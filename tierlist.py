@@ -571,7 +571,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #   Keyboard shortcuts . new dialog (UI-48)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
 #   Import / Export .... file dialog (UI-42)
-#   Merge offer, "Where is my save file?" ... shared dialog look (UI-24; today these are plain message boxes)
+#   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)
 #   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
 #   First-run progress . shared dialog look (UI-24)
 #   Error dialog ....... shared dialog look (UI-24)
