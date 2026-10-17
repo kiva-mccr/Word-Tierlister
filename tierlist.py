@@ -31,6 +31,7 @@ How it works
   size you start from.
 * Browse window (View menu): text and rows scale with the window; Ctrl +/-/0 or
   Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
+* Tab / Shift+Tab move to the next / previous tab.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
   place it by comparing against one anchor word per tier (about 3 questions).
   "Don't know / later" (U) sends a word to the back of the queue; skipped
@@ -554,12 +555,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           clear as soon as that field is edited. On the shared StyledDialog (UI-24).
 # [-] UI-29 Tier letters as hotkeys: dropped by request; placing stays on the number keys 1-6 (and the
 #           buttons), so D keeps showing definitions and the duel keys keep their meanings.
-# [ ] UI-47 Tab moves between the tabs (asked for): Tab goes to the next tab (Place new words -> Refine ->
+# [x] UI-47 Tab moves between the tabs (asked for): Tab goes to the next tab (Place new words -> Refine ->
 #           Boundary -> Conflicts -> back to Place), Shift+Tab to the previous one, skipping any tab hidden
 #           by UI-46. It does exactly what clicking the tab does (the open tab slides over, the view
 #           switches). Tab no longer moves keyboard focus between widgets in the main window (nothing there
 #           takes focus anyway); dialogs and Browse keep the normal Tab between fields. The bottom-right
 #           hint gains "Tab next tab" (no button shows it).
+#           Built: App.next_tab(d), from on_key (so held-key repeat and "nothing while a menu is open" apply);
+#           Shift+Tab is ISO_Left_Tab on X11 and Shift-state Tab elsewhere. The hint shows "Tab next tab"
+#           only while there is more than one tab. Checked with real keys (openbox + xdotool), dialogs too.
 # [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
 #           says what each package is for). Each package's name in the dialog links to its own web page
 #           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the

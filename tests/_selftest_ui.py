@@ -36,7 +36,7 @@ def key(ks):                                       # a press and its release (a 
 
 pump()
 # ---------------------------------------------------------------- place mode
-assert app.hint_lbl.cget("text") == "Backspace or Ctrl+Z undo"     # 1-6, Space, U, D are on their buttons
+assert app.hint_lbl.cget("text") == "Backspace or Ctrl+Z undo   \u00b7   Tab next tab"   # 1-6, Space, U, D are on their buttons
 first = s.next_unplaced()["word"]
 assert app.word_card.word == first, (app.word_card.word, first)
 assert "frequency rank" in app.word_card.sub
@@ -316,6 +316,24 @@ root.event_generate("<Control-0>"); pump(3)
 assert app.zoom == 1.0 and abs(_font("body").cget("size") - body0) <= 1
 app.set_zoom(1.1); zoom_saved = s.get_meta("zoom"); app.set_zoom(1.0)
 assert zoom_saved == "1.1"
+
+# ---- Tab / Shift+Tab move between the tabs, skipping hidden ones (UI-47)
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+vis = [k for k, _ in T.MODES if k in app.mode_switch.visible]
+assert len(vis) >= 3, vis
+key("Tab"); pump(2); assert app.mode == vis[1] and app.mode_switch.get() == vis[1]
+key("ISO_Left_Tab"); pump(2); assert app.mode == "place"                       # Shift+Tab (X11)
+app.on_key(types.SimpleNamespace(keysym="Tab", time=None, state=1))            # Shift+Tab (Windows / macOS)
+app.on_key_release(types.SimpleNamespace(keysym="Tab", time=None)); pump(2)
+assert app.mode == vis[-1]                                                      # wraps round
+key("Tab"); pump(2); assert app.mode == "place"
+assert app.on_key(types.SimpleNamespace(keysym="Tab", time=None)) == "break"   # no focus traversal
+app.on_key_release(types.SimpleNamespace(keysym="Tab", time=None))
+pump(2); app.mode_var.set("place"); app.on_mode_change(); pump(2)
+hidden = [k for k, _ in T.MODES if k not in app.mode_switch.visible]
+for _ in range(len(T.MODES)):
+    key("Tab"); pump(1); assert app.mode not in hidden                          # hidden tabs are skipped
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
 
 # ---- a bigger window, bigger contents (UI-25): the fonts grow with the window, then shrink back with it
 assert app._grow_for(*app._ref_size) == 1.0 and app._grow_for(app._ref_size[0] * 9, app._ref_size[1] * 9) == app.GROW_MAX

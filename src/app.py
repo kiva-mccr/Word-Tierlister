@@ -678,6 +678,8 @@ class App:
             h = "Esc cancel"
         else:
             h = "Backspace or Ctrl+Z undo"
+            if len(self.mode_switch.visible) > 1:
+                h += "   \u00b7   Tab next tab"
         self.hint_lbl.config(text=h)
 
     # ---- place mode ------------------------------------------------------------------------------------------
@@ -1061,6 +1063,9 @@ class App:
             if ks == "Escape":
                 self.header.close()
             return
+        if ks in ("Tab", "ISO_Left_Tab"):         # Tab / Shift+Tab: the next / previous tab (UI-47)
+            self.next_tab(-1 if ks == "ISO_Left_Tab" or getattr(e, "state", 0) & 0x1 else 1)
+            return "break"                         # (and no focus traversal in the main window)
         low = ks.lower()
         if low == "d":
             self.toggle_defs()
@@ -1080,6 +1085,15 @@ class App:
         if button is not None:
             button.flash()                         # ... then the button it stands for dips (not when disabled,
                                                    # not with Reduce motion: RoundButton.flash checks both)
+
+    def next_tab(self, d):
+        """Go to the next (d=1) or previous (d=-1) tab, wrapping round and skipping hidden ones (UI-47); the
+        same as clicking it."""
+        keys = [k for k, _ in MODES if k in self.mode_switch.visible]
+        i = keys.index(self.mode) if self.mode in keys else 0
+        key = keys[(i + d) % len(keys)]
+        if key != self.mode:
+            self._on_mode_switch(key)
 
     def _key_target(self, ks, low):
         """The one key -> (button, action) map (UI-18), for the current view; None if the key does nothing here.
