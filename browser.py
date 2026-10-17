@@ -224,7 +224,10 @@ class Browser:
         self.win.update_idletasks()
         cols = self._col_widths()
         tree_w = sum(cols.values()) - cols["word"] + cols["word"] // 2 + self.vsb.winfo_reqwidth() + 16
-        w = max(self.top_bar.winfo_reqwidth(), self.btn_bar.winfo_reqwidth(), tree_w)
+        # the word count changes length as rows load; leave room for its longest form so it never clips
+        count_w = self.f_body.measure(self._longest_count()) + 4
+        top_w = self.top_bar.winfo_reqwidth() - self.count_lbl.winfo_reqwidth() + count_w
+        w = max(top_w, self.btn_bar.winfo_reqwidth(), tree_w)
         row_h = int(self.f_body.metrics("linespace") * 1.5) + 6
         fixed = sum(x.winfo_reqheight() for x in self.win.pack_slaves() if x is not self.tree.master)
         return w, fixed + row_h * 8 + 16
@@ -300,8 +303,17 @@ class Browser:
         for i in range(0, len(kids), 2000):
             self.tree.delete(*kids[i:i + 2000])
 
+    def _longest_count(self):
+        """The longest text the word count can show for the current total (for the minimum size)."""
+        t = max(getattr(self, "total", 0) or 0, 1)
+        return f"{t:,} of {t:,} (more on scroll)"
+
     def _update_count(self):
-        """Show 'N words' or 'N of M (more on scroll)'."""
+        """Show 'N words' or 'N of M (more on scroll)'. A total with more digits than before raises the
+        window's minimum size, so the count is never clipped."""
+        if len(f"{self.total:,}") != getattr(self, "_count_digits", None):
+            self._count_digits = len(f"{self.total:,}")
+            self._update_minsize()
         if self.loaded < self.total:
             self.count_lbl.config(text=f"{self.loaded:,} of {self.total:,} (more on scroll)")
         else:

@@ -466,13 +466,13 @@ class App:
         self.tier_lbl.config(text="    ".join(f"{TIERS[t]}: {s['tiers'].get(t, 0):,}" for t in range(len(TIERS))))
 
     def _hint(self):
-        """Bottom-right key reminder for the current mode."""
+        """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
+        compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
+        their own key hints, and the Definition (D) button names its key."""
         if self.mode == "place" and self.cmp:
-            h = "Up/B better   Down/W worse   E same tier   Backspace back   Esc cancel"
-        elif self.mode == "place":
-            h = "1-6 tier   Space compare   U don't know   D definition   Ctrl+Z undo"
+            h = "Esc cancel"
         else:
-            h = "Left/A left wins   Right/L right wins   Down/T tie   S skip pair   D definition   Ctrl+Z undo"
+            h = "Backspace or Ctrl+Z undo"
         self.hint_lbl.config(text=h)
 
     # ---- place mode ------------------------------------------------------------------------------------------
