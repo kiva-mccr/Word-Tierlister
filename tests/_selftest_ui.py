@@ -192,7 +192,8 @@ for m in ("place", "refine", "boundary", "conflict"):
     l = min(w.winfo_rootx() for w in kids); r = max(w.winfo_rootx() + w.winfo_width() for w in kids)
     t = min(w.winfo_rooty() for w in kids); b = max(w.winfo_rooty() + w.winfo_height() for w in kids)
     assert abs((l + r) / 2 - (c.winfo_rootx() + c.winfo_width() / 2)) <= 2, ("not centred across", m)
-    assert abs((t + b) / 2 - (c.winfo_rooty() + c.winfo_height() / 2)) <= 2, ("not centred down", m)
+    page_top, page_bottom = app.status_band.winfo_rooty(), c.winfo_rooty() + c.winfo_height()
+    assert abs((t + b) / 2 - (page_top + page_bottom) / 2) <= 2, ("not centred in the visible page", m)
     pages.add((c.winfo_rooty(), c.winfo_height()))
 assert len(pages) == 1, pages                                       # the Tier / Boundary choice lives inside
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)

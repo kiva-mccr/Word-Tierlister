@@ -217,9 +217,9 @@ class App:
         self.place_inner = inner
         inner.place(relx=0.5, rely=0.5, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
-        self.word_card.grid(row=0, column=0, pady=(0, 6))
+        self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
-        self.ladder.grid(row=1, column=0, pady=(10, 0))
+        self.ladder.grid(row=1, column=0)
         self.ladder.grid_remove()               # only while comparing to anchors (UI-9)
         self.vs_lbl = ttk.Label(inner, text="", font=font("vs"), justify="center")
         self.vs_lbl.grid(row=2, column=0, pady=14)
@@ -298,6 +298,17 @@ class App:
         """The centre area was resized: re-wrap and re-fit the big words."""
         self._apply_wraps(e.width)
         self._fit_big_text()
+        self._recenter()
+
+    def _recenter(self):
+        """Centre the content in the visible page (from the tab line down to the bottom bar), not just in the
+        area under the status line: it moves up by half the status line's height, but only as far as the
+        free space allows, so it never runs into the stats on a small window."""
+        band = self.status_band.winfo_height()
+        ch = self.center.winfo_height()
+        for inner in (self.place_inner, self.pair_inner):
+            free = (ch - inner.winfo_reqheight()) / 2
+            inner.place_configure(y=-int(max(0, min(band / 2, free))))
 
     def _fit_big_text(self):
         """Shrink the big word(s) so a long one still fits on a line (down to about a third, then it wraps).
@@ -480,6 +491,7 @@ class App:
             self._show_place()
         else:
             self._show_pair()
+        self.root.after_idle(self._recenter)     # the content's height may have changed
 
     def after_external_change(self):
         """Call after something outside the normal flow changed the save (Browse edits, merge, anchors)."""
