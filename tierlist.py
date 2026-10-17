@@ -327,9 +327,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Covered by _selftest_sizing.py.
 # [ ] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
 #           with the window, like the Browse window already does.
+# [ ] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
+#           of the current tab (the Tier / Boundary choice in Refine and Boundary) instead of doing its
+#           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
+#           first, then hand focus back to the window whenever the drop-down closes, picked or not.
+#           Related: with a header menu open, Left / Right should move to the neighbouring menu.
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
+#
+# --- Last: definitions as a way in (asked for; at the very end of the plan) --------------------------
+# [ ] W-1  Click any word inside a definition to look it up. Its definition appears (the drawer and the
+#           Browse pane), and the word joins the Browse list for the moment as a greyed-out row under F
+#           ("not placed yet"). In Browse you can then sort it straight away with the tier buttons or
+#           the 1-6 keys, which places it for real (it leaves the queue like any placed word); if you
+#           do not, it disappears from the list again when Browse is refreshed or closed. Words that
+#           are not in the word list are offered as "add to the list" first.
 #
 # --- Packaging as a program (T-6..T-8 asked for; built after the UI steps) ----------------------
 # T-1..T-3 are the groundwork for T-6..T-8; T-4 and T-5 stay notes.
@@ -376,6 +389,26 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           into dist/. Needs the code pushed to GitHub and a GitHub login (gh) for --all; without
 #           them it explains and builds for this OS only. Building a Windows .exe on Linux through
 #           Wine was considered and rejected: fragile, and the result would still need testing on Windows.
+# [ ] T-9  Introduce the other form on first start (asked for). The first time the program starts as a
+#           script (tierlist.py) it asks once: "Make this a standalone program? It saves, builds, and
+#           reopens as the program" (T-6); the first time the built program starts it asks the reverse:
+#           "Unpack the source code next to it?" (T-7). Either way the save is committed first, the
+#           answer is remembered (meta), and both stay in the File menu afterwards. Never asked during
+#           a first-run download or while another question is open; --no-install also silences it.
+# [ ] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
+#           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
+#             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
+#             Releases, not in a committed folder: a 30-60 MB binary per build would bloat every clone
+#             forever, and Releases are what GitHub shows on the repo's front page anyway.
+#           - src/ the program (tierlist.py and its modules, requirements.txt); tests/ the self-tests and
+#             run_tests.sh; tools/ check_release.py and build.py; docs/ screenshots (and the roadmap if
+#             it ever moves out of this file); .github/workflows/ the T-8 build.
+#           - Claude assets in .claude/ (CLAUDE.md, CHECKLIST.md). Pushed back: CLAUDE.md must stay where
+#             Claude Code loads it automatically, the repo root or .claude/, so .claude/ is the folder,
+#             not a custom "claude/" one.
+#           - Moving the program into src/ moves its "next to the script" save location: saves.py must
+#             keep finding a save in the old place (one folder up) before anything moves, or someone
+#             updating would appear to lose their list. Do this together with T-7 (same split).
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
