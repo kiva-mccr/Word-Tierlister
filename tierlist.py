@@ -484,13 +484,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
 #           under the field instead of separate error boxes, RoundButton Save / Cancel. (UI-24 restyles
 #           the other dialogs; this one gets its own pass because it is the first thing a new user sees.)
-# [ ] UI-29 Tier letters as hotkeys (asked for): in Place new words and in Browse, pressing a tier's
-#           letter (S, A, B, C, D, F) puts the word there, as well as the 1-6 keys and the buttons. Two
-#           letters already have a job and need a new home first: D shows definitions (move it to a key
-#           that is not a tier letter, e.g. Tab or "?", and relabel the Definition button) and, while
-#           comparing to anchors, B means Better (letters stay off while a comparison is open; Up does
-#           Better). In the duel views A / S keep their duel meanings; tier letters only act where a
-#           single word is being placed. The pills' key hints show both: "1 / S".
+# [-] UI-29 Tier letters as hotkeys: dropped by request; placing stays on the number keys 1-6 (and the
+#           buttons), so D keeps showing definitions and the duel keys keep their meanings.
+# [ ] UI-47 Tab moves between the tabs (asked for): Tab goes to the next tab (Place new words -> Refine ->
+#           Boundary -> Conflicts -> back to Place), Shift+Tab to the previous one, skipping any tab hidden
+#           by UI-46. It does exactly what clicking the tab does (the open tab slides over, the view
+#           switches). Tab no longer moves keyboard focus between widgets in the main window (nothing there
+#           takes focus anyway); dialogs and Browse keep the normal Tab between fields. The bottom-right
+#           hint gains "Tab next tab" (no button shows it).
 # [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
 #           says what each package is for). Each package's name in the dialog links to its own web page
 #           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the
@@ -503,10 +504,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #
 # --- Window by window (asked for: every window's planned changes in one place) -------------------------
 #   Main window ........ header + tabs (UI-10, UI-27), status line (UI-15, UI-34), tier chart (UI-13,
-#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), Place keys (UI-29,
-#                        UI-37), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
+#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37, UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
 #                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
-#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39), tier letters (UI-29)
+#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24)
 #   Import / Export .... file dialog (UI-42)

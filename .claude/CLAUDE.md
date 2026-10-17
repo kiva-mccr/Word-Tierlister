@@ -37,6 +37,7 @@ errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
+- Placing uses the number keys 1-6, not tier letters (the user dropped UI-29).
 - No ttk.Combobox or tk.Menu popups: they grab input and float over other programs on Linux. Use
   ChoiceButton / DropMenu. To test focus behaviour for real: Xvfb + openbox + xdotool (installed here).
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
@@ -75,7 +76,7 @@ missed). Keep the README current in the same commit as the change (the user aske
 
 ## Status
 Done: UI-0..UI-13, UI-15..UI-19, UI-35, UI-36, UI-43..45 (fixes, zoom), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-20 (empty states), UI-21, UI-23..27, then
-ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, a web link per package in the install dialog), UI-33
+ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28, UI-30 (anchor dialog, a web link per package in the install dialog), UI-47 (Tab between tabs), UI-33
 (pace timeout + hover-note polish), UI-46 (hide Refine / Boundary / Conflicts tabs until they have work), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32
 (moving pastel background: needs the user's OK to relax the no-motion-while-idle guardrail). UI-14 is planned (measure decided).
