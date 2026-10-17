@@ -83,6 +83,22 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None):
     return answer["yes"]
 
 
+def ask_choices(title, headline, message, choices, yes="OK", no="Cancel", parent=None):
+    """A styled question with one tick box per choice (ST-4: each package is its own choice).
+
+    `choices` are (key, label, detail, ticked) tuples; the detail is a muted line under the label.
+    Returns the set of ticked keys for the `yes` button, or None for `no`, Escape or closing (also when
+    no window can be shown)."""
+    answer = {"yes": False}
+    try:
+        _dialog(parent, title, headline, message, None, buttons=((yes, True), (no, False)), answer=answer,
+                choices=choices)
+    except Exception:
+        _stderr(f"{title}: {headline} {message}")
+        return None
+    return answer.get("chosen") if answer["yes"] else None
+
+
 def show_exception(title, exc, parent, context):
     """Dialog for an error the program caught itself (a failed export, say): what we were doing, why, what to try."""
     headline, advice = describe(exc)
@@ -90,7 +106,7 @@ def show_exception(title, exc, parent, context):
                headline=headline)
 
 
-def _dialog(parent, title, headline, message, details, buttons=None, answer=None):
+def _dialog(parent, title, headline, message, details, buttons=None, answer=None, choices=None):
     dlg = tk.Toplevel(parent)
     dlg.title(title)
     dlg.configure(bg=PALETTE["bg"])
@@ -106,6 +122,17 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
     ttk.Label(box, text=headline, font=font("head"), wraplength=wrap, justify="left").pack(anchor="w")
     ttk.Label(box, text=message, wraplength=wrap, justify="left",
               foreground=PALETTE["muted"]).pack(anchor="w", pady=(10, 0))
+    ticks = []
+    if choices:                      # one tick box per choice, each with a muted line saying what it is for
+        cbox = ttk.Frame(box)
+        cbox.pack(fill="x", pady=(12, 0))
+        for key, label, detail, ticked in choices:
+            var = tk.BooleanVar(value=ticked)
+            ttk.Checkbutton(cbox, text=label, variable=var, takefocus=1).pack(anchor="w", pady=(6, 0))
+            if detail:
+                ttk.Label(cbox, text=detail, wraplength=wrap - 30, justify="left",
+                          foreground=PALETTE["muted"]).pack(anchor="w", padx=(26, 0))
+            ticks.append((key, var))
     txt = tk.Text(box, height=9, width=1, wrap="word", font=font("body"), relief="flat",
                   bg=PALETTE["surface"], fg=PALETTE["text"], padx=8, pady=6)
     if details:
@@ -134,6 +161,7 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
     if buttons:                      # a question: (label, value) pairs, the first is the default
         def choose(value):
             answer["yes"] = value
+            answer["chosen"] = {k for k, v in ticks if v.get()}
             dlg.destroy()
         for i, (label, value) in enumerate(buttons):
             ttk.Button(row, text=label, command=lambda v=value: choose(v)).pack(side="right", padx=(8, 0) if i else 0)

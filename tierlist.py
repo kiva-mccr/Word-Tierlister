@@ -155,20 +155,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           itself is downloaded the first time it is needed (definitions.py). --no-install turns
 #           the offer off; packaged builds skip it. Pillow is only for the tests' screenshots and is
 #           never offered. errors.py gained ask_yes_no. Covered by _selftest_deps.py.
-# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3). Started
-#           from a terminal, deps.terminal_setup() runs before any window and handles only what the
-#           program cannot start without: tkinter and the REQUIRED packages (wordfreq). It lists them
-#           with what each is for, asks once "Install them now? [Y/n]" (Enter = yes), installs tkinter
-#           through the system package manager (apt-get / dnf / pacman / zypper, Homebrew on macOS; sudo
-#           may ask for your password) and wordfreq with pip, with the output shown in the terminal,
-#           then says "Opening the window..." and the window opens (on Windows the console then closes,
-#           ST-1). Everything OPTIONAL (nltk) is offered later in the window by ensure_packages, which
-#           no longer asks about the required ones when the terminal already did. If this Python
-#           refuses pip installs (externally-managed), it offers to make a private .venv next to the
-#           program, installs there and restarts with it; later starts find .venv and use it without
-#           asking. Installing tkinter also restarts the program (it could not be imported at start).
-#           Without a terminal (pythonw, a double-clicked shortcut) the window asks as before.
-#           Covered by _selftest_install.py; tried for real in a fresh venv without wordfreq.
+# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3; reworked).
+#           1. Terminal, before any window: only what the window itself needs, which is tkinter (the
+#              program starts and asks without wordfreq: that is only imported when the list is built).
+#              deps.terminal_setup() explains, asks "Install it now? [Y/n]" (Enter = yes), runs the
+#              system package manager (apt-get / dnf / pacman / zypper, Homebrew; sudo may ask for a
+#              password) and restarts the program so the window can open.
+#           2. Window: every Python package, required (wordfreq) and optional (nltk), in ONE dialog with
+#              a tick box each (errors.ask_choices: label "(needed)" / "(optional)" and a muted line on
+#              what it is for), "Install selected" / "Not now". An optional one left unticked is
+#              remembered (meta declined_packages) and not offered again. If this Python refuses pip
+#              installs (externally-managed), the window offers to make a private .venv next to the
+#              program, installs there and restarts in it; every later start uses .venv straight away
+#              (deps.use_private_env). Without a terminal (pythonw, a shortcut) stage 1 is skipped.
+#           Tick boxes are drawn as images now (ui_style._tick_boxes): the clam theme's tiny cross was
+#           unreadable. Covered by _selftest_install.py and _selftest_deps.py; tried for real in a fresh
+#           venv without wordfreq (the dialog appears; screenshot taken).
 # [ ] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
 #           start from a terminal keeps that terminal busy until the window closes, and closing the
 #           terminal ends the program. Plan: once the terminal stage (ST-4) has nothing left to ask, the
@@ -495,11 +497,14 @@ def main():
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    # --- 1. in a terminal, before any window: install only what the program cannot start without
-    #        (tkinter, wordfreq), asking first; optional extras are offered later, in the window (ST-4)
-    asked_in_terminal = deps.wants_terminal_setup(args.no_install)
-    if asked_in_terminal:
-        deps.terminal_setup([os.path.abspath(__file__), *sys.argv[1:]], script_dir)
+    # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a
+    #        terminal, before any window, only tkinter is asked about (the window needs it to open);
+    #        every Python package is offered later, in the window, each as its own choice.
+    restart_argv = [os.path.abspath(__file__), *sys.argv[1:]]
+    if not args.no_install and not getattr(sys, "frozen", False):
+        deps.use_private_env(restart_argv, script_dir)
+    if tk is None and deps.wants_terminal_setup(args.no_install):
+        deps.terminal_setup(restart_argv)
     # tkinter is needed for the window (everything else works without it)
     if tk is None:
         sys.exit("tkinter is not installed. " + deps.tk_advice())
@@ -572,15 +577,19 @@ def main():
             apply_ttk_style(root)
             install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
             try:
-                # a missing package is offered for install (only asks when something is missing). The
-                # required ones were already asked about in the terminal when there is one (ST-4).
+                # packages, stage 2 (ST-4): anything missing is offered in one dialog, one tick box per
+                # package (required and optional each their own choice); only asks when something is missing
                 if not args.no_install:
                     wordnet_build = args.source == "wordnet" and existing == 0 and not args.wordlist
                     declined = set(json.loads(store.get_meta("declined_packages", "[]")))
-                    required = [] if asked_in_terminal else list(deps.REQUIRED)
+
+                    def restart(python):              # moved into a private environment: start again in it
+                        store.close()
+                        root.withdraw()               # (destroyed by the except below if this returns)
+                        deps.restart(python, restart_argv)
                     ensure_packages(
-                        root, required + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
-                        declined=declined,
+                        root, list(deps.REQUIRED) + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
+                        declined=declined, restart=restart, home=script_dir,
                         on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
                 run_with_progress(root, set_up,
                                   initial_stage="Initializing download..." if builds_wiktionary else "Initializing...")

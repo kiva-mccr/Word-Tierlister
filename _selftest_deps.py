@@ -1,4 +1,5 @@
-"""Missing packages (deps.py, startup.ensure_packages, errors.ask_yes_no): detection, asking, installing."""
+"""Missing packages (deps.py, startup.ensure_packages, errors.ask_yes_no / ask_choices): detection, asking,
+installing."""
 import os, subprocess, sys
 import tkinter as tk
 from tkinter import ttk
@@ -38,25 +39,32 @@ state = {"missing": ["wordfreq"]}
 S.deps.missing = lambda names: [n for n in names if n in state["missing"]]
 S.deps.pip_available = lambda: state.get("pip", True)
 asked, installs = [], []
-def ask(title, headline, message, yes="OK", no="Cancel", parent=None):
-    asked.append((headline, message, yes, no)); return state["answer"]
-S.ask_yes_no = ask
+def ask(title, headline, message, choices, yes="OK", no="Cancel", parent=None):
+    asked.append((headline, message, choices, yes, no))
+    a = state["answer"]
+    return set(a) if a is not None else None            # the ticked names, or None for "Not now"
+S.ask_choices = ask
 def installer(ok, tail="", clears=True):
     def run(names, log):
-        installs.append(list(names)); log("  Collecting wordfreq")
-        if ok and clears: state["missing"] = []
+        installs.append(list(names)); log("  Collecting " + names[0])
+        if ok and clears: state["missing"] = [n for n in state["missing"] if n not in names]
         return ok, tail
     return run
+ALL = ["wordfreq", "nltk"]
 
 state["missing"] = []; assert S.ensure_packages(root, ["wordfreq"]) is True and not asked      # nothing missing: silent
-state.update(missing=["wordfreq"], answer=False)
+state.update(missing=["wordfreq"], answer=None)
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and installs == []       # "Not now"
-assert "wordfreq" in asked[-1][0] and "pip install wordfreq>=3.0" in asked[-1][1] and asked[-1][2:] == ("Install now", "Not now")
-state.update(answer=True)
+headline, message, choices, yes, no = asked[-1]
+assert headline == "A package is needed" and (yes, no) == ("Install selected", "Not now")
+assert choices == [("wordfreq", "wordfreq  (needed)", deps.PURPOSE["wordfreq"], True)]              # its own tick box
+state.update(answer=["wordfreq"])
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is True and installs == [["wordfreq"]]
-state.update(missing=["wordfreq"])
+state.update(missing=["wordfreq"], answer=[])                                                      # unticked it
+assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and installs == [["wordfreq"]]
+state.update(missing=["wordfreq"], answer=["wordfreq"])
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment")); raise AssertionError
-except SetupError as e: assert "virtual environment" in str(e) and "-m venv" in str(e)
+except SetupError as e: assert "virtual environment" in str(e) and "-m venv" in str(e)              # no restart given: manual steps
 state.update(missing=["wordfreq"])
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(False, "ERROR: No matching distribution\nno internet")); raise AssertionError
 except SetupError as e: assert "Could not install wordfreq" in str(e) and "no internet" in str(e) and "pip install wordfreq>=3.0" in str(e)
@@ -70,37 +78,57 @@ state.update(pip=True, missing=["wordfreq"]); n = len(asked)
 sys.frozen = True                                                                                  # packaged build: never installs
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and len(asked) == n
 del sys.frozen
-state.update(missing=["wordfreq", "nltk"], answer=True); installs.clear()
-S.ensure_packages(root, ["wordfreq", "nltk"], installer=installer(True))
-assert installs == [["wordfreq", "nltk"]]                                                         # one pip run for everything
 
-# ---- optional packages (nltk): one question with everything, declines are remembered, failures are quiet
-state.update(missing=["nltk"], answer=False); asked.clear(); installs.clear()
-remembered = []
+# ---- required and optional together: one dialog, each its own choice
+state.update(missing=list(ALL), answer=ALL); installs.clear()
+assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=installer(True)) is True
+assert installs == [ALL]                                                            # one pip run for what was ticked
+headline, message, choices = asked[-1][:3]
+assert headline == "Some packages are needed" and [c[0] for c in choices] == ALL
+assert choices[1][1] == "nltk  (optional)" and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
+# required ticked, optional unticked: installs only the required one, remembers the optional "no"
+state.update(missing=list(ALL), answer=["wordfreq"]); installs.clear(); remembered = []
+assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=installer(True), on_decline=remembered.append) is True
+assert installs == [["wordfreq"]] and remembered == [["nltk"]]
+# optional ticked, required unticked: installs nltk, still reports the required one missing
+state.update(missing=list(ALL), answer=["nltk"]); installs.clear(); remembered = []
+assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=installer(True), on_decline=remembered.append) is False
+assert installs == [["nltk"]] and remembered == []
+# only the optional one missing
+state.update(missing=["nltk"], answer=None); asked.clear(); installs.clear(); remembered = []
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], on_decline=remembered.append) is True
-assert asked and "optional" in asked[-1][0] and "nltk" in asked[-1][1] and "offline definitions" in asked[-1][1]
-assert remembered == [["nltk"]] and installs == []                                  # declined: remembered, nothing installed
+assert asked[-1][0] == "An optional package is available" and remembered == [["nltk"]] and installs == []
 n = len(asked)
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], declined={"nltk"}) is True and len(asked) == n   # not asked again
-state.update(missing=["wordfreq", "nltk"], answer=True); installs.clear()
+state.update(missing=list(ALL), answer=["wordfreq"]); installs.clear()
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], declined={"nltk"}, installer=installer(True)) is True
-assert installs == [["wordfreq"]]                                                  # declined optional is left out of the run
-state.update(missing=["wordfreq", "nltk"], answer=False); remembered.clear()
-assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], on_decline=remembered.append) is False   # required still missing
-assert "wordfreq, nltk" in asked[-1][0] and remembered == [["nltk"]]
-state.update(missing=["wordfreq", "nltk"], answer=True); installs.clear()
-assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=installer(True)) is True
-assert installs == [["wordfreq", "nltk"]]                                          # one question, one pip run
-state.update(missing=["nltk"], answer=True)
-def only_required_installed(names, log):
-    state["missing"] = ["nltk"]; return False, "ERROR: nltk failed"
+assert installs == [["wordfreq"]] and [c[0] for c in asked[-1][2]] == ["wordfreq"]   # declined one not even listed
+state.update(missing=["nltk"], answer=["nltk"])
+def nltk_fails(names, log):
+    return False, "ERROR: nltk failed"
 import contextlib, io
 with contextlib.redirect_stderr(io.StringIO()) as err:
-    assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=only_required_installed) is True   # optional failure: no error
+    assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=nltk_fails) is True   # optional failure: no error
 assert "optional" in err.getvalue()
 state.update(missing=["nltk"], pip=False)
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"]) is True            # no pip + only optional missing: silent
 state.update(pip=True)
+
+# ---- pip refused (externally-managed): offers a private environment and restarts in it
+state.update(missing=["wordfreq"], answer=["wordfreq"])
+yes_no = []
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), state["venv_ok"])[1]
+made, restarted = [], []
+S.deps.make_private_env = lambda home, names, log: (made.append((home, names)), (True, "ok", "/venv/bin/python"))[1]
+state["venv_ok"] = True
+S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
+                  restart=restarted.append, home="/prog")
+assert yes_no == ["Make a private environment for the program?"] and made == [("/prog", ["wordfreq"])]
+assert restarted == ["/venv/bin/python"]
+state.update(missing=["wordfreq"], venv_ok=False)                                 # said no: manual steps
+try: S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
+                       restart=restarted.append, home="/prog"); raise AssertionError
+except SetupError as e: assert "-m venv" in str(e) and len(restarted) == 1
 
 # ---- the real question dialog: buttons, Return, Escape and closing the window all answer
 def walk(w):
@@ -123,6 +151,22 @@ root.after(150, drive(lambda d, b: b["Not now"].invoke())); assert question() is
 root.after(150, drive(lambda d, b: d.event_generate("<Return>"))); assert question() is True
 root.after(150, drive(lambda d, b: d.event_generate("<Escape>"))); assert question() is False
 root.after(150, drive(lambda d, b: d.protocol("WM_DELETE_WINDOW") and d.tk.call(d.protocol("WM_DELETE_WINDOW")))); assert question() is False
+# the tick-box dialog: what is ticked when "Install selected" is pressed comes back; "Not now" gives None
+def drive_choices(untick, press):
+    def go():
+        dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        boxes = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TCheckbutton"}
+        assert set(boxes) == {"wordfreq  (needed)", "nltk  (optional)"}, set(boxes)
+        for label in untick:
+            boxes[label].invoke()
+        btns = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TButton"}
+        btns[press].invoke()
+    return go
+CH = [("wordfreq", "wordfreq  (needed)", "ranks words", True), ("nltk", "nltk  (optional)", "definitions", True)]
+def pick(): return E.ask_choices("T", "Some packages are needed", "Tick", CH, yes="Install selected", no="Not now", parent=root)
+root.after(150, drive_choices([], "Install selected")); assert pick() == {"wordfreq", "nltk"}
+root.after(150, drive_choices(["nltk  (optional)"], "Install selected")); assert pick() == {"wordfreq"}
+root.after(150, drive_choices([], "Not now")); assert pick() is None
 # no window possible: the safe answer (False) and no exception
 import contextlib, io
 real_dialog = E._dialog

@@ -5,8 +5,8 @@ action and resumes automatically, even if you replace these files.
 
     python tierlist.py                 # options: python tierlist.py --help
 
-On the first start it asks in the terminal to install what it needs (see "Missing packages"), or
-install them yourself first: `pip install -r requirements.txt`.
+On the first start it offers to install what it needs (see "Missing packages"), or install it yourself
+first: `pip install -r requirements.txt`.
 
 See the docstring at the top of `tierlist.py` for how it works and the full code map; the UI
 redesign plan (UI-0 .. UI-26, ticked as built) is the comment block right under it.
@@ -66,14 +66,15 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
 ## Missing packages
 Installing happens in two stages.
 
-1. **In the terminal, before any window.** Only what the program cannot start without: `tkinter` (the
-   window toolkit) and `wordfreq`. It lists them, asks `Install them now? [Y/n]` (Enter = yes), installs
-   tkinter with your system's package manager (apt-get, dnf, pacman, zypper, or Homebrew on macOS; sudo
-   may ask for your password) and wordfreq with pip, then says "Opening the window..." and the window
-   opens (on Windows the console window closes). If your system Python refuses pip installs (Debian,
-   Ubuntu, Homebrew), it offers to make a private `.venv` next to the program and uses it from then on.
-2. **In the window.** Optional extras, today `nltk` (offline definitions, and the WordNet word list),
-   are offered with "Install now / Not now". A "Not now" is remembered.
+1. **In the terminal, before any window.** Only `tkinter` (the window toolkit), since without it there
+   is no window to ask in. It asks `Install it now? [Y/n]` (Enter = yes), installs it with your
+   system's package manager (apt-get, dnf, pacman, zypper, or Homebrew on macOS; sudo may ask for your
+   password) and restarts the program.
+2. **In the window.** Every Python package in one dialog, each with its own tick box: `wordfreq`
+   (needed: it ranks the words) and `nltk` (optional: offline definitions, and the WordNet word list).
+   An optional package you leave unticked is not offered again. If your system Python refuses pip
+   installs (Debian, Ubuntu, Homebrew), it offers to make a private `.venv` next to the program,
+   installs there, and from then on starts with it automatically.
 
-It only asks when something is missing. Started without a terminal (pythonw, a shortcut), the window
-asks about everything instead. `--no-install` turns all of it off.
+It only asks when something is missing. Started without a terminal (pythonw, a shortcut), only the
+window stage runs. `--no-install` turns all of it off.

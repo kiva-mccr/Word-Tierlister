@@ -36,7 +36,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import deps
-from errors import ask_yes_no
+from errors import ask_choices, ask_yes_no
 from fonts import font
 from problems import STOPPED_MESSAGE, SetupError, ensure_streams, open_log
 from sizing import ui_factor, usable_area
@@ -326,19 +326,24 @@ _VENV_ADVICE = ("Your system's Python does not allow installing packages into it
                 "    .venv/bin/python tierlist.py\n\n(On Windows: .venv\\Scripts\\python.)")
 
 
-def ensure_packages(root, required, optional=(), declined=(), on_decline=None, installer=None):
-    """Make sure the packages in `required` (and, if wanted, `optional`) can be imported.
+def ensure_packages(root, required, optional=(), declined=(), on_decline=None, installer=None,
+                    restart=None, home=None):
+    """Make sure the packages in `required` (and, if wanted, `optional`) can be imported (ST-4, stage 2).
 
-    Names are import names (see deps.PACKAGES). Does nothing unless something is missing. Then it asks
-    once ("Install now / Not now") listing what each package is for, runs `pip install` behind the usual
-    progress window, and checks again, without a restart.
+    Names are import names (see deps.PACKAGES). Does nothing unless something is missing. Then one
+    dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
+    or optional (all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
+    the usual progress window and checks again, without a restart.
 
-    * Optional packages the user already declined (`declined`) are not offered again; when they decline
-      now, `on_decline(names)` is called so the caller can remember it.
-    * Returns True when every required package is available, False if the user said "Not now" to a
-      missing required one (the program carries on; whatever needs it explains itself later).
-    * A failed install of a required package raises SetupError with what to do instead; a failed
-      install of only optional ones is reported on stderr and the program carries on.
+    * Optional packages already declined (`declined`) are not offered again; an optional one left unticked
+      (or "Not now") is passed to `on_decline(names)` so the caller can remember it.
+    * Returns True when every required package is available, False if a required one was left out (the
+      program carries on; whatever needs it explains itself later).
+    * If this Python refuses installs (externally-managed), it offers to make a private environment in
+      <home>/.venv, installs there, and calls restart(python) to start the program again with it. Without
+      `restart` / `home` it raises SetupError with the manual steps instead.
+    * A failed install of a required package raises SetupError with what to do instead; a failed install of
+      only optional ones is reported on stderr and the program carries on.
     Packaged builds skip all of this.
     """
     need = deps.missing(required)
@@ -352,29 +357,53 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
             return True                                   # only optional things missing: not worth an error
         raise SetupError(f"A required package is missing ({', '.join(need)}) and pip is not available "
                          f"to install it.\n\nInstall pip, then run:\n    {cmd}")
-    what = ", ".join(gone)
-    headline = (f"One more package is needed: {what}" if need
-                else f"An optional package is available: {what}")
-    detail = "\n".join(f"    {n}: {deps.PURPOSE.get(n, n)}" for n in gone)
-    if not ask_yes_no(
-            "Word Tier List", headline,
-            f"{detail}\n\nIt can be installed now with pip, which needs an internet connection and takes "
-            f"a minute or so. This will run:\n    {cmd}",
-            yes="Install now", no="Not now", parent=root):
-        if extra and on_decline:
-            on_decline(extra)
+    headline = ("Some packages are needed" if len(gone) > 1 else "A package is needed") if need \
+        else ("Optional packages are available" if len(extra) > 1 else "An optional package is available")
+    choices = [(n, f"{n}  ({'needed' if n in need else 'optional'})", deps.PURPOSE.get(n, ""), True) for n in gone]
+    chosen = ask_choices(
+        "Word Tier List", headline,
+        "Tick what to install. It uses pip, needs an internet connection and takes a minute or so.",
+        choices, yes="Install selected", no="Not now", parent=root)
+    chosen = [n for n in gone if chosen and n in chosen]
+    left_out = [n for n in extra if n not in chosen]
+    if left_out and on_decline:
+        on_decline(left_out)
+    if not chosen:
         return not need
+    what = ", ".join(chosen)
     ok, tail = run_with_progress(
-        root, lambda log: (installer or deps.install)(gone, log), title="Installing packages",
+        root, lambda log: (installer or deps.install)(chosen, log), title="Installing packages",
         initial_stage=f"Installing {what}...",
         intro="This only happens once. You can close this window to stop; the program will ask again next time.")
-    still = deps.missing(gone)
+    if not ok and "externally-managed-environment" in tail and _private_env(root, chosen, need, restart, home):
+        return True                       # restarted in the private environment (a real restart never returns)
+    still = deps.missing(chosen)
     if not ok or still:
-        if need and deps.missing(need):
-            if "externally-managed-environment" in tail:
-                raise SetupError(_VENV_ADVICE)
+        if set(need) & set(still):
             raise SetupError(f"Could not install {what}.\n\n{tail}\n\nTry running this yourself, then start "
-                             f"the program again:\n    {cmd}")
-        if sys.stderr is not None:
+                             f"the program again:\n    pip install {' '.join(deps.PACKAGES.get(n, n) for n in chosen)}")
+        if still and sys.stderr is not None:
             print(f"Could not install {', '.join(still)} (optional); carrying on without it.", file=sys.stderr)
+    return not deps.missing(need)
+
+
+def _private_env(root, names, need, restart, home):
+    """This Python refuses pip installs: offer a private environment next to the program, install there and
+    restart with it (True). Returns False when the user says no to an optional-only install."""
+    if restart is None or home is None:
+        raise SetupError(_VENV_ADVICE)
+    venv = os.path.join(home, ".venv")
+    if not ask_yes_no("Word Tier List", "Make a private environment for the program?",
+                      f"This Python does not allow installing packages into it directly. The program can make "
+                      f"its own environment in\n    {venv}\ninstall {', '.join(names)} there, and start again "
+                      "with it. Later starts use it automatically.",
+                      yes="Make it", no="Not now", parent=root):
+        if need:
+            raise SetupError(_VENV_ADVICE)
+        return False
+    ok, tail, vpy = run_with_progress(root, lambda log: deps.make_private_env(home, names, log),
+                                      title="Making a private environment", initial_stage="Making it...")
+    if not ok:
+        raise SetupError(f"Could not set up the private environment.\n\n{tail}")
+    restart(vpy)
     return True

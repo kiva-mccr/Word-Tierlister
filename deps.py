@@ -1,8 +1,8 @@
 """Third-party packages the program needs, and installing them (no tkinter here).
 
 Two stages (ST-4): before any window exists, terminal_setup() asks in the terminal to install only what
-the program cannot start without (tkinter and wordfreq), installs it, then the window opens. Everything
-optional (nltk) is offered later, in the window, by startup.ensure_packages. Keep PACKAGES in step with
+the window cannot open without (tkinter). Every Python package, required (wordfreq) or optional (nltk),
+is then offered in the window by startup.ensure_packages, each as its own choice. Keep PACKAGES in step with
 requirements.txt (a test checks it).
 """
 import importlib
@@ -15,7 +15,7 @@ import sys
 # import name -> what to hand to pip
 PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
 
-# needed before the window can do its job (asked in the terminal); the rest are offered in the window
+# needed to build and rank the word list / nice to have; both are offered in the window, separately
 REQUIRED = ["wordfreq"]
 OPTIONAL = ["nltk"]
 
@@ -39,13 +39,14 @@ def pip_available():
         return False
 
 
-def install(names, log=print):
+def install(names, log=print, python=None):
     """pip-install the packages for the import names `names`, streaming pip's output through `log`.
 
     Returns (ok, tail): whether pip succeeded and its last lines (for an error message). Runs in this
-    Python (sys.executable), so the packages land where the program will find them.
+    Python (sys.executable) unless `python` names another (a private environment), so the packages land
+    where the program will find them.
     """
-    cmd = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+    cmd = [python or sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
            "--no-input", "--progress-bar", "off", *[PACKAGES.get(n, n) for n in names]]
     lines = []
     try:
@@ -161,96 +162,65 @@ def _ask(ask, out, question):
         out("Please answer y or n.")
 
 
-def terminal_setup(argv, home, ask=input, out=print, run=subprocess.call, installer=None,
-                   has_tk=None, tk_command=None, make_venv=None, restarter=None):
-    """Stage 1 of the install (ST-4): in the terminal, before any window, get only what the program cannot
-    start without (tkinter and the REQUIRED packages). Optional packages are left for the window.
-
-    Asks once ("Install them now? [Y/n]"), installs (the tkinter system package through the package
-    manager, which may ask for your password; the Python packages with pip, output shown as it goes) and
-    then returns so the program opens its window. Returns True when everything required is there.
-
-    * If this Python refuses pip installs (externally-managed, typical on Linux), offers to make a private
-      environment in <home>/.venv, installs there and restarts the program with it. A later start with the
-      system Python that finds .venv restarts into it straight away, without asking again.
-    * Answering no: without tkinter the program cannot continue (SystemExit with what to do); without
-      wordfreq it carries on and the window explains (same as "Not now" there).
-    `argv` is the command line to restart with; the keyword arguments after `out` are for tests.
-    """
-    installer = installer or install
+def use_private_env(argv, home, has_tk=None, restarter=None):
+    """If something is missing here but the program's private environment (<home>/.venv, made by the
+    window's install step) exists, restart in it straight away: that is where the packages went. Never
+    loops (REEXEC_ENV). Returns True when it restarted (only seen in tests; a real restart does not return)."""
     has_tk = has_tk or tk_available
-    restarter = restarter or restart
-    need = missing(REQUIRED)
-    no_tk = not has_tk()
-    if not need and not no_tk:
-        return True
-    venv = os.path.join(home, ".venv")
-    vpy = venv_python(venv)
-    if (os.path.exists(vpy) and not _same_python(vpy) and not os.environ.get(REEXEC_ENV)):
-        out(f"Using the program's private Python environment ({venv}).")
-        restarter(vpy, argv)
-        return True                                  # only reached in tests (restart replaces the process)
-    tk_cmd = (tk_command if tk_command is not None else tk_install_command()) if no_tk else None
-    out("")
-    out("Word Tier List needs a few things before it can open its window:")
-    if no_tk:
-        how = f" (installed with: {' '.join(tk_cmd)})" if tk_cmd else ""
-        out(f"    tkinter: {PURPOSE['tkinter']}{how}")
-    for n in need:
-        out(f"    {n}: {PURPOSE.get(n, n)}")
-    if [n for n in OPTIONAL if n not in need]:
-        out("Optional extras are offered later, in the window.")
-    if need:
-        out(f"The Python packages are installed with: pip install {' '.join(PACKAGES.get(n, n) for n in need)}")
-    if no_tk and not tk_cmd:
-        out("")
-        raise SystemExit("tkinter cannot be installed from here. " + tk_advice())
-    if not _ask(ask, out, "Install them now?"):
-        if no_tk:
-            raise SystemExit("The window cannot open without tkinter. " + tk_advice())
-        out("Carrying on without them; the window explains what does not work.")
+    vpy = venv_python(os.path.join(home, ".venv"))
+    if os.environ.get(REEXEC_ENV) or not os.path.exists(vpy) or _same_python(vpy):
         return False
-    if no_tk:
-        out(f"Installing tkinter: {' '.join(tk_cmd)}")
-        code = run(tk_cmd)
-        if code != 0 or not has_tk():
-            raise SystemExit("tkinter could not be installed for this Python "
-                             f"({sys.executable}). " + tk_advice())
-    if need:
-        out("Installing " + ", ".join(need) + " (this needs an internet connection and takes a minute or so)...")
-        ok, tail = installer(need, out)
-        if not ok and "externally-managed-environment" in tail:
-            out("")
-            out("This Python does not allow installing packages into it directly.")
-            if not _ask(ask, out, f"Make a private environment for the program in {venv} and install there?"):
-                raise SystemExit("Nothing was installed. To do it yourself:\n"
-                                 f"    {sys.executable} -m venv {venv}\n"
-                                 f"    {vpy} -m pip install -r requirements.txt\n"
-                                 f"    {vpy} tierlist.py")
-            out(f"Making {venv}...")
-            if (make_venv or _make_venv)(venv, out) != 0 or not os.path.exists(vpy):
-                raise SystemExit("Could not make the private environment. On Debian/Ubuntu it needs:\n"
-                                 "    sudo apt install python3-venv")
-            code = run([vpy, "-m", "pip", "install", "--disable-pip-version-check",
-                        *[PACKAGES.get(n, n) for n in need]])
-            if code != 0:
-                raise SystemExit("Could not install the packages into the private environment (see above).")
-            out("Done. Restarting with the private environment...")
-            restarter(vpy, argv)
-            return True
-        if not ok or missing(need):
-            raise SystemExit(f"Could not install {', '.join(need)}.\n\n{tail}\n\nTry running this yourself:\n"
-                             f"    {sys.executable} -m pip install {' '.join(PACKAGES.get(n, n) for n in need)}")
-    if no_tk:
-        out("Done. Opening the window...")
-        restarter(sys.executable, argv)              # tkinter was missing when the program started
-        return True
-    out("Done. Opening the window...")
+    if has_tk() and not missing(REQUIRED):
+        return False
+    (restarter or restart)(vpy, argv)
     return True
 
 
-def _make_venv(venv, out):
-    return subprocess.call([sys.executable, "-m", "venv", venv])
+def terminal_setup(argv, ask=input, out=print, run=subprocess.call, has_tk=None, tk_command=None,
+                   restarter=None):
+    """Stage 1 of the install (ST-4): in the terminal, before any window, get only what the window itself
+    needs, which is tkinter. Every Python package (wordfreq, nltk) is asked about later, in the window.
+
+    Asks once ("Install it now? [Y/n]", Enter = yes), installs it with the system package manager (sudo may
+    ask for your password) and restarts the program so the window can open. Returns True when tkinter is
+    there. Raises SystemExit with what to do when it is missing and cannot or may not be installed.
+    The keyword arguments after `argv` are for tests."""
+    has_tk = has_tk or tk_available
+    if has_tk():
+        return True
+    tk_cmd = tk_command if tk_command is not None else tk_install_command()
+    out("")
+    out(f"Word Tier List needs tkinter, {PURPOSE['tkinter']}, to open its window.")
+    if not tk_cmd:
+        raise SystemExit("tkinter cannot be installed from here. " + tk_advice())
+    out(f"It can be installed with: {' '.join(tk_cmd)}")
+    out("Everything else the program uses is asked about in the window.")
+    if not _ask(ask, out, "Install it now?"):
+        raise SystemExit("The window cannot open without tkinter. " + tk_advice())
+    out(f"Installing tkinter: {' '.join(tk_cmd)}")
+    if run(tk_cmd) != 0 or not has_tk():
+        raise SystemExit("tkinter could not be installed for this Python "
+                         f"({sys.executable}). " + tk_advice())
+    out("Done. Opening the window...")
+    (restarter or restart)(sys.executable, argv)     # tkinter was missing when the program started
+    return True
+
+
+def make_private_env(home, names, log=print):
+    """Make <home>/.venv and pip-install `names` into it, streaming output through `log`. For a Python that
+    refuses installs (externally-managed). Returns (ok, tail, python of the environment)."""
+    venv = os.path.join(home, ".venv")
+    vpy = venv_python(venv)
+    log(f"Making a private environment in {venv}...")
+    if _make_venv(venv, log) != 0 or not os.path.exists(vpy):
+        return False, ("Could not make the private environment. On Debian/Ubuntu it needs:\n"
+                       "    sudo apt install python3-venv"), vpy
+    ok, tail = install(names, log, python=vpy)
+    return ok, tail, vpy
+
+
+def _make_venv(venv, log):
+    return subprocess.call([sys.executable, "-m", "venv", venv], **_hidden())
 
 
 def wants_terminal_setup(no_install):

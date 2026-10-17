@@ -59,7 +59,7 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-12, ST-1..ST-4, SZ-1 (sizing). Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
+Done: UI-0..UI-12, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1. Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
 ST-5, T-1..T-3, T-6..T-9, R-1, W-1 (the very last). UI-14 stays on hold.
 Waiting on the user: R-1 pushbacks (binaries in GitHub Releases, not a folder; Claude files in .claude/),
 and whether the placement toast should end in the chart bar (UI-17 note).

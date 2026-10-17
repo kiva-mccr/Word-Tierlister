@@ -70,6 +70,7 @@ def apply_ttk_style(root):
                   background=[("active", P["bg"])],
                   indicatorcolor=[("selected", P["accent"]), ("active", P["surface2"])],
                   indicatorbackground=[("selected", P["accent"]), ("active", P["surface2"])])
+    _tick_boxes(root, style, font("body").metrics("linespace"))
 
     for kind in ("TEntry", "TCombobox", "TSpinbox"):
         style.configure(kind, fieldbackground=P["surface"], foreground=P["text"], padding=5,
@@ -104,3 +105,37 @@ def apply_ttk_style(root):
     style.configure("TLabelframe.Label", background=P["bg"], foreground=P["muted"])
     style.configure("TSeparator", background=P["border"])
     return style
+
+
+def _tick_boxes(root, style, line):
+    """Tick boxes drawn as images (the clam theme's own is a tiny cross that is hard to read): a rounded
+    white box with a hairline, and when ticked a lilac box with a white tick. Sized from the body font."""
+    n = max(13, int(line * 0.8)) | 1
+
+    def box(fill, edge):
+        img = tk.PhotoImage(master=root, width=n, height=n)
+        img.put(P["bg"], to=(0, 0, n, n))
+        img.put(edge, to=(1, 0, n - 1, n))                  # a slightly rounded square: corners stay bg
+        img.put(edge, to=(0, 1, n, n - 1))
+        img.put(fill, to=(2, 1, n - 2, n - 1))
+        img.put(fill, to=(1, 2, n - 1, n - 2))
+        return img
+    off = box(P["surface"], P["disabled"])
+    on = box(P["accent"], P["accent"])
+    t = max(2, n // 7)                                       # stroke width of the tick
+    pts = [(0.24, 0.52), (0.42, 0.70), (0.76, 0.30)]
+    for (x1, y1), (x2, y2) in zip(pts, pts[1:]):
+        steps = n * 2
+        for i in range(steps + 1):
+            x = int((x1 + (x2 - x1) * i / steps) * n)
+            y = int((y1 + (y2 - y1) * i / steps) * n)
+            on.put(P["surface"], to=(x - t // 2, y - t // 2, x - t // 2 + t, y - t // 2 + t))
+    root._tick_images = (off, on)                            # keep references (Tk images are freed otherwise)
+    name = f"Tick{n}.indicator"
+    if name not in style.element_names():
+        style.element_create(name, "image", off, ("selected", on), width=n + max(6, n // 2), sticky="w")
+    style.layout("TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [
+        (name, {"side": "left", "sticky": ""}),
+        ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [
+            ("Checkbutton.label", {"sticky": "nswe"})]})]})])
+    style.configure("TCheckbutton", padding=(2, 3, 2, 3))
