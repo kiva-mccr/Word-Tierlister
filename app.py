@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, SegmentedControl, TierRow, WordCard,
+from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, WordCard,
                      refresh_widgets)
 
 
@@ -128,22 +128,25 @@ class App:
 
     def _build_header(self):
         """The top of the window (UI-10): a white bar with the File / Edit / View / Settings menu buttons,
-        a hairline, then the pill-shaped mode switch. Replaces the system menu bar and the radio buttons.
+        then the mode tabs on a hairline, the open tab joined to the page below. Replaces the system menu
+        bar and the radio buttons.
         Alt+F / Alt+E / Alt+V / Alt+S (and F10 for File) open the menus from the keyboard."""
         r = self.root
-        bar = tk.Frame(r, bg=PALETTE["surface"], padx=8, pady=5)
+        head = tk.Frame(r, bg=PALETTE["surface"])
+        head.pack(side="top", fill="x")
+        bar = tk.Frame(head, bg=PALETTE["surface"], padx=8, pady=5)
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
-        tk.Frame(r, height=1, bg=PALETTE["border"]).pack(side="top", fill="x")
         for name in self.header.buttons:
             r.bind(f"<Alt-{name[0].lower()}>", lambda e, n=name: self._open_menu_key(n))
         r.bind("<F10>", lambda e: self._open_menu_key("File"))
-        row = ttk.Frame(r, padding=(10, 10, 10, 4))
-        row.pack(side="top", fill="x")
-        self.mode_switch = SegmentedControl(row, MODES, self._on_mode_switch, font("label"), animator=self.anim)
+        # the mode tabs sit on the line that is the top edge of the page
+        self.mode_switch = TabBar(head, MODES, self._on_mode_switch, font("label"), animator=self.anim,
+                                  page_bg=PALETTE["bg"])
         self.mode_switch.set(self.mode)
-        self.mode_switch.pack()
+        self.mode_switch.pack(side="top", fill="x")
+        tk.Frame(r, height=6, bg=PALETTE["bg"]).pack(side="top", fill="x")
 
     def _open_menu_key(self, name):
         self.header.open_menu(name)

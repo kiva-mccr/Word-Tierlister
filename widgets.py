@@ -444,70 +444,103 @@ class AnchorLadder(tk.Canvas):
         self._draw()
 
 
-class SegmentedControl(tk.Canvas):
-    """A pill-shaped switch between a few options, with a white thumb that slides to the chosen one (UI-10).
+class TabBar(tk.Canvas):
+    """Folder-style tabs over a page (UI-10): a hairline runs the full width under the tabs, and the
+    chosen tab is drawn in the page colour with its sides and rounded top outlined, open at the bottom,
+    so it looks joined to the page below.
 
-        seg = SegmentedControl(parent, [("place", "Place new words"), ...], on_change, font("label"),
-                               animator=app.anim)
-        seg.set("refine")        # move the thumb without calling on_change (e.g. after a key)
+        tabs = TabBar(parent, [("place", "Place new words"), ...], on_change, font("label"),
+                      animator=app.anim, page_bg=PALETTE["bg"])
+        tabs.pack(fill="x")
+        tabs.set("refine")        # move to a tab without calling on_change (e.g. after a key)
 
-    A click on another segment moves the thumb (SLIDE_MS, ease-out; jumps with Reduce motion) and calls
-    on_change(key). Segments are all as wide as the widest label so the thumb keeps its size.
+    A click on another tab slides the open tab there (SLIDE_MS, ease-out; jumps with Reduce motion) and
+    calls on_change(key). Tabs are all as wide as the widest label and sit centred.
     """
     SLIDE_MS = 180
 
-    def __init__(self, parent, options, on_change, font=None, animator=None, canvas_bg=None):
-        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"], takefocus=0)
+    def __init__(self, parent, options, on_change, font=None, animator=None, canvas_bg=None, page_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["surface"], takefocus=0)
         self.options = list(options)
         self._keys = [k for k, _ in self.options]
         self._on_change, self._font, self._anim = on_change, font, animator
+        self._page = page_bg or PALETTE["bg"]
         self.value = self._keys[0]
-        self._x = 0.0                        # thumb position, in segments (animated)
+        self._x = 0.0                        # position of the open tab, in tabs (animated)
         self._hover = None
         self.bind("<Motion>", self._on_motion)
         self.bind("<Leave>", lambda e: self._set_hover(None))
         self.bind("<ButtonRelease-1>", self._on_click)
+        self.bind("<Configure>", lambda e: self._draw())
         self._draw()
 
     def _metrics(self):
         f = self._font
         line = f.metrics("linespace") if f else 16
         widest = max((f.measure(lbl) if f else 8 * len(lbl)) for _, lbl in self.options)
-        pad = int(line * 1.1)
-        return widest + 2 * pad, int(line * 2.0), 4      # segment width, height, inset of the thumb
+        tab_w = widest + 2 * int(line * 1.1)
+        h = int(line * 2.1)
+        n = len(self.options)
+        width = max(self.winfo_width(), n * tab_w + 20)
+        return tab_w, h, (width - n * tab_w) / 2, width       # tab width, height, left edge of the tabs, width
 
     def _draw(self):
         self.delete("all")
-        seg, h, inset = self._metrics()
+        tab_w, h, x0, width = self._metrics()
+        super().configure(height=h + 1, cursor="hand2")
         n = len(self.options)
-        total = seg * n + 2 * inset
-        super().configure(width=total + 2, height=h + 4, cursor="hand2")
-        self.create_polygon(_rounded_points(1, 1, total, h, h // 2), smooth=True, fill=PALETTE["surface2"],
-                            outline=PALETTE["border"], tags="track")
-        self.create_polygon(_rounded_points(0, 0, 1, 1, 1), smooth=True, fill=PALETTE["shadow"], outline="",
-                            tags="thumbshadow")
-        self.create_polygon(_rounded_points(0, 0, 1, 1, 1), smooth=True, fill=PALETTE["surface"],
-                            outline=PALETTE["border"], tags="thumb")
+        super().configure(width=n * tab_w + 20)
+        self.create_polygon(0, 0, 0, 0, fill=PALETTE["surface2"], outline="", tags="hoverfill")
+        self.create_polygon(0, 0, 0, 0, fill=self._page, outline="", tags="tabfill")
+        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], smooth=True, tags="tabedge")
+        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_left")
+        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_right")
         for i, (key, label) in enumerate(self.options):
-            self.create_text(1 + inset + seg * i + seg / 2, 1 + h / 2, text=label, font=self._font,
+            self.create_text(x0 + tab_w * i + tab_w / 2, 2 + h / 2, text=label, font=self._font,
                              tags=("label", f"label_{key}"))
-        self._place_thumb()
+        self._place_tab()
 
-    def _place_thumb(self):
-        seg, h, inset = self._metrics()
-        x1 = 1 + inset + self._x * seg
-        r = (h - 2 * inset) // 2
-        self.coords("thumbshadow", *_rounded_points(x1, 1 + inset + 1, x1 + seg, h - inset + 1, r))
-        self.coords("thumb", *_rounded_points(x1, 1 + inset, x1 + seg, h - inset, r))
+    @staticmethod
+    def _tab_shape(x1, x2, top, bottom, r):
+        """Outline of a tab with rounded top corners and square bottom corners (points doubled at the
+        bottom so a smoothed polygon keeps them sharp)."""
+        return [x1, bottom, x1, bottom, x1, top + r, x1, top, x1 + r, top, x2 - r, top, x2, top,
+                x2, top + r, x2, bottom, x2, bottom]
+
+    def _place_tab(self):
+        tab_w, h, x0, width = self._metrics()
+        base = h                                     # y of the page line
+        top = 4
+        r = max(4, h // 4)
+        x1 = x0 + self._x * tab_w + 2
+        x2 = x1 + tab_w - 4
+        shape = self._tab_shape(x1, x2, top, base + 1, r)
+        self.coords("tabfill", *shape)
+        self.coords("tabedge", *shape[2:-2])       # sides and top only: open at the bottom
+        self.coords("baseline_left", 0, base, x1, base)
+        self.coords("baseline_right", x2, base, width, base)
+        hov = self._hover if self._hover != self.value else None
+        if hov is not None:
+            i = self._keys.index(hov)
+            hx1 = x0 + i * tab_w + 6
+            self.coords("hoverfill", *self._tab_shape(hx1, hx1 + tab_w - 12, top + 4, base - 1, r))
+            self.itemconfigure("hoverfill", state="normal")
+        else:
+            self.itemconfigure("hoverfill", state="hidden")
         for key in self._keys:
             on = key == self.value or key == self._hover
             self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"])
         self.tag_raise("label")
 
     def _index_at(self, x):
-        seg, _h, inset = self._metrics()
-        i = int((x - 1 - inset) // seg)
+        tab_w, _h, x0, _w = self._metrics()
+        i = int((x - x0) // tab_w) if x >= x0 else -1
         return self._keys[i] if 0 <= i < len(self._keys) else None
+
+    def tab_x(self, key):
+        """Centre x of a tab, in canvas pixels (for tests)."""
+        tab_w, _h, x0, _w = self._metrics()
+        return x0 + self._keys.index(key) * tab_w + tab_w / 2
 
     def _on_motion(self, e):
         self._set_hover(self._index_at(e.x))
@@ -515,7 +548,7 @@ class SegmentedControl(tk.Canvas):
     def _set_hover(self, key):
         if key != self._hover:
             self._hover = key
-            self._place_thumb()
+            self._place_tab()
 
     def _on_click(self, e):
         key = self._index_at(e.x)
@@ -524,7 +557,7 @@ class SegmentedControl(tk.Canvas):
             self._on_change(key)
 
     def set(self, key):
-        """Show `key` as chosen (slides the thumb; does not call on_change)."""
+        """Show `key` as the open tab (slides; does not call on_change)."""
         if key not in self._keys:
             return
         self.value = key
@@ -532,11 +565,11 @@ class SegmentedControl(tk.Canvas):
 
         def frame(p):
             self._x = start + (goal - start) * p
-            self._place_thumb()
+            self._place_tab()
         if self._anim is None:
             frame(1.0)
         else:
-            self._anim.run(f"seg{id(self)}", self.SLIDE_MS, frame)
+            self._anim.run(f"tabs{id(self)}", self.SLIDE_MS, frame)
 
     def get(self):
         return self.value
@@ -852,7 +885,7 @@ class WordCard(tk.Canvas):
 def refresh_widgets(widget):
     """Re-measure every RoundButton, WordCard and AnchorLadder under `widget` (after fonts were resized)."""
     for child in widget.winfo_children():
-        if isinstance(child, (RoundButton, WordCard, AnchorLadder, SegmentedControl)):
+        if isinstance(child, (RoundButton, WordCard, AnchorLadder, TabBar)):
             child.refresh()
         else:
             refresh_widgets(child)

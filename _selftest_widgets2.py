@@ -1,10 +1,10 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
-SegmentedControl, DropMenu and HeaderMenus (UI-10)."""
+TabBar, DropMenu and HeaderMenus (UI-10)."""
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, SegmentedControl, TierRow
+from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -115,25 +115,40 @@ anim.reduce_motion = False
 w0 = lad.winfo_reqwidth(); small.configure(size=20); lad.refresh(); assert lad.winfo_reqwidth() > w0
 small.configure(size=11)
 
-# ---- SegmentedControl (UI-10)
+# ---- TabBar (UI-10): folder tabs on the page line
 changes = []
 opts = [("place", "Place new words"), ("refine", "Refine within tier"), ("boundary", "Boundary check")]
-seg = SegmentedControl(root, opts, changes.append, small, animator=anim); seg.pack(); update()
+seg = TabBar(root, opts, changes.append, small, animator=anim, page_bg=PALETTE["bg"])
+seg.pack(fill="x"); root.geometry("900x700"); update(5)
 assert seg.get() == "place" and len(seg.find_withtag("label")) == 3
-seg_w = (seg.winfo_reqwidth() - 2 - 8) / 3
-def seg_click(i):
-    x = int(5 + seg_w * i + seg_w / 2)
+def seg_click(key):
+    x = int(seg.tab_x(key))
     seg.event_generate("<Motion>", x=x, y=10); seg.event_generate("<ButtonRelease-1>", x=x, y=10); update()
 assert seg.itemcget("label_place", "fill") == PALETTE["text"] and seg.itemcget("label_refine", "fill") == PALETTE["muted"]
-t0 = seg.coords("thumb")[0]
-seg_click(2)
+# the page line runs the full width, with a gap exactly under the open tab
+bl, br = seg.coords("baseline_left"), seg.coords("baseline_right")
+tab = seg.coords("tabfill")
+assert bl[0] == 0 and br[2] >= seg.winfo_width() - 1 and bl[1] == bl[3] == br[1]
+assert abs(bl[2] - min(tab[0::2])) < 1 and abs(br[0] - max(tab[0::2])) < 1
+assert min(tab[0::2]) < seg.tab_x("place") < max(tab[0::2])
+assert seg.itemcget("tabfill", "fill") == PALETTE["bg"]                          # the open tab is page coloured
+assert max(tab[1::2]) > bl[1]                                                    # and reaches over the line
+edge = seg.coords("tabedge"); assert max(edge[1::2]) <= bl[1] + 1               # its outline is open at the bottom
+t0 = min(tab[0::2])
+seg_click("boundary")
 assert changes == ["boundary"] and seg.get() == "boundary"
-anim.finish_all(); assert seg.coords("thumb")[0] > t0 + seg_w * 1.5           # the thumb slid two segments
-seg_click(2); assert changes == ["boundary"]                                     # clicking the chosen one: nothing
+anim.finish_all(); assert min(seg.coords("tabfill")[0::2]) > t0 + 100           # the open tab slid over
+assert min(seg.coords("tabfill")[0::2]) < seg.tab_x("boundary") < max(seg.coords("tabfill")[0::2])
+seg_click("boundary"); assert changes == ["boundary"]                           # clicking the open one: nothing
+seg.event_generate("<Motion>", x=int(seg.tab_x("place")), y=10); update()
+assert seg.itemcget("hoverfill", "state") == "normal"                            # hover tint on another tab
 seg.set("refine"); anim.finish_all(); assert seg.get() == "refine" and changes == ["boundary"]   # set() is silent
 seg.set("nonsense"); assert seg.get() == "refine"
 seg.event_generate("<Leave>"); update()
+assert seg.itemcget("hoverfill", "state") == "hidden"
 assert seg.itemcget("label_refine", "fill") == PALETTE["text"] and seg.itemcget("label_place", "fill") == PALETTE["muted"]
+root.geometry("1300x700"); update(5)
+assert seg.coords("baseline_right")[2] >= seg.winfo_width() - 1                 # follows the window width
 
 # ---- DropMenu and HeaderMenus (UI-10)
 ran, chk = [], tk.BooleanVar(value=False)
