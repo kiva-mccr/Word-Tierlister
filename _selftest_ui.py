@@ -33,6 +33,7 @@ def key(ks):
 
 pump()
 # ---------------------------------------------------------------- place mode
+assert app.hint_lbl.cget("text") == "Backspace or Ctrl+Z undo"     # 1-6, Space, U, D are on their buttons
 first = s.next_unplaced()["word"]
 assert app.word_card.word == first, (app.word_card.word, first)
 assert "frequency rank" in app.word_card.sub
@@ -42,6 +43,7 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
+assert app.hint_lbl.cget("text") == "Esc cancel"                  # only keys no button shows
 pump(2)
 assert app.ladder.winfo_ismapped() and app.ladder.possible() == [0, 1, 2, 3, 4, 5]   # UI-9: the ladder shows
 assert app.ladder.mid == app.cmp["mid"]

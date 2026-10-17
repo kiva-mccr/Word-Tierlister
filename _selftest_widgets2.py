@@ -1,10 +1,11 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
-TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11)."""
+TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
+DefinitionDrawer (UI-12)."""
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from widgets import AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -253,5 +254,35 @@ assert toast.cget("text") == ""                                                #
 toast.show("jump", (PALETTE["ok"][0], PALETTE["ok"][1]), in_=page); assert toast.itemcget("pill", "fill") == PALETTE["ok"][0]
 toast.hide(); assert toast.cget("text") == ""                                     # no fade with Reduce motion
 anim.reduce_motion = False
+
+# ---- DefinitionDrawer (UI-12)
+head = tkfont.Font(root=root, family="TkDefaultFont", size=13, weight="bold")
+dwin = tk.Toplevel(root)                                                         # room of its own
+dr = DefinitionDrawer(dwin, {"body": small, "head": head}, animator=anim)
+defs = {"apple": '1. (noun) a round fruit\n      e.g. "an apple a day"\n2. (verb) to pick apples'}
+dr.show_words(["apple", "pear"], defs.get)
+txt = dr.text.get("1.0", "end")
+assert txt.startswith("apple\n1.  noun  a round fruit\n\u201can apple a day\u201d\n2.  verb  to pick apples")
+assert "pear\nLooking up definition..." in txt
+def tags_at(word):
+    i = dr.text.search(word, "1.0"); return set(dr.text.tag_names(i))
+assert "head" in tags_at("apple") and "pos" in tags_at("noun") and "ex" in tags_at("an apple a day")
+assert "wait" in tags_at("Looking up") and "num" in tags_at("2.")
+assert dr.text.tag_cget("pos", "font") and "italic" in str(tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("slant"))
+assert str(dr.text.cget("state")) == "disabled"
+assert not dr.is_open
+dr.pack(side="bottom", fill="x"); update()
+full = dr.winfo_reqheight()
+dr.open(); update()
+assert dr.is_open and dr.winfo_height() < full                                  # easing open from nothing
+anim.finish_all(); update(); assert abs(dr.winfo_height() - full) <= 2, (dr.winfo_height(), full, dr.winfo_reqheight(), root.winfo_height())
+closed = []
+dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()
+assert not dr.is_open and not closed and dr.winfo_height() > 1                   # still closing
+anim.finish_all(); update(); assert closed == [1] and not dr.winfo_manager()
+dr.set_open(True); assert dr.is_open
+small.configure(size=14); dr.refresh_fonts()
+assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
+small.configure(size=11)
 root.destroy()
 print("WIDGETS2 OK")

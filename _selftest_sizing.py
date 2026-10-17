@@ -72,6 +72,11 @@ for sw, sh, sc in cases:
     assert W <= int(sw * 0.96) and bw.win.winfo_height() <= int(sh * 0.90), f"browse bigger than screen {sw}x{sh}"
     for bar in (bw.top_bar, bw.btn_bar):
         assert bar.winfo_reqwidth() <= W, f"browse toolbar clipped {sw}x{sh} sc{sc}: {bar.winfo_reqwidth()} > {W}"
+    # the word count at its longest ("N of M (more on scroll)") still fits: it is part of the minimum size
+    bw.count_lbl.config(text=bw._longest_count()); root.update()
+    assert bw.top_bar.winfo_reqwidth() <= max(W, int(bw.win.minsize()[0])), f"browse count clipped {sw}x{sh} sc{sc}"
+    bw.total = 1234567; bw._update_count(); root.update()                 # more digits: the minimum grows
+    assert int(bw.win.minsize()[0]) >= min(bw._needed_size()[0], int(sw * 0.96)), "minsize ignores the count"
     cols = sum(int(bw.tree.column(c, "width")) for c in ("tier", "word", "rating", "games", "freq"))
     assert cols <= bw.tree.winfo_width() + 2, f"browse columns clipped {sw}x{sh} sc{sc}"
     for col, text in (("rating", "Rating"), ("freq", "Freq #")):

@@ -27,6 +27,9 @@ errors, ui_motion, widgets, startup -> browser -> app -> tierlist.
 
 ## Conventions worth keeping
 - Light theme only. Pastel and cutesy, short tasteful animations, no badges, streaks or goals.
+- New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
+  height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
+- The bottom-right hint lists only keys no on-screen button already shows.
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
@@ -56,9 +59,10 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-6, ST-1..ST-4 (ST-4: required packages + tkinter asked/installed in the terminal first,
-optional ones in the window), SZ-1 (sizing). Next: UI-7 (TierRow), UI-8 (DuelCards), then UI-9, UI-13,
-UI-16/17. UI-18 wires every hotkey to its button's pressed look via `RoundButton.flash`.
+Done: UI-0..UI-12, ST-1..ST-4, SZ-1 (sizing). Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
+ST-5, T-1..T-3, T-6..T-9, R-1, W-1 (the very last). UI-14 stays on hold.
+Waiting on the user: R-1 pushbacks (binaries in GitHub Releases, not a folder; Claude files in .claude/),
+and whether the placement toast should end in the chart bar (UI-17 note).
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.

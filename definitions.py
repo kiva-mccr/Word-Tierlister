@@ -6,6 +6,7 @@ finished lookups. Results are cached in the save file by the caller (App) via St
 """
 import json
 import queue
+import re
 import threading
 import urllib.error
 import urllib.parse
@@ -16,6 +17,34 @@ import urllib.request
 # Definitions (WordNet offline, dictionaryapi.dev online fallback, cached)
 # --------------------------------------------------------------------------
 POS_NAMES = {"n": "noun", "v": "verb", "a": "adj", "s": "adj", "r": "adv"}
+_SENSE = re.compile(r"^\s*(\d+)\.\s*(?:\(([^)]*)\)\s*)?(.*)$")
+_EXAMPLE = re.compile(r'^\s*e\.g\.\s*"?(.*?)"?\s*$')
+
+
+def parse_definition(text):
+    """Split stored definition text into senses for display (UI-12):
+    [{"num": "1", "pos": "noun", "text": "...", "example": "..." or None}, ...].
+
+    Understands the format written by _wordnet / _online ('1. (noun) text' lines, each optionally followed
+    by an indented 'e.g. "..."' line). Anything else becomes one sense with no number or part of speech,
+    so odd or old cached text still shows.
+    """
+    senses = []
+    for line in (text or "").splitlines():
+        if not line.strip():
+            continue
+        ex = _EXAMPLE.match(line)
+        if ex and senses and senses[-1]["example"] is None:
+            senses[-1]["example"] = ex.group(1)
+            continue
+        m = _SENSE.match(line)
+        if m:
+            senses.append({"num": m.group(1), "pos": m.group(2) or "", "text": m.group(3).strip(), "example": None})
+        elif senses and not senses[-1]["num"]:
+            senses[-1]["text"] += " " + line.strip()
+        else:
+            senses.append({"num": "", "pos": "", "text": line.strip(), "example": None})
+    return senses
 
 
 class Definitions:

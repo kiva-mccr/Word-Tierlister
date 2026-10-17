@@ -947,6 +947,124 @@ class Toast(tk.Canvas):
         self._anim.run(f"toast{id(self)}", ms, lambda p: self._paint(a + (b - a) * p), done)
 
 
+class DefinitionDrawer(tk.Frame):
+    """The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold
+    with its senses numbered, the part of speech in italics and examples muted.
+
+        drawer = DefinitionDrawer(root, fonts={"body": font("body"), "head": font("head")}, animator=app.anim)
+        drawer.show_words(["apple"], lambda w: "1. (noun) a fruit\n      e.g. \"an apple a day\"")
+        drawer.open() / drawer.close()      # the caller packs it first / unpacks it after on_closed
+
+    `text` is the tk.Text inside (its height in lines is what the window-fitting code shortens).
+    """
+    SLIDE_MS = 200
+
+    def __init__(self, parent, fonts, animator=None):
+        super().__init__(parent, bg=PALETTE["bg"])
+        self._anim = animator
+        body, head = fonts["body"], fonts["head"]
+        self._italic = tkfont.Font(root=self, font=body)
+        self._italic.configure(slant="italic")
+        self._body = body
+        inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"])
+        inner.pack(fill="x", anchor="n")
+        self.text = tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
+                            padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow")
+        self.text.pack(fill="x")
+        t = self.text
+        t.tag_configure("head", font=head, spacing1=2, spacing3=4)
+        t.tag_configure("num", foreground=PALETTE["muted"])
+        t.tag_configure("pos", font=self._italic, foreground=PALETTE["muted"])
+        t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
+        t.tag_configure("ex", font=self._italic, foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
+        t.tag_configure("wait", foreground=PALETTE["muted"])
+        self._shown = False
+
+    def refresh_fonts(self):
+        """Follow the body font after it was resized (the italic copy is this widget's own)."""
+        self._italic.configure(size=self._body.cget("size"), family=self._body.cget("family"))
+
+    def show_words(self, words, get_def):
+        """Fill the pane: for each word, its name and its senses (get_def(word) -> text, or None while
+        it is still being looked up)."""
+        from definitions import parse_definition
+        t = self.text
+        t.config(state="normal")
+        t.delete("1.0", "end")
+        for i, w in enumerate(words):
+            if i:
+                t.insert("end", "\n")
+            t.insert("end", w + "\n", "head")
+            text = get_def(w)
+            if text is None:
+                t.insert("end", "Looking up definition...\n", "wait")
+                continue
+            for sense in parse_definition(text):
+                if sense["num"]:
+                    t.insert("end", sense["num"] + ".  ", ("num", "sense"))
+                if sense["pos"]:
+                    t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
+                t.insert("end", sense["text"] + "\n", "sense")
+                if sense["example"]:
+                    t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
+        t.config(state="disabled")
+
+    @property
+    def is_open(self):
+        return self._shown
+
+    def settle(self):
+        """Jump a running open / close to its end now (before the layout around it is measured)."""
+        if self._anim is not None:
+            self._anim.finish(f"drawer{id(self)}")
+
+    def set_open(self, on):
+        """Mark as open / shut with no animation (the caller packs or unpacks it)."""
+        self._shown = bool(on)
+        self._natural()
+
+    def _natural(self):
+        """Back to sizing from the contents. The explicit height left by the slide must go too (0 = none):
+        with both set, Tk flips between the two sizes on every relayout."""
+        try:
+            super().configure(height=0)
+            self.pack_propagate(True)
+        except tk.TclError:
+            pass
+
+    def open(self):
+        """Ease open from nothing to the height the contents want (the caller has packed it already)."""
+        self._shown = True
+        self.update_idletasks()
+        goal = self.winfo_reqheight()
+        self._slide(0, goal, self._natural)
+
+    def close(self, on_closed=None):
+        """Ease shut, then call on_closed (the caller unpacks it there)."""
+        self._shown = False
+
+        def done():
+            self._natural()
+            if on_closed:
+                on_closed()
+        self._slide(max(1, self.winfo_height()), 0, done)
+
+    def _slide(self, a, b, done=None):
+        self.pack_propagate(False)
+
+        def frame(p):
+            try:
+                super(DefinitionDrawer, self).configure(height=max(1, int(a + (b - a) * p)))
+            except tk.TclError:
+                pass
+        if self._anim is None:
+            frame(1.0)
+            if done:
+                done()
+        else:
+            self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
+
+
 class WordCard(tk.Canvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").

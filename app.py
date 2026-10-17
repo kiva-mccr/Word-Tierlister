@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
+from widgets import (AnchorLadder, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
                      refresh_widgets)
 
 
@@ -186,10 +186,8 @@ class App:
         self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right", wraplength=560)
         self.hint_lbl.pack(side="right")
 
-        self.def_frame = ttk.LabelFrame(r, text="Definition")
-        self.def_text = tk.Text(self.def_frame, height=9, wrap="word", state="disabled", font=font("body"))
-        self.def_text.tag_configure("head", font=font("head"))
-        self.def_text.pack(fill="x", padx=6, pady=6)
+        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim)
+        self.def_text = self.def_frame.text
 
         self.center = ttk.Frame(r)
         self.center.pack(side="top", fill="both", expand=True)
@@ -355,21 +353,36 @@ class App:
                 r.geometry(f"{w}x{h}")
 
     # ---- layout toggles -------------------------------------------------------------------------------
-    def _layout_defs(self):
-        """Show or hide the definition pane to match self.show_defs."""
+    def _layout_defs(self, animate=False):
+        """Show or hide the definition drawer to match self.show_defs (easing open / shut when `animate`)."""
+        d = self.def_frame
+        d.settle()
+        if animate and self.show_defs == d.is_open:      # no change: nothing to animate
+            animate = False
         if self.show_defs:
-            self.def_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
+            if not animate:
+                d.set_open(True)
+            d.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
             self._render_defs()
-        else:
-            self.def_frame.pack_forget()
+            if animate:
+                self._fit_window()             # size for the open drawer first, then ease it open
+                d.open()
+        elif d.winfo_manager():
+            if animate:
+                d.close(on_closed=lambda: not self.show_defs and d.pack_forget())
+            else:
+                d.set_open(False)
+                d.pack_forget()
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
         self.show_defs = (not self.show_defs) if value is None else bool(value)
         self.defs_var.set(self.show_defs)
         self.store.set_meta("show_defs", int(self.show_defs))
-        self._layout_defs()
-        self._fit_window()
+        was_open = self.def_frame.is_open
+        self._layout_defs(animate=True)
+        if not self.show_defs or was_open:
+            self._fit_window()
 
     def toggle_motion(self):
         """View > Reduce motion: turn animations off (they jump to their end state). Saved."""
@@ -453,13 +466,13 @@ class App:
         self.tier_lbl.config(text="    ".join(f"{TIERS[t]}: {s['tiers'].get(t, 0):,}" for t in range(len(TIERS))))
 
     def _hint(self):
-        """Bottom-right key reminder for the current mode."""
+        """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
+        compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
+        their own key hints, and the Definition (D) button names its key."""
         if self.mode == "place" and self.cmp:
-            h = "Up/B better   Down/W worse   E same tier   Backspace back   Esc cancel"
-        elif self.mode == "place":
-            h = "1-6 tier   Space compare   U don't know   D definition   Ctrl+Z undo"
+            h = "Esc cancel"
         else:
-            h = "Left/A left wins   Right/L right wins   Down/T tie   S skip pair   D definition   Ctrl+Z undo"
+            h = "Backspace or Ctrl+Z undo"
         self.hint_lbl.config(text=h)
 
     # ---- place mode ------------------------------------------------------------------------------------------
@@ -822,16 +835,7 @@ class App:
             self.def_words = words
         if not self.show_defs:
             return
-        t = self.def_text
-        t.config(state="normal")
-        t.delete("1.0", "end")
-        for i, w in enumerate(self.def_words):
-            if i:
-                t.insert("end", "\n")
-            t.insert("end", w + "\n", "head")
-            t.insert("end", self.get_def(w) or "Looking up definition...")
-            t.insert("end", "\n")
-        t.config(state="disabled")
+        self.def_frame.show_words(self.def_words, self.get_def)
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
