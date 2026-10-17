@@ -471,6 +471,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
 #           scale, so a zoom never pushes the window past the screen. (Browse keeps its own zoom.)
 #           Plain messages (zoom, skip, duel results) now appear just above the bottom bar, clear of the card.
+# [ ] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
+#           while no tier holds two words yet (only at the very start), and "Resolve conflicts" while there
+#           are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon
+#           as it has work, and goes when it has none. If you are on a tab when its last piece of work is
+#           done (the last conflict resolved), it stays until you leave it, showing its friendly empty
+#           state (UI-20), so the page never vanishes under you. The saved mode falls back to Place new
+#           words if its tab is hidden at start-up. The check uses cheap counts (Store.tier_counts and
+#           the conflicts count, already read for the status line), never a scan per refresh.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
