@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, sys, tempfile, time, types
+import os, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
@@ -95,5 +95,14 @@ app.open_browser(); pump(6)
 bw = app.browsers[0]
 assert bw.total == store.stats()["placed"]
 bw.close()
+app.on_close()
+
+# --- every word placed (UI-20): a friendly card in Place, and no tier buttons
+done = T.Store(os.path.join(tempfile.mkdtemp(), "done.db"))
+six = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
+done.insert_words(six); done.set_anchors(six)                     # anchors are placed: nothing left to place
+root = tk.Tk(); app = T.App(root, done, T.Definitions(done)); pump(4)
+assert app.cur_word is None and app.place_empty.winfo_ismapped() and not app.word_card.winfo_ismapped()
+assert app.place_empty.title == "Every word is placed" and not app.tier_row.winfo_ismapped()
 app.on_close()
 print("UI2 OK")

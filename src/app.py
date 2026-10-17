@@ -26,7 +26,7 @@ from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -234,6 +234,7 @@ class App:
         inner.place(relx=0.5, rely=0.5, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
+        self.place_empty = EmptyCard(inner, font("title"), font("body"))     # every word placed (UI-20)
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
         self.ladder.grid(row=1, column=0)
         self.ladder.grid_remove()               # only while comparing to anchors (UI-9)
@@ -293,6 +294,7 @@ class App:
         self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
+        self.pair_empty = EmptyCard(pi, font("title"), font("body"))         # nothing to duel here (UI-20)
         self.center.bind("<Configure>", self._on_center_configure)
 
     # ---- zoom (View menu, Ctrl + / Ctrl - / Ctrl 0) ---------------------------------------------------------
@@ -614,7 +616,10 @@ class App:
         row = self.store.next_unplaced()
         if row is None:
             self.cur_word = None
-            self.word_card.set("All words placed", "Switch to Refine / Boundary to keep improving the ranking.")
+            self.word_card.grid_remove()
+            self.place_empty.set("Every word is placed",
+                                 "Refine within tier and Boundary check can keep polishing the order.")
+            self.place_empty.grid(row=0, column=0)
             self._set_question("")
             self.tier_row.grid_remove()
             self.cmp_row.grid_remove()
@@ -623,6 +628,8 @@ class App:
             self._hint()
             return
         self.cur_word = row["word"]
+        self.place_empty.grid_remove()
+        self.word_card.grid()
         notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
         self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")
@@ -812,28 +819,34 @@ class App:
         random.shuffle(pair)  # avoid left/right position bias
         return {"left": pair[0], "right": pair[1], "ctx": ctx}
 
+    EMPTY = {   # UI-20: what an empty duel tab says instead of greyed-out cards
+        "refine": ("Nothing to refine yet", "Duels start as soon as a tier holds two words. Keep placing!"),
+        "boundary": ("Nothing to compare yet",
+                     "Boundary checks start once two neighbouring tiers both have words."),
+        "conflict": ("No conflicts", "Your answers all agree. Nicely consistent!"),
+    }
+
     def _show_pair(self):
         """Pair view: show the next duel, or a friendly message with the buttons disabled when none is available."""
         self.place_frame.pack_forget()
         self.pair_frame.pack(fill="both", expand=True)
         self.pair = self._pick_pair()
         if self.pair is None:
-            msg = {
-                "refine": "Nothing to refine yet: you need two words in the same tier "
-                          "(or the focus word has faced all nearby words).",
-                "boundary": "Nothing to compare yet: you need words in two neighbouring tiers.",
-                "conflict": "No conflicts flagged. Nice and consistent.",
-            }[self.mode]
+            title, text = self.EMPTY[self.mode]
             if self.focus:
                 self.flash(f"No fresh opponents left for '{self.focus}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
                 self.focus = None
                 self._update_focus_label()
-            self.left_btn.config(text="-")
-            self.right_btn.config(text="-")
-            self.ctx_lbl.config(text=msg)
-            self.duel.set_enabled(False)
+            for w in (self.pair_title, self.duel, self.ctx_lbl):
+                w.grid_remove()
+            self.pair_empty.set(title, text)
+            self.pair_empty.grid(row=2, column=0)
+            self.duel.set_enabled(False)              # (their keys are off too)
             self._render_defs([])
         else:
+            self.pair_empty.grid_remove()
+            for w in (self.pair_title, self.duel, self.ctx_lbl):
+                w.grid()
             self.duel.show(self.pair["left"], self.pair["right"],
                            colors=[self._tier_color(self.pair[side]) for side in ("left", "right")])
             self._fit_big_text()

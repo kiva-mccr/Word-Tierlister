@@ -7,7 +7,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import ChoiceButton, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from widgets import ChoiceButton, EmptyCard, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -382,5 +382,14 @@ anim.reduce_motion = True                                                   # Re
 card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)
 assert not card.find_withtag("old") and card.itemcget("word", "fill") == PALETTE["text"]
 anim.reduce_motion = False
+
+# ---- EmptyCard (UI-20)
+ew = tk.Toplevel(root)
+ec = EmptyCard(ew, head, small); ec.pack(); ec.set("No conflicts", "Your answers all agree. " * 4); update()
+assert ec.itemcget("title", "text") == "No conflicts" and ec.itemcget("panel", "fill") == PALETTE["surface2"]
+tb, bb = ec.bbox("title"), ec.bbox("body")
+assert tb[3] <= bb[1] and bb[2] - bb[0] <= small.measure("n" * 34) + 2               # title above; body wraps
+assert ec.winfo_reqwidth() > bb[2] - bb[0] and ec.winfo_reqheight() > bb[3]           # the panel holds both
+ew.destroy()
 root.destroy()
 print("WIDGETS2 OK")

@@ -183,6 +183,15 @@ except Exception as exc:
 
 bw.close()
 
+# ---- empty states (UI-20): a friendly card instead of greyed-out cards
+app.mode_var.set("conflict"); app.on_mode_change(); pump(3)
+if app.pair is None:
+    assert app.pair_empty.winfo_ismapped() and not app.duel.winfo_ismapped() and not app.pair_title.winfo_ismapped()
+    assert app.pair_empty.title == "No conflicts"
+    n0 = s.stats()["comparisons"]; key("Left"); assert s.stats()["comparisons"] == n0     # its keys are off
+app.mode_var.set("refine"); app.on_mode_change(); pump(3)
+assert app.duel.winfo_ismapped() and not app.pair_empty.winfo_ismapped()             # back to duels when there are some
+
 # ---- every tab's content is centred in the page, and the page is the same size in every tab
 c = app.center
 pages = set()

@@ -1170,6 +1170,51 @@ class DefinitionDrawer(tk.Frame):
             self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
 
 
+class EmptyCard(tk.Canvas):
+    """A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of
+    help, shown instead of greyed-out controls.
+
+        card = EmptyCard(parent, font("title"), font("body"))
+        card.set("No conflicts", "Nicely consistent. Nothing to look at here.")
+    """
+
+    def __init__(self, parent, title_font, body_font, width_chars=34, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self._tf, self._bf, self._chars = title_font, body_font, width_chars
+        self.title = self.text = ""
+        self._draw()
+
+    def set(self, title, text):
+        self.title, self.text = title, text
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        line = self._tf.metrics("linespace")
+        pad, gap = int(line * 1.2), int(line * 0.35)
+        wrap = self._bf.measure("n" * self._chars)
+        t = self.create_text(0, 0, text=self.title, font=self._tf, fill=PALETTE["text"], anchor="n",
+                             justify="center", width=wrap, tags="title")
+        b = self.create_text(0, 0, text=self.text, font=self._bf, fill=PALETTE["muted"], anchor="n",
+                             justify="center", width=wrap, tags="body")
+        tb, bb = self.bbox(t), self.bbox(b)
+        tw, th = (tb[2] - tb[0], tb[3] - tb[1]) if tb else (0, 0)
+        bw, bh = (bb[2] - bb[0], bb[3] - bb[1]) if bb else (0, 0)
+        w = max(tw, bw, wrap * 0.6) + 2 * pad
+        h = th + gap + bh + 2 * int(pad * 0.8)
+        super().configure(width=w + 2, height=h + 2)
+        self.create_polygon(_rounded_points(1, 1, w, h, min(22, h // 3)), smooth=True, fill=PALETTE["surface2"],
+                            outline=PALETTE["border"], tags="panel")
+        top = 1 + int(pad * 0.8)
+        self.coords(t, 1 + w / 2, top)
+        self.coords(b, 1 + w / 2, top + th + gap)
+        self.tag_raise("title")
+        self.tag_raise("body")
+
+    def refresh(self):
+        self._draw()
+
+
 class WordCard(tk.Canvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").

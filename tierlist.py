@@ -378,8 +378,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           toast already says what moved.
 #           Later (asked for): the duel cards wear their word's tier colour in Refine, Boundary check and
 #           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
-# [ ] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
+# [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
+#           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
+#           holds the Refine / Boundary / Conflicts messages, and Place shows "Every word is placed".
 # [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
 #           words under the card, so the eye can pre-read and the flow stays quick.
 #
