@@ -504,7 +504,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #
 # --- Window by window (asked for: every window's planned changes in one place) -------------------------
 #   Main window ........ header + tabs (UI-10, UI-27), status line (UI-15, UI-34), tier chart (UI-13,
-#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37, UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
+#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37,
+#                        UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
 #                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
 #   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
