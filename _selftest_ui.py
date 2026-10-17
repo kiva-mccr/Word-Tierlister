@@ -42,6 +42,13 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
+pump(2)
+assert app.ladder.winfo_ismapped() and app.ladder.possible() == [0, 1, 2, 3, 4, 5]   # UI-9: the ladder shows
+assert app.ladder.mid == app.cmp["mid"]
+key("Up"); pump(2)                                                  # better than the middle anchor
+if app.cmp:
+    assert app.ladder.possible() == list(range(app.cmp["lo"], app.cmp["hi"] + 1)) and max(app.ladder.possible()) < 2
+key("BackSpace"); pump(2)
 key("Up"); key("Down")
 pump(2)
 if app.cmp:

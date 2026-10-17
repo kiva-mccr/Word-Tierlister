@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import DuelCards, RoundButton, TierRow, WordCard, refresh_widgets
+from widgets import AnchorLadder, DuelCards, RoundButton, TierRow, WordCard, refresh_widgets
 
 
 class App:
@@ -184,6 +184,9 @@ class App:
         inner.place(relx=0.5, rely=0.42, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 6))
+        self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
+        self.ladder.grid(row=1, column=0, pady=(10, 0))
+        self.ladder.grid_remove()               # only while comparing to anchors (UI-9)
         self.vs_lbl = ttk.Label(inner, text="", font=font("vs"), justify="center")
         self.vs_lbl.grid(row=2, column=0, pady=14)
 
@@ -482,7 +485,12 @@ class App:
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
+            if not self.ladder.winfo_manager():                     # not shown yet
+                self.ladder.update_range(0, len(TIERS) - 1, None)   # a fresh comparison starts full
+            self.ladder.grid()
+            self.ladder.update_range(self.cmp["lo"], self.cmp["hi"], mid)
         else:
+            self.ladder.grid_remove()
             self.vs_lbl.config(text="" if all(self.anchors) else "Set anchor words (Settings) to enable comparing.")
             self.cmp_row.grid_remove()
             self.tier_row.grid()

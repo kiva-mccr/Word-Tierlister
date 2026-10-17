@@ -359,6 +359,83 @@ class DuelCards(tk.Frame):
             pass
 
 
+class AnchorLadder(tk.Canvas):
+    """The S..F strip shown while a word is placed by comparing it to anchors (UI-9).
+
+        ladder = AnchorLadder(parent, ["S", "A", "B", "C", "D", "F"], font("head"), animator=app.anim)
+        ladder.update_range(0, 5, 2)    # every tier still possible; asking about B's anchor
+
+    Tiers still possible (lo..hi) keep their pastel colour; ruled-out ones fade toward the background.
+    The tier whose anchor is being asked about gets an accent ring and a small caret under it. Changes
+    blend over LADDER_MS with the Animator (they jump with Reduce motion).
+    """
+    LADDER_MS = 180
+
+    def __init__(self, parent, tiers, font=None, animator=None, colors=TIER_COLORS, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self._tiers, self._colors, self._font, self._anim = list(tiers), list(colors), font, animator
+        self.lo, self.hi, self.mid = 0, len(self._tiers) - 1, None
+        self._amount = [1.0] * len(self._tiers)      # 1 = still possible (full colour), 0 = ruled out
+        self._draw()
+
+    def _cell(self):
+        f = self._font
+        line = f.metrics("linespace") if f else 16
+        return int(line * 1.9), int(line * 1.5), max(4, line // 3)   # pill width, height, gap
+
+    def _draw(self):
+        self.delete("all")
+        w, h, gap = self._cell()
+        caret = max(6, h // 4)
+        total = len(self._tiers) * w + (len(self._tiers) - 1) * gap
+        super().configure(width=total + 6, height=h + caret + 8)
+        for i, name in enumerate(self._tiers):
+            x = 3 + i * (w + gap)
+            self.create_polygon(_rounded_points(x, 3, x + w, 3 + h, h // 2), smooth=True,
+                                tags=("pill", f"pill{i}"), width=1)
+            self.create_text(x + w / 2, 3 + h / 2, text=name, font=self._font, tags=("txt", f"txt{i}"))
+        self._caret_size = (w, h, gap, caret)
+        self._paint()
+
+    def _paint(self):
+        bg = super().cget("bg")
+        w, h, gap, caret = self._caret_size
+        self.delete("caret")
+        for i in range(len(self._tiers)):
+            a = self._amount[i]
+            fill = lerp_color(lerp_color(self._colors[i], bg, 0.82), self._colors[i], a)
+            ring = i == self.mid
+            self.itemconfigure(f"pill{i}", fill=fill, outline=PALETTE["accent"] if ring else lerp_color(fill, PALETTE["text"], 0.12),
+                               width=3 if ring else 1)
+            self.itemconfigure(f"txt{i}", fill=lerp_color(PALETTE["disabled"], PALETTE["text"], a))
+        if self.mid is not None:
+            cx = 3 + self.mid * (w + gap) + w / 2
+            y = 3 + h + 3
+            self.create_polygon(cx - caret, y + caret, cx + caret, y + caret, cx, y, fill=PALETTE["accent"],
+                                outline="", tags="caret")
+
+    def update_range(self, lo, hi, mid):
+        """Show that tiers lo..hi are still possible and the anchor of tier `mid` is being asked about."""
+        self.lo, self.hi, self.mid = lo, hi, mid
+        start = list(self._amount)
+        goal = [1.0 if lo <= i <= hi else 0.0 for i in range(len(self._tiers))]
+
+        def frame(p):
+            self._amount = [a + (b - a) * p for a, b in zip(start, goal)]
+            self._paint()
+        if self._anim is None:
+            frame(1.0)
+        else:
+            self._anim.run(f"ladder{id(self)}", self.LADDER_MS, frame)
+
+    def possible(self):
+        """The tier indexes drawn as still possible (for tests)."""
+        return [i for i in range(len(self._tiers)) if self.lo <= i <= self.hi]
+
+    def refresh(self):
+        self._draw()
+
+
 class WordCard(tk.Canvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").
@@ -467,9 +544,9 @@ class WordCard(tk.Canvas):
 
 
 def refresh_widgets(widget):
-    """Re-measure every RoundButton and WordCard under `widget` (after shared fonts were resized)."""
+    """Re-measure every RoundButton, WordCard and AnchorLadder under `widget` (after fonts were resized)."""
     for child in widget.winfo_children():
-        if isinstance(child, (RoundButton, WordCard)):
+        if isinstance(child, (RoundButton, WordCard, AnchorLadder)):
             child.refresh()
         else:
             refresh_widgets(child)

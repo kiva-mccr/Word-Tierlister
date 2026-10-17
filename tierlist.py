@@ -226,9 +226,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           hotkeys (Left/A, Right/L, Down/T, S) can show the pressed look (wired in UI-18).
 #           Built: DuelCards(parent, on_answer) in widgets.py, App.duel (left_btn etc. are its buttons).
 #           RoundButton gained flat= (quiet text button), ring= (hover ring width) and hint_font=.
-# [ ] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
+# [x] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
 #           still-possible tiers shaded and the anchor being asked about marked; it narrows
 #           smoothly after each answer. Shown in the Better / Same / Worse view.
+#           Built: AnchorLadder.update_range(lo, hi, mid) in widgets.py (named so it does not hide
+#           Canvas.update): ruled-out tiers fade over 180 ms, the asked tier has an accent ring and caret.
+#           Sits between the word card and the question.
 #
 # --- Phase 3: layout and chrome ----------------------------------------------------------------
 # [ ] UI-10 Modern top bar. adds SegmentedControl(options, on_change) and build_header(): a

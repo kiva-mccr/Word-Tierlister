@@ -3,7 +3,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import DuelCards, RoundButton, TierRow
+from widgets import AnchorLadder, DuelCards, RoundButton, TierRow
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -91,5 +91,27 @@ duel.set_enabled(False); duel.press("left"); assert len(answers) == 4        # d
 duel.show("a", "b"); duel.press("right"); assert answers[-1] == "right"      # show() re-enables
 b = duel.tie; b.event_generate("<Enter>"); b.event_generate("<ButtonPress-1>", x=6, y=6); update()
 b.event_generate("<ButtonRelease-1>", x=6, y=6); update(); assert answers[-1] == "tie"
+
+# ---- AnchorLadder (UI-9)
+lad = AnchorLadder(root, list("SABCDF"), small, animator=anim); lad.pack(); update()
+assert len(lad.find_withtag("pill")) == 6 and lad.itemcget("txt0", "text") == "S"
+assert lad.itemcget("pill0", "fill") == TIER_COLORS[0] and not lad.find_withtag("caret")
+lad.update_range(0, 5, 2); anim.finish_all()
+assert lad.possible() == [0, 1, 2, 3, 4, 5] and lad.find_withtag("caret")
+assert lad.itemcget("pill2", "outline") == PALETTE["accent"] and float(lad.itemcget("pill2", "width")) == 3
+cx = sum(lad.coords("caret")[0::2]) / 3; px = lad.coords("pill2")[0::2]
+assert min(px) < cx < max(px), "caret sits under the asked tier"
+lad.update_range(3, 5, 4)                                    # "worse than B": S..B ruled out
+assert lad.itemcget("pill0", "fill") == TIER_COLORS[0]       # mid-animation: not faded yet
+anim.finish_all()
+assert lad.possible() == [3, 4, 5]
+assert lad.itemcget("pill0", "fill") != TIER_COLORS[0] and lad.itemcget("pill3", "fill") == TIER_COLORS[3]
+assert lad.itemcget("txt0", "fill") == PALETTE["disabled"] and lad.itemcget("txt4", "fill") == PALETTE["text"]
+assert float(lad.itemcget("pill2", "width")) == 1            # the ring moved on
+anim.reduce_motion = True
+lad.update_range(4, 4, 4); assert lad.possible() == [4] and lad.itemcget("pill5", "fill") != TIER_COLORS[5]   # jumps
+anim.reduce_motion = False
+w0 = lad.winfo_reqwidth(); small.configure(size=20); lad.refresh(); assert lad.winfo_reqwidth() > w0
+small.configure(size=11)
 root.destroy()
 print("WIDGETS2 OK")
