@@ -58,7 +58,7 @@ Code map (all files live in one folder; run tierlist.py)
     ui_motion.py    easing, colour blend, Animator (UI-4).
     startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
-    deps.py         required packages: detect and pip-install them (ST-3; no tkinter).
+    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     errors.py       friendly error dialog, error handlers, run_guarded (ST-2).
     browser.py      Browser: the Browse / edit window.
     app.py          App: the main window and all modes.
@@ -96,7 +96,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # on its own, leaves the app working, and updates the tests that read the widgets it replaces.
 # Tick [x] as steps land. IDs are stable; the order is a suggestion.
 #
-# Suggested order: the start-up phase (ST-1, ST-2, ST-3; all done) came first by request, then the new look
+# Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
 #
@@ -154,6 +154,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           itself is downloaded the first time it is needed (definitions.py). --no-install turns
 #           the offer off; packaged builds skip it. Pillow is only for the tests' screenshots and is
 #           never offered. errors.py gained ask_yes_no. Covered by _selftest_deps.py.
+# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3). Started
+#           from a terminal, deps.terminal_setup() runs before any window and handles only what the
+#           program cannot start without: tkinter and the REQUIRED packages (wordfreq). It lists them
+#           with what each is for, asks once "Install them now? [Y/n]" (Enter = yes), installs tkinter
+#           through the system package manager (apt-get / dnf / pacman / zypper, Homebrew on macOS; sudo
+#           may ask for your password) and wordfreq with pip, with the output shown in the terminal,
+#           then says "Opening the window..." and the window opens (on Windows the console then closes,
+#           ST-1). Everything OPTIONAL (nltk) is offered later in the window by ensure_packages, which
+#           no longer asks about the required ones when the terminal already did. If this Python
+#           refuses pip installs (externally-managed), it offers to make a private .venv next to the
+#           program, installs there and restarts with it; later starts find .venv and use it without
+#           asking. Installing tkinter also restarts the program (it could not be imported at start).
+#           Without a terminal (pythonw, a double-clicked shortcut) the window asks as before.
+#           Covered by _selftest_install.py; tried for real in a fresh venv without wordfreq.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -307,6 +321,8 @@ import json
 import os
 import sys
 
+import deps
+
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS  # noqa: F401
@@ -365,10 +381,15 @@ def main():
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
-    # --- 1. tkinter is needed for the window (everything else works without it)
-    if tk is None:
-        sys.exit("tkinter is not installed. On Debian/Ubuntu:  sudo apt install python3-tk")
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    # --- 1. in a terminal, before any window: install only what the program cannot start without
+    #        (tkinter, wordfreq), asking first; optional extras are offered later, in the window (ST-4)
+    asked_in_terminal = deps.wants_terminal_setup(args.no_install)
+    if asked_in_terminal:
+        deps.terminal_setup([os.path.abspath(__file__), *sys.argv[1:]], script_dir)
+    # tkinter is needed for the window (everything else works without it)
+    if tk is None:
+        sys.exit("tkinter is not installed. " + deps.tk_advice())
 
     def start():
         # --- 2. find the save file: --db, else the earlier save (see saves.choose_save)
@@ -438,12 +459,14 @@ def main():
             apply_ttk_style(root)
             install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
             try:
-                # a missing package is offered for install (only asks when something is missing)
+                # a missing package is offered for install (only asks when something is missing). The
+                # required ones were already asked about in the terminal when there is one (ST-4).
                 if not args.no_install:
                     wordnet_build = args.source == "wordnet" and existing == 0 and not args.wordlist
                     declined = set(json.loads(store.get_meta("declined_packages", "[]")))
+                    required = [] if asked_in_terminal else list(deps.REQUIRED)
                     ensure_packages(
-                        root, ["wordfreq"] + (["nltk"] if wordnet_build else []), optional=["nltk"],
+                        root, required + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
                         declined=declined,
                         on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
                 run_with_progress(root, set_up,

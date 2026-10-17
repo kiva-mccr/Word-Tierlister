@@ -3,8 +3,10 @@
 Tier-list every English word (S / A / B / C / D / F). Progress autosaves to SQLite after every
 action and resumes automatically, even if you replace these files.
 
-    pip install wordfreq nltk
     python tierlist.py                 # options: python tierlist.py --help
+
+On the first start it asks in the terminal to install what it needs (see "Missing packages"), or
+install them yourself first: `pip install -r requirements.txt`.
 
 See the docstring at the top of `tierlist.py` for how it works and the full code map; the UI
 redesign plan (UI-0 .. UI-26, ticked as built) is the comment block right under it.
@@ -23,7 +25,7 @@ redesign plan (UI-0 .. UI-26, ticked as built) is the comment block right under 
 | `fonts.py` | Typography: font family and named size roles. |
 | `ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget). |
 | `check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed); `--tests`, `--zip`. See CHECKLIST.md. |
-| `deps.py` | Required packages: finds missing ones and pip-installs them (no tkinter). |
+| `deps.py` | Required packages: finds missing ones and installs them; the terminal install stage (no tkinter). |
 | `problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
 | `errors.py` | Friendly error dialog, global error handlers, `run_guarded` (the whole program runs inside it). |
 | `sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
@@ -61,8 +63,16 @@ To see the friendly error dialog on purpose, start with `python tierlist.py --cr
 seconds after start it raises a fake bug. The dialog appears and the program keeps running.
 
 ## Missing packages
-If `wordfreq` (needed) or `nltk` (optional: offline definitions, and the WordNet word list) is not
-installed, the program asks "Install now / Not now" and runs `pip install` for you, then carries on
-without a restart. It only asks when something is missing, and a "Not now" for the optional one is
-remembered. `--no-install` turns the question off. If your system Python refuses installs (Debian,
-Ubuntu, recent macOS Homebrew), it tells you how to make a virtual environment instead.
+Installing happens in two stages.
+
+1. **In the terminal, before any window.** Only what the program cannot start without: `tkinter` (the
+   window toolkit) and `wordfreq`. It lists them, asks `Install them now? [Y/n]` (Enter = yes), installs
+   tkinter with your system's package manager (apt-get, dnf, pacman, zypper, or Homebrew on macOS; sudo
+   may ask for your password) and wordfreq with pip, then says "Opening the window..." and the window
+   opens (on Windows the console window closes). If your system Python refuses pip installs (Debian,
+   Ubuntu, Homebrew), it offers to make a private `.venv` next to the program and uses it from then on.
+2. **In the window.** Optional extras, today `nltk` (offline definitions, and the WordNet word list),
+   are offered with "Install now / Not now". A "Not now" is remembered.
+
+It only asks when something is missing. Started without a terminal (pythonw, a shortcut), the window
+asks about everything instead. `--no-install` turns all of it off.

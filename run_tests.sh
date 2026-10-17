@@ -18,7 +18,7 @@ run() {  # run <label> <command...>: show the last line of output, abort if the 
     fi
 }
 
-for t in _selftest _selftest_wikt _selftest_queue _selftest_resume; do
+for t in _selftest _selftest_wikt _selftest_queue _selftest_resume _selftest_install; do
     run $t $PY $t.py
 done
 for t in _selftest_ui _selftest_ui2 _selftest_tidy _selftest_fonts _selftest_style _selftest_motion _selftest_startup _selftest_sizing _selftest_errors _selftest_widgets _selftest_deps _selftest_release; do
