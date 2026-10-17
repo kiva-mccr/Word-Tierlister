@@ -101,7 +101,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
-# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7, T-8.
+# Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
+# T-1..T-3 -> T-6, T-7, T-8.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -184,6 +185,24 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           all; anything that must be installed is then asked in the window (ST-3). A program cannot
 #           close a terminal window the user opened themselves; giving the prompt back is the most it
 #           can do. macOS behaves the same way and gets the same treatment if it is cheap.
+# [ ] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
+#           (UI-41). On the first start (and any time from Settings > How words are dealt...), one friendly
+#           page asks how new words should come:
+#           - Order: "Most common first" (strictly by frequency, no randomness), or "Mostly common, a little
+#             shuffled" with the drop-off shape: exponential (default) or gaussian, and its spread (the
+#             UI-41 diagrams show what each does).
+#           - Which words: tick boxes per kind: nouns, verbs, adjectives, adverbs, other (all ticked to
+#             start with), and "only obscene / offensive words" as its own choice. Unticked kinds are
+#             left out of the queue (not deleted: ticking them again brings them back).
+#           - "Hide obscene words" (unticked by default): obscene / offensive words are shown masked
+#             (f***), in the card, the duel cards, Browse and exports, and still sorted normally.
+#           Data: the Wiktionary parse records each word's parts of speech and whether any sense is tagged
+#           vulgar / offensive / derogatory / slur (new columns, migrated like the others). Saves built
+#           before this have no such data: they are filled from WordNet (parts of speech; nltk) where
+#           possible and from the kept Wiktionary file if there is one, else the page offers a one-time
+#           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
+#           Browse: the same kinds appear in its drop-downs (Show: "Nouns", "Verbs", "Obscene words"...,
+#           and a "Kind" sort), see the question in the notes.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -520,7 +539,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
 #   Keyboard shortcuts . new dialog (UI-48)
-#   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24)
+#   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
 #   Import / Export .... file dialog (UI-42)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24; today these are plain message boxes)
 #   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
