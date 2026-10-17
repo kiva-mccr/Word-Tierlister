@@ -71,7 +71,8 @@ missed). Keep the README current in the same commit as the change (the user aske
 ## Status
 Done: UI-0..UI-13, UI-15..UI-18, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-19 (duel result), UI-20, UI-21, UI-23..27, then
 ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, a web link per package in the install dialog), UI-33
-(pace timeout + hover-note polish), UI-32
+(pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
+roadmap shows which steps touch which window), UI-32
 (moving pastel background: needs the user's OK to relax the no-motion-while-idle guardrail). UI-14 stays on hold.
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 

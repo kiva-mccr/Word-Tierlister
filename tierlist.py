@@ -391,6 +391,39 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
+# [ ] UI-34 Status line: "Placed N of M (x%)" stays; the "N left" part goes (it repeats what placed / total
+#           already says) and in its place a completeness figure that weighs words by how common they are
+#           (asked for): e.g. "covers 93% of everyday English", the share of all word use (wordfreq
+#           frequency) that the placed words account for. Common words count for a lot, rare ones for very
+#           little, so it moves meaningfully even when placed / total is tiny. Computed in the Store from a
+#           running sum (never a full scan per refresh). This is close to UI-14 option (b); see the questions.
+# [ ] UI-35 The definition drawer does not open smoothly (reported): find out why (likely the window-fitting
+#           pass runs during the slide, or the frame jumps to full height first) and make it ease open
+#           and shut in one even motion. Check with a frame-by-frame capture.
+# [ ] UI-36 Tier chart: no hover note over the letters (asked for); hovering the bar itself still shows it.
+# [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
+#           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
+#           stepping back one answer while comparing. The Compare button's key hint and the bottom-right
+#           hint follow.
+# [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
+#           in from slightly smaller, or fades in where the system allows window transparency), and a
+#           click on the main window outside it closes it. Its unsaved state (search, filter, scroll) is
+#           remembered for the next open, so closing by accident costs nothing.
+# [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
+#           the Unplace button, with undo.
+# [ ] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
+#           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
+#           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
+#           toast says so ("table moved to C; the B anchor is now gristle"). Today the moved word stays
+#           registered as the old tier's anchor, which is quietly wrong.
+# [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
+#           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
+#           highlighted and redrawn live as spread changes. The intro text shrinks to one line.
+# [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
+#           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
+#           browser in general. On Linux tk draws this dialog itself, so it can be fixed (or replaced with
+#           a small themed file picker that matches the app); on Windows and macOS it is the system's own
+#           dialog. See the questions.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
@@ -412,6 +445,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
+#
+# --- Window by window (asked for: every window's planned changes in one place) -------------------------
+#   Main window ........ header + tabs (UI-10, UI-27), status line (UI-15, UI-34), tier chart (UI-13,
+#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), Place keys (UI-29,
+#                        UI-37), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
+#                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
+#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39), tier letters (UI-29)
+#   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
+#   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24)
+#   Import / Export .... file dialog (UI-42)
+#   Merge offer, "Where is my save file?" ... shared dialog look (UI-24; today these are plain message boxes)
+#   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
+#   First-run progress . shared dialog look (UI-24)
+#   Error dialog ....... shared dialog look (UI-24)
+#   Hover notes ........ still and themed (UI-33)
+#   Source & Updates ... T-6 / T-7 (later)
 #
 # --- Last: definitions as a way in (asked for; at the very end of the plan) --------------------------
 # [ ] W-1  Click any word inside a definition to look it up. Its definition appears (the drawer and the
