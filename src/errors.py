@@ -168,8 +168,9 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
             answer["yes"] = value
             answer["chosen"] = {k for k, v in ticks if v.get()}
             dlg.destroy()
-        for i, (label, value) in enumerate(buttons):
-            ttk.Button(row, text=label, command=lambda v=value: choose(v)).pack(side="right", padx=(8, 0) if i else 0)
+        for i, (label, value) in enumerate(buttons):     # the first is what Enter presses: drawn as the default
+            ttk.Button(row, text=label, command=lambda v=value: choose(v), default="active" if i == 0 else "normal",
+                       style="Default.TButton" if i == 0 else "TButton").pack(side="right", padx=(8, 0) if i else 0)
         dlg.bind("<Return>", lambda e: choose(buttons[0][1]))
         dlg.bind("<Escape>", lambda e: choose(False))
         dlg.protocol("WM_DELETE_WINDOW", lambda: choose(False))

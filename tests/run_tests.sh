@@ -1,10 +1,11 @@
 #!/bin/sh
-# Run every self-test, stopping at the first failure. From this folder:  sh run_tests.sh
+# Run every self-test, stopping at the first failure. From the top of the project:  sh tests/run_tests.sh
 #
 # Core tests need only python3 (+ wordfreq). Window tests need tkinter and a display; with no
 # display (CI, a server) they run under xvfb-run, on a desktop they simply run.
 # Some Linux Pythons ship without tkinter: point TK_PYTHON at one that has it, e.g.
-#     TK_PYTHON=/usr/bin/python3.12 sh run_tests.sh
+#     TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh
+cd "$(dirname "$0")" || exit 1
 PY=${PY:-python3}
 TK_PYTHON=${TK_PYTHON:-$PY}
 OUT=$(mktemp)

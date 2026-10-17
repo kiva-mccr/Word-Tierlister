@@ -1,4 +1,5 @@
 """Friendly errors (ST-2): plain-language messages, the dialog, the safety net and the exit paths."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import contextlib, errno, io, os, sqlite3, sys, tempfile, threading, time, urllib.error
 import tkinter as tk
 import errors as E

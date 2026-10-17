@@ -1,4 +1,5 @@
 """Window sizing: pure helpers, then the main window, browser and dialogs on simulated screens."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile
 import tkinter as tk
 import sizing as Z

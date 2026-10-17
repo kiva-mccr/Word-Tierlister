@@ -1,10 +1,11 @@
 # Checklist for every round of progress
 
 Run through this before handing a round over (and again before a zip is sent). Items marked (auto) are
-done by `python check_release.py`; the rest need a person or Claude to look.
+done by `python tools/check_release.py`; the rest need a person or Claude to look.
 
 ## 1. Code
-- [ ] New code lives in the right layer (README, "Layers"); only UI files import tkinter.
+- [ ] New code lives in the right layer (README, "Layers") and folder (modules in src/, tests in tests/,
+      tierlist.py stays at the top); only UI files import tkinter.
 - [ ] Every new third-party import is in `requirements.txt` AND `deps.PACKAGES` (auto). Optional ones are
       listed in requirements.txt too (commented), and the code works without them.
 - [ ] Every new module is in the README file map and the code map in `tierlist.py` (auto for the README).
@@ -14,8 +15,8 @@ done by `python check_release.py`; the rest need a person or Claude to look.
 - [ ] No animation frame touches the database; every Store mutator still commits before it returns.
 
 ## 2. Tests
-- [ ] The new behaviour has a `_selftest_*.py`, and the file is in `run_tests.sh` (auto).
-- [ ] `sh run_tests.sh` passes (`TK_PYTHON=...` if the default Python has no tkinter). Do not hand over
+- [ ] The new behaviour has a `_selftest_*.py`, and the file is in `tests/run_tests.sh` (auto).
+- [ ] `sh tests/run_tests.sh` passes (`TK_PYTHON=...` if the default Python has no tkinter). Do not hand over
       anything with a red test; if a test had to change, say why.
 - [ ] pyflakes is clean apart from the known re-export noise (auto).
 - [ ] The tests that start the program use `--no-install` so no prompt blocks them.
@@ -27,7 +28,7 @@ done by `python check_release.py`; the rest need a person or Claude to look.
 - [ ] Nothing clipped; dropdowns, columns and buttons fit their text.
 
 ## 4. Packages and first run
-- [ ] `python check_release.py` passes (imports vs requirements, docs, tests listed, no strays).
+- [ ] `python tools/check_release.py` passes (imports vs requirements, docs, tests listed, no strays).
 - [ ] A clean environment test when dependencies changed: make a fresh venv, start with `--db test.db`,
       and confirm the install prompt appears, installs, and the program carries on.
 - [ ] Errors still read well: bad `--db` path, missing wordfreq, disconnected internet during download.
@@ -36,8 +37,8 @@ done by `python check_release.py`; the rest need a person or Claude to look.
 - [ ] Roadmap (comment block in `tierlist.py`): step ticked `[x]` with what was actually built, notes for
       later steps updated, no stale names (renamed functions, test files).
 - [ ] README: file map, layers, any new command-line option or behaviour.
-- [ ] `CLAUDE.md`: Status line (done / next) and Known gaps are current.
-- [ ] Zip built with `python check_release.py --zip word-tierlist.zip` (not copied by hand), then the
+- [ ] `.claude/CLAUDE.md`: Status line (done / next) and Known gaps are current.
+- [ ] Zip built with `python tools/check_release.py --zip word-tierlist.zip` (not copied by hand), then the
       file list looked at: every module, `requirements.txt`, `CLAUDE.md`, `CHECKLIST.md`, the tests,
       and no `.db`, `.log` or caches.
 - [ ] Summary to the user: what changed, what was verified and how, what was NOT verified (and why),

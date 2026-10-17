@@ -1,5 +1,6 @@
 """Stage 1 of installing (ST-4, deps.terminal_setup): in the terminal, before any window, only tkinter is asked
 about; every Python package is left for the window. Also the private environment helpers. No tkinter needed."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, shutil, sys, tempfile
 import deps
 

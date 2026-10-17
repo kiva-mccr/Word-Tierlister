@@ -42,8 +42,9 @@ How it works
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
 
-Code map (all files live in one folder; run tierlist.py)
----------------------------------------------------------
+Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
+live in src/, the self-tests in tests/, check_release.py in tools/, the Claude notes in .claude/)
+----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults.        (no dependencies)
@@ -420,7 +421,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           "Unpack the source code next to it?" (T-7). Either way the save is committed first, the
 #           answer is remembered (meta), and both stay in the File menu afterwards. Never asked during
 #           a first-run download or while another question is open; --no-install also silences it.
-# [ ] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
+# [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
 #             Releases, not in a committed folder: a 30-60 MB binary per build would bloat every clone
@@ -436,6 +437,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             folder the program unpacks (T-7). Only the modules move into src/; tierlist.py adds src/ to
 #             the import path. So "next to the script" stays where it was and no save appears to be lost.
 #           - Approved (both pushbacks accepted); built ahead of T-6..T-9 so later steps use the layout.
+#           Built: src/, tests/ (each test starts with `import _paths`), tools/, .claude/; tierlist.py adds
+#           src/ to the import path; check_release.py knows the folders (flags a module left at the top,
+#           ships the tree with its folders, ignores your save / log / export next to tierlist.py).
+#           Still to do with T-8: the README's "Download for Windows / Linux" links to the Releases.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
@@ -457,7 +462,10 @@ import json
 import os
 import sys
 
-import deps
+# The program's modules live in src/ (R-1); this file stays at the top of the folder, next to your save.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
+import deps  # noqa: E402  (after the path line above)
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.

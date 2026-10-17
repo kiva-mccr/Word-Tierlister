@@ -1,3 +1,4 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, sys, tempfile, time, types
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)

@@ -1,3 +1,4 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import inspect, os, tempfile
 import tierlist as T
 

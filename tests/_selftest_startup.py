@@ -1,3 +1,4 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import gzip, json, os, subprocess, sys, tempfile, threading, time
 import tkinter as tk
 import startup as S
@@ -262,7 +263,7 @@ assert "checking every word for compounds" in text and "giving every unplaced wo
 words = os.path.join(tmp, "words.txt")
 open(words, "w").write("\n".join(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) + "\n")
 env = dict(os.environ, HOME=tmp)                                # keep the pointer file out of the real home
-p = subprocess.Popen([sys.executable, "tierlist.py", "--db", os.path.join(tmp, "m.db"), "--wordlist", words, "--no-install"],
+p = subprocess.Popen([sys.executable, os.path.join(_paths.ROOT, "tierlist.py"), "--db", os.path.join(tmp, "m.db"), "--wordlist", words, "--no-install"],
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 time.sleep(5)
 alive = p.poll() is None

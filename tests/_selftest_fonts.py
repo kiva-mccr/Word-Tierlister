@@ -1,3 +1,4 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile
 import tkinter as tk
 import fonts as F
@@ -21,8 +22,10 @@ root.destroy()
 root = tk.Tk(); F.init_fonts(root); F.font("word"); root.destroy()
 
 # the app uses roles and no hard-coded tuples remain
-src = open("tierlist.py").read()
-assert "(FONT," not in src and "FONT =" not in src
+import glob
+for path in [os.path.join(_paths.ROOT, "tierlist.py")] + glob.glob(os.path.join(_paths.SRC, "*.py")):
+    src = open(path, encoding="utf-8").read()
+    assert "(FONT," not in src and "FONT =" not in src, path
 tmp = tempfile.mkdtemp()
 s = T.Store(os.path.join(tmp, "f.db")); s.insert_words(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist", "x1", "x2"])
 s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]) if hasattr(s, "set_anchors") else None

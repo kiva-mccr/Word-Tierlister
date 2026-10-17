@@ -61,6 +61,10 @@ def apply_ttk_style(root):
               lightcolor=[("pressed", P["select_bg"]), ("active", P["surface2"])],
               darkcolor=[("pressed", P["select_bg"]), ("active", P["surface2"])])
 
+    # the button Enter presses in a dialog: the accent outline and a soft lilac fill, so it reads as the default
+    style.configure("Default.TButton", background=P["select_bg"], bordercolor=P["accent"])
+    style.map("Default.TButton", background=[("pressed", P["accent"]), ("active", P["surface2"])])
+
     for kind in ("TRadiobutton", "TCheckbutton"):
         style.configure(kind, background=P["bg"], foreground=P["text"], padding=(2, 3),
                         indicatorbackground=P["surface"], indicatorforeground=P["accent"],

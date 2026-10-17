@@ -19,6 +19,11 @@ PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
 REQUIRED = ["wordfreq"]
 OPTIONAL = ["nltk"]
 
+# disk space each one takes in MB, shown next to its tick box. Measured with pip for wordfreq 3.1 (57 MB to
+# download, 70 installed, mostly frequency data) and nltk 3.10 (3 MB download, 23 installed, plus 11 MB of
+# WordNet data on first use), Python 3.12; re-measure when the requirements change.
+SIZE = {"wordfreq": 70, "nltk": 35}
+
 # what each one is for, in the words used in the install question
 PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",

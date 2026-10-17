@@ -1,5 +1,6 @@
 """Missing packages (deps.py, startup.ensure_packages, errors.ask_yes_no / ask_choices): detection, asking,
 installing."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, subprocess, sys
 import tkinter as tk
 from tkinter import ttk
@@ -9,10 +10,11 @@ from problems import SetupError
 from fonts import init_fonts
 from ui_style import apply_ttk_style
 
-# ---- detection and the package table
+# ---- detection and the package table (every package has a purpose and a size for the install dialog)
+assert set(deps.SIZE) == set(deps.PACKAGES) == set(deps.PURPOSE) - {"tkinter"}
 assert deps.missing(["os", "sys"]) == []
 assert deps.missing(["os", "surely_not_installed_pkg_xyz"]) == ["surely_not_installed_pkg_xyz"]
-req = [l.split("#")[0].strip() for l in open(os.path.join(os.path.dirname(__file__) or ".", "requirements.txt"))]
+req = [l.split("#")[0].strip() for l in open(os.path.join(_paths.ROOT, "requirements.txt"))]
 req = [l for l in req if l]
 for spec in deps.PACKAGES.values():                                   # requirements.txt lists every package
     assert spec in req or spec.split(">=")[0] in [r.split(">=")[0] for r in req], spec
@@ -58,7 +60,9 @@ state.update(missing=["wordfreq"], answer=None)
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and installs == []       # "Not now"
 headline, message, choices, yes, no = asked[-1]
 assert headline == "A package is needed" and (yes, no) == ("Install selected", "Not now")
-assert choices == [("wordfreq", "wordfreq  (required)", deps.PURPOSE["wordfreq"], True, True)]       # its own tick box
+assert [c[0] for c in choices] == ["wordfreq"] and choices[0][3:] == (True, True)                   # its own tick box
+assert choices[0][1] == "wordfreq  (required, about 70 MB)"                                        # with its size
+assert choices[0][2] == deps.PURPOSE["wordfreq"]                                                    # just the reason
 state.update(answer=["wordfreq"])
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is True and installs == [["wordfreq"]]
 state.update(missing=["wordfreq"], answer=[])                                                      # unticked it
@@ -86,7 +90,7 @@ assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=instal
 assert installs == [ALL]                                                            # one pip run for what was ticked
 headline, message, choices = asked[-1][:3]
 assert headline == "Some packages are needed" and [c[0] for c in choices] == ALL
-assert choices[1][1] == "nltk  (optional)" and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
+assert choices[1][1] == "nltk  (optional, about 35 MB)" and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
 assert [c[4] for c in choices] == [True, False]                                     # only the required one gets the *
 # required ticked, optional unticked: installs only the required one, remembers the optional "no"
 state.update(missing=list(ALL), answer=["wordfreq"]); installs.clear(); remembered = []
@@ -171,6 +175,13 @@ def pick(): return E.ask_choices("T", "Some packages are needed", "Tick", CH, ye
 root.after(150, drive_choices([], "Install selected")); assert pick() == {"wordfreq", "nltk"}
 root.after(150, drive_choices(["nltk  (optional)"], "Install selected")); assert pick() == {"wordfreq"}
 root.after(150, drive_choices([], "Not now")); assert pick() is None
+def enter_after_untick():
+    dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+    [w for w in walk(dlg) if w.winfo_class() == "TCheckbutton"][1].invoke()      # untick nltk
+    btn = [w for w in walk(dlg) if w.winfo_class() == "TButton" and w.cget("text") == "Install selected"][0]
+    assert str(btn.cget("default")) == "active"                                  # drawn as the default button
+    dlg.event_generate("<Return>")
+root.after(150, enter_after_untick); assert pick() == {"wordfreq"}              # Enter = Install selected
 # no window possible: the safe answer (False) and no exception
 import contextlib, io
 real_dialog = E._dialog

@@ -1,7 +1,9 @@
 # Word Tier List: project notes for Claude Code
 
 A tkinter app that tier-lists (S/A/B/C/D/F) every English word. Words come from English Wiktionary
-(~1M, ranked by wordfreq). Progress autosaves to SQLite and is resumable. Entry point: `tierlist.py`.
+(~1M, ranked by wordfreq). Progress autosaves to SQLite and is resumable. Entry point: `tierlist.py`
+(at the top, next to the user's save); modules in `src/`, self-tests in `tests/`, `tools/check_release.py`,
+and this file plus CHECKLIST.md in `.claude/` (R-1). Never move tierlist.py into a sub-folder.
 The README has the file map; the roadmap (steps, status, decisions) is the big comment block at the
 top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
@@ -10,13 +12,14 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
   (Debian/Ubuntu: `sudo apt install python3-tk`). The program needs internet only for the first-run
   Wiktionary download (~3 GB) and for online definitions.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
-- This container: `python3.12` is the one with tkinter (`PY=python3.12 sh run_tests.sh`); packages for it
+- This container: `python3.12` is the one with tkinter (`PY=python3.12 sh tests/run_tests.sh`); packages for it
   need `pip install --break-system-packages`. Xvfb is available for screenshots.
-- Tests: `sh run_tests.sh` (stops at the first failure and checks every exit status). If the default
-  Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh run_tests.sh`. Window tests need a display;
+- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status). If the default
+  Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
-- Every new widget or behaviour gets a `_selftest_*.py` and a line in `run_tests.sh`.
+- Every new widget or behaviour gets a `tests/_selftest_*.py` (first line `import _paths`) and a line in
+  `tests/run_tests.sh`.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
@@ -38,11 +41,14 @@ errors, ui_motion, widgets, startup -> browser -> app -> tierlist.
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
-  recreate); show the user pictures for each UI step.
+  recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
+  preview can wash out pale pastels.
+- Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
 
 ## Before handing a round over
-Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip with
-`python check_release.py --zip word-tierlist.zip` (never copy files by hand, that is how files get missed).
+Run through `.claude/CHECKLIST.md` and `python tools/check_release.py --tests`; build the zip with
+`python tools/check_release.py --zip word-tierlist.zip` (never copy files by hand, that is how files get
+missed). Keep the README current in the same commit as the change (the user asked for this explicitly).
 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
@@ -59,10 +65,9 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-12, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1. Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
-ST-5, T-1..T-3, T-6..T-9, R-1, W-1 (the very last). UI-14 stays on hold.
-Waiting on the user: R-1 pushbacks (binaries in GitHub Releases, not a folder; Claude files in .claude/),
-and whether the placement toast should end in the chart bar (UI-17 note).
+Done: UI-0..UI-12, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
+ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, why-each-package hovers). UI-14 stays on hold.
+Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.

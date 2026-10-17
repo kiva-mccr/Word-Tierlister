@@ -1,4 +1,5 @@
 """RoundButton (UI-5) and WordCard (UI-6): drawing, states, clicks, config, font refresh, animation."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk

@@ -1,6 +1,7 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
 DefinitionDrawer (UI-12)."""
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS

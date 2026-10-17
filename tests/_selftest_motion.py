@@ -1,3 +1,4 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile
 import tkinter as tk
 from ui_motion import Animator, ease_out_cubic, lerp_color

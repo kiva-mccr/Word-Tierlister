@@ -8,32 +8,46 @@ action and resumes automatically, even if you replace these files.
 On the first start it offers to install what it needs (see "Missing packages"), or install it yourself
 first: `pip install -r requirements.txt`.
 
-See the docstring at the top of `tierlist.py` for how it works and the full code map; the UI
-redesign plan (UI-0 .. UI-26, ticked as built) is the comment block right under it.
+See the docstring at the top of `tierlist.py` for how it works and the full code map; the roadmap
+(UI, start-up and packaging steps, ticked as built) is the comment block right under it.
 
-## Files (keep them all in one folder; run `tierlist.py`)
+## Folders
+
+```
+tierlist.py        run this. Your save (tierlist.db), its log and exports stay next to it.
+requirements.txt   the Python packages (the program offers to install them itself)
+src/               the program's modules
+tests/             the self-tests and run_tests.sh
+tools/             check_release.py (pre-hand-off checks, builds the zip)
+.claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
+```
+
+`tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
+replacing the other folders never loses your list.
+
+## Files
 
 | File | Job |
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
-| `constants.py` | Tier names, modes, ranking defaults. No dependencies. |
-| `store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, merging. |
-| `wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, queue prep. |
-| `saves.py` | Finding / remembering your earlier save; export. |
-| `definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online). |
-| `theme.py` | Colour palette. |
-| `fonts.py` | Typography: font family and named size roles. |
-| `ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget). |
-| `check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed); `--tests`, `--zip`. See CHECKLIST.md. |
-| `deps.py` | Required packages: finds missing ones and installs them; the terminal install stage (no tkinter). |
-| `problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
-| `errors.py` | Friendly error dialog, global error handlers, `run_guarded` (the whole program runs inside it). |
-| `sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
-| `ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
-| `startup.py` | First-run progress window: runs set-up on a worker thread and shows what it is doing. |
-| `widgets.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, `HeaderMenus` + `DropMenu`), `Toast` (messages), `DefinitionDrawer` and other small widgets. |
-| `browser.py` | The Browse / edit window. |
-| `app.py` | The main window and all four modes. |
+| `src/constants.py` | Tier names, modes, ranking defaults. No dependencies. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, merging. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, queue prep. |
+| `src/saves.py` | Finding / remembering your earlier save; export. |
+| `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
+| `src/theme.py` | Colour palette. |
+| `src/fonts.py` | Typography: font family and named size roles. |
+| `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes). |
+| `src/deps.py` | Packages: finds missing ones and installs them; the terminal stage, the private `.venv` (no tkinter). |
+| `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
+| `src/errors.py` | Friendly error dialog, question dialogs, global error handlers, `run_guarded` (the whole program runs inside it). |
+| `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
+| `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
+| `src/startup.py` | First-run progress window (set-up on a worker thread) and the window's package install step. |
+| `src/widgets.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, `HeaderMenus` + `DropMenu`), `Toast` (messages), `DefinitionDrawer` and other small widgets. |
+| `src/browser.py` | The Browse / edit window. |
+| `src/app.py` | The main window and all four modes. |
+| `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 
 Layers, lowest first: `constants`, `problems`, `deps` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
 `fonts`, `sizing`, `ui_style`, `errors`, `ui_motion`, `widgets`, `startup` -> `browser` -> `app` -> `tierlist`. A file only imports from files
@@ -49,8 +63,9 @@ earlier in that list. Only the UI files import `tkinter`.
 
 ## Tests
 
-`sh run_tests.sh` runs everything (`_selftest*.py`). Window tests need tkinter and run headless
-under `xvfb-run` when there is no display.
+`sh tests/run_tests.sh` runs everything (`tests/_selftest*.py`), from any folder. Window tests need
+tkinter and run headless under `xvfb-run` when there is no display. A single test runs on its own too:
+`python tests/_selftest_ui.py`. Before handing work over: `python tools/check_release.py --tests`.
 
 ## Windows notes
 
@@ -70,8 +85,9 @@ Installing happens in two stages.
    is no window to ask in. It asks `Install it now? [Y/n]` (Enter = yes), installs it with your
    system's package manager (apt-get, dnf, pacman, zypper, or Homebrew on macOS; sudo may ask for your
    password) and restarts the program.
-2. **In the window.** Every Python package in one dialog, each with its own tick box: `wordfreq`
-   (needed: it ranks the words) and `nltk` (optional: offline definitions, and the WordNet word list).
+2. **In the window.** Every Python package in one dialog, each with its own tick box and its size:
+   `wordfreq` (required, marked with a red *, about 70 MB: it ranks the words) and `nltk` (optional,
+   about 35 MB with its dictionary data: offline definitions, and the WordNet word list).
    An optional package you leave unticked is not offered again. If your system Python refuses pip
    installs (Debian, Ubuntu, Homebrew), it offers to make a private `.venv` next to the program,
    installs there, and from then on starts with it automatically.

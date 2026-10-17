@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Word Tier List: your save, its log, downloads and exports live next to tierlist.py; never commit them
+*.db
+*.db-wal
+*.db-shm
+*.part
+tierlist.txt
+tierlist.csv
+tierlist.md
