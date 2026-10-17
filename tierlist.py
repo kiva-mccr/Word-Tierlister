@@ -369,6 +369,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           its words with enough duels), six bars in the same tier colours. Boundary: the five
 #           boundaries S|A .. D|F as a short strip, each with how many checks and swaps it has had.
 #           Conflicts: not a chart, a single number ("3 to look at" / "none - nicely consistent").
+# [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
+#           drifting and jiggling slowly. Two things to settle before building:
+#           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
+#             OK to relax that one rule for the background only. Proposed limits: very slow (a full drift
+#             takes many seconds), a few frames a second rather than 60, faint colours just off the
+#             cream, off with Reduce motion (then a still pattern), paused while the window is not in
+#             front or minimised, and never touching the database.
+#           - tk has no transparency: every widget is an opaque rectangle, so a pattern drawn behind the
+#             page would show only in the empty space around the card and buttons, and each widget would
+#             sit on a plain cream box. To look right, the pieces on the page need their canvases to
+#             paint the pattern under themselves, or the page becomes one canvas. Try it on a small
+#             mock-up first and show screenshots before committing to it.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
