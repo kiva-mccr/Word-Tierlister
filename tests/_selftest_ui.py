@@ -228,6 +228,15 @@ for m in ("refine", "boundary", "conflict"):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
     assert not app.chart.shown and app.chart.itemcget("letter0", "state") == "hidden", m
 app.mode_var.set("place"); app.on_mode_change(); pump(2); assert app.chart.shown
+# UI-17: a placed word's message lands in its tier's bar, which then pulses
+pulsed = []
+real_pulse = app.chart.pulse
+app.chart.pulse = lambda t: pulsed.append(t)
+key("3"); app.anim.finish_all(); pump(2)                            # the rise ...
+root.after(700, root.quit); root.mainloop()                         # ... the rest ...
+app.anim.finish_all(); pump(2)                                       # ... the flight
+assert pulsed == [2], pulsed
+app.chart.pulse = real_pulse
 
 # ---- header (UI-10): no system menu bar; menus open from the header and the keyboard; the mode switch
 assert not root.cget("menu")

@@ -821,13 +821,16 @@ class Toast(tk.Canvas):
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._job = self.after(ms, self.hide)
 
-    def fling(self, text, tint, start_mid, rest_bottom, dx, hold_ms=550, in_=None, wraplength=None, under=None):
+    def fling(self, text, tint, start_mid, rest_bottom, dx, hold_ms=550, in_=None, wraplength=None, under=None,
+              target=None, on_arrive=None):
         """The placement message: rise from its centre at y=start_mid (the word) until its bottom edge is at
         y=rest_bottom, fading in; rest for hold_ms while paling slightly; then slide dx pixels sideways
         (negative = left) while fading out completely. y values are inside `in_`. Every stage is <= 250 ms and a new
         message (or Animator.finish_all from a key press) cuts it short; with Reduce motion it stays put.
         `under(y_mid)` returns the colour behind the toast at that height (tk has no transparency, so the
-        toast takes that colour as its own background and blends toward it)."""
+        toast takes that colour as its own background and blends toward it).
+        With `target` = (x offset from the centre of `in_`, y of the landing point inside `in_`), the last stage
+        flies there instead of swiping sideways (UI-17: into its tier's bar) and calls on_arrive() on landing."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -861,7 +864,12 @@ class Toast(tk.Canvas):
 
         def swipe(p):
             if alive():
-                self._put(dx * p, to_y)
+                if target is None:
+                    self._put(dx * p, to_y)
+                else:
+                    y = to_y + (target[1] - h / 2 - to_y) * p
+                    backdrop(y)
+                    self._put(target[0] * p, y)
                 self._paint(0.7 * (1.0 - p))
 
         def gone():
@@ -870,6 +878,8 @@ class Toast(tk.Canvas):
                 self.place_forget()
                 self._page = self._home
                 super(Toast, self).configure(bg=self._home)
+                if on_arrive is not None:
+                    on_arrive()
 
         def after_rise():
             if alive():

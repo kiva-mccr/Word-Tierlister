@@ -607,8 +607,9 @@ class App:
         self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
 
     def _fling_toast(self, text, tier):
-        """The placement message rises out of the word card's top edge, rests above it, then swipes toward its tier's
-        side (S, A, B to the left; C, D, F to the right; further for the outer tiers) and fades out."""
+        """The placement message rises out of the word card's top edge, rests above it, then flies into its
+        tier's bar in the chart, fading as it goes, and the bar pulses (UI-17). Without the chart it swipes
+        toward its tier's side instead (S, A, B left; C, D, F right)."""
         card, c = self.word_card, self.center
         if not card.winfo_ismapped():
             self.flash(text, bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
@@ -623,8 +624,15 @@ class App:
 
         def under(y):          # the card is white, the page around it cream
             return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
+        target, arrive = None, None
+        ch = self.chart
+        if ch.shown and ch.winfo_ismapped():    # UI-17: it lands in its tier's bar, which pulses
+            bx, by = ch.bar_top(tier)
+            target = (bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty())
+            arrive = lambda: ch.pulse(tier)
         t.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=mid, rest_bottom=card_top - int(8 * f),
-                dx=int((tier - 2.5) * 70 * f), in_=c, wraplength=max(240, c.winfo_width() - 120), under=under)
+                dx=int((tier - 2.5) * 70 * f), in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
+                target=target, on_arrive=arrive)
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""

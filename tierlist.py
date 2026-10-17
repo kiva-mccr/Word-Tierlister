@@ -317,13 +317,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the new one rises a few px into place from 35%. "Don't know" drifts up instead. Positions are
 #           absolute, so a redraw mid-way still ends exactly in place. The placement toast now starts at
 #           the card's top edge (an opaque tk canvas over the word hid the letters).
-# [ ] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
+# [x] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
 #           tier's bar (~250 ms) and the bar ticks up with a soft pulse. The main "that felt
 #           good" moment.
 #           Approved plan: build this as the END of the placement toast's swipe (UI-11) instead
 #           of a second chip: the toast already rises out of the word, so once the chart (UI-13) is on
 #           screen above the card it can swipe up and toward its tier's bar and land in it, the bar
 #           pulsing as it arrives. One motion instead of two, and it says where the word went.
+#           Built that way: Toast.fling(target=, on_arrive=) flies the resting message to its bar's top
+#           (DistributionChart.bar_top) over 240 ms, fading, and the bar pulses (chart.pulse) as it lands.
+#           A message replaced mid-way never "lands". Without the chart (other tabs) it swipes sideways.
 # [ ] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and

@@ -235,6 +235,20 @@ assert toast.itemcget("pill", "fill") == PALETTE["bg"]
 toast.fling("pear  ->  F", (TIER_COLORS[5], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=150, hold_ms=10, in_=page)
 anim.finish_all(); anim.finish_all(); root.after(40, root.quit); root.mainloop()
 update(); rx, _ = toast_xy(); assert rx >= 0                                    # F swipes to the right
+# target: the last stage flies to a landing point (UI-17: its tier's bar) and calls on_arrive there
+landed = []
+toast.fling("kiwi", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
+            target=(200, -30), on_arrive=lambda: landed.append(1))
+anim.finish_all(); root.after(40, root.quit); root.mainloop(); update()
+xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
+xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
+anim.finish_all(); update(); assert landed == [1] and toast.cget("text") == ""
+toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
+            target=(200, -30), on_arrive=lambda: landed.append(2))
+toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
+assert landed == [1]                                                           # a replaced fling never "lands"
+toast.hide(); anim.finish_all()
+
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
 toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=50,
             hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
