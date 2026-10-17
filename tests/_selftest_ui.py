@@ -248,6 +248,8 @@ app.anim.finish_all(); root.after(800, root.quit); root.mainloop(); app.anim.fin
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 if app.pair:
     first = dict(app.pair); n0 = s.stats()["comparisons"]
+    for side, btn in (("left", app.left_btn), ("right", app.right_btn)):        # cards wear their tier colour
+        assert btn.cget("bg") == T.TIER_COLORS[s.get_word(app.pair[side])["tier"]]
     key("Left")
     assert s.stats()["comparisons"] == n0 + 1 and app.pair is None              # saved straight away
     assert app.toast.cget("text") == f"{first['left']}  >  {first['right']}"    # refine shows its result too

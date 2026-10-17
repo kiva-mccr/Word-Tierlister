@@ -346,10 +346,12 @@ class DuelCards(tk.Frame):
         """The Animator key of the result animation (a key press finishes it: the next pair waits on it)."""
         return f"duel{id(self)}"
 
-    def show(self, left, right):
-        """Show a new pair (and enable everything)."""
-        self.left.config(text=left)
-        self.right.config(text=right)
+    def show(self, left, right, colors=None):
+        """Show a new pair (and enable everything). `colors` = (left fill, right fill), e.g. each word's tier
+        colour; without it the cards keep their own pastel blue / peach."""
+        left_bg, right_bg = colors or (PALETTE["left"], PALETTE["right"])
+        self.left.config(text=left, bg=left_bg)
+        self.right.config(text=right, bg=right_bg)
         self.set_enabled(True)
 
     def set_enabled(self, enabled):

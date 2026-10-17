@@ -357,6 +357,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           for 120 ms, then the next pair. A key press goes straight on; clicks during it are ignored.
 #           The "two chips trade places" for a boundary swap was left out to keep things lean: the swap
 #           toast already says what moved.
+#           Later (asked for): the duel cards wear their word's tier colour in Refine, Boundary check and
+#           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
 # [ ] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 # [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two

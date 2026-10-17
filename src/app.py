@@ -832,11 +832,17 @@ class App:
             self.duel.set_enabled(False)
             self._render_defs([])
         else:
-            self.duel.show(self.pair["left"], self.pair["right"])
+            self.duel.show(self.pair["left"], self.pair["right"],
+                           colors=[self._tier_color(self.pair[side]) for side in ("left", "right")])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
             self._render_defs([self.pair["left"], self.pair["right"]])
         self._hint()
+
+    def _tier_color(self, word):
+        """A word's tier colour (the duel cards wear it); a neutral pastel if it has no tier yet."""
+        tier = self.store.get_word(word)["tier"]
+        return TIER_COLORS[tier] if tier is not None else PALETTE["neutral"]
 
     def pair_answer(self, ans):
         """Record a duel result ('left' | 'right' | 'tie'), report swaps/conflicts, count down a focus session."""

@@ -96,7 +96,8 @@ duel.resolve("right", anim, lambda: nxt.append(1)); update(1)
 assert not duel.left.enabled and duel.right.enabled and not nxt                 # loser dims at once
 anim.finish_all(); update(1)
 assert duel.right.coords("label")[1] == yw - DuelCards.LIFT and nxt == [1]      # winner up, then on to the next
-duel.show("c", "d"); update()
+duel.show("c", "d", colors=(TIER_COLORS[1], TIER_COLORS[2])); update()
+assert duel.left.cget("bg") == TIER_COLORS[1] and duel.right.cget("bg") == TIER_COLORS[2]   # tier colours
 assert duel.right.coords("label")[1] == yw and duel.left.enabled                # the next pair starts fresh
 anim.reduce_motion = True
 duel.resolve("left", anim, lambda: nxt.append(2)); assert nxt == [1, 2]         # Reduce motion: straight on
