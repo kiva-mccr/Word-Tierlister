@@ -44,6 +44,8 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
+  Main-window font scale = font_scale (screen fit) x zoom x grow (window bigger than normal, UI-25);
+  measure minimum sizes at grow 1.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it).
 - Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
   messagebox. The bottom bar's square ttk buttons stay on purpose.
@@ -78,7 +80,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-25..27, then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-26, UI-27, then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28, UI-30 (anchor dialog, a web link per package in the install dialog), UI-47 (Tab between tabs), UI-48 (keyboard shortcuts menu), UI-33
 (pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32

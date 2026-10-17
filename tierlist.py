@@ -26,6 +26,9 @@ How it works
   the most progress), so words you've already done stay done. If progress got split
   across several saves it offers to merge them; File > Import earlier progress merges
   another save file or an exported list (.csv/.txt/.md) any time.
+* The main window's contents grow with it: make it bigger (or maximise it) and the
+  word card, pills, buttons and text grow too (up to 1.75x); View > Zoom sets the
+  size you start from.
 * Browse window (View menu): text and rows scale with the window; Ctrl +/-/0 or
   Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
@@ -409,8 +412,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           pane shortens) when contents would not fit, dialogs are centred on screen.
 #           Browse and start-up windows size from measured text. Browse selection is an outline.
 #           Covered by _selftest_sizing.py.
-# [ ] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
+# [x] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
 #           with the window, like the Browse window already does.
+#           Built: App.grow (_grow_for, _apply_grow): past its preferred size (or what the contents need,
+#           if more) the window scales every shared font in proportion, in 5% steps up to 1.75x, 80 ms
+#           after resizing pauses (~0.1 s per step). Grow only: the minimum size stays the one measured at
+#           the normal size, so the window always shrinks back. A zoom makes the window's current size the
+#           new "normal". Switching tabs while grown does not flash back to the normal size.
 # [ ] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
 #           of the current tab (the Tier / Boundary choice in Refine and Boundary) instead of doing its
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check

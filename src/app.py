@@ -93,7 +93,10 @@ class App:
         self.browsers = []
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
-        self._applied_scale = None  # font scale last applied by _fit_window (skip re-applying the same)
+        self._applied_scale = None  # font scale last applied (skip re-applying the same)
+        self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
+        self._ref_size = None     # the window size at which grow is 1 (set by _fit_window)
+        self._grow_job = None
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
 
@@ -297,6 +300,7 @@ class App:
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.pair_empty = EmptyCard(pi, font("title"), font("body"))         # nothing to duel here (UI-20)
         self.center.bind("<Configure>", self._on_center_configure)
+        self.root.bind("<Configure>", self._on_root_configure, add="+")
 
     # ---- zoom (View menu, Ctrl + / Ctrl - / Ctrl 0) ---------------------------------------------------------
     ZOOM_MIN, ZOOM_MAX, ZOOM_STEP = 0.6, 2.0, 0.1
@@ -311,7 +315,8 @@ class App:
         self.zoom = z
         self.store.set_meta("zoom", z)
         self.font_scale = 1.0                  # re-fit from the full size at the new zoom
-        self._fit_window()
+        self.grow = 1.0                        # a zoom sets the size: the window as it is now becomes "normal"
+        self._fit_window(rebase=True)
         self.flash(f"Zoom {round(z * 100)}%", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=900)
         return "break"
 
@@ -363,7 +368,7 @@ class App:
                 ("word", [self.word_card.word], width - int(80 * f) - 2 * self.word_card.padx),
                 ("pair", [self.left_btn.cget("text"), self.right_btn.cget("text")],
                  (width - int(220 * f)) // 2 - int(80 * f))):
-            base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom)))
+            base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom * self.grow)))
             fnt = font(role)
             fnt.configure(size=base)
             need = max((fnt.measure(t) for t in texts if t), default=0)
@@ -380,7 +385,7 @@ class App:
         """
         r = self.root
         r.update_idletasks()
-        f = ui_factor(r) * self.font_scale * self.zoom
+        f = ui_factor(r) * self.font_scale * self.zoom * self.grow
         rows = [w for w in r.pack_slaves() if w is not self.center]
         extra = 0 if self.opt_frame.winfo_manager() else self.opt_frame.winfo_reqheight() + 16  # refine/boundary row
         inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
@@ -389,16 +394,22 @@ class App:
         height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
         return width, height
 
-    def _fit_window(self, initial=False):
+    def _fit_window(self, initial=False, rebase=False):
         """Size and place the main window for this screen and these contents.
 
         First call: if the contents cannot fit the screen even at the right size, the fonts are
         shrunk step by step (FONT_STEPS) until they do; then the window opens at the preferred size
         (BASE_SIZE scaled for dpi), at least as big as the contents need, no bigger than the usable
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
-        now need more room. The minimum size always follows the contents.
+        now need more room. The minimum size always follows the contents. It also sets the size at which
+        the contents start to grow with the window (UI-25); `rebase` (after a zoom) makes that at least the
+        window's current size.
         """
         r = self.root
+        if not initial and self.grow > 1:
+            cw, ch = self._content_size()
+            if cw <= r.winfo_width() and ch <= r.winfo_height():
+                return       # still fits at the grown size: re-measuring at normal size would flash small text
         f = ui_factor(r)
         area = usable_area(r)
         if initial:
@@ -407,6 +418,7 @@ class App:
         # then take the next font step down, and repeat. Later calls never grow the fonts back.
         steps = [st for st in self.FONT_STEPS if st <= self.font_scale + 1e-9]
         rescaled = False
+        self.grow = 1.0                          # measured at the normal size; _apply_grow re-grows after
         for step in steps:
             self.font_scale = step
             if self._applied_scale != step * self.zoom:     # re-scaling and redrawing everything is the slow
@@ -432,8 +444,9 @@ class App:
         min_w = min(max(cw, int(self.MIN_SIZE[0] * f * fs)), area[2])
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
         r.minsize(min_w, min_h)
+        pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
+        self._ref_size = (max(pref[0], cw), max(pref[1], ch))
         if initial:
-            pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
             w, h = fit_size((min_w, min_h), pref, (area[2], area[3]))
             r.geometry(center_geometry(w, h, area))
         else:
@@ -441,6 +454,49 @@ class App:
             w, h = max(r.winfo_width(), min_w), max(r.winfo_height(), min_h)
             if (w, h) != (r.winfo_width(), r.winfo_height()):
                 r.geometry(f"{w}x{h}")
+            if rebase:
+                self._ref_size = (max(self._ref_size[0], w), max(self._ref_size[1], h))
+            self._apply_grow()
+
+    # ---- a bigger window, bigger contents (UI-25) ----------------------------------------------------
+    GROW_MAX, GROW_STEP = 1.75, 0.05
+
+    def _grow_for(self, w, h):
+        """How much bigger than normal the contents may be in a w x h window: 1 up to the preferred size
+        (or what the contents need, if more), then in proportion, in steps of GROW_STEP, up to GROW_MAX."""
+        rw, rh = self._ref_size
+        g = math.floor(min(w / rw, h / rh) / self.GROW_STEP + 1e-6) * self.GROW_STEP
+        return round(max(1.0, min(self.GROW_MAX, g)), 2)
+
+    def _on_root_configure(self, e):
+        """The window was resized: re-grow the contents once resizing pauses for 80 ms (like Browse)."""
+        if e.widget is not self.root:
+            return
+        if self._grow_job:
+            self.root.after_cancel(self._grow_job)
+        self._grow_job = self.root.after(80, self._apply_grow)
+
+    def _apply_grow(self):
+        """Scale every shared font with the window (the word card, pills, buttons, chart and menus follow).
+        The minimum size stays the one measured at the normal size, so the window can always shrink back."""
+        self._grow_job = None
+        if not self._ref_size:
+            return
+        g = self._grow_for(self.root.winfo_width(), self.root.winfo_height())
+        if g == 1.0 and self.grow > 1:
+            self.grow = 1.0
+            self._fit_window()                # back to normal: the full fit (it also renews the minimum size)
+            return
+        scale = self.font_scale * self.zoom * g
+        self.grow = g
+        if scale == self._applied_scale:
+            return
+        self._applied_scale = scale
+        scale_fonts(scale)
+        self._apply_wraps(self.center.winfo_width())
+        refresh_widgets(self.root)
+        self._fit_big_text()
+        self.root.after_idle(self._recenter)
 
     # ---- layout toggles -------------------------------------------------------------------------------
     def _layout_defs(self, animate=False):
