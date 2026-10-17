@@ -226,9 +226,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           smoothly after each answer. Shown in the Better / Same / Worse view.
 #
 # --- Phase 3: layout and chrome ----------------------------------------------------------------
-# [ ] UI-10 SegmentedControl. adds SegmentedControl(options, on_change) and build_header(): a
+# [ ] UI-10 Modern top bar. adds SegmentedControl(options, on_change) and build_header(): a
 #           pill-shaped mode switch (Place / Refine / Boundary / Conflicts) replacing the
-#           Radiobuttons.
+#           Radiobuttons, and the File / Edit / View / Settings menus as soft rounded header buttons
+#           with styled drop-down menus instead of the plain system menu bar (same items, same
+#           shortcuts). By request: modernize the top; the bottom bar stays as it is.
 # [ ] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
 #           blend) instead of the full-width flash banner. App.flash() keeps its signature.
 # [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
@@ -277,7 +279,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
 #           and RoundButton "Move to" chips. Keeps its scale-with-window behaviour.
 # [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
-#           Merge dialogs match the rest.
+#           Merge dialogs match the rest. The bottom bar (Undo, Browse / edit, Definition, key
+#           hints) keeps its current look by request; only dialogs change here.
 # [x] SZ-1  Screen- and content-aware window sizing (sizing.py). Windows open at a size derived from
 #           the monitor under the pointer and the dpi scaling, fonts step down (and the definition
 #           pane shortens) when contents would not fit, dialogs are centred on screen.
@@ -307,7 +310,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  light theme only (a dark theme can be added later: theme.py is built so a second
+#   Settled:  modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
+#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be added later: theme.py is built so a second
 #             palette with the same keys drops in); the session count stays as a muted "+N today",
 #             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
 #   Open:     1. Next-up peek (UI-21) [try it; easy to remove]

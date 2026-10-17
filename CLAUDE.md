@@ -48,6 +48,9 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   changed (Status, Known gaps, new files, commands, conventions or user preferences), then commit and
   push it with the rest. Keep it short; skip it when nothing worth recording changed.
 - The repo on GitHub is the source of truth for this file; a copy inside an uploaded zip may be older.
+- UI styling: keep the bottom bar (Undo, Browse / edit, Definition and the key-hint line) roughly as it
+  looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
+  "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
   "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging (T-1..T-5) tentative.
 
@@ -60,5 +63,5 @@ UI-16/17. UI-18 wires every hotkey to its button's pressed look via `RoundButton
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- The ttk buttons (Undo, Browse / edit, dialogs) are still square until UI-24.
+- Dialog buttons are still square until UI-24 (the bottom bar keeps its square look on purpose).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
