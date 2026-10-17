@@ -75,8 +75,8 @@ class App:
         self.root, self.store, self.defs = root, store, defs
         self.note, self.other_saves = note, list(other_saves)
         self.mode = store.get_meta("mode", "place")
-        if self.mode not in dict(MODES):
-            self.mode = "place"
+        if self.mode not in self.modes_with_work(store.stats()):
+            self.mode = "place"              # unknown, or its tab is hidden (UI-46)
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
@@ -181,6 +181,7 @@ class App:
         self.mode_switch = TabBar(head, MODES, self._on_mode_switch, font("label"), animator=self.anim,
                                   page_bg=PALETTE["bg"])
         self.mode_switch.set(self.mode)
+        self.mode_switch.show_only(self.modes_with_work(self.store.stats()), animate=False)
         self.mode_switch.pack(side="top", fill="x")
         tk.Frame(r, height=6, bg=PALETTE["bg"]).pack(side="top", fill="x")
 
@@ -582,6 +583,7 @@ class App:
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
         # the tier chart belongs to Place new words; the other tabs get their own views later (UI-31)
         # (it keeps its space in the other tabs, so the page does not move when switching)
+        self.mode_switch.show_only(self.modes_with_work(s))
         if self.mode == "place":
             self.chart.set([s["tiers"].get(t, 0) for t in range(len(TIERS))], animate=self._chart_ready)
             self._chart_ready = True             # the first fill does not grow from zero
@@ -589,6 +591,20 @@ class App:
         elif self.chart.shown:
             self.chart.show(False)
             self._chart_ready = False            # back in Place it shows the counts as they are, no growth
+
+    @staticmethod
+    def modes_with_work(s):
+        """The tabs worth showing for Store.stats() `s` (UI-46): Refine once a tier holds two words,
+        Boundary check once two neighbouring tiers both hold words, Resolve conflicts while there are any."""
+        t = s["tiers"]
+        modes = {"place"}
+        if any(n >= 2 for n in t.values()):
+            modes.add("refine")
+        if any(t.get(i) and t.get(i + 1) for i in range(len(TIERS) - 1)):
+            modes.add("boundary")
+        if s["conflicts"]:
+            modes.add("conflict")
+        return modes
 
     def _pace_text(self):
         """The hover note on "+N today": this session's pace, once there is enough to say anything."""

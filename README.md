@@ -44,7 +44,7 @@ replacing the other folders never loses your list.
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread) and the window's package install step. |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `DefinitionDrawer` and other small widgets. |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `DefinitionDrawer` and other small widgets. |
 | `src/ui_chart.py` | The tier chart: six bars, S..F, with counts (Place new words). |
 | `src/browser.py` | The Browse / edit window. |
 | `src/app.py` | The main window and all four modes. |

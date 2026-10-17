@@ -38,6 +38,8 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
+* A mode's tab only shows once it has work (Refine: a tier with two words;
+  Boundary: two neighbouring tiers with words; Resolve conflicts: a conflict).
 * Every action is committed to SQLite immediately: close the window or lose
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
@@ -492,7 +494,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
 #           scale, so a zoom never pushes the window past the screen. (Browse keeps its own zoom.)
 #           Plain messages (zoom, skip, duel results) now appear just above the bottom bar, clear of the card.
-# [ ] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
+# [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
 #           while no tier holds two words yet (only at the very start), "Boundary check" while no two
 #           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon
 #           as it has work, and goes when it has none. If you are on a tab when its last piece of work is
@@ -500,6 +502,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           state (UI-20), so the page never vanishes under you. The saved mode falls back to Place new
 #           words if its tab is hidden at start-up. The check uses cheap counts (Store.tier_counts and
 #           the conflicts count, already read for the status line), never a scan per refresh.
+#           Built: TabBar.show_only(keys) folds tabs away / grows them in; App.modes_with_work(stats).
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

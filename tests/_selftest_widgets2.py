@@ -159,6 +159,21 @@ assert seg.itemcget("hoverfill", "state") == "hidden"
 assert seg.itemcget("label_refine", "fill") == PALETTE["text"] and seg.itemcget("label_place", "fill") == PALETTE["muted"]
 root.geometry("1300x700"); update(5)
 assert seg.coords("baseline_right")[2] >= seg.winfo_width() - 1                 # follows the window width
+# tabs with nothing to do fold away (UI-46); the open one always stays
+seg.set("place"); anim.finish_all()
+seg.show_only({"boundary"}); update()
+assert anim.is_running(f"tabfold{id(seg)}")                                      # folds, not jumps
+anim.finish_all(); assert seg.visible == {"place", "boundary"}
+assert seg.itemcget("label_refine", "state") == "hidden" and seg.itemcget("label_boundary", "state") == "normal"
+assert seg._index_at(seg.tab_x("refine")) != "refine"                           # a folded tab can't be clicked
+assert seg.tab_x("place") < seg.tab_x("boundary")
+mid = seg.winfo_width() / 2
+assert abs((seg.tab_x("place") + seg.tab_x("boundary")) / 2 - mid) < 2           # the rest stay centred
+seg_click("boundary"); anim.finish_all(); assert seg.get() == "boundary" and changes[-1] == "boundary"
+assert min(seg.coords("tabfill")[0::2]) < seg.tab_x("boundary") < max(seg.coords("tabfill")[0::2])
+seg.show_only(set()); anim.finish_all(); assert seg.visible == {"boundary"}     # the open tab never vanishes
+seg.show_only({"place", "refine", "boundary"}, animate=False)
+assert seg.itemcget("label_refine", "state") == "normal" and not anim.is_running(f"tabfold{id(seg)}")
 
 # ---- DropMenu and HeaderMenus (UI-10)
 ran, chk = [], tk.BooleanVar(value=False)

@@ -76,9 +76,9 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-21, UI-23..27, then
+Done: UI-0..UI-13, UI-15..UI-20, UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-21, UI-23..27, then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28, UI-30 (anchor dialog, a web link per package in the install dialog), UI-47 (Tab between tabs), UI-48 (keyboard shortcuts menu), UI-33
-(pace timeout + hover-note polish), UI-46 (hide Refine / Boundary / Conflicts tabs until they have work), UI-34..42 (a round of edits; the "Window by window" list in the
+(pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32
 (moving pastel background: needs the user's OK to relax the no-motion-while-idle guardrail). UI-14 is planned (measure decided).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).

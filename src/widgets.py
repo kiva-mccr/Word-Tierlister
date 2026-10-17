@@ -445,9 +445,11 @@ class TabBar(tk.Canvas):
                       animator=app.anim, page_bg=PALETTE["bg"])
         tabs.pack(fill="x")
         tabs.set("refine")        # move to a tab without calling on_change (e.g. after a key)
+        tabs.show_only({"place", "refine"})   # the other tabs fold away (UI-46)
 
     A click on another tab slides the open tab there (SLIDE_MS, ease-out; jumps with Reduce motion) and
-    calls on_change(key). Tabs are all as wide as the widest label and sit centred.
+    calls on_change(key). Tabs are all as wide as the widest label and sit centred. A tab that is shown or
+    hidden grows or folds over SLIDE_MS too; its label shows once its tab is wide enough for it.
     """
     SLIDE_MS = 180
 
@@ -458,7 +460,10 @@ class TabBar(tk.Canvas):
         self._on_change, self._font, self._anim = on_change, font, animator
         self._page = page_bg or PALETTE["bg"]
         self.value = self._keys[0]
-        self._x = 0.0                        # position of the open tab, in tabs (animated)
+        self.visible = set(self._keys)
+        self._open = {k: 1.0 for k in self._keys}   # how open each tab is, 0 (folded away) .. 1 (animated)
+        self._x = 0.0                        # left edge of the open tab, in tab widths (animated)
+        self._sliding = False
         self._hover = None
         self.bind("<Motion>", self._on_motion)
         self.bind("<Leave>", lambda e: self._set_hover(None))
@@ -474,22 +479,25 @@ class TabBar(tk.Canvas):
         h = int(line * 2.1)
         n = len(self.options)
         width = max(self.winfo_width(), n * tab_w + 20)
-        return tab_w, h, (width - n * tab_w) / 2, width       # tab width, height, left edge of the tabs, width
+        shown = sum(self._open.values())
+        return tab_w, h, (width - shown * tab_w) / 2, width   # tab width, height, left edge of the tabs, width
+
+    def _slot(self, key):
+        """Left edge of a tab, in tab widths from the left edge of the tabs."""
+        return sum(self._open[k] for k in self._keys[:self._keys.index(key)])
 
     def _draw(self):
         self.delete("all")
         tab_w, h, x0, width = self._metrics()
         super().configure(height=h + 1, cursor="hand2")
-        n = len(self.options)
-        super().configure(width=n * tab_w + 20)
+        super().configure(width=len(self.options) * tab_w + 20)
         self.create_polygon(0, 0, 0, 0, fill=PALETTE["surface2"], outline="", tags="hoverfill")
         self.create_polygon(0, 0, 0, 0, fill=self._page, outline="", tags="tabfill")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], smooth=True, tags="tabedge")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_left")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_right")
-        for i, (key, label) in enumerate(self.options):
-            self.create_text(x0 + tab_w * i + tab_w / 2, 2 + h / 2, text=label, font=self._font,
-                             tags=("label", f"label_{key}"))
+        for key, label in self.options:
+            self.create_text(0, 2 + h / 2, text=label, font=self._font, tags=("label", f"label_{key}"))
         self._place_tab()
 
     @staticmethod
@@ -505,34 +513,40 @@ class TabBar(tk.Canvas):
         top = 4
         r = max(4, h // 4)
         x1 = x0 + self._x * tab_w + 2
-        x2 = x1 + tab_w - 4
-        shape = self._tab_shape(x1, x2, top, base + 1, r)
+        x2 = x1 + self._open[self.value] * tab_w - 4
+        shape = self._tab_shape(x1, max(x2, x1 + 2 * r), top, base + 1, r)
         self.coords("tabfill", *shape)
         self.coords("tabedge", *shape[2:-2])       # sides and top only: open at the bottom
         self.coords("baseline_left", 0, base, x1, base)
         self.coords("baseline_right", x2, base, width, base)
         hov = self._hover if self._hover != self.value else None
         if hov is not None:
-            i = self._keys.index(hov)
-            hx1 = x0 + i * tab_w + 6
+            hx1 = x0 + self._slot(hov) * tab_w + 6
             self.coords("hoverfill", *self._tab_shape(hx1, hx1 + tab_w - 12, top + 4, base - 1, r))
             self.itemconfigure("hoverfill", state="normal")
         else:
             self.itemconfigure("hoverfill", state="hidden")
-        for key in self._keys:
+        for key, label in self.options:
             on = key == self.value or key == self._hover
-            self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"])
+            w = self._open[key] * tab_w
+            fits = w >= (self._font.measure(label) if self._font else 8 * len(label)) + 4
+            self.coords(f"label_{key}", x0 + self._slot(key) * tab_w + w / 2, 2 + h / 2)
+            self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"],
+                               state="normal" if fits else "hidden")
         self.tag_raise("label")
 
     def _index_at(self, x):
         tab_w, _h, x0, _w = self._metrics()
-        i = int((x - x0) // tab_w) if x >= x0 else -1
-        return self._keys[i] if 0 <= i < len(self._keys) else None
+        for key in self._keys:
+            left = x0 + self._slot(key) * tab_w
+            if key in self.visible and left <= x < left + self._open[key] * tab_w:
+                return key
+        return None
 
     def tab_x(self, key):
         """Centre x of a tab, in canvas pixels (for tests)."""
         tab_w, _h, x0, _w = self._metrics()
-        return x0 + self._keys.index(key) * tab_w + tab_w / 2
+        return x0 + (self._slot(key) + self._open[key] / 2) * tab_w
 
     def _on_motion(self, e):
         self._set_hover(self._index_at(e.x))
@@ -553,15 +567,39 @@ class TabBar(tk.Canvas):
         if key not in self._keys:
             return
         self.value = key
-        start, goal = self._x, float(self._keys.index(key))
+        start = self._x
 
         def frame(p):
-            self._x = start + (goal - start) * p
+            self._sliding = p < 1
+            self._x = start + (self._slot(self.value) - start) * p   # follows tabs that fold meanwhile
             self._place_tab()
         if self._anim is None:
             frame(1.0)
         else:
             self._anim.run(f"tabs{id(self)}", self.SLIDE_MS, frame)
+
+    def show_only(self, keys, animate=True):
+        """Show just these tabs (the open one always stays): the others fold away and new ones grow in
+        (UI-46). animate=False sets them at once (when the window is first built)."""
+        keys = set(keys) | {self.value}
+        if keys == self.visible:
+            return
+        self.visible = keys
+        start = dict(self._open)
+
+        def frame(p):
+            for k in self._keys:
+                goal = 1.0 if k in self.visible else 0.0
+                self._open[k] = start[k] + (goal - start[k]) * p
+            if not self._sliding:
+                self._x = self._slot(self.value)
+            if self._hover not in self.visible:
+                self._hover = None
+            self._place_tab()
+        if self._anim is None or not animate:
+            frame(1.0)
+        else:
+            self._anim.run(f"tabfold{id(self)}", self.SLIDE_MS, frame)
 
     def get(self):
         return self.value

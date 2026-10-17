@@ -365,5 +365,19 @@ app._on_mode_switch("boundary"); pump(2)
 assert app.mode == "boundary" and s.get_meta("mode") == "boundary" and app.mode_switch.get() == "boundary"
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
 assert app.mode_switch.get() == "place"                              # the switch follows code changes too
+
+# ---- tabs only when they have work (UI-46)
+W = T.App.modes_with_work
+assert W({"tiers": {}, "conflicts": 0}) == {"place"}
+assert W({"tiers": {0: 1, 2: 1}, "conflicts": 0}) == {"place"}                     # no pair, no neighbours
+assert W({"tiers": {0: 2}, "conflicts": 0}) == {"place", "refine"}
+assert W({"tiers": {1: 1, 2: 1}, "conflicts": 3}) == {"place", "boundary", "conflict"}
+app.anim.finish_all()
+assert app.mode_switch.visible == W(s.stats())
+app.mode_var.set("conflict"); app.on_mode_change(); pump(2)                      # opened by code: it shows while open
+assert "conflict" in app.mode_switch.visible
+if not s.stats()["conflicts"]:
+    app.mode_var.set("place"); app.on_mode_change(); pump(2); app.anim.finish_all()
+    assert "conflict" not in app.mode_switch.visible                             # and goes once you leave it
 app.on_close()
 print("UI OK")
