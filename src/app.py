@@ -26,7 +26,7 @@ from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
-from widgets import (AnchorLadder, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -274,10 +274,9 @@ class App:
         self.opt_frame.grid(row=0, column=0, pady=(0, 16))
         self.opt_label = ttk.Label(self.opt_frame, text="Tier:", foreground=PALETTE["muted"])
         self.opt_label.pack(side="left")
-        self.filter_cb = ttk.Combobox(self.opt_frame, textvariable=self.filter_var,
-                                      state="readonly", width=16, takefocus=0)
+        self.filter_cb = ChoiceButton(self.opt_frame, self.filter_var, ["All tiers"], on_change=self._on_filter,
+                                      font=font("body"), animator=self.anim)
         self.filter_cb.pack(side="left", padx=6)
-        self.filter_cb.bind("<<ComboboxSelected>>", self._on_filter)
         self.focus_lbl = ttk.Label(self.opt_frame, text="")
         self.focus_lbl.pack(side="left", padx=12)
         self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
@@ -477,13 +476,13 @@ class App:
         """Show the tier / boundary drop-down for refine and boundary modes, hide it otherwise."""
         if self.mode == "refine":
             self.opt_label.config(text="Tier:")
-            self.filter_cb["values"] = ["All tiers"] + TIERS
+            self.filter_cb.set_values(["All tiers"] + TIERS)
             self.filter_var.set("All tiers")
             self.opt_frame.grid()
         elif self.mode == "boundary":
             self.opt_label.config(text="Boundary:")
             vals = [f"{TIERS[i]} | {TIERS[i + 1]}" for i in range(len(TIERS) - 1)]
-            self.filter_cb["values"] = ["All boundaries"] + vals
+            self.filter_cb.set_values(["All boundaries"] + vals)
             self.filter_var.set("All boundaries")
             self.opt_frame.grid()
         else:
@@ -499,9 +498,8 @@ class App:
             self.focus_lbl.config(text="")
             self.focus_clear.pack_forget()
 
-    def _on_filter(self, _e=None):
+    def _on_filter(self):
         """A tier/boundary was picked in the drop-down: drop any focus word and load a new pair."""
-        self.root.focus_set()
         self.focus = None
         self.refresh()
 

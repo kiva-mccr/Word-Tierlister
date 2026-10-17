@@ -37,6 +37,8 @@ errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
+- No ttk.Combobox or tk.Menu popups: they grab input and float over other programs on Linux. Use
+  ChoiceButton / DropMenu. To test focus behaviour for real: Xvfb + openbox + xdotool (installed here).
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.

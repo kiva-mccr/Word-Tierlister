@@ -51,6 +51,7 @@ class RoundButton(tk.Canvas):
         self._fill, self._fg = bg, fg
         self._padx, self._pady, self._radius = padx, pady, radius
         self._lift, self._lifted = lift, False
+        self._minwidth = 0               # ChoiceButton keeps a steady width
         self._flat, self._ring = flat, ring
         self._selected = False
         self._anim = animator
@@ -189,7 +190,7 @@ class RoundButton(tk.Canvas):
             hb = self.bbox(h)
             hw, hh = hb[2] - hb[0], hb[3] - hb[1]
         gap = 1 if self._hint else 0
-        need_w = max(tw, hw) + 2 * self._padx
+        need_w = max(tw + 2 * self._padx, hw + 2 * self._padx, self._minwidth)
         lift = self._lift
         need_h = th + gap + hh + 2 * self._pady + DIP + 1 + lift
         super().configure(width=need_w, height=need_h)
@@ -573,13 +574,16 @@ class DropMenu:
 
         items = [("command", "Export tier list...", app.export, None),
                  ("check", "Reduce motion", app.motion_var, app.toggle_motion),
+                 ("radio", "Tier S", app.filter_var, "S", app.refresh),
                  ("separator",),
                  ("command", "Undo", app.undo, "Ctrl+Z")]
         DropMenu(root, items, font("body")).open(x, y, on_close)
 
     Mouse: hover highlights, click runs the item and closes. Keys: Up / Down move, Return runs, Escape
-    closes. It also closes when the main window is clicked elsewhere, moved, or loses focus.
+    closes. It never grabs input (unlike tk's own menus and ttk drop-down lists), so switching to another
+    program closes it (watch_focus -> close_popups, UI-43); a click elsewhere in the window does too.
     """
+    open_menus = set()                 # every DropMenu showing right now (close_popups closes them all)
 
     def __init__(self, root, items, font=None):
         self.root, self.items, self.font = root, list(items), font
@@ -589,7 +593,7 @@ class DropMenu:
     @staticmethod
     def labels(items):
         """The labels of the clickable items (for tests and docs)."""
-        return [it[1] for it in items if it[0] in ("command", "check")]
+        return [it[1] for it in items if it[0] in ("command", "check", "radio")]
 
     def is_open(self):
         return self.win is not None
@@ -616,6 +620,8 @@ class DropMenu:
             mark = ""
             if kind == "check":
                 mark = "\u2713" if target.get() else ""
+            elif kind == "radio":
+                mark = "\u2713" if target.get() == extra else ""
             parts = [tk.Label(row, text=mark, width=2, bg=PALETTE["surface"], fg=PALETTE["accent_text"],
                               font=self.font, anchor="w"),
                      tk.Label(row, text=label, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
@@ -637,7 +643,6 @@ class DropMenu:
         win.bind("<Up>", lambda e: self._step(-1))
         win.bind("<Down>", lambda e: self._step(1))
         win.bind("<Return>", lambda e: self._active is not None and self.invoke(self._active))
-        win.bind("<FocusOut>", self._on_focus_out)
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -646,14 +651,11 @@ class DropMenu:
         win.geometry(f"+{x}+{y}")
         win.deiconify()
         win.lift()
+        DropMenu.open_menus.add(self)
         try:
             win.focus_force()
         except tk.TclError:
             pass
-
-    def _on_focus_out(self, _e):
-        # only when focus left the menu for good (not moving between its own rows)
-        self.root.after(50, lambda: self.win is not None and self.win.focus_get() is None and self.close())
 
     def _highlight(self, i):
         self._active = i
@@ -678,10 +680,16 @@ class DropMenu:
             var.set(not var.get())
             if command:
                 command()
+        elif it[0] == "radio":
+            var, value, command = it[2], it[3], (it[4] if len(it) > 4 else None)
+            var.set(value)
+            if command:
+                command()
         else:
             it[2]()
 
     def close(self):
+        DropMenu.open_menus.discard(self)
         if self.win is not None:
             try:
                 self.win.destroy()
@@ -692,6 +700,49 @@ class DropMenu:
             cb, self._on_close = self._on_close, None
             if cb:
                 cb()
+
+
+class ChoiceButton(RoundButton):
+    """A drop-down choice (UI-43): a soft button showing the current value and a little arrow; a click opens a
+    DropMenu with the choices (a check mark on the current one). Replaces ttk.Combobox, whose list grabs all
+    input and so stayed in front of other programs.
+
+        ChoiceButton(parent, app.filter_var, ["All tiers", "S", "A"], on_change=app.refresh, font=font("body"))
+
+    It is as wide as its longest choice, so it does not change size when the value does.
+    """
+
+    def __init__(self, parent, variable, values, on_change=None, font=None, animator=None, canvas_bg=None):
+        self.var, self.values, self._on_change = variable, list(values), on_change
+        super().__init__(parent, "", self.toggle, bg=PALETTE["surface"], font=font, padx=12, pady=5, radius=10,
+                         animator=animator, canvas_bg=canvas_bg)
+        self.menu = DropMenu(self.winfo_toplevel(), [], font)
+        variable.trace_add("write", lambda *_: self._show())
+        self._show()
+
+    def set_values(self, values):
+        self.values = list(values)
+        self._show()
+
+    def _show(self):
+        """Label it with the current value; the minimum width fits the longest choice."""
+        f = self._font
+        self._minwidth = max((f.measure(f"{v}   \u25be") for v in self.values), default=0) + 2 * self._padx + 4
+        self.config(text=f"{self.var.get()}   \u25be")
+
+    def toggle(self):
+        if self.menu.is_open():
+            self.menu.close()
+            return
+        self.menu.items = [("radio", v, self.var, v, self._picked) for v in self.values]
+        self.menu.open(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height() + 2)
+
+    def _picked(self):
+        if self._on_change:
+            self._on_change()
+
+    def refresh(self):
+        self._show()
 
 
 class HeaderMenus(tk.Frame):
@@ -1340,37 +1391,32 @@ class Tooltip:
             self.win = self._label = None
 
 
-def close_popups(root):
-    """Close every drop-down the program has open (UI-43): the header menus' DropMenus and any ttk drop-down
-    list (Tier / Boundary, Browse's Show / Sort). Called when the program loses focus, so nothing is left
-    floating in front of another program."""
-    def walk(w):
-        for child in list(w.winfo_children()):
-            try:
-                if isinstance(child, HeaderMenus):
-                    child.close()
-                elif child.winfo_class() == "TCombobox":
-                    child.tk.call("ttk::combobox::Unpost", str(child))
-                walk(child)
-            except tk.TclError:
-                pass                     # a window that is already gone
-    walk(root)
+def close_popups():
+    """Close every drop-down the program has open (UI-43): all DropMenus (header menus, ChoiceButtons). Called
+    when the program loses focus, so nothing is left floating in front of another program."""
+    for menu in list(DropMenu.open_menus):
+        menu.close()
 
 
 def watch_focus(root, on_lost=None):
     """When the whole program loses focus (another program came to the front), close its drop-downs
-    (close_popups) and call on_lost(). Moving focus between the program's own windows does nothing."""
+    (close_popups) and call on_lost(). Moving focus between the program's own windows does nothing.
+    (ttk drop-down lists cannot be closed this way: they grab all input, so no focus event arrives at
+    all; the program uses ChoiceButton instead.)"""
     state = {"job": None}
 
     def check():
         state["job"] = None
         try:
-            if root.focus_get() is None:
-                close_popups(root)
-                if on_lost:
-                    on_lost()
-        except (tk.TclError, KeyError):
-            pass                         # focus_get can fail on a half-destroyed popup: nothing to close then
+            # ask Tcl, not focus_get(): while a ttk drop-down list is open the focus is in its pop-down,
+            # which tkinter does not know, and focus_get() raises instead of answering
+            focused = root.tk.call("focus")
+        except tk.TclError:
+            return
+        if not str(focused):
+            close_popups()
+            if on_lost:
+                on_lost()
 
     def later(_e):
         if state["job"] is None:

@@ -35,10 +35,6 @@ def apply_ttk_style(root):
         "*Listbox.background": P["surface"], "*Listbox.foreground": P["text"],
         "*Listbox.selectBackground": P["select_bg"], "*Listbox.selectForeground": P["text"],
         "*Listbox.relief": "flat", "*Listbox.highlightThickness": 0,
-        "*TCombobox*Listbox.background": P["surface"], "*TCombobox*Listbox.foreground": P["text"],
-        "*TCombobox*Listbox.selectBackground": P["select_bg"],
-        "*TCombobox*Listbox.selectForeground": P["text"],
-        "*TCombobox*Listbox.font": body,
     }.items():
         root.option_add(pat, val)
 
@@ -76,16 +72,13 @@ def apply_ttk_style(root):
                   indicatorbackground=[("selected", P["accent"]), ("active", P["surface2"])])
     _tick_boxes(root, style, font("body").metrics("linespace"))
 
-    for kind in ("TEntry", "TCombobox", "TSpinbox"):
+    for kind in ("TEntry", "TSpinbox"):
         style.configure(kind, fieldbackground=P["surface"], foreground=P["text"], padding=5,
                         bordercolor=P["border"], lightcolor=P["surface"], darkcolor=P["surface"],
                         insertcolor=P["text"], selectbackground=P["select_bg"],
                         selectforeground=P["text"])
         style.map(kind, bordercolor=[("focus", P["accent"])],
                   lightcolor=[("focus", P["accent"])], darkcolor=[("focus", P["accent"])])
-    style.configure("TCombobox", arrowcolor=P["muted"], background=P["surface"])
-    style.map("TCombobox", fieldbackground=[("readonly", P["surface"])],
-              foreground=[("readonly", P["text"])], background=[("active", P["surface2"])])
 
     style.configure("Treeview", background=P["surface"], fieldbackground=P["surface"],
                     foreground=P["text"], borderwidth=0, relief="flat", rowheight=28)

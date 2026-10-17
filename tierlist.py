@@ -440,9 +440,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           it with a small themed file picker that matches the app (Windows and macOS keep the system's
 #           own dialog).
 # [x] UI-43 Bug (reported, Linux): open a drop-down, switch to another program (Chrome, say), and the drop-down
-#           stayed in front of that program. Fixed: the header menus' DropMenu no longer asks to be always
-#           on top, and when the program loses focus every open drop-down closes (header menus and the
-#           ttk drop-downs such as Tier / Boundary and Browse's Show / Sort).
+#           stayed in front of that program. First fix (closing menus when focus left) did not work: tried
+#           again with a real window manager (openbox + xdotool), the Tier list (a ttk.Combobox) grabs all
+#           input while open, so no focus event ever arrives. Fixed for real: the Tier / Boundary choice
+#           and Browse's Show / Sort are now ChoiceButtons (a button + the same DropMenu as the header
+#           menus, which never grabs input); watch_focus asks Tcl who has the focus and closes every open
+#           DropMenu when the program loses it; nothing is "always on top". Verified with the window
+#           manager: both the header menus and the choice lists close on switching away. (Tk's own file
+#           dialog still uses tk menus that grab input: replaced by the themed file picker in UI-42.)
 # [x] UI-44 Fixes after trying UI-16..19 (reported): (1) the placement pill no longer flies as a box over
 #           the chart: it shrinks into a small drop as it flies (tk has no transparency, so a full-size
 #           pill was an opaque box); (2) Refine within tier (and every duel) now shows a short result

@@ -19,7 +19,7 @@ from fonts import family
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
-from widgets import RoundButton, refresh_widgets
+from widgets import ChoiceButton, RoundButton, refresh_widgets
 
 
 class Browser:
@@ -63,10 +63,6 @@ class Browser:
         self.style.configure(f"{self.sid}.TLabel", font=self.f_body)
         self.style.configure(f"{self.sid}.TButton", font=self.f_body)
         self.style.configure(f"{self.sid}.TLabelframe.Label", font=self.f_bold)
-        # Dropdowns take their text size from the style (the widget's own font option is ignored for
-        # read-only ones), so the shared font object must be named here or the text clips as it scales.
-        self.style.configure(f"{self.sid}.TCombobox", font=self.f_body, padding=(6, 4))
-        self.win.option_add("*TCombobox*Listbox.font", self.f_body)
 
         top = self.top_bar = ttk.Frame(self.win, padding=8)
         top.pack(fill="x")
@@ -77,19 +73,12 @@ class Browser:
         self.search_var.trace_add("write", lambda *_: self._debounce())
         ttk.Label(top, text="Show:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
         self.filter_var = tk.StringVar(value="All placed")
-        cb = ttk.Combobox(
-            top, textvariable=self.filter_var, state="readonly", width=11, font=self.f_body,
-            style=f"{self.sid}.TCombobox",
-            values=["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
-        )
-        cb.pack(side="left", padx=6)
-        cb.bind("<<ComboboxSelected>>", lambda e: self.reload())
+        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
+                     on_change=self.reload, font=self.f_body).pack(side="left", padx=6)
         ttk.Label(top, text="Sort:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
         self.sort_var = tk.StringVar(value="Default")
-        sc = ttk.Combobox(top, textvariable=self.sort_var, state="readonly", width=10,
-                          font=self.f_body, style=f"{self.sid}.TCombobox", values=list(Store.SORTS))
-        sc.pack(side="left", padx=6)
-        sc.bind("<<ComboboxSelected>>", lambda e: self.reload())
+        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=self.reload,
+                     font=self.f_body).pack(side="left", padx=6)
         ttk.Button(top, text="A+", width=3, style=f"{self.sid}.TButton",
                    command=lambda: self.zoom_by(1)).pack(side="right")
         ttk.Button(top, text="A-", width=3, style=f"{self.sid}.TButton",
@@ -201,7 +190,7 @@ class Browser:
         # Row height must be set explicitly: the tree does not derive it from the font.
         self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
         self._set_columns()
-        refresh_widgets(self.btn_bar)               # the tier buttons use the shared fonts
+        refresh_widgets(self.win)                   # the tier buttons and Show / Sort use the shared fonts
         self._update_minsize()
 
     def _col_widths(self):
@@ -246,7 +235,7 @@ class Browser:
         self.f_bold.configure(size=12)
         self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
         self._set_columns()
-        refresh_widgets(self.btn_bar)
+        refresh_widgets(self.win)
         area = usable_area(self.app.root)
         nw, nh = self._needed_size()
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
