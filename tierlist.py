@@ -99,7 +99,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
-# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7.
+# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7, T-8.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -319,8 +319,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
 #
-# --- Packaging as a program (T-6 / T-7 asked for; built after the UI steps) ---------------------
-# T-1..T-3 are the groundwork for T-6 / T-7; T-4 and T-5 stay notes.
+# --- Packaging as a program (T-6..T-8 asked for; built after the UI steps) ----------------------
+# T-1..T-3 are the groundwork for T-6..T-8; T-4 and T-5 stay notes.
 # Notes from the discussion: PyInstaller builds only
 # for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
 # Linux can be tested from here (Windows / macOS builds would need testing on those machines).
@@ -338,7 +338,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           program for this OS behind the progress window (T-3 is the engine), bundles the complete
 #           source inside it (see T-7), then starts the new program and closes this window. Both use the
 #           same save (T-1), so nothing is lost. Needs T-1 and T-2 first. Only builds for the OS it runs
-#           on (PyInstaller cannot cross-compile).
+#           on (PyInstaller cannot cross-compile; T-8 covers the other OS).
+#           Always builds from the source as it is now, so every change since the last build (files
+#           edited, added or deleted) is in the new program. Each build records a manifest (file list
+#           + hashes) inside the program; if nothing changed since the last build, it says so and just
+#           starts the existing program instead of rebuilding.
 # [ ] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
 #           (shown in the built program): writes the exact source files that were bundled (no real
 #           decompiling is needed or attempted) into a folder you pick: the program files at the top,
@@ -346,6 +350,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           check_release.py) in a separate folder inside it. run_tests.sh and check_release.py learn
 #           to find the program files one level up. Then it opens the folder and offers to start
 #           tierlist.py from it.
+#           Unpacking into a folder that already has the source syncs it with the program instead of
+#           copying blindly: changed files are updated, new ones added, and files the program no longer
+#           has are removed. Only files listed in the program's manifest (T-6) are ever touched, so a
+#           save (.db), tierlist.log, a .venv or anything else of yours is never removed. A summary
+#           ("3 updated, 1 added, 1 removed") is shown first, with Cancel; a file you edited in the
+#           folder since the last unpack is backed up (name.py.bak) rather than overwritten silently.
+# [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
+#           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
+#           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
+#           on a Linux and a Windows machine at the same time from the pushed source and attaches
+#           word-tierlist-linux and word-tierlist-windows.exe as downloads; --all waits and fetches them
+#           into dist/. Needs the code pushed to GitHub and a GitHub login (gh) for --all; without
+#           them it explains and builds for this OS only. Building a Windows .exe on Linux through
+#           Wine was considered and rejected: fragile, and the result would still need testing on Windows.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
@@ -356,8 +374,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             palette with the same keys drops in); the session count stays as a muted "+N today",
 #             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
 #   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
-#   Planned:  Packaging, now asked for: T-6 (make a program) and T-7 (back to source), which need T-1,
-#             T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
+#   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
+#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).

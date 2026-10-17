@@ -52,7 +52,8 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
   "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging: T-6 / T-7 (make a program / back to source buttons) are planned after the UI steps.
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
 Done: UI-0..UI-6, ST-1..ST-4 (ST-4: required packages + tkinter asked/installed in the terminal first,
