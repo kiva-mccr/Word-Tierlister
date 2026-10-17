@@ -381,6 +381,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             sit on a plain cream box. To look right, the pieces on the page need their canvases to
 #             paint the pattern under themselves, or the page becomes one canvas. Try it on a small
 #             mock-up first and show screenshots before committing to it.
+# [ ] UI-33 Pace and hover-note polish (asked for, four parts):
+#           1. Pace with a timeout: the rate counts only active time. The time between two actions counts
+#              up to a cap (about 2 minutes); a longer gap is a break and adds nothing, so stepping away
+#              does not drag the number down. (Today it is actions / time since the window opened.)
+#           2. Wording: the hover says "about 120 per hour" (not "an hour").
+#           3. The hover note stays where it first appeared (next to what it describes) instead of
+#              following the pointer.
+#           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
+#              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
+#              today", later ones).
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
