@@ -1,0 +1,717 @@
+"""The save file: every read and write of the SQLite database goes through Store.
+
+Nothing here imports tkinter, so the whole data layer is testable without a window.
+
+Data model (see SCHEMA below)
+    words        one row per dictionary word. tier is NULL while a word is unplaced, else 0..5
+                 (S..F). rating/games are the Elo score and duel count used inside a tier.
+                 skips counts "don't know / later" presses. qkey is the seeded queue key (lower =
+                 comes up sooner); rank is the frequency rank (1 = most common); pen is the
+                 compound-word class (0 normal, 1 closed compound, 2 hyphenated / multi-word).
+    comparisons  every answer ever given (winner, loser, tie, kind). Used to avoid repeating a
+                 duel and to detect contradictions.
+    conflicts    pairs whose answers contradict each other, waiting to be re-judged.
+    anchors      the one reference word per tier used by "compare to anchors".
+    defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
+    history      one JSON row per action, so Undo works and survives restarts.
+
+Conventions
+    * Every public method that changes data commits before returning (a crash loses nothing).
+    * Store.version goes up on every change; open windows compare it to know when to refresh.
+    * Methods starting with an underscore are internal helpers.
+"""
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import random
+import re
+import sqlite3
+import time
+
+from constants import PEN_UNITS, QUEUE_DEFAULTS, TIERS, tier_base
+
+
+# --------------------------------------------------------------------------
+# Schema. All statements are IF NOT EXISTS, so opening an old save file is safe;
+# columns added in later versions are migrated in Store.__init__.
+# --------------------------------------------------------------------------
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS words(
+    word TEXT PRIMARY KEY,
+    rank INTEGER NOT NULL,
+    tier INTEGER,
+    rating REAL NOT NULL DEFAULT 1500,
+    games INTEGER NOT NULL DEFAULT 0,
+    skips INTEGER NOT NULL DEFAULT 0,
+    qkey REAL,
+    pen INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS comparisons(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    winner TEXT NOT NULL,
+    loser TEXT NOT NULL,
+    tie INTEGER NOT NULL DEFAULT 0,
+    kind TEXT NOT NULL,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cmp_w ON comparisons(winner, loser);
+CREATE INDEX IF NOT EXISTS idx_cmp_l ON comparisons(loser, winner);
+CREATE TABLE IF NOT EXISTS conflicts(a TEXT NOT NULL, b TEXT NOT NULL, PRIMARY KEY(a, b));
+CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    payload TEXT NOT NULL,
+    ts REAL NOT NULL
+);
+"""
+
+
+class Store:
+    """All persistence and ranking logic. Every public mutator commits.
+
+    Sections, in file order: meta/defs -> word list -> seeded queue order -> stats -> anchors
+    -> history/undo -> placement -> comparisons (Elo, conflicts) -> pair selection ->
+    listing/export -> merging earlier progress.
+    """
+
+    def __init__(self, path):
+        """Open (or create) the save file at `path`, migrate old layouts, and enable WAL mode."""
+        self.path = path
+        # check_same_thread=False: the first-run window (startup.py) lets a worker thread build the
+        # word list while the UI thread only shows progress. Never two threads at the same moment.
+        self.db = sqlite3.connect(path, check_same_thread=False)
+        self.db.row_factory = sqlite3.Row
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=FULL")
+        self.db.executescript(SCHEMA)
+        # Migrate save files made by earlier versions (they lack the queue-order columns).
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(words)")}
+        if "qkey" not in cols:
+            self.db.execute("ALTER TABLE words ADD COLUMN qkey REAL")
+        if "pen" not in cols:
+            self.db.execute("ALTER TABLE words ADD COLUMN pen INTEGER NOT NULL DEFAULT 0")
+        self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
+        self.db.commit()
+        self.version = 0  # bumps on every change; lets open windows know when to refresh
+        self._total = None
+
+    def close(self):
+        """Flush and close the database; safe to call twice."""
+        try:
+            self.db.commit()
+            self.db.close()
+        except sqlite3.Error:
+            pass
+
+    # ---- meta / defs ----------------------------------------------------
+    def get_meta(self, key, default=None):
+        """Read a setting from the meta table (always returned as text), or `default`."""
+        r = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
+        return r["value"] if r else default
+
+    def set_meta(self, key, value):
+        """Save a setting (stored as text) and commit."""
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, str(value)))
+        self.db.commit()
+
+    def get_def(self, word):
+        """Cached definition text for `word`, or None if not looked up yet."""
+        r = self.db.execute("SELECT text FROM defs WHERE word=?", (word,)).fetchone()
+        return r["text"] if r else None
+
+    def set_def(self, word, text):
+        """Cache a definition so it never has to be looked up again."""
+        self.db.execute("INSERT OR REPLACE INTO defs(word, text) VALUES(?, ?)", (word, text))
+        self.db.commit()
+
+    # ---- word list --------------------------------------------------------
+    def count_words(self):
+        """Total number of words in the list (a full count; stats() caches it)."""
+        return self.db.execute("SELECT COUNT(*) FROM words").fetchone()[0]
+
+    def insert_words(self, words):
+        """Add words in presentation order. Existing words keep their tier/ratings and are only re-ranked."""
+        # New words get a placeholder queue key (the back of the line) until reshuffle() runs.
+        self.db.executemany(
+            "INSERT INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, ?)"
+            " ON CONFLICT(word) DO UPDATE SET rank=excluded.rank",
+            ((w, i, 1e18 + i) for i, w in enumerate(words)),
+        )
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
+        self.db.commit()
+        self._total = None
+        self.version += 1
+
+    def has_word(self, word):
+        """True if `word` is in the list."""
+        return self.db.execute("SELECT 1 FROM words WHERE word=?", (word,)).fetchone() is not None
+
+    def get_word(self, word):
+        """The full row for `word` (sqlite3.Row), or None."""
+        return self.db.execute("SELECT * FROM words WHERE word=?", (word,)).fetchone()
+
+    def next_unplaced(self):
+        """The word to show next in Place mode, or None when nothing is left."""
+        # Fresh words first (skips=0), then skipped words; within each, the seeded queue order.
+        return self.db.execute(
+            "SELECT * FROM words WHERE tier IS NULL ORDER BY skips, qkey, rank LIMIT 1"
+        ).fetchone()
+
+    # ---- seeded queue order ---------------------------------------------------
+    def queue_settings(self):
+        """Seed + decay settings (a random seed is chosen once and then stored)."""
+        seed = self.get_meta("qseed")
+        if seed is None:
+            seed = random.SystemRandom().randrange(1, 2 ** 31)
+            self.set_meta("qseed", seed)
+        shape = self.get_meta("qshape", QUEUE_DEFAULTS["qshape"])
+        try:
+            spread = max(100.0, float(self.get_meta("qspread", QUEUE_DEFAULTS["qspread"])))
+            comp = min(10.0, max(0.0, float(self.get_meta("qcompound", QUEUE_DEFAULTS["qcompound"]))))
+        except ValueError:
+            spread, comp = float(QUEUE_DEFAULTS["qspread"]), float(QUEUE_DEFAULTS["qcompound"])
+        return {"seed": int(seed), "spread": spread,
+                "shape": shape if shape in ("exp", "gauss") else "exp", "compound": comp}
+
+    def reshuffle(self, seed=None, spread=None, shape=None, compound=None):
+        """Give every unplaced word a random queue key whose odds fall off with frequency rank.
+
+        Each word draws E ~ Exp(1) from a hash of (seed, word) and sorts by  E * exp(pos/spread)
+        (exponential shape) or  E * exp((pos/spread)^2 / 2)  (gaussian shape). That is weighted
+        sampling without replacement with weight exp(-pos/spread): a word `spread` ranks further
+        back is e times less likely to come up early. pos = frequency rank, plus a push-back for
+        compound words. Keys are stored as logs so they never overflow. The same seed always gives
+        the same relative order, whichever words are already placed.
+        """
+        for key, val in (("qseed", seed), ("qspread", spread), ("qshape", shape), ("qcompound", compound)):
+            if val is not None:
+                self.set_meta(key, val)
+        cfg = self.queue_settings()
+        spread, comp, gauss = cfg["spread"], cfg["compound"], cfg["shape"] == "gauss"
+        salt = str(cfg["seed"]).encode()
+        rows = self.db.execute("SELECT word, rank, pen FROM words WHERE tier IS NULL").fetchall()
+        total = len(rows)
+        rebuild_index = total > 100000  # much faster to rebuild the index than to update it row by row
+        if rebuild_index:
+            self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
+        batch = []
+        for n, (word, rank, pen) in enumerate(rows, 1):
+            x = int.from_bytes(hashlib.blake2b(word.encode("utf-8"), digest_size=8, key=salt).digest(), "big")
+            u = ((x >> 12) + 0.5) / 4503599627370496.0  # strictly inside (0, 1)
+            e = -math.log(u) or 1e-300
+            z = (rank + PEN_UNITS.get(pen, 0.0) * comp * spread) / spread
+            batch.append((math.log(e) + (0.5 * z * z if gauss else z), word))
+            if len(batch) >= 50000 or n == total:
+                self.db.executemany("UPDATE words SET qkey=? WHERE word=?", batch)
+                batch = []
+        if rebuild_index:
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
+        self.db.commit()
+        self.version += 1
+
+    def tier_counts(self):
+        """{tier index: number of placed words}. Tiers with no words are absent."""
+        return {
+            r[0]: r[1]
+            for r in self.db.execute(
+                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier"
+            )
+        }
+
+    def stats(self):
+        """Numbers for the header: total, placed, skipped, per-tier counts, duels, conflicts."""
+        # Index-friendly queries: with ~1M words, a full scan per refresh would make the UI laggy.
+        if self._total is None:
+            self._total = self.count_words()
+        tiers = self.tier_counts()
+        skipped = self.db.execute(
+            "SELECT COUNT(*) FROM words WHERE tier IS NULL AND skips > 0"
+        ).fetchone()[0]
+        return {
+            "total": self._total,
+            "placed": sum(tiers.values()),
+            "skipped": skipped,
+            "tiers": tiers,
+            "comparisons": self.db.execute("SELECT COUNT(*) FROM comparisons").fetchone()[0],
+            "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
+        }
+
+    # ---- anchors ------------------------------------------------------------
+    def get_anchors(self):
+        """The six anchor words as a list indexed by tier; an entry is None until it is set."""
+        out = [None] * len(TIERS)
+        for r in self.db.execute("SELECT tier, word FROM anchors"):
+            out[r["tier"]] = r["word"]
+        return out
+
+    def set_anchors(self, words):
+        """Replace the anchors (one word per tier) and move each anchor word into its tier."""
+        self.db.execute("DELETE FROM anchors")
+        for t, w in enumerate(words):
+            self.db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, w))
+            self.db.execute(
+                "UPDATE words SET tier=?, rating=?, games=0 WHERE word=? AND (tier IS NULL OR tier!=?)",
+                (t, tier_base(t), w, t),
+            )
+        self.db.commit()
+        self.version += 1
+
+    # ---- history / undo -------------------------------------------------------
+    def _snap(self, words):
+        """Copy the current rows of `words` (dicts) so an action can be undone later."""
+        q = ",".join("?" * len(words))
+        return [dict(r) for r in self.db.execute(f"SELECT * FROM words WHERE word IN ({q})", list(words))]
+
+    def _push(self, before, comp_ids=(), conf_added=(), comps_deleted=(), conf_deleted=()):
+        """Record one undoable action: the rows as they were, plus which comparisons/conflicts it added or removed."""
+        payload = {
+            "before": before,
+            "comp_ids": list(comp_ids),
+            "conf_added": [list(p) for p in conf_added],
+            "comps_deleted": list(comps_deleted),
+            "conf_deleted": [list(p) for p in conf_deleted],
+        }
+        cur = self.db.execute(
+            "INSERT INTO history(payload, ts) VALUES(?, ?)", (json.dumps(payload), time.time())
+        )
+        hid = cur.lastrowid
+        if hid % 250 == 0:  # keep the most recent 5000 undo steps
+            self.db.execute("DELETE FROM history WHERE id <= ?", (hid - 5000,))
+        self.version += 1
+
+    def undo(self):
+        """Revert the most recent action. Returns the main word affected, or None."""
+        row = self.db.execute("SELECT id, payload FROM history ORDER BY id DESC LIMIT 1").fetchone()
+        if row is None:
+            return None
+        p = json.loads(row["payload"])
+        for r in p["before"]:
+            # qkey is missing from history written by older versions; COALESCE keeps the current one.
+            self.db.execute(
+                "UPDATE words SET tier=?, rating=?, games=?, skips=?, qkey=COALESCE(?, qkey) WHERE word=?",
+                (r["tier"], r["rating"], r["games"], r["skips"], r.get("qkey"), r["word"]),
+            )
+        for cid in p["comp_ids"]:
+            self.db.execute("DELETE FROM comparisons WHERE id=?", (cid,))
+        for a, b in p["conf_added"]:
+            self.db.execute("DELETE FROM conflicts WHERE a=? AND b=?", (a, b))
+        for r in p["comps_deleted"]:
+            self.db.execute(
+                "INSERT OR REPLACE INTO comparisons(id, winner, loser, tie, kind, ts) VALUES(?,?,?,?,?,?)",
+                (r["id"], r["winner"], r["loser"], r["tie"], r["kind"], r["ts"]),
+            )
+        for a, b in p["conf_deleted"]:
+            self.db.execute("INSERT OR IGNORE INTO conflicts(a, b) VALUES(?, ?)", (a, b))
+        self.db.execute("DELETE FROM history WHERE id=?", (row["id"],))
+        self.db.commit()
+        self.version += 1
+        return p["before"][0]["word"] if p["before"] else ""
+
+    # ---- placement ----------------------------------------------------------------
+    def place(self, word, tier, comps=()):
+        """Put `word` in `tier`. comps = [(anchor_word, 'a'|'b'|'tie')] where 'a' means word won."""
+        before = self._snap([word])
+        ids = []
+        now = time.time()
+        for anchor, res in comps:
+            if res == "a":
+                w, l, tie = word, anchor, 0
+            elif res == "b":
+                w, l, tie = anchor, word, 0
+            else:
+                w, l, tie = word, anchor, 1
+            cur = self.db.execute(
+                "INSERT INTO comparisons(winner, loser, tie, kind, ts) VALUES(?,?,?,?,?)",
+                (w, l, tie, "anchor", now),
+            )
+            ids.append(cur.lastrowid)
+        self.db.execute(
+            "UPDATE words SET tier=?, rating=?, games=0 WHERE word=?", (tier, tier_base(tier), word)
+        )
+        self._push(before, comp_ids=ids)
+        self.db.commit()
+
+    def unplace(self, word):
+        """Send a placed word back to the front of the queue so it is judged again next."""
+        before = self._snap([word])
+        # Back to the front of the queue so the word is re-judged next.
+        front = self.db.execute(
+            "SELECT MIN(qkey) FROM words WHERE tier IS NULL AND skips=0 AND qkey < 1e17").fetchone()[0]
+        front = (front if front is not None else 0.0) - 1.0
+        self.db.execute(
+            "UPDATE words SET tier=NULL, rating=1500, games=0, skips=0, qkey=? WHERE word=?", (front, word))
+        self._push(before)
+        self.db.commit()
+
+    def skip(self, word):
+        """"Don't know / later": count a skip, which moves the word behind every fresh word."""
+        before = self._snap([word])
+        self.db.execute("UPDATE words SET skips = skips + 1 WHERE word=?", (word,))
+        self._push(before)
+        self.db.commit()
+
+    # ---- comparisons ----------------------------------------------------------------
+    def _contradicts(self, w, l):
+        """True if earlier decisive answers already say l beats w (directly or via one word)."""
+        if self.db.execute(
+            "SELECT 1 FROM comparisons WHERE winner=? AND loser=? AND tie=0 LIMIT 1", (l, w)
+        ).fetchone():
+            return True
+        return (
+            self.db.execute(
+                "SELECT 1 FROM comparisons c1 JOIN comparisons c2 ON c1.loser = c2.winner"
+                " WHERE c1.winner=? AND c2.loser=? AND c1.tie=0 AND c2.tie=0 LIMIT 1",
+                (l, w),
+            ).fetchone()
+            is not None
+        )
+
+    @staticmethod
+    def _k(games):
+        """Elo K-factor: big steps for new words, shrinking to 10 as a word accumulates duels."""
+        return max(10.0, 40.0 / (1.0 + games / 6.0))
+
+    def record_comparison(self, a, b, result, kind):
+        """result: 'a' (a wins) | 'b' (b wins) | 'tie'. kind: within | boundary | conflict."""
+        ra, rb = self.get_word(a), self.get_word(b)
+        before = [dict(ra), dict(rb)]
+        if result == "b":
+            w, l, tie = b, a, 0
+        elif result == "a":
+            w, l, tie = a, b, 0
+        else:
+            w, l, tie = a, b, 1
+        info = {"conflict": False, "swapped": None}
+        comps_deleted, conf_deleted, conf_added = [], [], []
+        pair_clause = "(winner=? AND loser=?) OR (winner=? AND loser=?)"
+
+        if kind == "conflict":
+            # Re-judging: the new answer replaces earlier direct answers for this pair.
+            rows = self.db.execute(f"SELECT * FROM comparisons WHERE {pair_clause}", (a, b, b, a)).fetchall()
+            comps_deleted = [dict(r) for r in rows]
+            self.db.execute(f"DELETE FROM comparisons WHERE {pair_clause}", (a, b, b, a))
+            for r in self.db.execute(
+                "SELECT a, b FROM conflicts WHERE (a=? AND b=?) OR (a=? AND b=?)", (a, b, b, a)
+            ).fetchall():
+                conf_deleted.append([r["a"], r["b"]])
+            self.db.execute(
+                "DELETE FROM conflicts WHERE (a=? AND b=?) OR (a=? AND b=?)", (a, b, b, a)
+            )
+        elif not tie and self._contradicts(w, l):
+            pair = sorted([a, b])
+            if not self.db.execute("SELECT 1 FROM conflicts WHERE a=? AND b=?", pair).fetchone():
+                self.db.execute("INSERT INTO conflicts(a, b) VALUES(?, ?)", pair)
+                conf_added.append(pair)
+            info["conflict"] = True
+
+        cur = self.db.execute(
+            "INSERT INTO comparisons(winner, loser, tie, kind, ts) VALUES(?,?,?,?,?)",
+            (w, l, tie, kind, time.time()),
+        )
+        comp_id = cur.lastrowid
+
+        if ra["tier"] is not None and ra["tier"] == rb["tier"]:
+            # Same tier: Elo update (shrinking K as a word accumulates duels).
+            ea = 1.0 / (1.0 + 10 ** ((rb["rating"] - ra["rating"]) / 400.0))
+            sa = 1.0 if result == "a" else 0.0 if result == "b" else 0.5
+            na = ra["rating"] + self._k(ra["games"]) * (sa - ea)
+            nb = rb["rating"] + self._k(rb["games"]) * ((1.0 - sa) - (1.0 - ea))
+            self.db.execute("UPDATE words SET rating=?, games=games+1 WHERE word=?", (na, a))
+            self.db.execute("UPDATE words SET rating=?, games=games+1 WHERE word=?", (nb, b))
+        elif (
+            kind == "boundary"
+            and not tie
+            and ra["tier"] is not None
+            and rb["tier"] is not None
+        ):
+            rw, rl = (ra, rb) if w == a else (rb, ra)
+            if rw["tier"] > rl["tier"]:  # winner lives in the lower tier -> swap tiers
+                self.db.execute(
+                    "UPDATE words SET tier=?, rating=?, games=games+1 WHERE word=?",
+                    (rl["tier"], rl["rating"] + 1.0, w),
+                )
+                self.db.execute(
+                    "UPDATE words SET tier=?, rating=?, games=games+1 WHERE word=?",
+                    (rw["tier"], rw["rating"] - 1.0, l),
+                )
+                info["swapped"] = (w, rl["tier"], l, rw["tier"])
+            else:
+                self.db.execute("UPDATE words SET games=games+1 WHERE word IN (?, ?)", (a, b))
+
+        self._push(
+            before,
+            comp_ids=[comp_id],
+            conf_added=conf_added,
+            comps_deleted=comps_deleted,
+            conf_deleted=conf_deleted,
+        )
+        self.db.commit()
+        return info
+
+    # ---- pair selection ---------------------------------------------------------------
+    def _faced_set(self, word):
+        """Every word that `word` has already been compared with (either side of a duel)."""
+        return {
+            r[0]
+            for r in self.db.execute(
+                "SELECT loser FROM comparisons WHERE winner=? UNION SELECT winner FROM comparisons WHERE loser=?",
+                (word, word),
+            )
+        }
+
+    def _faced(self, a, b):
+        """True if a and b have already been compared, in either order."""
+        return (
+            self.db.execute(
+                "SELECT 1 FROM comparisons WHERE (winner=? AND loser=?) OR (winner=? AND loser=?) LIMIT 1",
+                (a, b, b, a),
+            ).fetchone()
+            is not None
+        )
+
+    def pick_within(self, tier=None, focus=None):
+        """Adaptive pairing: least-dueled word vs nearest-rated opponent it hasn't faced."""
+        counts = self.tier_counts()
+        eligible = [t for t, n in counts.items() if n >= 2]
+        if not eligible or (tier is not None and tier not in eligible):
+            return None
+        if focus:
+            r = self.get_word(focus)
+            if r is None or r["tier"] is None or r["tier"] not in eligible:
+                return None
+            seeds = [r]
+        else:
+            if tier is not None:
+                where, args = "tier=?", [tier]
+            else:
+                where, args = "tier IN (%s)" % ",".join(str(t) for t in eligible), []
+            seeds = list(self.db.execute(
+                f"SELECT * FROM words WHERE {where} ORDER BY games ASC, RANDOM() LIMIT 40", args
+            ).fetchall())
+            random.shuffle(seeds)
+        for a in seeds:
+            faced = self._faced_set(a["word"])
+            cands = self.db.execute(
+                "SELECT * FROM words WHERE tier=? AND word!=? ORDER BY ABS(rating-?) ASC, RANDOM() LIMIT 80",
+                (a["tier"], a["word"], a["rating"]),
+            ).fetchall()
+            for c in cands:
+                if c["word"] not in faced:
+                    return a["word"], c["word"], a["tier"]
+        return None
+
+    def pick_boundary(self, boundary=None):
+        """Weakest words of tier t vs strongest of tier t+1. Returns (higher, lower, t)."""
+        order = [boundary] if boundary is not None else random.sample(range(len(TIERS) - 1), len(TIERS) - 1)
+        counts = self.tier_counts()
+        for t in order:
+            n_hi, n_lo = counts.get(t, 0), counts.get(t + 1, 0)
+            if n_hi < 1 or n_lo < 1:
+                continue
+            k = max(5, int(0.05 * min(n_hi, n_lo)))
+            hi = [r[0] for r in self.db.execute(
+                "SELECT word FROM words WHERE tier=? ORDER BY rating ASC, RANDOM() LIMIT ?", (t, k))]
+            lo = [r[0] for r in self.db.execute(
+                "SELECT word FROM words WHERE tier=? ORDER BY rating DESC, RANDOM() LIMIT ?", (t + 1, k))]
+            pairs = [(x, y) for x in hi for y in lo]
+            random.shuffle(pairs)
+            for x, y in pairs[:60]:
+                if not self._faced(x, y):
+                    return x, y, t
+        return None
+
+    def pick_conflict(self):
+        """A random flagged pair (a, b) to re-judge, or None when there are no conflicts."""
+        r = self.db.execute("SELECT a, b FROM conflicts ORDER BY RANDOM() LIMIT 1").fetchone()
+        return (r["a"], r["b"]) if r else None
+
+    # ---- listing / export ------------------------------------------------------------------
+    SORTS = ("Default", "A-Z", "Frequency")
+
+    def list_words(self, text="", tier_filter="All placed", sort="Default", limit=3000, offset=0,
+                   with_total=True):
+        """One page of words. Default order = tier/rating for placed words, queue order for unplaced."""
+        where, args = [], []
+        if tier_filter == "Unplaced":
+            where.append("tier IS NULL")
+            default_order = "skips ASC, qkey ASC, rank ASC"
+        else:
+            where.append("tier IS NOT NULL")
+            default_order = "tier ASC, rating DESC, games DESC, rank ASC"
+            if tier_filter.startswith("Tier "):
+                where.append("tier=?")
+                args.append(TIERS.index(tier_filter[5:]))
+        order = {"A-Z": "word ASC", "Frequency": "rank ASC"}.get(sort, default_order)
+        if text:
+            where.append("word LIKE ?")
+            args.append("%" + text.replace("%", "").replace("_", "") + "%")
+        clause = " AND ".join(where)
+        rows = self.db.execute(
+            f"SELECT word, tier, rating, games, skips, rank, pen FROM words WHERE {clause}"
+            f" ORDER BY {order} LIMIT ? OFFSET ?",
+            args + [limit, offset],
+        ).fetchall()
+        total = None
+        if with_total:
+            if offset == 0 and len(rows) < limit:
+                total = len(rows)  # a short first page is everything: skip the extra full scan
+            else:
+                total = self.db.execute(f"SELECT COUNT(*) FROM words WHERE {clause}", args).fetchone()[0]
+        return rows, total
+
+    def export_rows(self):
+        """Placed words, best first within each tier, for File > Export."""
+        return self.db.execute(
+            "SELECT word, tier, rating, games FROM words WHERE tier IS NOT NULL"
+            " ORDER BY tier, rating DESC, games DESC, rank"
+        ).fetchall()
+
+    def skipped_words(self):
+        """Words that were skipped and are still unplaced, in frequency order."""
+        return [r[0] for r in self.db.execute(
+            "SELECT word FROM words WHERE tier IS NULL AND skips > 0 ORDER BY rank")]
+
+    # ---- bringing in earlier progress ---------------------------------------------------------
+    def backup(self, tag="backup"):
+        """Consistent copy of this save file next to it (.bak, so it is never mistaken for a save)."""
+        self.db.commit()
+        dest = f"{self.path}.{tag}-{time.strftime('%Y%m%d-%H%M%S')}.bak"
+        out = sqlite3.connect(dest)
+        try:
+            self.db.backup(out)
+        finally:
+            out.close()
+        return dest
+
+    @staticmethod
+    def _read_save(path):
+        """(progress rows, past comparisons) from another save file, opened read-only."""
+        con = sqlite3.connect(Path(os.path.abspath(path)).as_uri() + "?mode=ro", uri=True, timeout=5)
+        con.row_factory = sqlite3.Row
+        try:
+            tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "words" not in tables:
+                raise ValueError("that file is not a tier list save file")
+            rows = [dict(r) for r in con.execute(
+                "SELECT word, tier, rating, games, skips, rank FROM words WHERE tier IS NOT NULL OR skips > 0")]
+            comps = ([tuple(r) for r in con.execute("SELECT winner, loser, tie, kind, ts FROM comparisons")]
+                     if "comparisons" in tables else [])
+        finally:
+            con.close()
+        return rows, comps
+
+    @staticmethod
+    def parse_export(path):
+        """Progress rows from a file made by File > Export (.csv, or the .txt/.md listing)."""
+        rows = []
+
+        def row(word, tier, rating=None, games=0, skips=0):
+            return {"word": word, "tier": tier, "rating": rating, "games": games, "skips": skips, "rank": 0}
+
+        if path.lower().endswith(".csv"):
+            import csv
+
+            def num(r, key, cast, default=None):
+                try:
+                    return cast(r.get(key))
+                except (TypeError, ValueError):
+                    return default
+
+            with open(path, newline="", encoding="utf-8-sig") as f:
+                for r in csv.DictReader(f):
+                    word, t = (r.get("word") or "").strip().lower(), (r.get("tier") or "").strip().upper()
+                    if not word:
+                        continue
+                    if t == "?":
+                        rows.append(row(word, None, skips=1))
+                    elif t in TIERS:
+                        rows.append(row(word, TIERS.index(t), num(r, "rating", float), num(r, "duels", int, 0)))
+            return rows
+        tier, in_skipped = None, False
+        with open(path, encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                m = re.match(r"^(?:#+\s*)?([SABCDF]) tier\b", line)
+                if m:
+                    tier, in_skipped = TIERS.index(m.group(1)), False
+                    continue
+                if re.match(r"^(?:#+\s*)?Skipped\b", line):
+                    tier, in_skipped = None, True
+                    continue
+                if in_skipped:
+                    rows += [row(w.strip().lower(), None, skips=1) for w in line.split(",") if w.strip()]
+                    continue
+                m = re.match(r"^\d+\.\s+(.+)$", line)
+                if m and tier is not None:
+                    rows.append(row(m.group(1).strip().lower(), tier))
+        # The listing is best-first within each tier: turn that order back into ratings.
+        for t in range(len(TIERS)):
+            grp = [r for r in rows if r["tier"] == t]
+            for i, r in enumerate(grp):
+                r["rating"] = tier_base(t) + 60.0 * (1.0 - 2.0 * i / max(len(grp) - 1, 1))
+        return rows
+
+    def _merge_row(self, r, res):
+        """Fold one incoming progress row into this list and update the tallies in `res`. Never overwrites a placed word."""
+        word, tier = r["word"], r["tier"]
+        cur = self.get_word(word)
+        if tier is not None and 0 <= tier < len(TIERS):
+            rating = tier_base(tier) if r.get("rating") is None else float(r["rating"])
+            games = int(r.get("games") or 0)
+            if cur is None:        # a word this list does not have (e.g. from an older, smaller word list)
+                self.db.execute(
+                    "INSERT INTO words(word, rank, tier, rating, games, qkey) VALUES(?,?,?,?,?,1e18)",
+                    (word, 10_000_000 + int(r.get("rank") or 0), tier, rating, games))
+                res["added"] += 1
+                res["placed"] += 1
+            elif cur["tier"] is None:
+                self.db.execute("UPDATE words SET tier=?, rating=?, games=? WHERE word=?",
+                                (tier, rating, games, word))
+                res["placed"] += 1
+            elif cur["tier"] == tier:
+                res["same"] += 1
+            else:
+                res["differs"] += 1
+        elif tier is None and int(r.get("skips") or 0) > 0 and cur is not None \
+                and cur["tier"] is None and cur["skips"] == 0:
+            self.db.execute("UPDATE words SET skips=? WHERE word=?", (int(r["skips"]), word))
+            res["skipped"] += 1
+
+    def merge(self, path, backup=True):
+        """Bring progress from another save file, or from an Export, into this list.
+
+        Only fills in what is still undecided here: a word already placed in this list keeps its
+        tier, so nothing done here is overwritten, and the other file is never changed. Words
+        placed there but missing here are added. Returns a summary dict.
+        """
+        if os.path.realpath(path) == os.path.realpath(self.path):
+            raise ValueError("that is the save file you are already using")
+        with open(path, "rb") as f:
+            is_db = f.read(16).startswith(b"SQLite format 3")
+        rows, comps = self._read_save(path) if is_db else (self.parse_export(path), [])
+        res = {"placed": 0, "skipped": 0, "added": 0, "same": 0, "differs": 0, "comparisons": 0, "backup": None}
+        if backup:
+            res["backup"] = self.backup("before-merge")
+        try:
+            for r in rows:
+                self._merge_row(r, res)
+            have = {(w, l) for w, l in self.db.execute("SELECT winner, loser FROM comparisons")}
+            for w, l, tie, kind, ts in comps:
+                if (w, l) not in have and self.has_word(w) and self.has_word(l):
+                    self.db.execute(
+                        "INSERT INTO comparisons(winner, loser, tie, kind, ts) VALUES(?,?,?,?,?)",
+                        (w, l, tie, kind, ts))
+                    have.add((w, l))
+                    res["comparisons"] += 1
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+        self._total = None
+        self.version += 1
+        return res

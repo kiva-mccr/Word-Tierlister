@@ -1,0 +1,10 @@
+# Needed to run the program (pip install -r requirements.txt)
+wordfreq>=3.0
+
+# Optional: only for the smaller WordNet word list (--source wordnet) and offline definitions
+nltk
+
+# Pillow is optional too: only the tests use it, to save screenshots (they skip it if missing)
+# pillow
+
+# tkinter is also needed but comes with Python, not pip. On Debian/Ubuntu: sudo apt install python3-tk

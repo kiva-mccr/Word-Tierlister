@@ -1,0 +1,471 @@
+#!/usr/bin/env python3
+"""
+Word Tier List
+==============
+Tier-list every word in the English dictionary (S / A / B / C / D / F).
+
+Setup (once):
+    pip install wordfreq nltk
+Run:
+    python tierlist.py
+    python tierlist.py --db mylist.db            # use a different save file
+    python tierlist.py --wordlist words.txt      # custom word list (first run only)
+
+How it works
+------------
+* Words come from English Wiktionary (every lowercase word, inflections included,
+  roughly a million) and ranked by how common they are (wordfreq).
+* The queue is a seeded random order, not a strict frequency order: a word's odds
+  of coming up early fall off exponentially (or gaussianly) with its frequency
+  rank, and compound words ("bookshelf", "well-known") are pushed further back.
+  Same seed = same order. Change it under Settings > Queue randomness & seed (or
+  --seed N). (--source wordnet gives a smaller ~77k list instead.)
+* Your progress lives in a save file (tierlist.db) that is written after every action.
+  When you replace tierlist.py with a newer version, even in a different folder, the
+  new one finds your earlier save automatically (the one used last time, or the one with
+  the most progress), so words you've already done stay done. If progress got split
+  across several saves it offers to merge them; File > Import earlier progress merges
+  another save file or an exported list (.csv/.txt/.md) any time.
+* Browse window (View menu): text and rows scale with the window; Ctrl +/-/0 or
+  Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
+* PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
+  place it by comparing against one anchor word per tier (about 3 questions).
+  "Don't know / later" (U) sends a word to the back of the queue; skipped
+  words come back after every fresh word has been handled.
+* REFINE mode: head-to-head duels between words in the same tier (Elo ratings,
+  fewest-duels-first, nearest-rating opponents) to order words within a tier.
+* BOUNDARY mode: duels between the weakest word of one tier and the strongest of
+  the next; if the lower-tier word wins, the two swap tiers.
+* CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
+  pair is flagged; re-judge them in "Resolve conflicts".
+* Every action is committed to SQLite immediately: close the window or lose
+  power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
+* Press D any time to show the dictionary definition next to the word(s).
+
+Code map (all files live in one folder; run tierlist.py)
+---------------------------------------------------------
+    tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
+                    the pieces below so `import tierlist` keeps working for the self-tests.
+    constants.py    tier names, modes, ranking defaults.        (no dependencies)
+    store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
+                    conflicts, merging. Every change is committed immediately.
+    wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
+                    detection, queue preparation.
+    saves.py        finding your earlier save, remembering it, exporting the tier list.
+    definitions.py  Definitions: WordNet offline, dictionaryapi.dev online, cached.
+    theme.py        colour palette (UI-1).            fonts.py     typography (UI-2).
+    ui_style.py     ttk / tk styling (UI-3).          widgets.py   RoundButton and other small widgets.
+    ui_motion.py    easing, colour blend, Animator (UI-4).
+    startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
+    problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
+    deps.py         required packages: detect and pip-install them (ST-3; no tkinter).
+    errors.py       friendly error dialog, error handlers, run_guarded (ST-2).
+    browser.py      Browser: the Browse / edit window.
+    app.py          App: the main window and all modes.
+
+Layers: constants -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+ui_style, ui_motion, widgets, startup -> browser -> app -> tierlist. Nothing lower imports anything higher, and
+only the UI layer imports tkinter, so the core runs and is tested without it.
+"""
+# ==========================================================================================
+# UI OVERHAUL ROADMAP  ([x] built, [ ] planned, [-] on hold, [?] tentative idea, not planned)
+# ==========================================================================================
+# Goal: a modern, minimalist UI with a soft pastel charm, where sorting feels good to do so the
+#       list actually gets finished. Tasteful motion, zero pressure.
+#
+# Guardrails (promises, not suggestions)
+#   - NO badges, streaks, levels/XP, daily goals, leaderboards, reminders/notifications,
+#     "don't break the chain" copy, surprise rewards or guilt messages.
+#   - No pace pressure: the session count stays but is small and muted, and the "/hr" rate only
+#     appears in a hover tooltip on the count (UI-15). Nothing on screen tells you to hurry or
+#     compares you to yesterday.
+#   - Satisfaction comes from speed, clarity and smooth feedback, not from psychological hooks.
+#   - Motion: every animation <= 250 ms with ease-out; it never blocks input (pressing the next
+#     key finishes the running animation instantly); nothing loops or moves while idle; and
+#     View > Reduce motion turns all of it off (UI-4).
+#   - No sound by default.
+#
+# tkinter constraints that shape the plan
+#   - No real transparency or anti-aliasing: "fades" are colour blends toward the background,
+#     rounded corners are smoothed Canvas polygons, shadows are a slightly darker offset shape.
+#   - Animation = root.after() at ~60 fps with easing. Per-frame work must be tiny and must never
+#     query the database (the list can hold ~1M words).
+#   - Fonts cannot be bundled in one file: pick the nicest installed family, fall back gracefully.
+#
+# How we work: one step at a time. Each step adds one small function or class, can be checked
+# on its own, leaves the app working, and updates the tests that read the widgets it replaces.
+# Tick [x] as steps land. IDs are stable; the order is a suggestion.
+#
+# Suggested order: the start-up phase (ST-1, ST-2, ST-3; all done) came first by request, then the new look
+# + chart + the satisfying drop:
+#   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
+#
+# --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
+# Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
+# shuffling) and every start-up error are print() / sys.exit() messages in a terminal. Anyone who
+# double-clicks the program, or runs it without a console, sees nothing for several minutes, or
+# sees it close silently. Both steps are useful even if the program is only ever run as a script.
+# [x] ST-1  First-run window. adds startup.py with StartupWindow(title) and run_with_progress(
+#           work, title): the long set-up jobs (build_wiktionary, build_word_list, prepare_queue,
+#           reshuffle) run on a worker thread while a small window shows the current stage, a
+#           progress bar when the size is known (download %, entries parsed) and a plain-language
+#           line ("one time only, about 5 to 10 minutes; closing is safe, it resumes"). The
+#           existing log=print callbacks feed it through a thread-safe queue, so wordsource.py and
+#           store.py need no UI code. Closing the window stops cleanly: downloads already resume
+#           from their .part file and parsing restarts from the saved stage. No animation beyond
+#           the bar; honours Reduce motion. Console output stays when a console exists.
+#           Built: the window appears only if set-up takes longer than 0.4 s (normal launches
+#           never flash it); if the window itself cannot be drawn, set-up still completes.
+#           Refinements after first real use (Windows): the bar is always visible, starting at 1%
+#           with "Initializing download..."; every stage shows a stand-in detail line instead of a
+#           blank; parsing reports a real percentage (bytes read / file size) for the plain .jsonl;
+#           on Windows the console window behind the app is closed once the program starts
+#           (startup.detach_console; --console keeps it), messages go to tierlist.log next to the
+#           save, and failures show a dialog (startup.run_guarded: a small first slice of ST-2).
+#           Every bar with a real percentage also shows a time-left estimate (startup.EtaTracker /
+#           format_eta: "estimating time left..." first, then e.g. "about 6 min left"); sweeping
+#           stages have no estimate because their length is unknown. Any future bar (UI-14 if it
+#           is built) must use the same two helpers.
+# [x] ST-2  Friendly errors. adds problems.py (no tkinter: SetupError, describe(exc) -> plain-language
+#           headline + advice for a full disk, no internet, a busy or damaged save file, missing
+#           permissions...; log helpers) and errors.py (show_error: a styled dialog with Show details
+#           and Copy details; install_handlers: Tk callback, main-thread and worker-thread errors go to
+#           tierlist.log and the window's own errors show one dialog, "your progress is saved", with
+#           repeats suppressed; run_guarded: the whole program runs inside it, with or without a
+#           console, so a SetupError, a sys.exit("message") or a crash ends in a dialog and a log entry,
+#           while closing the set-up window stays silent). The sys.exit("...") paths in wordsource.py
+#           and main() became SetupError messages that say what to do next; a failed export uses the
+#           same dialog. Only "tkinter is not installed" still prints to the terminal: without tkinter
+#           there is no way to draw a dialog. startup.py lost its own copies (fatal_dialog etc.).
+#           A hidden --crash-test option raises a fake bug 3 s after start so the dialog (and the
+#           fact that the program keeps running) can be seen on purpose.
+#           Covered by _selftest_errors.py.
+# [x] ST-3  Missing packages are offered for install. adds deps.py (no tkinter: PACKAGES table kept in
+#           step with requirements.txt, missing(), install() = `python -m pip install` with pip's
+#           output streamed as detail lines) and startup.ensure_packages(root, names): only when
+#           something is missing it asks "Install now / Not now", then installs behind the usual
+#           progress window and carries on without a restart. "Not now" lets the program continue
+#           (whatever really needs the package explains itself later); a failed install, no pip, or a
+#           system Python that forbids installing (externally-managed) raises a SetupError saying
+#           what to do instead (for example make a virtual environment). wordfreq is checked on
+#           every start; nltk (offline definitions, optional) is offered in the same question, and a "Not
+#           now" to an optional package is remembered in the save (meta declined_packages) so it is not
+#           asked again; it is required only when --source wordnet builds a list. The WordNet data
+#           itself is downloaded the first time it is needed (definitions.py). --no-install turns
+#           the offer off; packaged builds skip it. Pillow is only for the tests' screenshots and is
+#           never offered. errors.py gained ask_yes_no. Covered by _selftest_deps.py.
+#
+# --- Phase 0: housekeeping -------------------------------------------------------------------
+# [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
+#           edit_anchors(first=) unused parameter; Store.reshuffle(progress=) unused callback;
+#           redundant `seeds = []` / `seeds = list(seeds)` in pick_within; redundant getattr in
+#           stats(). (make_btn(width=) disappears in UI-5; App.tier_btns comes alive in UI-7.)
+#
+# --- Phase 1: look and feel foundations (no behaviour change) ---------------------------------
+# [x] UI-1  Palette.     adds theme.py (PALETTE tokens, six pastel TIER_COLORS, contrast()) and
+#           maps every hard-coded colour in tierlist.py onto it. Light theme only. The window
+#           and ttk backgrounds are still the system grey until UI-3 styles them.
+# [x] UI-2  Typography.  adds fonts.py: pick_font_family() + init_fonts(root) + font(role): shared
+#           tkfont.Font objects for the roles word / pair / vs / tier / choice / title / head / label
+#           / body, using the first installed of Nunito, Quicksand, SF Pro Rounded, Segoe UI,
+#           Helvetica Neue, else Helvetica. Replaced every hard-coded font tuple; sizes are
+#           unchanged, so the layout does not move. ttk widgets keep the system font until UI-3.
+# [x] UI-3  ttk styling. adds ui_style.py: apply_ttk_style(root) styles the "clam" theme for TFrame,
+#           TLabel, TButton, Radio/Checkbutton, Entry, Combobox, Treeview (+heading), Scrollbar,
+#           Labelframe and Separator, and sets menu, text, listbox and dialog colours through the
+#           option database. Window background is now the cream; make_btn labels are flat with a
+#           hairline border (they become rounded in UI-5). The Browser keeps its own font-scaling
+#           styles on top of this base.
+# [x] UI-4  Motion engine. adds ui_motion.py: ease_out_cubic(t), lerp_color(c1, c2, t) and
+#           Animator.run(key, ms, on_frame, on_done): a running animation with the same key is
+#           finished first; ~16 ms frames; finish_all() (called by App.on_key) and cancel_all().
+#           Also the saved "Reduce motion" switch (View menu, App.toggle_motion): when on, run()
+#           jumps straight to the end state. Nothing animates yet; UI-16 onward use it.
+#
+# --- Phase 2: widgets (each replaces one ad-hoc piece of the current UI) -----------------------
+# [x] UI-5  RoundButton.  Canvas widget in widgets.py: smoothed rounded corners, hover tint (fades with
+#           the Animator, jumps with Reduce motion), pressed "dip", disabled state, small key-hint
+#           caption under the label. Replaces make_btn / set_btn_enabled everywhere (main window and
+#           Browse). Label-style options (text, hint, font, wraplength, bg, fg) so existing code kept
+#           working; click fires on release inside the button; invoke() / flash() give keyboard
+#           shortcuts the pressed look (used by UI-7); refresh_widgets(widget) (was refresh_buttons) re-measures after a
+#           shared font was resized (done by the window-fitting code and the Browse text scaling).
+#           The ttk buttons (Undo, Browse / edit, dialogs) are still square: UI-24 restyles them.
+#           Covered by _selftest_widgets.py.
+# [x] UI-6  WordCard.     adds WordCard.set(word, sub) in widgets.py: the big word on a soft rounded
+#           white card with a faint shadow and a muted sub-line (frequency rank, "skipped",
+#           "compound"). Replaces word_lbl + sub_lbl. The card has a minimum width (so it does not
+#           jump from word to word), widens for long words, then wraps; its padding follows the word
+#           font so it shrinks with the rest when a small screen forces smaller text. The old
+#           refresh_buttons() became refresh_widgets() (handles buttons and cards).
+#           Covered by _selftest_widgets.py.
+# [ ] UI-7  TierRow.      adds TierRow: six pastel pills (letter + key hint) with a hover lift and
+#           press(tier), which plays the same pressed "dip" as a mouse click (RoundButton.flash, built
+#           in UI-5) so pressing 1-6 on the keyboard looks like pressing the pill. Revives
+#           App.tier_btns. (UI-18 wires every other hotkey the same way.)
+# [ ] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
+#           arrow-key hints, plus quiet Tie / Skip text buttons. Replaces left_btn / right_btn /
+#           tie_btn / skip_pair_btn. Offers press(side) for left / right / tie / skip so the
+#           hotkeys (Left/A, Right/L, Down/T, S) can show the pressed look (wired in UI-18).
+# [ ] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
+#           still-possible tiers shaded and the anchor being asked about marked; it narrows
+#           smoothly after each answer. Shown in the Better / Same / Worse view.
+#
+# --- Phase 3: layout and chrome ----------------------------------------------------------------
+# [ ] UI-10 SegmentedControl. adds SegmentedControl(options, on_change) and build_header(): a
+#           pill-shaped mode switch (Place / Refine / Boundary / Conflicts) replacing the
+#           Radiobuttons.
+# [ ] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
+#           blend) instead of the full-width flash banner. App.flash() keeps its signature.
+# [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
+#           instead of snapping; nicer text (bold word, italic part of speech, muted examples).
+#           Replaces def_frame / def_text.
+#
+# --- Phase 4: seeing your list take shape ------------------------------------------------------
+# [ ] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with
+#           counts, fed by Store.tier_counts(); bars grow with ease-out when a count changes.
+#           (Read the dataviz skill before building.)
+# [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
+#           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
+#           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for
+#           ages. Candidates: (a) plain placed/total; (b) "common-word coverage", the share of the
+#           top ~20k frequency ranks already placed or skipped; (c) the tier chart (UI-13) alone,
+#           with no bar at all. Whatever we pick must stay calm: no goals, no streaks.
+# [ ] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
+#           conflicts only when there are some) replacing the dense two-line header. The session
+#           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
+#           only in a tooltip when you hover over "+N today" (adds Tooltip(widget, text_fn)).
+#           While UI-14 is on hold, the placed/total figure stays.
+#
+# --- Phase 5: satisfying (but tasteful) motion -------------------------------------------------
+# [ ] UI-16 Word transition. adds App.animate_word_change(direction): the old word nudges ~12 px
+#           toward the chosen tier and fades while the next word eases in (~180 ms in total).
+#           Input is never locked; the next keypress completes it instantly.
+# [ ] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
+#           tier's bar (~250 ms) and the bar ticks up with a soft pulse. The main "that felt
+#           good" moment.
+# [ ] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
+#           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
+#           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
+#           Backspace (Better / Same tier / Worse / Back), and in the duel view Left/A, Right/L,
+#           Down/T and S (cards, Tie, Skip). Disabled buttons do not dip. Respects Reduce motion
+#           (no dip, the action still happens). Input is never delayed: the action runs first.
+# [ ] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
+#           dims (~120 ms) before the next pair; a boundary swap shows the two chips trading
+#           places.
+# [ ] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
+#           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
+# [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
+#           words under the card, so the eye can pre-read and the flow stays quick.
+#
+# --- Phase 6: polish ---------------------------------------------------------------------------
+# (UI-22, the dark theme toggle, was dropped from the plan by request; IDs are not renumbered.)
+# [ ] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
+#           and RoundButton "Move to" chips. Keeps its scale-with-window behaviour.
+# [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
+#           Merge dialogs match the rest.
+# [x] SZ-1  Screen- and content-aware window sizing (sizing.py). Windows open at a size derived from
+#           the monitor under the pointer and the dpi scaling, fonts step down (and the definition
+#           pane shortens) when contents would not fit, dialogs are centred on screen.
+#           Browse and start-up windows size from measured text. Browse selection is an outline.
+#           Covered by _selftest_sizing.py.
+# [ ] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
+#           with the window, like the Browse window already does.
+# [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
+#           database), refresh the module docstring, and add a UI smoke test that drives every
+#           mode and saves screenshots.
+#
+# --- Tentative: packaging as a program (NOT planned yet; ignore for now) ------------------------
+# Idea only, to revisit once the UI is finished. Notes from the discussion: PyInstaller builds only
+# for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
+# Linux can be tested from here (Windows / macOS builds would need testing on those machines).
+# [?] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
+#          when frozen. REQUIRED before any build: a one-file build unpacks to a temporary folder,
+#          so a save kept "next to the script" would be deleted when the program exits.
+# [?] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
+#          stays an optional download as it is now.
+# [?] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
+#          Depends on ST-1 and ST-2 (a windowed program has no console for messages).
+# [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
+#          dependencies once and start the program. Roughly ten lines each, nothing to sign.
+# [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
+#          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
+#          for a Python with a current Tk; Linux depends only on system libraries.
+#
+# Decisions
+#   Settled:  light theme only (a dark theme can be added later: theme.py is built so a second
+#             palette with the same keys drops in); the session count stays as a muted "+N today",
+#             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
+#   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
+#   Parked:   Packaging as a program (T-1..T-5 above): tentative, ignored until asked for.
+#
+# File layout: see the code map in the docstring above. New UI steps add files named for their
+# job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).
+# ==========================================================================================
+import argparse
+import json
+import os
+import sys
+
+# Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
+# still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS  # noqa: F401
+from definitions import Definitions
+from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
+                   remember_save, save_progress, write_export)
+from store import Store
+from theme import PALETTE, TIER_COLORS, TIER_TEXT  # noqa: F401
+from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
+                        prepare_queue)
+
+# The window code needs tkinter, which is optional (e.g. Debian needs `apt install python3-tk`).
+# Without it everything above still works; main() explains what is missing.
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox  # noqa: F401
+    from app import App
+    from fonts import init_fonts
+    from errors import install_handlers, run_guarded
+    from problems import SetupError, ensure_streams
+    from startup import detach_console, ensure_packages, run_with_progress
+    from ui_style import apply_ttk_style
+    from browser import Browser  # noqa: F401
+except ImportError as exc:
+    if (getattr(exc, "name", "") or "").split(".")[0] not in ("tkinter", "_tkinter"):
+        raise  # a real bug, not a missing tkinter
+    tk = App = Browser = None
+    from problems import SetupError, ensure_streams   # these need no tkinter
+
+
+def main():
+    """Start the program: parse options, pick and open the save, build the word list on first run, open the window."""
+    ap = argparse.ArgumentParser(description="Tier-list every word in the English dictionary.")
+    ap.add_argument("--db", default=None,
+                    help="save file to use. By default your earlier save is found automatically "
+                         "(the one used last time, or the one with the most progress), so replacing or "
+                         "moving this script never loses your tier list")
+    ap.add_argument("--wordlist", help="optional text file, one word per line, in presentation order "
+                                       "(only used when the save file is first created)")
+    ap.add_argument("--source", choices=["wiktionary", "wordnet"], default="wiktionary",
+                    help="word source: wiktionary = every English Wiktionary word (default, ~1M); "
+                         "wordnet = ~77k base-form dictionary words")
+    ap.add_argument("--wiktionary-file", help="use an already-downloaded kaikki.org English JSONL "
+                                              "(.jsonl or .jsonl.gz) instead of downloading it")
+    ap.add_argument("--include-phrases", action="store_true",
+                    help="also include multi-word entries such as 'ice cream' (Wiktionary source)")
+    ap.add_argument("--keep-download", action="store_true",
+                    help="keep the 3 GB Wiktionary download after building the word list")
+    ap.add_argument("--console", action="store_true",
+                    help="Windows: keep the console window open and print to it (for troubleshooting). "
+                         "Normally the console is closed once the program starts and messages go to "
+                         "tierlist.log next to the save file")
+    ap.add_argument("--no-install", action="store_true",
+                    help="never offer to pip-install missing packages (they are listed in requirements.txt)")
+    ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
+    ap.add_argument("--seed", type=int,
+                    help="seed for the random queue order (reshuffles the words you haven't placed yet)")
+    args = ap.parse_args()
+    # --- 1. tkinter is needed for the window (everything else works without it)
+    if tk is None:
+        sys.exit("tkinter is not installed. On Debian/Ubuntu:  sudo apt install python3-tk")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    def start():
+        # --- 2. find the save file: --db, else the earlier save (see saves.choose_save)
+        best, others = None, []
+        if args.db:
+            db_path = os.path.abspath(args.db)
+        else:
+            db_path, best, others = choose_save(script_dir)
+        store = Store(db_path)
+        if not args.db:
+            remember_save(store.path)
+        note = None
+        if best:
+            print(f"Resuming your save file: {db_path} ({best['placed']:,} placed, {best['skipped']:,} skipped)")
+            if os.path.realpath(db_path) != os.path.realpath(default_save_path(script_dir)):
+                note = f"Resumed your earlier tier list from {db_path} ({best['placed']:,} words placed)"
+        for o in others:
+            print(f"Also found: {o['path']} ({o['placed']:,} placed). You'll be asked whether to merge it.")
+        # --- 3. Windows: close the console window behind the app (messages go to tierlist.log from
+        #        here on, and errors become dialogs; see startup.detach_console / run_guarded).
+        log_path = os.path.join(os.path.dirname(db_path), "tierlist.log")
+        if not args.console:
+            detach_console(log_path)
+        ensure_streams(log_path)          # started without a console at all (pythonw): print() must not crash
+        # `current` is the source the list was built from; an older WordNet save is upgraded to
+        # Wiktionary in place, keeping all progress.
+        existing = store.count_words()
+        current = store.get_meta("source") or ("wordnet" if existing else None)
+        builds_wiktionary = (not args.wordlist and current != "custom"
+                             and args.source == "wiktionary" and current != "wiktionary")
+
+        def set_up(log):
+            if args.wordlist:
+                if existing == 0:
+                    store.insert_words(build_word_list(args.wordlist))
+                    store.set_meta("source", "custom")
+            elif current == "custom":
+                pass  # a custom list is never replaced automatically
+            elif builds_wiktionary:
+                if existing:
+                    log(f"Upgrading your {existing:,}-word list to the full Wiktionary list. "
+                        "Your progress is kept.")
+                try:
+                    build_wiktionary(store, args.wiktionary_file, args.include_phrases,
+                                     args.keep_download, log=log)
+                except (RuntimeError, OSError) as exc:
+                    raise SetupError(f"Could not build the Wiktionary word list: {exc}\n\n"
+                                     "Try again (downloads resume), download the file yourself and pass "
+                                     "--wiktionary-file, or use --source wordnet.") from exc
+            elif args.source == "wordnet" and existing == 0:
+                log("First run: building the word list (about 10-30 seconds)...")
+                store.insert_words(build_word_list())
+                store.set_meta("source", "wordnet")
+            # queue order: flag compounds and shuffle (cheap when already done), honour --seed
+            prepare_queue(store, log=log)
+            if args.seed is not None and args.seed != store.queue_settings()["seed"]:
+                log(f"Reshuffling the queue with seed {args.seed}...")
+                store.reshuffle(seed=args.seed)
+
+        def launch():
+            # --- 4. make sure the save has a word list and a queue order. This is the slow part on a
+            #        first run, so it runs on a worker thread behind a progress window (startup.py); the
+            #        window only appears if it takes more than a moment. Every message goes through `log`.
+            root = tk.Tk()
+            root.withdraw()                  # stays hidden until set-up is done
+            init_fonts(root)
+            apply_ttk_style(root)
+            install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
+            try:
+                # a missing package is offered for install (only asks when something is missing)
+                if not args.no_install:
+                    wordnet_build = args.source == "wordnet" and existing == 0 and not args.wordlist
+                    declined = set(json.loads(store.get_meta("declined_packages", "[]")))
+                    ensure_packages(
+                        root, ["wordfreq"] + (["nltk"] if wordnet_build else []), optional=["nltk"],
+                        declined=declined,
+                        on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
+                run_with_progress(root, set_up,
+                                  initial_stage="Initializing download..." if builds_wiktionary else "Initializing...")
+            except BaseException:
+                root.destroy()
+                raise
+            print(f"{store.count_words():,} words ready.")
+            # --- 5. show the main window; App runs until it is closed
+            root.deiconify()
+            App(root, store, Definitions(store), note=note, other_saves=others)
+            if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
+                root.after(3000, lambda: 1 / 0)
+            root.mainloop()
+
+        # Always guarded: with or without a console, a failure ends in a dialog and a log entry.
+        run_guarded(launch, log_path, db_path)
+
+
+    # Everything from opening the save onward is guarded, so even a save that cannot be opened
+    # ends in a dialog (logged next to this script until the save's folder is known).
+    run_guarded(start, os.path.join(script_dir, "tierlist.log"), args.db)
+
+if __name__ == "__main__":
+    main()
