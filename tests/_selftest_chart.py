@@ -27,6 +27,7 @@ assert hs[0] == hs[5] == max(hs) and abs(hs[1] - hs[0] / 2) <= 1 and abs(hs[3] -
 assert hs[2] == 0 and ch.itemcget("bar2", "state") == "hidden"                    # empty tier: no bar
 assert 3 <= hs[4] < 6                                                              # one word: still a sliver
 assert all(ch.itemcget(f"bar{i}", "fill") == TIER_BAR[i] for i in (0, 1, 3, 4, 5))
+assert ch.itemcget("bar0", "outline") not in ("", TIER_BAR[0])                   # the pills' faint edge
 xs = [ch.coords(f"letter{i}")[0] for i in range(6)]; assert xs == sorted(xs)       # S..F, left to right
 w = max(ch.coords("bar0")[0::2]) - min(ch.coords("bar0")[0::2]); assert w <= 24   # thin marks
 base = max(ch.coords("bar0")[1::2]); assert all(abs(max(ch.coords(f"bar{i}")[1::2]) - base) < 0.5 for i in (0, 1, 3))

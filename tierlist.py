@@ -286,10 +286,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: src/ui_chart.py, at the right of the status line, in Place new words only (by
 #           request; see UI-31 for the other tabs). Bars <= 24 px, rounded data end on one hairline
 #           baseline, letter under and count on top in text colours, a hover note per bar
-#           (widgets.Tooltip), growth 220 ms, pulse(tier) and bar_top(tier) ready for UI-17. The bar
-#           colours (theme.TIER_BAR) were found by search and PASS the dataviz validator's colour-blind
-#           checks (adjacent CVD 8.6, normal vision 16.4) while staying within 8 degrees of each tier's
-#           hue; the pastels themselves failed every check. Covered by tests/_selftest_chart.py.
+#           (widgets.Tooltip), growth 220 ms, pulse(tier) and bar_top(tier) ready for UI-17. Bars are
+#           the tier pastels with the pills' faint same-hue edge. A colour-blind-tuned set (passed the
+#           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
+#           letter + count on every bar already tell the tiers apart without colour.
+#           Covered by tests/_selftest_chart.py.
 # [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
 #           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
 #           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for

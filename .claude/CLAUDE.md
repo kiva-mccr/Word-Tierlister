@@ -30,6 +30,8 @@ errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
 
 ## Conventions worth keeping
 - Light theme only. Pastel and cutesy, short tasteful animations, no badges, streaks or goals.
+- Keep the pastel look over colour-blind colour tuning wherever labels (letters, counts) already carry the
+  meaning; the user chose this for the tier chart.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.

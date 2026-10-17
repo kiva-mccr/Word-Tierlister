@@ -2,9 +2,9 @@
 
 Built to the dataviz rules where they apply: bars at most 24 px wide with a rounded data end and a square
 baseline on one hairline axis; the tier letter under each bar and its count on the cap are in text colours
-(never the bar colour); one hover note per bar; bars grow with ease-out when a count changes. The bars use
-theme.TIER_BAR, a deeper step of each tier's pastel, so a bar's length reads on the cream; identity comes
-from the letter and the fixed S..F order, not from colour.
+(never the bar colour); one hover note per bar; bars grow with ease-out when a count changes. The bars are
+the tier pastels with the pills' faint edge (theme.TIER_BAR): identity comes from the letter and the fixed
+S..F order, not from colour, so the colours can stay pastel (the user's choice over a colour-blind-tuned set).
 """
 import tkinter as tk
 
@@ -72,7 +72,7 @@ class DistributionChart(tk.Canvas):
         self.create_line(4, base, width - 4, base, fill=PALETTE["border"], tags="axis")
         for i, name in enumerate(self.tiers):
             x = self._x(i)
-            self.create_polygon(0, 0, 0, 0, smooth=True, outline="", tags=("bar", f"bar{i}"))
+            self.create_polygon(0, 0, 0, 0, smooth=True, tags=("bar", f"bar{i}"))
             self.create_text(x, 0, text="", font=self._font, fill=PALETTE["muted"], anchor="s",
                              tags=("count", f"count{i}"))
             self.create_text(x, base + 3, text=name, font=self._lfont, fill=PALETTE["text"], anchor="n",
@@ -96,7 +96,9 @@ class DistributionChart(tk.Canvas):
                 pts = [x1, base, x1, base, x1, y1 + r, x1, y1, x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
                        x2, base, x2, base]
                 self.coords(f"bar{i}", *pts)
-                self.itemconfigure(f"bar{i}", fill=fill, state="normal")
+                # the same faint same-hue edge as the tier pills (RoundButton), so pale bars still read
+                self.itemconfigure(f"bar{i}", fill=fill, outline=lerp_color(self.colors[i], PALETTE["text"], 0.18),
+                                   width=1, state="normal")
             else:
                 self.itemconfigure(f"bar{i}", state="hidden")
             self.coords(f"count{i}", x, base - h - 2)
