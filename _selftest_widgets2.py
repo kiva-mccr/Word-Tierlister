@@ -1,10 +1,10 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
-TabBar, DropMenu and HeaderMenus (UI-10)."""
+TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11)."""
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow
+from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -193,5 +193,31 @@ seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      #
 assert hm.open_name is None and not hm.drops["File"].is_open()
 hm.open_menu("Edit"); update(); hm.drops["Edit"].invoke(0); update()
 assert ran[-1] == "undo" and hm.open_name is None
+
+# ---- Toast (UI-11)
+page = tk.Frame(root, width=600, height=300, bg=PALETTE["bg"]); page.pack(); update()
+other = tk.Label(page, text="stays put"); other.place(x=10, y=100); update()
+oy = other.winfo_y()
+toast = Toast(root, small, animator=anim)
+assert toast.cget("text") == "" and toast.cget("font") is small
+toast.show("apple  ->  S", tint=(TIER_COLORS[0], PALETTE["text"]), ms=200, in_=page); update()
+assert toast.cget("text") == "apple  ->  S" and toast.winfo_ismapped() and other.winfo_y() == oy   # floats
+assert toast.itemcget("pill", "fill") != TIER_COLORS[0]                         # fading in from the page colour
+anim.finish_all(); assert toast.itemcget("pill", "fill") == TIER_COLORS[0] and toast.itemcget("text", "fill") == PALETTE["text"]
+cx = toast.winfo_rootx() + toast.winfo_width() / 2; px = page.winfo_rootx() + page.winfo_width() / 2
+assert abs(cx - px) <= 2 and toast.winfo_rooty() - page.winfo_rooty() < 20       # centred at the top of the page
+toast.show("pear", ms=5000, in_=page); anim.finish_all()                         # a new message replaces it
+assert toast.cget("text") == "pear" and toast.itemcget("pill", "fill") == TIER_COLORS[0]   # (keeps the last tint)
+toast.hide(); assert toast.cget("text") == "pear"; anim.finish_all(); update()   # fades out, then it is gone
+assert toast.cget("text") == "" and not toast.winfo_ismapped()
+toast.show("short", ms=60, in_=page); anim.finish_all()
+root.after(120, root.quit); root.mainloop(); anim.finish_all(); update()         # the timer hides it
+assert toast.cget("text") == "" and not toast.winfo_ismapped()
+toast.show("x " * 200, ms=1000, in_=page, wraplength=300); anim.finish_all(); update()
+assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40             # long messages wrap
+anim.reduce_motion = True
+toast.show("jump", (PALETTE["ok"][0], PALETTE["ok"][1]), in_=page); assert toast.itemcget("pill", "fill") == PALETTE["ok"][0]
+toast.hide(); assert toast.cget("text") == ""                                     # no fade with Reduce motion
+anim.reduce_motion = False
 root.destroy()
 print("WIDGETS2 OK")

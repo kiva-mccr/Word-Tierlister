@@ -258,8 +258,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (File / Edit / View / Settings as flat buttons; hovering another while one is open switches,
 #           like a menu bar). App._build_header; Alt+F/E/V/S and F10 open the menus; keys do nothing
 #           else while a menu is open. The system menu bar is gone.
-# [ ] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
+# [x] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
 #           blend) instead of the full-width flash banner. App.flash() keeps its signature.
+#           Built: Toast(parent, font) in widgets.py, floating at the top of the page (place), so it
+#           never pushes the layout; fades in 160 ms, out 220 ms; long messages wrap. App.banner is the
+#           Toast (cget("text") still works). Messages use a real arrow (apple  \u2192  S).
 # [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
 #           instead of snapping; nicer text (bold word, italic part of speech, muted examples).
 #           Replaces def_frame / def_text.

@@ -775,6 +775,96 @@ class HeaderMenus(tk.Frame):
             self.drops[self._open].close()
 
 
+class Toast(tk.Canvas):
+    """A small rounded message that fades in over the page, stays a moment, and fades out (UI-11).
+
+        toast = Toast(root, font("label"), animator=app.anim)
+        toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
+
+    It floats (place), so showing it never moves anything else. A new message replaces the current one.
+    "Fades" are colour blends from the page colour (FADE_IN_MS / FADE_OUT_MS; they jump with Reduce
+    motion). cget("text") is the message on screen ("" once it is gone); cget("font") its Font.
+    """
+    FADE_IN_MS, FADE_OUT_MS = 160, 220
+
+    def __init__(self, parent, font=None, animator=None, page_bg=None):
+        page = page_bg or PALETTE["bg"]
+        super().__init__(parent, bd=0, highlightthickness=0, bg=page)
+        self._font, self._anim, self._page = font, animator, page
+        self._text, self._tint = "", (PALETTE["info"][0], PALETTE["info"][1])
+        self._job = None
+        self._wrap = 600
+
+    def cget(self, key):
+        if key == "text":
+            return self._text
+        if key == "font":
+            return self._font
+        return super().cget(key)
+
+    def show(self, text, tint=None, ms=3500, in_=None, wraplength=None):
+        """Show `text` on a pill coloured `tint` = (background, text colour) for `ms` milliseconds."""
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+        if self._anim is not None:
+            self._anim.finish(f"toast{id(self)}")
+        self._text = text
+        self._tint = tint or self._tint
+        if wraplength:
+            self._wrap = wraplength
+        self._draw()
+        self.place(in_=in_ or self.master, relx=0.5, y=6, anchor="n")
+        self.tk.call("raise", self._w)          # (Canvas.lift raises canvas items, not the widget)
+        self._fade(0.0, 1.0, self.FADE_IN_MS)
+        self._job = self.after(ms, self.hide)
+
+    def hide(self):
+        """Fade out now (also what happens when the time is up)."""
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+        if not self._text:
+            return
+
+        def gone():
+            self._text = ""
+            self.place_forget()
+        self._fade(1.0, 0.0, self.FADE_OUT_MS, gone)
+
+    def _draw(self):
+        self.delete("all")
+        f = self._font
+        line = f.metrics("linespace") if f else 16
+        padx, pady = int(line * 1.1), int(line * 0.45)
+        t = self.create_text(0, 0, text=self._text, font=f, width=self._wrap, justify="center", anchor="n",
+                             tags="text")
+        x1, y1, x2, y2 = self.bbox(t)
+        w = min(x2 - x1, self._wrap) + 2 * padx
+        h = (y2 - y1) + 2 * pady
+        super().configure(width=w + 2, height=h + 2)
+        self.create_polygon(_rounded_points(1, 1, w, h, min(h // 2, line)), smooth=True, tags="pill")
+        self.coords(t, 1 + w / 2, 1 + pady)
+        self.tag_raise("text")
+
+    def _paint(self, a):
+        bg, fg = self._tint
+        try:
+            self.itemconfigure("pill", fill=lerp_color(self._page, bg, a),
+                               outline=lerp_color(self._page, lerp_color(bg, PALETTE["text"], 0.12), a))
+            self.itemconfigure("text", fill=lerp_color(self._page, fg, a))
+        except tk.TclError:
+            pass
+
+    def _fade(self, a, b, ms, done=None):
+        if self._anim is None:
+            self._paint(b)
+            if done:
+                done()
+            return
+        self._anim.run(f"toast{id(self)}", ms, lambda p: self._paint(a + (b - a) * p), done)
+
+
 class WordCard(tk.Canvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").

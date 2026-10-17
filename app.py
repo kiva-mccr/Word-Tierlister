@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, WordCard,
+from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
                      refresh_widgets)
 
 
@@ -50,7 +50,7 @@ class App:
     """
 
     def __init__(self, root, store, defs, note=None, other_saves=()):
-        """Build the window. `note` is a one-time banner (which save was resumed); `other_saves` are
+        """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
         extra saves with progress that _startup() offers to merge. `defs` is a Definitions.
         """
         self.root, self.store, self.defs = root, store, defs
@@ -72,7 +72,6 @@ class App:
         self.mem_defs = {}
         self.def_words = []
         self.browsers = []
-        self._banner_job = None
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
 
         init_fonts(root)
@@ -158,7 +157,7 @@ class App:
         self.on_mode_change()
 
     def _build_ui(self):
-        """Create every widget below the header once: stats, banner, bottom bar, definition pane, place view
+        """Create every widget below the header once: stats, toast, bottom bar, definition pane, place view
         and pair view."""
         r = self.root
         self.stats_lbl = ttk.Label(r, anchor="w", padding=(10, 0))
@@ -177,8 +176,6 @@ class App:
         self.focus_lbl.pack(side="left", padx=12)
         self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
 
-        self.banner = tk.Label(r, text="", font=font("label"), pady=5, bg=r.cget("bg"))
-        self.banner.pack(side="top", fill="x")
 
         # bottom bar first so it keeps the bottom edge
         bottom = ttk.Frame(r, padding=(10, 6))
@@ -196,6 +193,8 @@ class App:
 
         self.center = ttk.Frame(r)
         self.center.pack(side="top", fill="both", expand=True)
+        # messages float over the top of the page as a toast (UI-11); App.flash() shows them
+        self.banner = Toast(r, font("label"), animator=self.anim)
 
         # ---- place view
         self.place_frame = ttk.Frame(self.center)
@@ -292,7 +291,7 @@ class App:
     def _content_size(self):
         """(width, height) the window needs to show everything without clipping, in pixels.
 
-        Fixed rows (header, banner, bottom bar, definition pane when shown) report their own size; the
+        Fixed rows (header, stats, bottom bar, definition pane when shown) report their own size; the
         centre area uses `place`, which does not report one, so the two views' inner frames are
         measured and given some breathing room.
         """
@@ -392,13 +391,13 @@ class App:
             self.opt_label.config(text="Tier:")
             self.filter_cb["values"] = ["All tiers"] + TIERS
             self.filter_var.set("All tiers")
-            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+            self.opt_frame.pack(side="top", fill="x", before=self.center)
         elif self.mode == "boundary":
             self.opt_label.config(text="Boundary:")
             vals = [f"{TIERS[i]} | {TIERS[i + 1]}" for i in range(len(TIERS) - 1)]
             self.filter_cb["values"] = ["All boundaries"] + vals
             self.filter_var.set("All boundaries")
-            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+            self.opt_frame.pack(side="top", fill="x", before=self.center)
         else:
             self.opt_frame.pack_forget()
         self._update_focus_label()
@@ -419,12 +418,10 @@ class App:
         self.refresh()
 
     def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
-        """Show a coloured message in the banner for `ms` milliseconds, then clear it. A new message replaces the old one."""
-        self.banner.config(text=text, bg=bg, fg=fg)
-        if self._banner_job:
-            self.root.after_cancel(self._banner_job)
-        self._banner_job = self.root.after(
-            ms, lambda: self.banner.config(text="", bg=self.root.cget("bg")))
+        """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
+        replaces the old one."""
+        self.banner.show(text, (bg, fg), ms, in_=self.center,
+                         wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
     def refresh(self):
@@ -536,10 +533,10 @@ class App:
         self.refresh()
 
     def _after_place(self, word, tier):
-        """Shared tail of every placement: count it, confirm in the banner, show the next word."""
+        """Shared tail of every placement: count it, confirm in the toast, show the next word."""
         self.session_count += 1
         self.cmp = None
-        self.flash(f"{word}  ->  {TIERS[tier]}", bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
+        self.flash(f"{word}  \u2192  {TIERS[tier]}", bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
         self.refresh()
 
     def start_compare(self):
@@ -673,7 +670,7 @@ class App:
         self.session_count += 1
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
-            self.flash(f"Swapped: {w} -> {TIERS[wt]},  {l} -> {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
                        "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
