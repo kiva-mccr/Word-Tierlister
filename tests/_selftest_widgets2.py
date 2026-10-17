@@ -406,5 +406,26 @@ tb, bb = ec.bbox("title"), ec.bbox("body")
 assert tb[3] <= bb[1] and bb[2] - bb[0] <= small.measure("n" * 34) + 2               # title above; body wraps
 assert ec.winfo_reqwidth() > bb[2] - bb[0] and ec.winfo_reqheight() > bb[3]           # the panel holds both
 ew.destroy()
+
+# ---- StyledDialog (UI-24): headline, intro, body, rounded buttons; Enter = default, Escape = on_cancel
+from fonts import init_fonts
+from widgets import StyledDialog
+init_fonts(root)
+got = []
+dlg = StyledDialog(root, "T", "A headline", "Some intro text", animator=anim)
+tk.Label(dlg.body, text="body").pack()
+dlg.button("Details", lambda: got.append("details"), side="left")
+dlg.button("Cancel", dlg.close)
+dlg.button("Go", lambda: got.append("go"), default=True)
+dlg.show(); update()
+assert dlg.win.cget("bg") == PALETTE["bg"] and all(isinstance(b, RoundButton) for b in dlg.buttons.values())
+xs = {k: b.winfo_rootx() for k, b in dlg.buttons.items()}
+assert xs["Details"] < xs["Cancel"] < xs["Go"]                                 # default rightmost, extras far left
+assert dlg.buttons["Go"].cget("bg") == PALETTE["select_bg"] != dlg.buttons["Cancel"].cget("bg")
+dlg.win.event_generate("<Return>"); update(); assert got == ["go"]
+cancelled = []
+dlg.on_cancel = lambda: cancelled.append(1)
+dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
+dlg.close(); update(); assert not dlg.alive()
 root.destroy()
 print("WIDGETS2 OK")

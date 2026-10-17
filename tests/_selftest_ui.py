@@ -17,8 +17,9 @@ for i in range(6500):
 
 root = tk.Tk()
 shown = []
-T.messagebox.showinfo = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
-T.messagebox.showerror = lambda *a, **k: shown.append(a)
+import app as A, browser as B
+A.show_message = B.show_message = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
+A.show_error = lambda *a, **k: shown.append(a)
 app = T.App(root, s, T.Definitions(s))
 
 
@@ -84,18 +85,24 @@ assert app.apply_queue_settings("77", "8,000", "gauss", "2") is None
 cfg = s.queue_settings()
 assert cfg["seed"] == 77 and cfg["spread"] == 8000 and cfg["shape"] == "gauss" and cfg["compound"] == 2
 assert app.apply_queue_settings("11", "3000", "exp", "1") is None
-before = set(root.winfo_children())
-app.edit_queue()
-pump(3)
-dlgs = [w for w in root.winfo_children() if w not in before and isinstance(w, tk.Toplevel)]
-assert dlgs, "queue dialog did not open"
-for d in dlgs:
-    d.destroy()
-app.edit_anchors()
-pump(3)
-for w in root.winfo_children():
-    if isinstance(w, tk.Toplevel):
-        w.destroy()
+# the dialogs (UI-24): the shared StyledDialog, problems shown inline, the default button on Enter
+qd = app.edit_queue(); pump(3)
+assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply & reshuffle"]
+assert qd.buttons["Apply & reshuffle"].cget("bg") == T.PALETTE["select_bg"]
+spread = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
+spread.delete(0, "end"); spread.insert(0, "5")
+qd.win.event_generate("<Return>"); pump(2)
+assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
+qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
+ad = app.edit_anchors(); pump(3)
+entries = [w for w in ad.body.winfo_children() if w.winfo_class() == "TEntry"]
+assert len(entries) == 6 and entries[0].get() == "serendipity"
+entries[1].delete(0, "end"); entries[1].insert(0, "serendipity")
+ad.buttons["Save anchors"].invoke(); pump(2)
+assert ad.alive() and any("different" in str(w.cget("text")) for w in ad.body.winfo_children() if w.winfo_class() == "TLabel")
+entries[1].delete(0, "end"); entries[1].insert(0, "luminous")
+ad.buttons["Save anchors"].invoke(); pump(2)
+assert not ad.alive() and s.get_anchors()[1] == "luminous"
 pump(2)
 
 # ---------------------------------------------------------------- browse window

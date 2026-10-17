@@ -62,7 +62,7 @@ live in src/, the self-tests in tests/, check_release.py in tools/, the Claude n
     startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
-    errors.py       friendly error dialog, error handlers, run_guarded (ST-2).
+    errors.py       friendly error / message / question dialogs, error handlers, run_guarded (ST-2).
     browser.py      Browser: the Browse / edit window.
     app.py          App: the main window and all modes.
 
@@ -396,9 +396,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           of their tier colour (theme.TIER_ROW, theme.tint), the selected row in the full colour with its
 #           outline; every button a RoundButton (A- / A+ and Refresh quiet flat ones); the definition a
 #           white pane under a muted heading instead of a grooved frame.
-# [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
+# [x] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
 #           Merge dialogs match the rest. The bottom bar (Undo, Browse / edit, Definition, key
 #           hints) keeps its current look by request; only dialogs change here.
+#           Built: widgets.StyledDialog (headline, muted intro, body, rounded buttons with the lilac
+#           default on the right; Enter / Escape). Anchors and Queue use it and show problems inline;
+#           errors.py's dialogs (errors, questions, tick boxes) and the new show_message are built on it,
+#           so the merge / import / save-file messages and Browse's notes no longer use tk's messagebox.
+#           errors.py now sits after widgets.py in the layers.
 # [x] SZ-1  Screen- and content-aware window sizing (sizing.py). Windows open at a size derived from
 #           the monitor under the pointer and the dpi scaling, fonts step down (and the definition
 #           pane shortens) when contents would not fit, dialogs are centred on screen.
@@ -696,7 +701,7 @@ from wordsource import (build_word_list, build_wiktionary, compute_penalties,  #
 # Without it everything above still works; main() explains what is missing.
 try:
     import tkinter as tk
-    from tkinter import filedialog, messagebox  # noqa: F401
+    from tkinter import filedialog  # noqa: F401
     from app import App
     from fonts import init_fonts
     from errors import install_handlers, run_guarded

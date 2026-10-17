@@ -1,6 +1,6 @@
 """Friendly error dialogs and the program-wide safety net (ST-2).
 
-    show_error(title, message, details=None, parent=None)
+    show_error(title, message, details=None, parent=None)  /  show_message(title, headline, message)
         a small styled dialog: plain-language message, an optional "Show details" area and a
         "Copy details" button. With no window system it prints to stderr instead.
     install_handlers(root, log_path, save_path)
@@ -24,6 +24,7 @@ from fonts import font, init_fonts
 from problems import STOPPED_MESSAGE, SetupError, append_log, describe
 from theme import PALETTE
 from ui_style import apply_ttk_style
+from widgets import StyledDialog
 
 APP_TITLE = "Word Tier List"
 REPEAT_SECONDS = 5      # the same error again within this time only goes to the log
@@ -59,7 +60,12 @@ def show_error(title, message, details=None, parent=None, headline=None):
                 pass
 
 
-def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None):
+def show_message(title, headline, message, parent=None):
+    """A plain styled message with an OK button (no error look, no details): a merge result, say."""
+    show_error(title, message, parent=parent, headline=headline)
+
+
+def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None, wrap_chars=44):
     """A small styled question dialog. Returns True for the `yes` button, False for `no`, Escape or close.
 
     Falls back to False (the safe answer) when no window can be shown."""
@@ -71,7 +77,8 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None):
             own_root.withdraw()
             init_fonts(own_root)
             apply_ttk_style(own_root)
-        _dialog(parent, title, headline, message, None, buttons=((yes, True), (no, False)), answer=answer)
+        _dialog(parent, title, headline, message, None, buttons=((yes, True), (no, False)), answer=answer,
+                wrap_chars=wrap_chars)
     except Exception:
         _stderr(f"{title}: {headline} {message}")
     finally:
@@ -107,35 +114,22 @@ def show_exception(title, exc, parent, context):
                headline=headline)
 
 
-def _dialog(parent, title, headline, message, details, buttons=None, answer=None, choices=None):
-    dlg = tk.Toplevel(parent)
-    dlg.title(title)
-    dlg.configure(bg=PALETTE["bg"])
-    dlg.resizable(False, False)
-    try:
-        if parent.winfo_viewable():
-            dlg.transient(parent)
-    except tk.TclError:
-        pass
-    wrap = max(380, font("body").measure("n") * 44)
-    box = ttk.Frame(dlg, padding=(26, 22))
-    box.pack(fill="both", expand=True)
-    ttk.Label(box, text=headline, font=font("head"), wraplength=wrap, justify="left").pack(anchor="w")
-    ttk.Label(box, text=message, wraplength=wrap, justify="left",
-              foreground=PALETTE["muted"]).pack(anchor="w", pady=(10, 0))
+def _dialog(parent, title, headline, message, details, buttons=None, answer=None, choices=None, wrap_chars=44):
+    """Every dialog here, on the shared StyledDialog (UI-24). `buttons` are (label, value) pairs, the first
+    is the default (drawn rightmost, pressed by Enter); without them there is one OK button."""
+    dlg = StyledDialog(parent, title, headline, message, wrap_chars=wrap_chars)
+    box, wrap = dlg.body, dlg.wrap
     ticks = []
     if choices:                      # one tick box per choice, each with a muted line saying what it is for
-        cbox = ttk.Frame(box)
-        cbox.pack(fill="x", pady=(12, 0))
         for key, label, detail, ticked, *rest in choices:
             var = tk.BooleanVar(value=ticked)
-            line = ttk.Frame(cbox)
+            line = ttk.Frame(box)
             line.pack(anchor="w", pady=(6, 0))
             ttk.Checkbutton(line, text=label, variable=var, takefocus=1).pack(side="left")
             if rest and rest[0]:             # required: the classic red asterisk
                 ttk.Label(line, text="*", foreground=PALETTE["required"], font=font("head")).pack(side="left")
             if detail:
-                ttk.Label(cbox, text=detail, wraplength=wrap - 30, justify="left",
+                ttk.Label(box, text=detail, wraplength=wrap - 30, justify="left",
                           foreground=PALETTE["muted"]).pack(anchor="w", padx=(26, 0))
             ticks.append((key, var))
     txt = tk.Text(box, height=9, width=1, wrap="word", font=font("body"), relief="flat",
@@ -144,58 +138,36 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
         txt.insert("1.0", details)
     txt.config(state="disabled")
     shown = tk.BooleanVar(value=False)
-    row = ttk.Frame(box)
-    row.pack(fill="x", pady=(16, 0))
 
     def toggle():
         shown.set(not shown.get())
         if shown.get():
-            txt.pack(fill="x", pady=(12, 0), before=row)
+            txt.pack(fill="x", pady=(12, 0))
             toggle_btn.config(text="Hide details")
         else:
             txt.pack_forget()
             toggle_btn.config(text="Show details")
-        dlg.update_idletasks()
-        dlg.geometry("")
+        dlg.refit()
 
     def copy():
-        dlg.clipboard_clear()
-        dlg.clipboard_append(f"{headline}\n{message}\n\n{details or ''}")
+        dlg.win.clipboard_clear()
+        dlg.win.clipboard_append(f"{headline}\n{message}\n\n{details or ''}")
         copy_btn.config(text="Copied")
 
-    if buttons:                      # a question: (label, value) pairs, the first is the default
+    if details:
+        toggle_btn = dlg.button("Show details", toggle, side="left")
+        copy_btn = dlg.button("Copy details", copy)
+    if buttons:                      # a question
         def choose(value):
             answer["yes"] = value
             answer["chosen"] = {k for k, v in ticks if v.get()}
-            dlg.destroy()
-        for i, (label, value) in enumerate(buttons):     # the first is what Enter presses: drawn as the default
-            ttk.Button(row, text=label, command=lambda v=value: choose(v), default="active" if i == 0 else "normal",
-                       style="Default.TButton" if i == 0 else "TButton").pack(side="right", padx=(8, 0) if i else 0)
-        dlg.bind("<Return>", lambda e: choose(buttons[0][1]))
-        dlg.bind("<Escape>", lambda e: choose(False))
-        dlg.protocol("WM_DELETE_WINDOW", lambda: choose(False))
+            dlg.close()
+        for i, (label, value) in reversed(list(enumerate(buttons))):
+            dlg.button(label, lambda v=value: choose(v), default=(i == 0))
+        dlg.on_cancel = lambda: choose(False)
     else:
-        ttk.Button(row, text="OK", command=dlg.destroy).pack(side="right")
-    if details:
-        copy_btn = ttk.Button(row, text="Copy details", command=copy)
-        copy_btn.pack(side="right", padx=(0, 8))
-        toggle_btn = ttk.Button(row, text="Show details", command=toggle)
-        toggle_btn.pack(side="left")
-    if not buttons:
-        dlg.bind("<Return>", lambda e: dlg.destroy())
-        dlg.bind("<Escape>", lambda e: dlg.destroy())
-    dlg.update_idletasks()
-    # centre over the parent (or the screen when the parent is hidden)
-    w, h = dlg.winfo_reqwidth(), dlg.winfo_reqheight()
-    if parent.winfo_viewable():
-        x = parent.winfo_rootx() + (parent.winfo_width() - w) // 2
-        y = parent.winfo_rooty() + (parent.winfo_height() - h) // 3
-    else:
-        x, y = (dlg.winfo_screenwidth() - w) // 2, (dlg.winfo_screenheight() - h) // 3
-    dlg.geometry(f"+{max(x, 0)}+{max(y, 0)}")
-    dlg.grab_set()
-    dlg.focus_force()
-    dlg.wait_window()
+        dlg.button("OK", dlg.close, default=True)
+    dlg.show(wait=True)
 
 
 def _report(exc, tb_text, log_path, save_path, parent):

@@ -23,7 +23,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
+ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -45,6 +45,8 @@ errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it).
+- Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
+  messagebox. The bottom bar's square ttk buttons stay on purpose.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
@@ -76,7 +78,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-24..27, then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-25..27, then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28, UI-30 (anchor dialog, a web link per package in the install dialog), UI-47 (Tab between tabs), UI-48 (keyboard shortcuts menu), UI-33
 (pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32
@@ -90,7 +92,6 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   programs on Linux); UI-42's themed file picker replaces it.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- Dialog buttons are still square until UI-24 (the bottom bar keeps its square look on purpose).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.

@@ -12,9 +12,10 @@ Text and row height scale with the window size (_apply_scale); Ctrl +/-/0 and Ct
 
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from constants import TIERS
+from errors import show_message
 from fonts import family
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from store import Store
@@ -405,8 +406,7 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            messagebox.showinfo("Anchor word", f"'{w}' is an anchor. Change anchors in Settings first.",
-                                parent=self.win)
+            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
             return
         self.store.place(w, tier)
         self.app.after_external_change()
@@ -418,8 +418,7 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            messagebox.showinfo("Anchor word", f"'{w}' is an anchor. Change anchors in Settings first.",
-                                parent=self.win)
+            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
             return
         self.store.unplace(w)
         self.app.after_external_change()
@@ -432,7 +431,7 @@ class Browser:
             return
         row = self.store.get_word(w)
         if row is None or row["tier"] is None:
-            messagebox.showinfo("Not placed", "Place the word in a tier first, then refine it.",
-                                parent=self.win)
+            show_message("Not placed", f"'{w}' is not placed yet", "Place the word in a tier first, then refine it.",
+                         parent=self.win)
             return
         self.app.start_focus(w)

@@ -33,9 +33,10 @@ assert os.path.realpath(path) == os.path.realpath(cur_path) and len(others) == 1
 root = tk.Tk()
 asked, shown, errors = [], [], []
 answer = {"yes": False}
-T.messagebox.askyesno = lambda title, msg, **k: (asked.append((title, msg)), answer["yes"])[1]
-T.messagebox.showinfo = lambda title, msg, **k: shown.append((title, msg))
-T.messagebox.showerror = lambda title, msg, **k: errors.append((title, msg))
+import app as A
+A.ask_yes_no = lambda title, headline, msg, **k: (asked.append((title, msg)), answer["yes"])[1]
+A.show_message = lambda title, headline, msg, **k: shown.append((title, msg))
+A.show_error = lambda title, msg, **k: errors.append((title, msg))
 store = T.Store(path)
 app = T.App(root, store, T.Definitions(store), note="Resumed your earlier tier list from X", other_saves=others)
 

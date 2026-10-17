@@ -14,19 +14,19 @@ import sqlite3
 import time
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 
 from browser import Browser
-from errors import show_exception
+from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
 from fonts import ROLES, init_fonts, font, scale_fonts
 from saves import write_export
-from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_area
+from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -1104,50 +1104,46 @@ class App:
 
     def edit_anchors(self):
         """Dialog to choose the six anchor words (checked: filled in, distinct, and in the word list)."""
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Anchor words")
-        dlg.transient(self.root)
-        try:  # some Linux window managers refuse a grab before the window is visible
-            dlg.wait_visibility()
-            dlg.grab_set()
-        except tk.TclError:
-            pass
-        intro = ("Pick one reference word per tier. New words are compared against these\n"
-                 "to find their tier quickly. Choose words you know well that feel typical\n"
-                 "of each tier. Edit freely; every word must be in the word list.")
-        ttk.Label(dlg, text=intro, padding=12, justify="left").grid(row=0, column=0, columnspan=2)
+        dlg = StyledDialog(self.root, "Anchor words", "Anchor words",
+                           "Pick one reference word per tier. New words are compared against these to find "
+                           "their tier quickly. Choose words you know well that feel typical of each tier. "
+                           "Every word must be in the word list.", animator=self.anim)
         current = self.store.get_anchors()
         vars_ = []
         for t in range(len(TIERS)):
             pre = current[t] or (DEFAULT_ANCHORS[t] if self.store.has_word(DEFAULT_ANCHORS[t]) else "")
-            tk.Label(dlg, text=TIERS[t], bg=TIER_COLORS[t], font=font("head"), width=3
-                     ).grid(row=t + 1, column=0, padx=(12, 6), pady=3)
+            tk.Label(dlg.body, text=TIERS[t], bg=TIER_COLORS[t], fg=TIER_TEXT, font=font("head"), width=3
+                     ).grid(row=t, column=0, padx=(0, 10), pady=3)
             v = tk.StringVar(value=pre)
-            ttk.Entry(dlg, textvariable=v, width=26).grid(row=t + 1, column=1, padx=(0, 12), pady=3)
+            ttk.Entry(dlg.body, textvariable=v, width=26).grid(row=t, column=1, sticky="w", pady=3)
             vars_.append(v)
+        status = ttk.Label(dlg.body, text="", foreground=PALETTE["bad"][1])     # shown only with a problem
+
+        def problem(words):
+            if any(not w for w in words):
+                return "Fill in all six anchors."
+            if len(set(words)) != len(words):
+                return "Anchors must be six different words."
+            missing = next((w for w in words if not self.store.has_word(w)), None)
+            return f"'{missing}' is not in the word list." if missing else None
 
         def save():  # validate, store the anchors and close
             words = [v.get().strip().lower() for v in vars_]
-            if any(not w for w in words):
-                messagebox.showerror("Anchor words", "Fill in all six anchors.", parent=dlg)
+            err = problem(words)
+            if err:
+                status.config(text=err)
+                status.grid(row=len(TIERS), column=0, columnspan=2, sticky="w", pady=(8, 0))
+                dlg.refit()
                 return
-            if len(set(words)) != len(words):
-                messagebox.showerror("Anchor words", "Anchors must be six different words.", parent=dlg)
-                return
-            for w in words:
-                if not self.store.has_word(w):
-                    messagebox.showerror("Anchor words", f"'{w}' is not in the word list.", parent=dlg)
-                    return
             self.store.set_anchors(words)
             self.anchors = self.store.get_anchors()
-            dlg.destroy()
+            dlg.close()
             self.after_external_change()
 
-        bar = ttk.Frame(dlg, padding=12)
-        bar.grid(row=len(TIERS) + 1, column=0, columnspan=2)
-        ttk.Button(bar, text="Save anchors", command=save).pack(side="left", padx=6)
-        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(side="left")
-        place_dialog(dlg, self.root)
+        dlg.button("Cancel", dlg.close)
+        dlg.button("Save anchors", save, default=True)
+        dlg.show()
+        return dlg
 
     def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
         """Validate and apply the queue settings, then reshuffle. Returns an error message or None."""
@@ -1170,43 +1166,36 @@ class App:
     def edit_queue(self):
         """Dialog for the queue's seed, spread, shape and compound strength; Apply reshuffles the unplaced words."""
         cfg = self.store.queue_settings()
-        dlg = tk.Toplevel(self.root)
-        dlg.title("Queue randomness")
-        dlg.transient(self.root)
-        try:
-            dlg.wait_visibility()
-            dlg.grab_set()
-        except tk.TclError:
-            pass
-        intro = ("New words are drawn at random, but the odds fall off with how rare a word is: a word\n"
-                 "'spread' ranks further down the frequency list is about 2.7x less likely to come up\n"
-                 "early (exponential), or drops off faster still (gaussian). The same seed always\n"
-                 "gives the same order. Applying reshuffles the words you haven't placed yet.")
-        ttk.Label(dlg, text=intro, padding=12, justify="left").grid(row=0, column=0, columnspan=3)
+        dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
+                           "New words are drawn at random, but the odds fall off with how rare a word is: a "
+                           "word 'spread' ranks further down the frequency list is about 2.7x less likely to "
+                           "come up early (exponential), or drops off faster still (gaussian). The same seed "
+                           "always gives the same order. Applying reshuffles the words you haven't placed yet.",
+                           animator=self.anim, wrap_chars=60)
+        box = dlg.body
         seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
         comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
-        ttk.Label(dlg, text="Seed:").grid(row=1, column=0, sticky="e", padx=(12, 6), pady=3)
-        ttk.Entry(dlg, textvariable=seed_v, width=14).grid(row=1, column=1, sticky="w")
-        ttk.Button(dlg, text="New random seed",
-                   command=lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31)))
-                   ).grid(row=1, column=2, padx=12)
-        ttk.Label(dlg, text="Spread (ranks):").grid(row=2, column=0, sticky="e", padx=(12, 6), pady=3)
-        ttk.Entry(dlg, textvariable=spread_v, width=14).grid(row=2, column=1, sticky="w")
-        info = ttk.Label(dlg, text="", foreground=PALETTE["muted"])
-        info.grid(row=2, column=2, sticky="w", padx=12)
-        ttk.Label(dlg, text="Shape:").grid(row=3, column=0, sticky="e", padx=(12, 6), pady=3)
-        sh = ttk.Frame(dlg)
-        sh.grid(row=3, column=1, columnspan=2, sticky="w")
+        ttk.Label(box, text="Seed:").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
+        ttk.Entry(box, textvariable=seed_v, width=14).grid(row=0, column=1, sticky="w")
+        RoundButton(box, "New random seed", lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31))),
+                    bg=PALETTE["surface"], font=font("body"), padx=12, pady=3, radius=10,
+                    animator=self.anim).grid(row=0, column=2, sticky="w", padx=12)
+        ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
+        ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
+        info = ttk.Label(box, text="", foreground=PALETTE["muted"])
+        info.grid(row=1, column=2, sticky="w", padx=12)
+        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=4)
+        sh = ttk.Frame(box)
+        sh.grid(row=2, column=1, columnspan=2, sticky="w")
         ttk.Radiobutton(sh, text="Exponential (e^-x)", value="exp", variable=shape_v).pack(side="left")
         ttk.Radiobutton(sh, text="Gaussian", value="gauss", variable=shape_v).pack(side="left", padx=12)
-        ttk.Label(dlg, text="Compound strength:").grid(row=4, column=0, sticky="e", padx=(12, 6), pady=3)
-        ttk.Entry(dlg, textvariable=comp_v, width=14).grid(row=4, column=1, sticky="w")
-        ttk.Label(dlg, text="0 = treat compounds like any word, 1 = default, higher = rarer",
-                  foreground=PALETTE["muted"]).grid(row=4, column=2, sticky="w", padx=12)
-        status = ttk.Label(dlg, text="", foreground=PALETTE["bad"][1])
-        status.grid(row=5, column=0, columnspan=3, pady=(6, 0))
+        ttk.Label(box, text="Compound strength:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
+        ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
+        ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
+                  foreground=PALETTE["muted"]).grid(row=3, column=2, sticky="w", padx=12)
+        status = ttk.Label(box, text="", foreground=PALETTE["bad"][1])           # shown while applying / with a problem
 
-        def update_info(*_):  # live hint under "Spread": the median rank of early words
+        def update_info(*_):  # live hint next to "Spread": the median rank of early words
             try:
                 s = float(spread_v.get().replace(",", ""))
             except ValueError:
@@ -1221,26 +1210,26 @@ class App:
 
         def apply():  # validate and reshuffle through apply_queue_settings()
             status.config(text="Shuffling...", foreground=PALETTE["muted"])
-            dlg.update_idletasks()
+            status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+            dlg.refit()
             err = self.apply_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
             if err:
                 status.config(text=err, foreground=PALETTE["bad"][1])
                 return
-            dlg.destroy()
+            dlg.close()
             self.after_external_change()
             self.flash("Queue reshuffled", ms=2000)
 
-        bar = ttk.Frame(dlg, padding=12)
-        bar.grid(row=6, column=0, columnspan=3)
-        ttk.Button(bar, text="Apply & reshuffle", command=apply).pack(side="left", padx=6)
-        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(side="left")
-        place_dialog(dlg, self.root)
+        dlg.button("Cancel", dlg.close)
+        dlg.button("Apply & reshuffle", apply, default=True)
+        dlg.show()
+        return dlg
 
     # ---- earlier progress ------------------------------------------------------------------------
     def show_save_location(self):
         """File > Where is my save file?"""
-        messagebox.showinfo(
-            "Save file",
+        show_message(
+            "Save file", "Where your progress is saved",
             f"Your progress is saved automatically, after every action, in:\n\n{self.store.path}\n\n"
             "If you replace or move tierlist.py, this file is found and reused automatically. "
             "To back it up, copy it somewhere safe.", parent=self.root)
@@ -1282,7 +1271,10 @@ class App:
         if not path:
             return
         ok, text = self.merge_file(path)
-        (messagebox.showinfo if ok else messagebox.showerror)("Import earlier progress", text, parent=self.root)
+        if ok:
+            show_message("Import earlier progress", "Earlier progress brought in", text, parent=self.root)
+        else:
+            show_error("Import earlier progress", text, parent=self.root, headline="That file could not be imported")
         self.after_external_change()
 
     def offer_merge(self, others):
@@ -1292,20 +1284,20 @@ class App:
         if not todo:
             return
         lines = "\n".join(f"   {o['path']}   ({o['placed']:,} placed, {o['skipped']:,} skipped)" for o in todo)
-        yes = messagebox.askyesno(
-            "Merge your earlier progress?",
+        yes = ask_yes_no(
+            "Merge your earlier progress?", "Merge your earlier progress?",
             f"Found other tier list save files with progress:\n\n{lines}\n\n"
             f"Merge their progress into the list you're using now?\n\n   {self.store.path}\n\n"
             "Nothing already placed here is overwritten, the other files are not changed, and a "
             "backup of this list is saved first. You can also do this later from "
-            "File > Import earlier progress.", parent=self.root)
+            "File > Import earlier progress.", yes="Merge", no="Not now", parent=self.root, wrap_chars=70)
         self.store.set_meta("merge_prompted", json.dumps(sorted(done | {o["key"] for o in todo})))
         if not yes:
             self.flash("Not merged. You can do it any time from File > Import earlier progress...", ms=8000)
             return
         msgs = [self.merge_file(o["path"], backup=(i == 0))[1] for i, o in enumerate(todo)]
         self.after_external_change()
-        messagebox.showinfo("Merged", "\n\n".join(msgs), parent=self.root)
+        show_message("Merged", "Your earlier progress is merged in", "\n\n".join(msgs), parent=self.root)
 
     def export(self):
         """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md."""

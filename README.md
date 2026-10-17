@@ -40,18 +40,18 @@ replacing the other folders never loses your list.
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes). |
 | `src/deps.py` | Packages: finds missing ones and installs them; the terminal stage, the private `.venv` (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
-| `src/errors.py` | Friendly error dialog, question dialogs, global error handlers, `run_guarded` (the whole program runs inside it). |
+| `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`), global error handlers, `run_guarded` (the whole program runs inside it). |
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread) and the window's package install step. |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `DefinitionDrawer` and other small widgets. |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` and other small widgets. |
 | `src/ui_chart.py` | The tier chart: six bars, S..F, with counts (Place new words). |
 | `src/browser.py` | The Browse / edit window: search, Show / Sort, rows in soft tier colours, Move to, definition. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 
 Layers, lowest first: `constants`, `problems`, `deps` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `errors`, `ui_motion`, `widgets`, `startup` -> `ui_chart`, `browser` -> `app` -> `tierlist`. A file only imports from files
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Where to change things

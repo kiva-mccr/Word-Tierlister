@@ -7,6 +7,8 @@ After a shared Font object is resized, call refresh_widgets(window) so they re-m
 import tkinter as tk
 import tkinter.font as tkfont
 
+from fonts import font
+from sizing import place_dialog
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
@@ -272,7 +274,7 @@ class RoundButton(tk.Canvas):
                     self._go(self._target())
                 except tk.TclError:
                     pass
-        self.after(ms, undo)
+        self._root().after(ms, undo)         # on the root: the button may close its own window
 
 
 class TierRow(tk.Frame):
@@ -1517,6 +1519,94 @@ def watch_focus(root, on_lost=None):
             state["job"] = root.after(120, check)
     root.bind_all("<FocusOut>", later, add="+")
     return check
+
+
+class StyledDialog:
+    """The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and
+    a row of rounded buttons, the default one (what Enter presses) in lilac and on the right.
+
+        dlg = StyledDialog(parent, "Anchor words", "Pick one word per tier", "New words are compared...")
+        ttk.Entry(dlg.body, ...).pack()
+        dlg.button("Cancel", dlg.close)
+        dlg.button("Save anchors", save, default=True)
+        dlg.show()                    # centre over the parent and take the input; wait=True blocks
+
+    Buttons line up left to right in the order added, at the right edge (side="left" puts one at the
+    far left instead, like "Show details"). Escape and the close box call on_cancel (default: close).
+    """
+
+    def __init__(self, parent, title, headline=None, intro=None, animator=None, wrap_chars=52):
+        self.parent, self._anim, self._default = parent, animator, None
+        self.on_cancel = self.close
+        bg = PALETTE["bg"]
+        self.win = tk.Toplevel(parent)
+        self.win.title(title)
+        self.win.configure(bg=bg)
+        self.win.resizable(False, False)
+        try:
+            if parent.winfo_viewable():
+                self.win.transient(parent)
+        except tk.TclError:
+            pass
+        self.wrap = max(380, font("body").measure("n") * wrap_chars)
+        box = tk.Frame(self.win, bg=bg, padx=26, pady=22)
+        box.pack(fill="both", expand=True)
+        if headline:
+            tk.Label(box, text=headline, font=font("head"), bg=bg, fg=PALETTE["text"], wraplength=self.wrap,
+                     justify="left").pack(anchor="w")
+        if intro:
+            tk.Label(box, text=intro, font=font("body"), bg=bg, fg=PALETTE["muted"], wraplength=self.wrap,
+                     justify="left").pack(anchor="w", pady=(8 if headline else 0, 0))
+        self.body = tk.Frame(box, bg=bg)
+        self.body.pack(fill="both", expand=True, pady=(14 if headline or intro else 0, 0))
+        self.button_row = tk.Frame(box, bg=bg)
+        self.button_row.pack(fill="x", pady=(18, 0))
+        self._right = tk.Frame(self.button_row, bg=bg)
+        self._right.pack(side="right")
+        self.buttons = {}
+        self.win.bind("<Return>", lambda e: self._default.invoke() if self._default else None)
+        self.win.bind("<Escape>", lambda e: self.on_cancel())
+        self.win.protocol("WM_DELETE_WINDOW", lambda: self.on_cancel())
+
+    def button(self, text, command, default=False, side="right"):
+        """Add a rounded button; `default` makes it the lilac one Enter presses."""
+        row = self._right if side == "right" else self.button_row
+        b = RoundButton(row, text, command, bg=PALETTE["select_bg"] if default else PALETTE["surface"],
+                        font=font("body"), padx=16, pady=6, radius=12, animator=self._anim)
+        b.pack(side="left", padx=(8, 0) if row is self._right and self.buttons else 0)
+        self.buttons[text] = b
+        if default:
+            self._default = b
+        return b
+
+    def show(self, wait=False):
+        """Size to the contents, centre over the parent, take the input (and with wait, block until closed)."""
+        place_dialog(self.win, self.parent)
+        try:                             # some Linux window managers refuse a grab before the window shows
+            self.win.wait_visibility()
+            self.win.grab_set()
+        except tk.TclError:
+            pass
+        self.win.focus_force()
+        if wait:
+            self.win.wait_window()
+
+    def refit(self):
+        """Re-size to the contents after something was shown or hidden."""
+        self.win.update_idletasks()
+        self.win.geometry("")
+
+    def close(self):
+        try:
+            self.win.destroy()
+        except tk.TclError:
+            pass
+
+    def alive(self):
+        try:
+            return bool(self.win.winfo_exists())
+        except tk.TclError:
+            return False
 
 
 def refresh_widgets(widget):
