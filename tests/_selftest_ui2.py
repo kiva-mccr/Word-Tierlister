@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, sys, tempfile, time, types
+import os, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
@@ -33,9 +33,10 @@ assert os.path.realpath(path) == os.path.realpath(cur_path) and len(others) == 1
 root = tk.Tk()
 asked, shown, errors = [], [], []
 answer = {"yes": False}
-T.messagebox.askyesno = lambda title, msg, **k: (asked.append((title, msg)), answer["yes"])[1]
-T.messagebox.showinfo = lambda title, msg, **k: shown.append((title, msg))
-T.messagebox.showerror = lambda title, msg, **k: errors.append((title, msg))
+import app as A
+A.ask_yes_no = lambda title, headline, msg, **k: (asked.append((title, msg)), answer["yes"])[1]
+A.show_message = lambda title, headline, msg, **k: shown.append((title, msg))
+A.show_error = lambda title, msg, **k: errors.append((title, msg))
 store = T.Store(path)
 app = T.App(root, store, T.Definitions(store), note="Resumed your earlier tier list from X", other_saves=others)
 
@@ -49,7 +50,7 @@ assert store.path in root.title()
 # --- startup: the note shows, and the merge offer is asked once (answered "no" here)
 pump(12)
 assert asked and "tierlist.db" in asked[0][1] and "306 placed" in asked[0][1], asked
-assert app.banner.cget("text").startswith("Not merged") or "Resumed" in app.banner.cget("text")
+assert app.toast.cget("text").startswith("Not merged") or "Resumed" in app.toast.cget("text")
 assert store.stats()["placed"] == 26
 n_asked = len(asked)
 app.offer_merge(others)                                   # already answered: it must not ask again
@@ -95,5 +96,20 @@ app.open_browser(); pump(6)
 bw = app.browsers[0]
 assert bw.total == store.stats()["placed"]
 bw.close()
+app.on_close()
+
+# --- every word placed (UI-20): a friendly card in Place, and no tier buttons
+done = T.Store(os.path.join(tempfile.mkdtemp(), "done.db"))
+six = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
+done.insert_words(six); done.set_anchors(six)                     # anchors are placed: nothing left to place
+root = tk.Tk(); app = T.App(root, done, T.Definitions(done)); pump(4)
+assert app.cur_word is None and app.place_empty.winfo_ismapped() and not app.word_card.winfo_ismapped()
+assert app.place_empty.title == "Every word is placed" and not app.tier_row.winfo_ismapped()
+app.on_close()
+# a saved mode whose tab is hidden falls back to Place new words (UI-46)
+fresh = T.Store(os.path.join(tempfile.mkdtemp(), "fresh.db"))
+fresh.insert_words(WORDS[:50]); fresh.set_meta("mode", "conflict")
+root = tk.Tk(); app = T.App(root, fresh, T.Definitions(fresh)); pump(12)
+assert app.mode == "place" and app.mode_switch.visible == {"place"}
 app.on_close()
 print("UI2 OK")

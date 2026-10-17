@@ -16,7 +16,7 @@ ROLES = {
     "choice": (18, "bold"),    # Better / Same / Worse
     "title":  (18, "normal"),
     "head":   (14, "bold"),    # headings inside text panes, small badges
-    "label":  (13, "normal"),  # banner, action buttons
+    "label":  (13, "normal"),  # toast messages, action buttons
     "body":   (12, "normal"),  # everything else
 }
 

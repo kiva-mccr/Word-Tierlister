@@ -1,11 +1,10 @@
-"""The tier chart (UI-13, ui_chart.py): bar sizes and shapes, labels in text colours, growth, pulse, hover."""
+"""The tier chart (UI-13, ui_chart.py): bar sizes and shapes, labels in text colours, growth, pulse, hiding."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import types
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import DistributionChart, compact
+from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip, compact
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
 assert compact(12345) == "12.3K" and compact(20000) == "20K" and compact(1234567) == "1.2M" and compact(3000000) == "3M"
@@ -53,22 +52,56 @@ anim.finish_all(); assert ch.itemcget("bar1", "fill") == TIER_BAR[1]
 x, y = ch.bar_top(1)
 assert abs(x - (ch.winfo_rootx() + (min(ch.coords("bar1")[0::2]) + max(ch.coords("bar1")[0::2])) / 2)) <= 1
 assert abs(y - (ch.winfo_rooty() + min(ch.coords("bar1")[1::2]))) <= 1
-# hover note per bar
-ev = types.SimpleNamespace(x=int((min(ch.coords("bar3")[0::2]) + max(ch.coords("bar3")[0::2])) / 2), y=40)
-assert ch.tier_at(ev.x) == 3 and ch.tier_at(-5) is None
-assert ch._tip_text(ev) == "Tier C: 25 words (11% of placed)"                   # 25 of 236
-ch.tooltip.show_at(ev); root.update()
-assert ch.tooltip.text.startswith("Tier C") and ch.tooltip.win.winfo_ismapped()
-ch.tooltip.hide(); assert ch.tooltip.text == ""
-ch.set([1, 0, 0, 0, 0, 0], animate=False)
-assert ch._tip_text(types.SimpleNamespace(x=ev.x - 3 * (xs[1] - xs[0]), y=40)).endswith("1 word (100% of placed)")
+assert not ch.bind("<Motion>")                                                     # no hover note (UI-36)
 # hidden (other tabs): nothing drawn, no hover note, but the same size
+ch.set([1, 0, 0, 0, 0, 0], animate=False)
 w1, h1 = ch.winfo_reqwidth(), ch.winfo_reqheight()
 ch.show(False); assert not ch.shown and ch.itemcget("bar0", "state") == "hidden" and ch.itemcget("axis", "state") == "hidden"
-assert ch._tip_text(ev) is None and (ch.winfo_reqwidth(), ch.winfo_reqheight()) == (w1, h1)
+assert (ch.winfo_reqwidth(), ch.winfo_reqheight()) == (w1, h1)
 ch.refresh(); assert ch.itemcget("letter0", "state") == "hidden"                     # stays hidden on refresh
 ch.show(True); assert ch.itemcget("letter0", "state") == "normal" and ch.itemcget("bar1", "state") == "hidden"  # (empty)
+# hidden in the middle of a growth or a glow (switching tabs while it runs): it stays hidden (reported)
+ch.set([5, 3, 0, 0, 0, 0]); ch.show(False); anim.finish_all()
+assert all(ch.itemcget(i, "state") == "hidden" for i in ch.find_withtag("all"))
+ch.show(True); ch.pulse(0); ch.show(False); anim.finish_all()
+assert all(ch.itemcget(i, "state") == "hidden" for i in ch.find_withtag("all"))
+ch.show(True)
 # a font change re-measures
 w0 = ch.winfo_reqwidth(); body.configure(size=20); ch.refresh(); assert ch.winfo_reqwidth() > w0
+body.configure(size=12)
+
+# ---- each tab's own view (UI-31)
+# Refine: how settled each tier's order is, a track per tier (100%), the percentage on top, a caption
+sc = SettledChart(root, list("SABCDF"), body, head, animator=anim); sc.pack(); root.update()
+sc.set([0.8, 0.5, 0.0, 0.25, None, 1.0], animate=False)
+def sh(i):
+    ys = sc.coords(f"bar{i}")[1::2]; return max(ys) - min(ys)
+track = max(sc.coords("track0")[1::2]) - min(sc.coords("track0")[1::2])
+assert abs(sh(5) - track) <= 2 and abs(sh(1) - track / 2) <= 2 and sh(0) > sh(1)    # absolute shares, not peak
+assert sc.itemcget("count0", "text") == "80%" and sc.itemcget("count4", "text") == "" and sc.itemcget("bar4", "state") == "hidden"
+assert sc.itemcget("count2", "text") == "0%" and sc.itemcget("bar2", "state") == "hidden"   # none settled yet: no sliver
+assert "settled" in sc.itemcget("caption", "text") and max(sc.bbox("caption")[0::2]) < min(sc.coords("track0")[0::2])
+sc.set([0.2] * 6); assert anim.is_running(f"chart{id(sc)}"); anim.finish_all()           # grows like the tier chart
+sc.show(False); assert sc.itemcget("track0", "state") == "hidden"; sc.show(True)
+# Boundary: six pills, one swap count per join under it, one "swaps" caption, the current join bold
+st = SwapStrip(root, list("SABCDF"), body, head); st.pack(); root.update()
+st.set([3, 2, 4, 1, 0], current=2)
+assert [st.itemcget(f"num{j}", "text") for j in range(5)] == ["3", "2", "4", "1", "0"]
+assert st.itemcget("caption", "text") == "swaps" and len(st.find_withtag("chip")) == 6
+for j in range(5):                                                               # each number under its join
+    nx = st.coords(f"num{j}")[0]
+    assert max(st.coords(f"chip{j}")[0::2]) < nx < min(st.coords(f"chip{j + 1}")[0::2])
+assert st.itemcget("num2", "font") != st.itemcget("num1", "font") and st.itemcget("join2", "fill") == PALETTE["accent"]
+st.set([3, 2, 4, 1, 0], current=None); assert st.itemcget("join2", "fill") == PALETTE["border"]
+st.show(False); st.set([5, 2, 4, 1, 0]); assert st.itemcget("num0", "state") == "hidden"   # stays hidden on redraw
+w0 = st.winfo_reqwidth(); body.configure(size=20); head.configure(size=22); st.refresh()
+assert st.winfo_reqwidth() > w0; body.configure(size=12); head.configure(size=14)
+# Conflicts: one number on a soft card
+title = tkfont.Font(root=root, family="TkDefaultFont", size=20)
+cc = ConflictCard(root, title, body); cc.pack(); root.update()
+assert cc.itemcget("big", "text") == "None" and cc.itemcget("small", "text") == "nicely consistent"
+cc.set(3); assert cc.itemcget("big", "text") == "3" and cc.itemcget("small", "text") == "to look at"
+cc.set(1234); assert cc.itemcget("big", "text") == "1,234"
+cc.show(False); cc.set(2); assert cc.itemcget("big", "state") == "hidden"
 root.destroy()
 print("CHART OK")

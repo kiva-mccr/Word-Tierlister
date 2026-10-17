@@ -3,7 +3,7 @@ installing."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, subprocess, sys
 import tkinter as tk
-from tkinter import ttk
+from widgets import RoundButton
 import deps, errors as E, startup as S
 from theme import PALETTE
 from problems import SetupError
@@ -60,8 +60,9 @@ state.update(missing=["wordfreq"], answer=None)
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and installs == []       # "Not now"
 headline, message, choices, yes, no = asked[-1]
 assert headline == "A package is needed" and (yes, no) == ("Install selected", "Not now")
-assert [c[0] for c in choices] == ["wordfreq"] and choices[0][3:] == (True, True)                   # its own tick box
-assert choices[0][1] == "wordfreq  (required, about 70 MB)"                                        # with its size
+assert [c[0] for c in choices] == ["wordfreq"] and choices[0][3:5] == (True, True)                 # its own tick box
+assert choices[0][1] == " (required, about 70 MB)"                                                 # with its size
+assert choices[0][5] == ("wordfreq", deps.HOMEPAGE["wordfreq"])                                    # its name links (UI-30)
 assert choices[0][2] == deps.PURPOSE["wordfreq"]                                                    # just the reason
 state.update(answer=["wordfreq"])
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is True and installs == [["wordfreq"]]
@@ -90,7 +91,7 @@ assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=instal
 assert installs == [ALL]                                                            # one pip run for what was ticked
 headline, message, choices = asked[-1][:3]
 assert headline == "Some packages are needed" and [c[0] for c in choices] == ALL
-assert choices[1][1] == "nltk  (optional, about 35 MB)" and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
+assert choices[1][1] == " (optional, about 35 MB)" and choices[1][5][1] == deps.HOMEPAGE["nltk"] and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
 assert [c[4] for c in choices] == [True, False]                                     # only the required one gets the *
 # required ticked, optional unticked: installs only the required one, remembers the optional "no"
 state.update(missing=list(ALL), answer=["wordfreq"]); installs.clear(); remembered = []
@@ -144,9 +145,9 @@ def walk(w):
 def drive(action):
     def go():
         dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
-        btns = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TButton"}
+        btns = {w.cget("text"): w for w in walk(dlg) if isinstance(w, RoundButton)}
         assert set(btns) == {"Install now", "Not now"}, set(btns)
-        labels = " ".join(str(w.cget("text")) for w in walk(dlg) if w.winfo_class() == "TLabel")
+        labels = " ".join(str(w.cget("text")) for w in walk(dlg) if w.winfo_class() in ("TLabel", "Label"))
         assert "needed" in labels
         action(dlg, btns)
     return go
@@ -167,7 +168,7 @@ def drive_choices(untick, press):
         assert len(stars) == 1 and str(stars[0].cget("foreground")) == PALETTE["required"]   # red, on wordfreq only
         for label in untick:
             boxes[label].invoke()
-        btns = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TButton"}
+        btns = {w.cget("text"): w for w in walk(dlg) if isinstance(w, RoundButton)}
         btns[press].invoke()
     return go
 CH = [("wordfreq", "wordfreq  (required)", "ranks words", True, True), ("nltk", "nltk  (optional)", "definitions", True, False)]
@@ -178,10 +179,28 @@ root.after(150, drive_choices([], "Not now")); assert pick() is None
 def enter_after_untick():
     dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
     [w for w in walk(dlg) if w.winfo_class() == "TCheckbutton"][1].invoke()      # untick nltk
-    btn = [w for w in walk(dlg) if w.winfo_class() == "TButton" and w.cget("text") == "Install selected"][0]
-    assert str(btn.cget("default")) == "active"                                  # drawn as the default button
+    btn = [w for w in walk(dlg) if isinstance(w, RoundButton) and w.cget("text") == "Install selected"][0]
+    assert btn.cget("bg") == PALETTE["select_bg"]                                # drawn as the default button
     dlg.event_generate("<Return>")
 root.after(150, enter_after_untick); assert pick() == {"wordfreq"}              # Enter = Install selected
+# a choice with a link (UI-30): the name is a quiet link that opens its page; the rest of the label still ticks
+opened = []
+real_open, E.open_link = E.open_link, opened.append
+def drive_link():
+    dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+    link = [w for w in walk(dlg) if getattr(w, "url", None)][0]
+    assert link.cget("text") == "wordfreq" and str(link.cget("fg")) == PALETTE["muted"] and link.cget("cursor") == "hand2"
+    assert tk.font.Font(font=link.cget("font")).actual("underline")
+    link.event_generate("<Button-1>"); dlg.update()
+    rest = [w for w in walk(dlg) if w.winfo_class() == "TLabel" and str(w.cget("text")).startswith(" (required")][0]
+    rest.event_generate("<Button-1>"); dlg.update()                             # unticks wordfreq
+    [w for w in walk(dlg) if isinstance(w, RoundButton) and w.cget("text") == "Install selected"][0].invoke()
+root.after(150, drive_link)
+LINKED = [("wordfreq", " (required, about 70 MB)", "ranks words", True, True, ("wordfreq", deps.HOMEPAGE["wordfreq"])),
+          ("nltk", " (optional)", "definitions", True, False, ("nltk", deps.HOMEPAGE["nltk"]))]
+assert E.ask_choices("T", "H", "M", LINKED, yes="Install selected", parent=root) == {"nltk"}
+assert opened == [deps.HOMEPAGE["wordfreq"]]
+E.open_link = real_open
 # no window possible: the safe answer (False) and no exception
 import contextlib, io
 real_dialog = E._dialog

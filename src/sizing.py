@@ -95,12 +95,15 @@ def center_geometry(w, h, area):
 
 
 def place_dialog(dlg, parent):
-    """Size a dialog to its contents and centre it over `parent`, kept on the screen."""
+    """Size a dialog to its contents and centre it over `parent` (over the screen when the parent is
+    hidden), kept on the screen."""
     dlg.update_idletasks()
     area = usable_area(dlg)
     w = min(dlg.winfo_reqwidth(), area[2])
     h = min(dlg.winfo_reqheight(), area[3])
     try:
+        if not parent.winfo_viewable():
+            raise ValueError("hidden parent")
         px = parent.winfo_rootx() + parent.winfo_width() // 2
         py = parent.winfo_rooty() + parent.winfo_height() // 2
     except Exception:

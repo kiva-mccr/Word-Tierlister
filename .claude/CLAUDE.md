@@ -23,22 +23,38 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
+ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
 
 ## Conventions worth keeping
 - Light theme only. Pastel and cutesy, short tasteful animations, no badges, streaks or goals.
+- A key press makes running animations speed out of the way (Animator.hurry_all), never jump; each message
+  is its own Toast with the newest on top.
 - Keep the pastel look over colour-blind colour tuning wherever labels (letters, counts) already carry the
   meaning; the user chose this for the tier chart.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
+- Placing uses the number keys 1-6, not tier letters (the user dropped UI-29). A held key repeats after
+  500 ms, then every 250 ms (App._repeat_allowed); tests' key() helper sends a press and a release.
+- No ttk.Combobox or tk.Menu popups: they grab input and float over other programs on Linux. Use
+  ChoiceButton / DropMenu. To test focus behaviour for real: Xvfb + openbox + xdotool (installed here).
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
-- Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it).
+  Main window: what shows = min(zoom, biggest size that fits the screen, in 0.1 steps) x grow (window
+  bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
+  minimum sizes at grow 1. Main and Browse zooms are separate and saved.
+- Test speed on a big save (300k-1M words) for anything run per duel or per refresh: a query that sorts a
+  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier.
+- Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
+  else may write the save meanwhile.
+- Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
+  `deps.SIZE`, `PURPOSE` and `HOMEPAGE` entries.
+- Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
+  messagebox. The bottom bar's square ttk buttons stay on purpose.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
@@ -65,19 +81,27 @@ missed). Keep the README current in the same commit as the change (the user aske
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
   "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): equal segments by commonness (rank
+  decades) with a "covers 99.4%" tag to its right, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-18, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-19 (duel result), UI-20, UI-21, UI-23..27, then
-ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, a web link per package in the install dialog). UI-14 stays on hold.
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-33, UI-34, UI-37..42, UI-48, UI-14, then UI-26 (final pass), then
+ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). UI-32 (moving pastel
+background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
+shows which steps touch which window.
+Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek.
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.
+- Tk's own file dialog (Import / Export) still uses tk menus that grab input (can float over other
+  programs on Linux); UI-42's themed file picker replaces it.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- Dialog buttons are still square until UI-24 (the bottom bar keeps its square look on purpose).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
+- Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
+  hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).
+  Ask what OS / save size / key if it happens again.
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.

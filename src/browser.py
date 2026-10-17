@@ -12,14 +12,15 @@ Text and row height scale with the window size (_apply_scale); Ctrl +/-/0 and Ct
 
 import tkinter as tk
 import tkinter.font as tkfont
-from tkinter import messagebox, ttk
+from tkinter import ttk
 
 from constants import TIERS
+from errors import show_message
 from fonts import family
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_TEXT
-from widgets import RoundButton, refresh_widgets
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
+from widgets import ChoiceButton, RoundButton, refresh_widgets
 
 
 class Browser:
@@ -43,6 +44,7 @@ class Browser:
         self._scale_job = None
         self.current = None
         self.loaded = self.total = 0
+        self._count_digits = None                 # digits in the total the minimum size was last set for
         self._seen_version = -1
         self._loading = False
         self.fsize = 0
@@ -60,44 +62,35 @@ class Browser:
         self.style.configure(self.tstyle, font=self.f_body)
         self.style.configure(self.tstyle + ".Heading", font=self.f_bold)
         self.style.configure(f"{self.sid}.TLabel", font=self.f_body)
-        self.style.configure(f"{self.sid}.TButton", font=self.f_body)
-        self.style.configure(f"{self.sid}.TLabelframe.Label", font=self.f_bold)
-        # Dropdowns take their text size from the style (the widget's own font option is ignored for
-        # read-only ones), so the shared font object must be named here or the text clips as it scales.
-        self.style.configure(f"{self.sid}.TCombobox", font=self.f_body, padding=(6, 4))
-        self.win.option_add("*TCombobox*Listbox.font", self.f_body)
+        self.style.configure(f"{self.sid}.Bar.TLabel", font=self.f_body, background=PALETTE["surface"])
+        self.style.configure(f"{self.sid}.Muted.TLabel", font=self.f_body, foreground=PALETTE["muted"])
+        anim, surf = self.app.anim, PALETTE["surface"]
 
-        top = self.top_bar = ttk.Frame(self.win, padding=8)
+        # the toolbar sits on a white band with a hairline under it, like the main window's header (UI-23)
+        top = self.top_bar = tk.Frame(self.win, bg=surf, padx=10, pady=8)
         top.pack(fill="x")
-        ttk.Label(top, text="Search:", style=f"{self.sid}.TLabel").pack(side="left")
+        tk.Frame(self.win, height=1, bg=PALETTE["border"]).pack(fill="x")
+        ttk.Label(top, text="Search:", style=f"{self.sid}.Bar.TLabel").pack(side="left")
         self.search_var = tk.StringVar()
         entry = ttk.Entry(top, textvariable=self.search_var, width=18, font=self.f_body)
         entry.pack(side="left", padx=6)
         self.search_var.trace_add("write", lambda *_: self._debounce())
-        ttk.Label(top, text="Show:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
+        ttk.Label(top, text="Show:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.filter_var = tk.StringVar(value="All placed")
-        cb = ttk.Combobox(
-            top, textvariable=self.filter_var, state="readonly", width=11, font=self.f_body,
-            style=f"{self.sid}.TCombobox",
-            values=["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
-        )
-        cb.pack(side="left", padx=6)
-        cb.bind("<<ComboboxSelected>>", lambda e: self.reload())
-        ttk.Label(top, text="Sort:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
+        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
+                     on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
+        ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.sort_var = tk.StringVar(value="Default")
-        sc = ttk.Combobox(top, textvariable=self.sort_var, state="readonly", width=10,
-                          font=self.f_body, style=f"{self.sid}.TCombobox", values=list(Store.SORTS))
-        sc.pack(side="left", padx=6)
-        sc.bind("<<ComboboxSelected>>", lambda e: self.reload())
-        ttk.Button(top, text="A+", width=3, style=f"{self.sid}.TButton",
-                   command=lambda: self.zoom_by(1)).pack(side="right")
-        ttk.Button(top, text="A-", width=3, style=f"{self.sid}.TButton",
-                   command=lambda: self.zoom_by(-1)).pack(side="right", padx=(0, 4))
-        self.count_lbl = ttk.Label(top, text="", style=f"{self.sid}.TLabel")
+        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=self.reload, font=self.f_body,
+                     animator=anim, canvas_bg=surf).pack(side="left", padx=6)
+        for text, delta in (("A+", 1), ("A-", -1)):
+            RoundButton(top, text, lambda d=delta: self.zoom_by(d), font=self.f_body, padx=8, pady=4, radius=10,
+                        flat=True, animator=anim, canvas_bg=surf).pack(side="right", padx=(2, 0))
+        self.count_lbl = ttk.Label(top, text="", style=f"{self.sid}.Bar.TLabel", foreground=PALETTE["muted"])
         self.count_lbl.pack(side="right", padx=10)
 
         mid = ttk.Frame(self.win)
-        mid.pack(fill="both", expand=True, padx=8)
+        mid.pack(fill="both", expand=True, padx=10, pady=(10, 0))
         self.vsb = ttk.Scrollbar(mid, orient="vertical")
         self.tree = ttk.Treeview(mid, columns=("tier", "word", "rating", "games", "freq"),
                                  show="headings", selectmode="browse", style=self.tstyle,
@@ -109,7 +102,7 @@ class Browser:
             self.tree.heading(col, text=text)
             self.tree.column(col, anchor=anchor)
         for t in range(len(TIERS)):
-            self.tree.tag_configure(f"t{t}", background=TIER_COLORS[t], foreground=TIER_TEXT)
+            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
         self.tree.pack(side="left", fill="both", expand=True)
         self.vsb.pack(side="right", fill="y")
         # Selection is shown as an outline round the row (the row keeps its tier colour). Treeview
@@ -119,24 +112,25 @@ class Browser:
         self.tree.bind("<Configure>", lambda e: self._draw_outline(), add="+")
         self.tree.bind("<Double-1>", lambda e: self.refine())
 
-        btns = self.btn_bar = ttk.Frame(self.win, padding=8)
+        btns = self.btn_bar = ttk.Frame(self.win, padding=(10, 8))
         btns.pack(fill="x")
         ttk.Label(btns, text="Move to:", style=f"{self.sid}.TLabel").pack(side="left")
         for t in range(len(TIERS)):
             RoundButton(btns, TIERS[t], lambda t=t: self.move(t), bg=TIER_COLORS[t], font=self.f_bold,
-                        padx=10, pady=3, radius=10, animator=self.app.anim).pack(side="left", padx=2)
-        ttk.Button(btns, text="Unplace (back to queue)", style=f"{self.sid}.TButton",
-                   command=self.unplace).pack(side="left", padx=10)
-        ttk.Button(btns, text="Refine this word", style=f"{self.sid}.TButton",
-                   command=self.refine).pack(side="left")
-        ttk.Button(btns, text="Refresh", style=f"{self.sid}.TButton",
-                   command=lambda: self.reload(keep_view=True)).pack(side="right")
+                        padx=10, pady=3, radius=10, animator=anim).pack(side="left", padx=2)
+        for text, command, padx in (("Unplace (back to queue)", self.unplace, (12, 4)),
+                                    ("Refine this word", self.refine, (4, 0))):
+            RoundButton(btns, text, command, bg=surf, font=self.f_body, padx=12, pady=3, radius=10,
+                        animator=anim).pack(side="left", padx=padx)
+        RoundButton(btns, "Refresh", lambda: self.reload(keep_view=True), font=self.f_body, padx=12, pady=3,
+                    radius=10, flat=True, animator=anim).pack(side="right")
 
-        dfr = ttk.LabelFrame(self.win, text="Definition", style=f"{self.sid}.TLabelframe")
-        dfr.pack(fill="x", padx=8, pady=(0, 8))
-        self.def_text = tk.Text(dfr, height=7, wrap="word", state="disabled", font=self.f_body)
+        # the definition: a muted heading over a white pane with a hairline (no grooved frame)
+        ttk.Label(self.win, text="Definition", style=f"{self.sid}.Muted.TLabel").pack(anchor="w", padx=12)
+        self.def_text = tk.Text(self.win, height=7, wrap="word", state="disabled", font=self.f_body,
+                                padx=10, pady=8)
         self.def_text.tag_configure("head", font=self.f_bold)
-        self.def_text.pack(fill="x", padx=4, pady=4)
+        self.def_text.pack(fill="x", padx=10, pady=(2, 10))
 
         # Ctrl + / Ctrl - / Ctrl 0 and Ctrl+mouse wheel zoom the text.
         for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1), ("<Control-KP_Add>", 1),
@@ -200,7 +194,7 @@ class Browser:
         # Row height must be set explicitly: the tree does not derive it from the font.
         self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
         self._set_columns()
-        refresh_widgets(self.btn_bar)               # the tier buttons use the shared fonts
+        refresh_widgets(self.win)                   # the tier buttons and Show / Sort use the shared fonts
         self._update_minsize()
 
     def _col_widths(self):
@@ -245,7 +239,7 @@ class Browser:
         self.f_bold.configure(size=12)
         self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
         self._set_columns()
-        refresh_widgets(self.btn_bar)
+        refresh_widgets(self.win)
         area = usable_area(self.app.root)
         nw, nh = self._needed_size()
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
@@ -305,13 +299,13 @@ class Browser:
 
     def _longest_count(self):
         """The longest text the word count can show for the current total (for the minimum size)."""
-        t = max(getattr(self, "total", 0) or 0, 1)
+        t = max(self.total, 1)
         return f"{t:,} of {t:,} (more on scroll)"
 
     def _update_count(self):
         """Show 'N words' or 'N of M (more on scroll)'. A total with more digits than before raises the
         window's minimum size, so the count is never clipped."""
-        if len(f"{self.total:,}") != getattr(self, "_count_digits", None):
+        if len(f"{self.total:,}") != self._count_digits:
             self._count_digits = len(f"{self.total:,}")
             self._update_minsize()
         if self.loaded < self.total:
@@ -412,8 +406,7 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            messagebox.showinfo("Anchor word", f"'{w}' is an anchor. Change anchors in Settings first.",
-                                parent=self.win)
+            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
             return
         self.store.place(w, tier)
         self.app.after_external_change()
@@ -425,8 +418,7 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            messagebox.showinfo("Anchor word", f"'{w}' is an anchor. Change anchors in Settings first.",
-                                parent=self.win)
+            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
             return
         self.store.unplace(w)
         self.app.after_external_change()
@@ -439,7 +431,7 @@ class Browser:
             return
         row = self.store.get_word(w)
         if row is None or row["tier"] is None:
-            messagebox.showinfo("Not placed", "Place the word in a tier first, then refine it.",
-                                parent=self.win)
+            show_message("Not placed", f"'{w}' is not placed yet", "Place the word in a tier first, then refine it.",
+                         parent=self.win)
             return
         self.app.start_focus(w)

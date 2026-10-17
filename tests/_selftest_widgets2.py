@@ -2,11 +2,12 @@
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
 DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
+import time
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from widgets import ChoiceButton, EmptyCard, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -47,18 +48,15 @@ assert [x.cget("bg") for x in row.buttons] == TIER_COLORS
 xs = [x.winfo_x() for x in row.buttons]
 assert xs == sorted(xs), "pills run S..F left to right"
 ys = row.buttons[2].coords("label")[1]
-row.press(2); update(1)
-assert picked == [2] and row.buttons[2].coords("label")[1] == ys + 2           # action ran, pill dipped
+row.buttons[2].flash(); update(1)
+assert row.buttons[2].coords("label")[1] == ys + 2                             # the key's dip (UI-18 calls it)
 root.after(150, root.quit); root.mainloop()
-assert row.buttons[2].coords("label")[1] == ys                                 # ...and came back up
-row.press(9); assert picked == [2]                                             # out of range: nothing
-row.buttons[0].set_enabled(False); row.press(0); assert picked == [2]          # disabled: nothing
-row.set_enabled(True); row.press(0); assert picked == [2, 0]
-# a click on a pill picks too
+assert row.buttons[2].coords("label")[1] == ys                                 # ...and back up
+# a click on a pill picks it
 p = row.buttons[5]
 p.event_generate("<Enter>"); p.event_generate("<ButtonPress-1>", x=6, y=8); update()
 p.event_generate("<ButtonRelease-1>", x=6, y=8); update()
-assert picked == [2, 0, 5]
+assert picked == [5]
 # pill shape: radius clamps to half the height (a true pill)
 assert str(p.itemcget("shape", "smooth")) in ("1", "true")
 
@@ -84,16 +82,26 @@ assert duel.tie.winfo_rooty() > duel.left.winfo_rooty() + duel.left.winfo_height
 duel.left.event_generate("<Enter>"); update(); anim.finish_all()
 assert duel.left.itemcget("shape", "outline") == PALETTE["accent"] and float(duel.left.itemcget("shape", "width")) == 3
 duel.left.event_generate("<Leave>"); update()
-yl = duel.left.coords("label")[1]
-for side in DuelCards.SIDES:
-    duel.press(side)
-assert answers == ["left", "right", "tie", "skip"]
-update(1); assert duel.left.coords("label")[1] == yl + 2                     # the pressed dip
-duel.press("nonsense"); assert len(answers) == 4
-duel.set_enabled(False); duel.press("left"); assert len(answers) == 4        # disabled: nothing
-duel.show("a", "b"); duel.press("right"); assert answers[-1] == "right"      # show() re-enables
+assert set(duel.buttons) == {"left", "right", "tie", "skip"}
+duel.set_enabled(False); assert not any(b.enabled for b in duel.buttons.values())
+duel.show("a", "b"); assert all(b.enabled for b in duel.buttons.values())    # show() re-enables
 b = duel.tie; b.event_generate("<Enter>"); b.event_generate("<ButtonPress-1>", x=6, y=6); update()
 b.event_generate("<ButtonRelease-1>", x=6, y=6); update(); assert answers[-1] == "tie"
+
+# resolve (UI-19): the winner lifts, the loser dims, then the next pair
+nxt = []
+duel.show("a", "b"); update(); anim.finish_all()
+yw = duel.right.coords("label")[1]
+duel.resolve("right", anim, lambda: nxt.append(1)); update(1)
+assert not duel.left.enabled and duel.right.enabled and not nxt                 # loser dims at once
+anim.finish_all(); update(1)
+assert duel.right.coords("label")[1] == yw - DuelCards.LIFT and nxt == [1]      # winner up, then on to the next
+duel.show("c", "d", colors=(TIER_COLORS[1], TIER_COLORS[2])); update()
+assert duel.left.cget("bg") == TIER_COLORS[1] and duel.right.cget("bg") == TIER_COLORS[2]   # tier colours
+assert duel.right.coords("label")[1] == yw and duel.left.enabled                # the next pair starts fresh
+anim.reduce_motion = True
+duel.resolve("left", anim, lambda: nxt.append(2)); assert nxt == [1, 2]         # Reduce motion: straight on
+anim.reduce_motion = False
 
 # ---- AnchorLadder (UI-9)
 lad = AnchorLadder(root, list("SABCDF"), small, animator=anim); lad.pack(); update()
@@ -151,6 +159,21 @@ assert seg.itemcget("hoverfill", "state") == "hidden"
 assert seg.itemcget("label_refine", "fill") == PALETTE["text"] and seg.itemcget("label_place", "fill") == PALETTE["muted"]
 root.geometry("1300x700"); update(5)
 assert seg.coords("baseline_right")[2] >= seg.winfo_width() - 1                 # follows the window width
+# tabs with nothing to do fold away (UI-46); the open one always stays
+seg.set("place"); anim.finish_all()
+seg.show_only({"boundary"}); update()
+assert anim.is_running(f"tabfold{id(seg)}")                                      # folds, not jumps
+anim.finish_all(); assert seg.visible == {"place", "boundary"}
+assert seg.itemcget("label_refine", "state") == "hidden" and seg.itemcget("label_boundary", "state") == "normal"
+assert seg._index_at(seg.tab_x("refine")) != "refine"                           # a folded tab can't be clicked
+assert seg.tab_x("place") < seg.tab_x("boundary")
+mid = seg.winfo_width() / 2
+assert abs((seg.tab_x("place") + seg.tab_x("boundary")) / 2 - mid) < 2           # the rest stay centred
+seg_click("boundary"); anim.finish_all(); assert seg.get() == "boundary" and changes[-1] == "boundary"
+assert min(seg.coords("tabfill")[0::2]) < seg.tab_x("boundary") < max(seg.coords("tabfill")[0::2])
+seg.show_only(set()); anim.finish_all(); assert seg.visible == {"boundary"}     # the open tab never vanishes
+seg.show_only({"place", "refine", "boundary"}, animate=False)
+assert seg.itemcget("label_refine", "state") == "normal" and not anim.is_running(f"tabfold{id(seg)}")
 
 # ---- DropMenu and HeaderMenus (UI-10)
 ran, chk = [], tk.BooleanVar(value=False)
@@ -195,6 +218,58 @@ seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      #
 assert hm.open_name is None and not hm.drops["File"].is_open()
 hm.open_menu("Edit"); update(); hm.drops["Edit"].invoke(0); update()
 assert ran[-1] == "undo" and hm.open_name is None
+# UI-27: Left / Right move to the neighbouring menu (wrapping); closing hands the keyboard focus back
+hm.open_menu("File"); update()
+hm.drops["File"].win.event_generate("<Right>"); update(); assert hm.open_name == "Edit"
+hm.drops["Edit"].win.event_generate("<Right>"); update(); assert hm.open_name == "File"     # wraps round
+hm.drops["File"].win.event_generate("<Left>"); update(); assert hm.open_name == "Edit"
+hm.close(); update()
+ent = tk.Entry(root); ent.pack(); ent.focus_force(); update()
+hm.open_menu("File"); update(); assert str(root.tk.call("focus")).startswith(str(hm.drops["File"].win))
+hm.drops["File"].win.event_generate("<Escape>"); update()
+assert not hm.drops["File"].is_open() and str(root.tk.call("focus")) == str(ent)       # keys work again
+ent.destroy()
+
+# ---- ChoiceButton (UI-43): a drop-down choice made of a button and a DropMenu (no input grab)
+cwin = tk.Toplevel(root)
+cv = tk.StringVar(value="All tiers"); picked_c = []
+cb = ChoiceButton(cwin, cv, ["All tiers", "S", "A"], on_change=lambda: picked_c.append(cv.get()), font=small,
+                  animator=anim)
+cb.pack(padx=20, pady=20); update()
+assert cb.cget("text").startswith("All tiers") and "\u25be" in cb.cget("text")
+w_all = cb.winfo_reqwidth()
+cv.set("S"); update(); assert cb.cget("text").startswith("S") and cb.winfo_reqwidth() == w_all   # steady width
+cb.toggle(); update()
+assert cb.menu.is_open() and cb.menu in DropMenu.open_menus
+marks = [parts[0].cget("text") for _r, parts, _i in cb.menu._rows]
+assert marks == ["", "\u2713", ""]                                                # a check on the current one
+cb.menu.invoke(2); update()
+assert cv.get() == "A" and picked_c == ["A"] and not cb.menu.is_open() and cb.menu not in DropMenu.open_menus
+cb.set_values(["All boundaries", "S | A"]); cv.set("All boundaries"); update()
+assert cb.cget("text").startswith("All boundaries")
+cb.toggle(); update(); cb.toggle(); update(); assert not cb.menu.is_open()       # clicking again closes it
+
+# ---- UI-43: switching to another program closes every open drop-down; none is "always on top"
+cb.toggle(); hm.open_menu("File"); update()
+assert hm.open_name == "File" and str(hm.drops["File"].win.attributes("-topmost")) in ("0", "False")
+assert len(DropMenu.open_menus) == 2
+close_popups(); update()
+assert hm.open_name is None and not cb.menu.is_open() and not DropMenu.open_menus
+lost = []
+check = watch_focus(root, on_lost=lambda: lost.append(1))
+hm.open_menu("Edit"); update()
+real_tk = root.tk
+class FakeTk:                                                                    # what Tcl says has the focus
+    def __init__(self, answer): self.answer = answer
+    def call(self, *a): return self.answer if a == ("focus",) else real_tk.call(*a)
+    def __getattr__(self, name): return getattr(real_tk, name)
+root.tk = FakeTk("")                                                             # the program lost focus
+check(); root.tk = real_tk; update()
+assert hm.open_name is None and lost == [1]
+hm.open_menu("Edit"); update()
+root.tk = FakeTk(".x.popdown"); check(); root.tk = real_tk                       # focus still inside the program
+assert hm.open_name == "Edit"
+hm.close(); cwin.destroy()
 
 # ---- Toast (UI-11)
 page = tk.Frame(root, width=600, height=300, bg=PALETTE["bg"]); page.pack(); update()
@@ -207,7 +282,7 @@ assert toast.cget("text") == "apple  ->  S" and toast.winfo_ismapped() and other
 assert toast.itemcget("pill", "fill") != TIER_COLORS[0]                         # fading in from the page colour
 anim.finish_all(); assert toast.itemcget("pill", "fill") == TIER_COLORS[0] and toast.itemcget("text", "fill") == PALETTE["text"]
 cx = toast.winfo_rootx() + toast.winfo_width() / 2; px = page.winfo_rootx() + page.winfo_width() / 2
-assert abs(cx - px) <= 2 and toast.winfo_rooty() - page.winfo_rooty() < 20       # centred at the top of the page
+assert abs(cx - px) <= 2 and 0 < (page.winfo_rooty() + page.winfo_height()) - (toast.winfo_rooty() + toast.winfo_height()) <= 20   # centred, near the bottom
 toast.show("pear", ms=5000, in_=page); anim.finish_all()                         # a new message replaces it
 assert toast.cget("text") == "pear" and toast.itemcget("pill", "fill") == TIER_COLORS[0]   # (keeps the last tint)
 toast.hide(); assert toast.cget("text") == "pear"; anim.finish_all(); update()   # fades out, then it is gone
@@ -217,52 +292,62 @@ root.after(120, root.quit); root.mainloop(); anim.finish_all(); update()        
 assert toast.cget("text") == "" and not toast.winfo_ismapped()
 toast.show("x " * 200, ms=1000, in_=page, wraplength=300); anim.finish_all(); update()
 assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40             # long messages wrap
-# fling(): rises from the word, rests, then swipes toward its tier and fades out completely
+# fling(): rises from the card, rests, then flies to its landing point (its tier's bar) and fades out completely
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
-toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-150, hold_ms=60, in_=page)
-update(); x0, y0 = toast_xy()
-assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts at the word, faint
-anim.finish_all(); update(); x1, y1 = toast_xy()
-assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                                 # risen to its resting place
-anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
-assert toast.cget("text") == "apple  ->  S"
-root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: swiping
-mid_x, _ = toast_xy(); assert toast.winfo_ismapped()
-anim.finish_all(); update()
-assert toast.cget("text") == "" and not toast.winfo_ismapped()                  # gone, fully faded
-assert toast.itemcget("pill", "fill") == PALETTE["bg"]
-toast.fling("pear  ->  F", (TIER_COLORS[5], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=150, hold_ms=10, in_=page)
-anim.finish_all(); anim.finish_all(); root.after(40, root.quit); root.mainloop()
-update(); rx, _ = toast_xy(); assert rx >= 0                                    # F swipes to the right
-# target: the last stage flies to a landing point (UI-17: its tier's bar) and calls on_arrive there
 landed = []
-toast.fling("kiwi", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
-            target=(200, -30), on_arrive=lambda: landed.append(1))
-anim.finish_all(); root.after(40, root.quit); root.mainloop(); update()
+toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+            hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
+update(); x0, y0 = toast_xy()
+assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
+anim.finish_all(); update(); x1, y1 = toast_xy()
+assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                 # risen to its resting place
+anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
+assert toast.cget("text") == "apple  ->  S" and not landed
+root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: flying
 xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
 xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
-anim.finish_all(); update(); assert landed == [1] and toast.cget("text") == ""
-toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
-            target=(200, -30), on_arrive=lambda: landed.append(2))
+anim.finish_all(); update()
+assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
+assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
+toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+            hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
 assert landed == [1]                                                           # a replaced fling never "lands"
 toast.hide(); anim.finish_all()
 
+# hurry(): a newer message has started; the old one speeds through its stages and still lands
+toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(100, -30),
+            hold_ms=5000, in_=page, on_arrive=lambda: landed.append(3))
+update(); toast.hurry()
+t0 = time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert landed[-1] == 3 and time.perf_counter() - t0 < 0.6                      # landed well before the 5 s rest
+gone = []
+t2 = Toast(root, small, animator=anim, on_gone=gone.append)
+t2.show("bye", ms=5000, in_=page); update(); t2.hurry()
+t0 = time.perf_counter()
+while t2.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert gone == [t2] and time.perf_counter() - t0 < 0.6                         # a plain message fades out fast
+t2.hurry()                                                                     # already gone: no-op
+t2.destroy()
+
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
-toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=50,
+toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(50, 0),
             hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 # a new message cuts a fling short, and the old one's pending stages do nothing
-toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=10, in_=page)
+toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
 toast.show("new", ms=5000, in_=page); anim.finish_all()
 root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=30, in_=page); update()
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
 assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
 root.after(80, root.quit); root.mainloop(); update()
 assert toast.cget("text") == ""                                                # then simply gone
@@ -296,7 +381,7 @@ dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()
 assert not dr.is_open and not closed and dr.winfo_height() > 1                   # still closing
 anim.finish_all(); update(); assert closed == [1] and not dr.winfo_manager()
 dr.set_open(True); assert dr.is_open
-small.configure(size=14); dr.refresh_fonts()
+small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
 small.configure(size=11)
 
@@ -323,5 +408,43 @@ anim.reduce_motion = True                                                   # Re
 card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)
 assert not card.find_withtag("old") and card.itemcget("word", "fill") == PALETTE["text"]
 anim.reduce_motion = False
+
+# ---- EmptyCard (UI-20)
+ew = tk.Toplevel(root)
+ec = EmptyCard(ew, head, small); ec.pack(); ec.set("No conflicts", "Your answers all agree. " * 4); update()
+assert ec.itemcget("title", "text") == "No conflicts" and ec.itemcget("panel", "fill") == PALETTE["surface2"]
+tb, bb = ec.bbox("title"), ec.bbox("body")
+assert tb[3] <= bb[1] and bb[2] - bb[0] <= small.measure("n" * 34) + 2               # title above; body wraps
+assert ec.winfo_reqwidth() > bb[2] - bb[0] and ec.winfo_reqheight() > bb[3]           # the panel holds both
+ew.destroy()
+
+# ---- StyledDialog (UI-24): headline, intro, body, rounded buttons; Enter = default, Escape = on_cancel
+from fonts import init_fonts
+from widgets import StyledDialog
+init_fonts(root)
+got = []
+dlg = StyledDialog(root, "T", "A headline", "Some intro text", animator=anim)
+tk.Label(dlg.body, text="body").pack()
+dlg.button("Details", lambda: got.append("details"), side="left")
+dlg.button("Cancel", dlg.close)
+dlg.button("Go", lambda: got.append("go"), default=True)
+dlg.show(); update()
+assert dlg.win.cget("bg") == PALETTE["bg"] and all(isinstance(b, RoundButton) for b in dlg.buttons.values())
+xs = {k: b.winfo_rootx() for k, b in dlg.buttons.items()}
+assert xs["Details"] < xs["Cancel"] < xs["Go"]                                 # default rightmost, extras far left
+assert dlg.buttons["Go"].cget("bg") == PALETTE["select_bg"] != dlg.buttons["Cancel"].cget("bg")
+dlg.win.event_generate("<Return>"); update(); assert got == ["go"]
+cancelled = []
+dlg.on_cancel = lambda: cancelled.append(1)
+dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
+dlg.close(); update(); assert not dlg.alive()
+
+# ---- TierChip (UI-28): a rounded pastel tier label, sized from its font
+from widgets import TierChip
+chip = TierChip(root, "S", TIER_COLORS[0], small); chip.pack(); update()
+poly = chip.find_withtag("all")[0]
+assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.itemcget(poly, "smooth") in ("1", "true", "bezier")
+w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
+small.configure(size=11); chip.destroy()
 root.destroy()
 print("WIDGETS2 OK")

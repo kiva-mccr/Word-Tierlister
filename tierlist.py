@@ -26,8 +26,12 @@ How it works
   the most progress), so words you've already done stay done. If progress got split
   across several saves it offers to merge them; File > Import earlier progress merges
   another save file or an exported list (.csv/.txt/.md) any time.
+* The main window's contents grow with it: make it bigger (or maximise it) and the
+  word card, pills, buttons and text grow too (up to 1.75x); View > Zoom sets the
+  size you start from.
 * Browse window (View menu): text and rows scale with the window; Ctrl +/-/0 or
   Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
+* Tab / Shift+Tab move to the next / previous tab.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
   place it by comparing against one anchor word per tier (about 3 questions).
   "Don't know / later" (U) sends a word to the back of the queue; skipped
@@ -38,6 +42,11 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
+* Each tab has its own little view at the top right: the tier chart (Place), how
+  settled each tier's order is (Refine), swaps per boundary (Boundary), and the
+  number of conflicts (Conflicts).
+* A mode's tab only shows once it has work (Refine: a tier with two words;
+  Boundary: two neighbouring tiers with words; Resolve conflicts: a conflict).
 * Every action is committed to SQLite immediately: close the window or lose
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
@@ -60,12 +69,12 @@ live in src/, the self-tests in tests/, check_release.py in tools/, the Claude n
     startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
-    errors.py       friendly error dialog, error handlers, run_guarded (ST-2).
+    errors.py       friendly error / message / question dialogs, error handlers, run_guarded (ST-2).
     browser.py      Browser: the Browse / edit window.
     app.py          App: the main window and all modes.
 
 Layers: constants -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-ui_style, ui_motion, widgets, startup -> browser -> app -> tierlist. Nothing lower imports anything higher, and
+sizing, ui_style, ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
 # ==========================================================================================
@@ -82,7 +91,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #     compares you to yesterday.
 #   - Satisfaction comes from speed, clarity and smooth feedback, not from psychological hooks.
 #   - Motion: every animation <= 250 ms with ease-out; it never blocks input (pressing the next
-#     key finishes the running animation instantly); nothing loops or moves while idle; and
+#     key makes running animations speed out of the way within 90 ms while the new one starts on
+#     top; changed by request from "finishes instantly"); nothing loops or moves while idle; and
 #     View > Reduce motion turns all of it off (UI-4).
 #   - No sound by default.
 #
@@ -100,7 +110,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
-# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7, T-8.
+# Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
+# T-1..T-3 -> T-6, T-7, T-8.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -183,6 +194,24 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           all; anything that must be installed is then asked in the window (ST-3). A program cannot
 #           close a terminal window the user opened themselves; giving the prompt back is the most it
 #           can do. macOS behaves the same way and gets the same treatment if it is cheap.
+# [ ] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
+#           (UI-41). On the first start (and any time from Settings > How words are dealt...), one friendly
+#           page asks how new words should come:
+#           - Order: "Most common first" (strictly by frequency, no randomness), or "Mostly common, a little
+#             shuffled" with the drop-off shape: exponential (default) or gaussian, and its spread (the
+#             UI-41 diagrams show what each does).
+#           - Which words: tick boxes per kind: nouns, verbs, adjectives, adverbs, other (all ticked to
+#             start with), and "only obscene / offensive words" as its own choice. Unticked kinds are
+#             left out of the queue (not deleted: ticking them again brings them back).
+#           - "Hide obscene words" (unticked by default): obscene / offensive words are shown masked
+#             (f***), in the card, the duel cards, Browse and exports, and still sorted normally.
+#           Data: the Wiktionary parse records each word's parts of speech and whether any sense is tagged
+#           vulgar / offensive / derogatory / slur (new columns, migrated like the others). Saves built
+#           before this have no such data: they are filled from WordNet (parts of speech; nltk) where
+#           possible and from the kept Wiktionary file if there is one, else the page offers a one-time
+#           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
+#           Browse (decided): the kinds appear in its Show drop-down only ("Nouns", "Verbs", "Obscene
+#           words"...), so Browse lists just those words; no extra sort.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -291,17 +320,27 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
 #           letter + count on every bar already tell the tiers apart without colour.
 #           Covered by tests/_selftest_chart.py.
-# [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
-#           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
-#           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for
-#           ages. Candidates: (a) plain placed/total; (b) "common-word coverage", the share of the
-#           top ~20k frequency ranks already placed or skipped; (c) the tier chart (UI-13) alone,
-#           with no bar at all. Whatever we pick must stay calm: no goals, no streaks.
+# [ ] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
+#           words are, each segment holding ten times the words of the one before: everyday (frequency rank
+#           top 1,000), common (1,000-10,000), uncommon (10,000-100,000), rare (100,000 and beyond, including
+#           words wordfreq does not know). Each segment fills by the share of its own words placed, so it
+#           is a log scale over commonness: every placed word counts (also zero-frequency ones, which a
+#           coverage measure would ignore), segments fill roughly left to right because the queue favours
+#           common words, and the rare words get a quarter of the bar instead of a millionth of it.
+#           Hover / small text: "everyday 100% · common 97% · uncommon 41% · rare 0.3%"; the segment being
+#           worked in can show its own count ("rare: 1,204 of 640,000").
+#           To the right of the bar, a tag: the share of everyday English the placed words cover (wordfreq
+#           frequency-weighted, e.g. "covers 99.4%"), formatted with as many decimals as it takes to show
+#           the last change (93%, 99.4%, 99.97%) so it never sits at a flat 99%. It is a label only; it does
+#           not drive the bar (on its own it barely moves for rare words).
+#           Both come from per-segment counts and a running coverage sum in the Store (no full scan per
+#           refresh). Calm: no goals, no streaks. Placed / total stays as text. No ETA: this measures the
+#           list, it is not a task running (the ETA rule is for set-up bars).
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
 #           only in a tooltip when you hover over "+N today" (adds Tooltip(widget, text_fn)).
-#           While UI-14 is on hold, the placed/total figure stays.
+#           The placed/total figure stays alongside the UI-14 bar.
 #           Built: app.format_stats(): "Placed 6,506 of 9,006 (72.2%) · 2,500 left · 0 skipped" (duels
 #           dropped from the line; conflicts only when there are some). "+N today" counts the actions
 #           saved since local midnight (Store.actions_since over the undo history, so undo takes one
@@ -326,7 +365,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           pulsing as it arrives. One motion instead of two, and it says where the word went.
 #           Built that way: Toast.fling(target=, on_arrive=) flies the resting message to its bar's top
 #           (DistributionChart.bar_top) over 240 ms, fading, and the bar pulses (chart.pulse) as it lands.
-#           A message replaced mid-way never "lands". Without the chart (other tabs) it swipes sideways.
+#           A message replaced mid-way never "lands". (The sideways swipe was removed in the tidy-up:
+#           placing only happens in Place, where the chart is always there.)
 # [x] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
@@ -337,59 +377,255 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           duels); on_key runs the action, then button.flash(). A disabled button's key is off too (Space
 #           no longer starts a comparison while Compare is greyed out). RoundButton.flash skips the dip with
 #           Reduce motion. Covered in tests/_selftest_ui.py.
-# [ ] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
+# [x] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
 #           dims (~120 ms) before the next pair; a boundary swap shows the two chips trading
 #           places.
-# [ ] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
+#           Built: DuelCards.resolve(side): the answer is saved at once; the winning card rises off its
+#           shadow (the same lift the cards now have on hover) and the other fades to its disabled look
+#           for 120 ms, then the next pair. A key press goes straight on; clicks during it are ignored.
+#           The "two chips trade places" for a boundary swap was left out to keep things lean: the swap
+#           toast already says what moved.
+#           Later (asked for): the duel cards wear their word's tier colour in Refine, Boundary check and
+#           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
+# [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
-# [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
+#           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
+#           holds the Refine / Boundary / Conflicts messages, and Place shows "Every word is placed".
+# [?] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
 #           words under the card, so the eye can pre-read and the flow stays quick.
+#           Shelved (asked for): on the "In consideration" list under Decisions; not built for now.
 #
 # --- Phase 6: polish ---------------------------------------------------------------------------
 # (UI-22, the dark theme toggle, was dropped from the plan by request; IDs are not renumbered.)
-# [ ] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
+# [x] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
 #           and RoundButton "Move to" chips. Keeps its scale-with-window behaviour.
-# [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
+#           Built: the toolbar on a white band with a hairline (like the main header); rows in a soft wash
+#           of their tier colour (theme.TIER_ROW, theme.tint), the selected row in the full colour with its
+#           outline; every button a RoundButton (A- / A+ and Refresh quiet flat ones); the definition a
+#           white pane under a muted heading instead of a grooved frame.
+# [x] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
 #           Merge dialogs match the rest. The bottom bar (Undo, Browse / edit, Definition, key
 #           hints) keeps its current look by request; only dialogs change here.
+#           Built: widgets.StyledDialog (headline, muted intro, body, rounded buttons with the lilac
+#           default on the right; Enter / Escape). Anchors and Queue use it and show problems inline;
+#           errors.py's dialogs (errors, questions, tick boxes) and the new show_message are built on it,
+#           so the merge / import / save-file messages and Browse's notes no longer use tk's messagebox.
+#           errors.py now sits after widgets.py in the layers.
 # [x] SZ-1  Screen- and content-aware window sizing (sizing.py). Windows open at a size derived from
 #           the monitor under the pointer and the dpi scaling, fonts step down (and the definition
 #           pane shortens) when contents would not fit, dialogs are centred on screen.
 #           Browse and start-up windows size from measured text. Browse selection is an outline.
 #           Covered by _selftest_sizing.py.
-# [ ] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
+# [x] UI-25 Responsive sizing. adds scale_fonts(width, height): the word card and buttons scale
 #           with the window, like the Browse window already does.
-# [ ] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
+#           Built: App.grow (_grow_for, _apply_grow): past its preferred size (or what the contents need,
+#           if more) the window scales every shared font in proportion, in 5% steps up to 1.75x, 80 ms
+#           after resizing pauses (~0.1 s per step). Grow only: the minimum size stays the one measured at
+#           the normal size, so the window always shrinks back. A zoom makes the window's current size the
+#           new "normal". Switching tabs while grown does not flash back to the normal size.
+# [x] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
 #           of the current tab (the Tier / Boundary choice in Refine and Boundary) instead of doing its
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
 #           first, then hand focus back to the window whenever the drop-down closes, picked or not.
 #           Related: with a header menu open, Left / Right should move to the neighbouring menu.
-# [ ] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
+#           Checked (openbox + xdotool): Down no longer opens a drop-down (ChoiceButton has no keys of its
+#           own since UI-43), but closing any drop-down with Escape or by clicking its button again left
+#           the program with no keyboard focus at all, so Down (and every key) did nothing until a click.
+#           Fixed: DropMenu gives the focus back to where it was when it opened, only if it still had it
+#           (switching to another program still closes it and leaves that program in front). Left / Right
+#           in an open header menu open the neighbouring one, wrapping round.
+# [x] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
 #           each to be shown and approved first: Refine: how settled each tier's order is (the share of
 #           its words with enough duels), six bars in the same tier colours. Boundary: the five
 #           boundaries S|A .. D|F as a short strip, each with how many checks and swaps it has had.
 #           Conflicts: not a chart, a single number ("3 to look at" / "none - nicely consistent").
-# [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
+#           Approved from mock-ups: Refine as shown; Boundary as the pill strip (option A) with only the swaps,
+#           one number per join and a single "swaps" caption (no check totals); Conflicts as shown.
+#           Built (ui_chart.py): SettledChart (a word counts as settled at App.SETTLED_DUELS = 5 duels;
+#           Store.settled_shares, index-only on the new idx_words_tg, ~50 ms with a million placed words),
+#           SwapStrip (Store.swap_counts from the new swaps table: one row per boundary duel that swapped,
+#           taken off again by undo; counted from now on, earlier swaps were never recorded; the join being
+#           checked is bold), ConflictCard. All four views share one spot in the status band, the current
+#           one raised and the others hidden, so switching tabs never moves the page.
+#           Fixed (reported): switching from Place new words while the chart was still growing (or a bar
+#           glowing) left the chart drawn under the next tab's view; a hidden chart now stays hidden mid-animation.
+# [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
+#           drifting and jiggling slowly. Two things to settle before building:
+#           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
+#             OK to relax that one rule for the background only. Proposed limits: very slow (a full drift
+#             takes many seconds), a few frames a second rather than 60, faint colours just off the
+#             cream, off with Reduce motion (then a still pattern), paused while the window is not in
+#             front or minimised, and never touching the database.
+#           - tk has no transparency: every widget is an opaque rectangle, so a pattern drawn behind the
+#             page would show only in the empty space around the card and buttons, and each widget would
+#             sit on a plain cream box. To look right, the pieces on the page need their canvases to
+#             paint the pattern under themselves, or the page becomes one canvas. Try it on a small
+#             mock-up first and show screenshots before committing to it.
+# [ ] UI-33 Pace and hover-note polish (asked for, four parts):
+#           1. Pace with a timeout: the rate counts only active time. The time between two actions counts
+#              up to a cap (about 2 minutes); a longer gap is a break and adds nothing, so stepping away
+#              does not drag the number down. (Today it is actions / time since the window opened.)
+#           2. Wording: the hover says "about 120 per hour" (not "an hour").
+#           3. The hover note stays where it first appeared (next to what it describes) instead of
+#              following the pointer.
+#           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
+#              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
+#              today", later ones).
+# [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
+#           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
+# [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window
+#           manager: pressing D blocked ~150 ms in a full window-fitting pass, then the first update took
+#           ~280 ms more because every frame of the slide re-fitted and redrew every button (each change
+#           of the page's height ran _fit_big_text + refresh_widgets), so the 200 ms slide had already
+#           ended when the screen first showed it. Fixed: a height-only change of the page only re-centres
+#           (wrapping depends on the width); opening does one quick size check instead of the full fit
+#           (the full fit runs only when the drawer does not fit); _fit_window skips re-scaling fonts that
+#           are already the right size; and the drawer is packed folded, so it never flashes at full
+#           height first. Now: the slide starts within ~25 ms (was ~430) and runs one frame every ~17 ms,
+#           opening and closing. Also: switching tabs finishes a duel result still showing.
+# [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
+# [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
+#           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
+#           stepping back one answer while comparing (confirmed). The Compare button's key hint and the bottom-right
+#           hint follow.
+# [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
+#           in from slightly smaller; preferred over a fade), and a click on the main window's empty
+#           background closes it (not a click on a pill, card or button, so a quick click never loses your
+#           place). Its unsaved state (search, filter, scroll) is
+#           remembered for the next open, so closing by accident costs nothing.
+# [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
+#           the Unplace button, with undo.
+# [ ] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
+#           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
+#           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
+#           toast says so ("table moved to C; the B anchor is now gristle"). If the old tier has no other
+#           words, its anchor slot stays empty until one is picked (confirmed). Today the moved word stays
+#           registered as the old tier's anchor, which is quietly wrong.
+# [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
+#           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
+#           highlighted and redrawn live as spread changes. The intro text shrinks to one line.
+# [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
+#           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
+#           browser in general. Seen on Linux, where tk draws this dialog itself: fix it there, or replace
+#           it with a small themed file picker that matches the app (Windows and macOS keep the system's
+#           own dialog).
+# [x] UI-43 Bug (reported, Linux): open a drop-down, switch to another program (Chrome, say), and the drop-down
+#           stayed in front of that program. First fix (closing menus when focus left) did not work: tried
+#           again with a real window manager (openbox + xdotool), the Tier list (a ttk.Combobox) grabs all
+#           input while open, so no focus event ever arrives. Fixed for real: the Tier / Boundary choice
+#           and Browse's Show / Sort are now ChoiceButtons (a button + the same DropMenu as the header
+#           menus, which never grabs input); watch_focus asks Tcl who has the focus and closes every open
+#           DropMenu when the program loses it; nothing is "always on top". Verified with the window
+#           manager: both the header menus and the choice lists close on switching away. (Tk's own file
+#           dialog still uses tk menus that grab input: replaced by the themed file picker in UI-42.)
+# [x] UI-44 Fixes after trying UI-16..19 (reported): (1) the placement pill no longer flies as a box over
+#           the chart: it shrinks into a small drop as it flies (tk has no transparency, so a full-size
+#           pill was an opaque box); (2) Refine within tier (and every duel) now shows a short result
+#           message, "apple > pear", like Boundary's swap note; (3) sorting fast: each message is its own
+#           pill, the newest on top, and older ones (and every other running animation) speed out of the
+#           way within 90 ms (Animator.hurry / hurry_all, Toast.hurry) instead of jumping; a word that
+#           interrupts the card's transition shows at once; (4) content is centred in the visible page
+#           (tab line to bottom bar), which fixes Resolve conflicts sitting low; (5) more room between
+#           the word card and the tier pills.
+# [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
+#           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
+#           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
+#           scale, so a zoom never pushes the window past the screen. (Browse keeps its own zoom.)
+#           Plain messages (zoom, skip, duel results) now appear just above the bottom bar, clear of the card.
+#           Fixed (reported): on a screen too small for the zoomed contents, switching tabs or closing the
+#           definitions lost the zoom (the screen fit shrank the fonts a step and never grew them back), and
+#           zoom out could then jump. Now what shows is the zoom or the biggest size that fits (0.1 steps),
+#           whichever is smaller, worked out again on every change (remembered per layout, so no flicker);
+#           closing the definitions re-fits once the drawer is out of the way. Zoom out is always one step
+#           and never makes anything bigger; a zoom in that cannot get bigger says "as big as fits" and
+#           changes nothing. In a window enlarged by UI-25, Ctrl + / - step from the size on screen.
+#           Main and Browse keep separate zooms, both saved (meta zoom / browse_zoom). _selftest_zoom.py.
+# [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
+#           while no tier holds two words yet (only at the very start), "Boundary check" while no two
+#           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon
+#           as it has work, and goes when it has none. If you are on a tab when its last piece of work is
+#           done (the last conflict resolved), it stays until you leave it, showing its friendly empty
+#           state (UI-20), so the page never vanishes under you. The saved mode falls back to Place new
+#           words if its tab is hidden at start-up. The check uses cheap counts (Store.tier_counts and
+#           the conflicts count, already read for the status line), never a scan per refresh.
+#           Built: TabBar.show_only(keys) folds tabs away / grows them in; App.modes_with_work(stats).
+# [x] UI-50 Queue randomness Apply (asked for): Apply & reshuffle with nothing changed says "No settings
+#           changed" (inline, cleared by the next edit; the dialog stays open, confirmed) instead of reshuffling. Otherwise the reshuffle runs on
+#           a worker thread while the dialog shows a back-and-forth (indeterminate) bar, its buttons greyed
+#           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
+#           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
+#           Reduce motion the bar stands still.
+# [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
+#           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
+#           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by
+#           view, each with its current key(s). Click a key, press the new one, done; a key already used
+#           in the same view is pointed out ("U is already Don't know: swap them?") instead of silently
+#           taken. "Reset to defaults" per row and for all. Saved in the save (meta keymap), so it
+#           survives restarts. Everything that shows a key follows the change: the button hints (1, Space,
+#           U, Up / B...), the bottom-right hint and the menus' shortcut column. Builds on UI-18's single
+#           key map (App._key_target), which becomes a table the dialog edits. Reserved keys that cannot be
+#           rebound: Escape (cancel / close) and the Alt+letter menu keys.
+# [x] UI-49 Bug (reported): holding a tier key kept placing words, and lagged on after the key was released
+#           (auto-repeat sends ~30 presses a second, faster than placing, so they queued). Fixed: a held key
+#           repeats like a keyboard's own defaults: nothing for 500 ms after the first press, then at most
+#           one action per 250 ms; faster repeats are dropped, so nothing queues. Held keys are recognised on
+#           Windows (presses without releases) and X11 (release + press with the same timestamp). Applies to
+#           every action key. Measured with a real held key (xdotool): 1.5 s held placed 23 words before, 5
+#           now, and none after release.
+#           Later (reported: holding a key in Refine crashed the PC): could not be reproduced here (a held key
+#           in Refine or Boundary on a 300,000-word save: memory flat, ~3.5 duels/s, stops on release), but
+#           two hazards were fixed: Boundary check built every pair of the weakest / strongest 5% of two
+#           tiers (25 million pairs, gigabytes and ~40 s on a big save; now at most 30 a side, ~0.15 s,
+#           Store.BOUNDARY_POOL), and a held key's next repeat now waits 250 ms from when the last action
+#           finished (App._action_done), so a slow save still gets time to draw between repeats.
+# [x] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
 #           under the field instead of separate error boxes, RoundButton Save / Cancel. (UI-24 restyles
 #           the other dialogs; this one gets its own pass because it is the first thing a new user sees.)
-# [ ] UI-29 Tier letters as hotkeys (asked for): in Place new words and in Browse, pressing a tier's
-#           letter (S, A, B, C, D, F) puts the word there, as well as the 1-6 keys and the buttons. Two
-#           letters already have a job and need a new home first: D shows definitions (move it to a key
-#           that is not a tier letter, e.g. Tab or "?", and relabel the Definition button) and, while
-#           comparing to anchors, B means Better (letters stay off while a comparison is open; Up does
-#           Better). In the duel views A / S keep their duel meanings; tier letters only act where a
-#           single word is being placed. The pills' key hints show both: "1 / S".
-# [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
+#           Built: widgets.TierChip (a rounded pastel tier label like the pills), wider entries, a two-line
+#           intro, and per-field notes ("Fill this one in", "Used twice...", "Not in the word list") that
+#           clear as soon as that field is edited. On the shared StyledDialog (UI-24).
+# [-] UI-29 Tier letters as hotkeys: dropped by request; placing stays on the number keys 1-6 (and the
+#           buttons), so D keeps showing definitions and the duel keys keep their meanings.
+# [x] UI-47 Tab moves between the tabs (asked for): Tab goes to the next tab (Place new words -> Refine ->
+#           Boundary -> Conflicts -> back to Place), Shift+Tab to the previous one, skipping any tab hidden
+#           by UI-46. It does exactly what clicking the tab does (the open tab slides over, the view
+#           switches). Tab no longer moves keyboard focus between widgets in the main window (nothing there
+#           takes focus anyway); dialogs and Browse keep the normal Tab between fields. The bottom-right
+#           hint gains "Tab next tab" (no button shows it).
+#           Built: App.next_tab(d), from on_key (so held-key repeat and "nothing while a menu is open" apply);
+#           Shift+Tab is ISO_Left_Tab on X11 and Shift-state Tab elsewhere. The hint shows "Tab next tab"
+#           only while there is more than one tab. Checked with real keys (openbox + xdotool), dialogs too.
+# [x] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
 #           says what each package is for). Each package's name in the dialog links to its own web page
 #           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the
 #           browser with webbrowser.open; styled as a quiet underlined link in the muted colour. In the
 #           terminal (tkinter), the page address is printed after the package's line. One table
 #           (deps.HOMEPAGE) feeds both.
+#           Built: a choice in errors.ask_choices can carry (link text, url); the tick box, the name as the
+#           link (darker on hover, opens with errors.open_link = webbrowser.open), then the rest of the
+#           label, which still ticks the box. terminal_setup prints "More about it: <address>".
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
+#
+# --- Window by window (asked for: every window's planned changes in one place) -------------------------
+#   Main window ........ header + tabs (UI-10, UI-27), status line (UI-15, UI-34), tier chart (UI-13,
+#                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37,
+#                        UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
+#                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
+#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
+#   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
+#   Keyboard shortcuts . new dialog (UI-48)
+#   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
+#   Import / Export .... file dialog (UI-42)
+#   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)
+#   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
+#   First-run progress . shared dialog look (UI-24)
+#   Error dialog ....... shared dialog look (UI-24)
+#   Hover notes ........ still and themed (UI-33)
+#   Source & Updates ... T-6 / T-7 (later)
 #
 # --- Last: definitions as a way in (asked for; at the very end of the plan) --------------------------
 # [ ] W-1  Click any word inside a definition to look it up. Its definition appears (the drawer and the
@@ -483,13 +719,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
-#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be added later: theme.py is built so a second
-#             palette with the same keys drops in); the session count stays as a muted "+N today",
-#             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
-#   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
+#   Settled:  progress bar (UI-14): segments by commonness (rank decades), with the covered share as a tag;
+#             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
+#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
+#             added later: theme.py is built so a second palette with the same keys drops in); the
+#             session count stays as a muted "+N today", with the pace only in a hover note.
+#   In consideration (shelved, not planned; ask before building):
+#             - Next-up peek (UI-21).
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
-#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
+#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
+#             stay notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).
@@ -511,7 +750,7 @@ from definitions import Definitions
 from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, save_progress, write_export)
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_TEXT  # noqa: F401
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
 from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
                         prepare_queue)
 
@@ -519,7 +758,7 @@ from wordsource import (build_word_list, build_wiktionary, compute_penalties,  #
 # Without it everything above still works; main() explains what is missing.
 try:
     import tkinter as tk
-    from tkinter import filedialog, messagebox  # noqa: F401
+    from tkinter import filedialog  # noqa: F401
     from app import App
     from fonts import init_fonts
     from errors import install_handlers, run_guarded

@@ -14,9 +14,9 @@ PALETTE = {
     "accent_text": "#3D3A4B",
     "select_bg": "#DCD2FA",  # selected row / pressed fill
     "shadow":   "#E9E2E6",   # offset shape under cards
-    # feedback banners: (background, text)
+    # feedback messages (toasts): (background, text)
     "ok":       ("#DDF3E4", "#25523A"),
-    "info":     ("#EFEAF4", "#4A4560"),
+    "info":     ("#FFFFFF", "#3D3A4B"),   # plain messages (skip, undo, zoom): a white card
     "warn":     ("#FFF1C9", "#6B5200"),
     "alert":    ("#FFDCC8", "#6B3210"),
     "bad":      ("#FFD9DF", "#7A2438"),
@@ -38,6 +38,17 @@ TIER_TEXT = PALETTE["text"]     # dark ink reads on every tier colour
 # tell tiers apart by colour. (A tuned set that passed the validator was tried and dropped: it lost the
 # pastel look.)
 TIER_BAR = TIER_COLORS
+
+
+def tint(h, amount):
+    """`h` (#RRGGBB) mixed towards white by `amount` (0 = unchanged, 1 = white)."""
+    h = h.lstrip("#")
+    return "#" + "".join(f"{round(int(h[i:i + 2], 16) + (255 - int(h[i:i + 2], 16)) * amount):02X}" for i in (0, 2, 4))
+
+
+# Browse rows (UI-23): a lighter wash of each tier colour, so a long list reads soft; the selected row
+# shows the full tier colour.
+TIER_ROW = [tint(c, 0.55) for c in TIER_COLORS]
 
 
 def _lum(h):

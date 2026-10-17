@@ -32,6 +32,6 @@ s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "mo
 root = tk.Tk()
 app = T.App(root, s, T.Definitions(s)); root.update()
 assert str(app.word_card.cget("font")) == str(F.font("word")), app.word_card.cget("font")
-assert str(app.banner.cget("font")) == str(F.font("label"))
+assert str(app.toast.cget("font")) == str(F.font("label"))
 root.destroy()
 print("FONTS OK")

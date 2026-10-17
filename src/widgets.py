@@ -7,8 +7,10 @@ After a shared Font object is resized, call refresh_widgets(window) so they re-m
 import tkinter as tk
 import tkinter.font as tkfont
 
+from fonts import font
+from sizing import place_dialog
 from theme import PALETTE, TIER_COLORS
-from ui_motion import lerp_color
+from ui_motion import HURRY_MS, lerp_color
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
 DIP = 2                 # pixels the button sinks while pressed
@@ -51,6 +53,7 @@ class RoundButton(tk.Canvas):
         self._fill, self._fg = bg, fg
         self._padx, self._pady, self._radius = padx, pady, radius
         self._lift, self._lifted = lift, False
+        self._minwidth = 0               # ChoiceButton keeps a steady width
         self._flat, self._ring = flat, ring
         self._selected = False
         self._anim = animator
@@ -189,7 +192,7 @@ class RoundButton(tk.Canvas):
             hb = self.bbox(h)
             hw, hh = hb[2] - hb[0], hb[3] - hb[1]
         gap = 1 if self._hint else 0
-        need_w = max(tw, hw) + 2 * self._padx
+        need_w = max(tw + 2 * self._padx, hw + 2 * self._padx, self._minwidth)
         lift = self._lift
         need_h = th + gap + hh + 2 * self._pady + DIP + 1 + lift
         super().configure(width=need_w, height=need_h)
@@ -271,16 +274,16 @@ class RoundButton(tk.Canvas):
                     self._go(self._target())
                 except tk.TclError:
                     pass
-        self.after(ms, undo)
+        self._root().after(ms, undo)         # on the root: the button may close its own window
 
 
 class TierRow(tk.Frame):
     """The six tier pills S..F, each with its key hint (1-6), a hover lift and the pressed dip (UI-7).
 
         row = TierRow(parent, ["S", "A", "B", "C", "D", "F"], on_pick, font("tier"), animator=app.anim)
-        row.press(2)        # what the "3" key does: the B pill dips, then on_pick(2) runs
 
-    `buttons` are the RoundButtons (App.tier_btns), in tier order. on_pick(tier) runs on a click too.
+    `buttons` are the RoundButtons (App.tier_btns), in tier order; on_pick(tier) runs on a click. The 1-6
+    keys are wired in App._key_target (UI-18), which runs the action and then the pill's flash().
     """
 
     def __init__(self, parent, tiers, on_pick, font=None, animator=None, colors=TIER_COLORS, gap=5):
@@ -291,21 +294,32 @@ class TierRow(tk.Frame):
                             hint=str(t + 1), radius=999, animator=animator, lift=3)
             b.grid(row=0, column=t, padx=gap)
             self.buttons.append(b)
-        self._on_pick = on_pick
 
-    def press(self, tier):
-        """The keyboard version of a click: the action runs first (input is never delayed), then the pill
-        shows its pressed dip. Out-of-range tiers and disabled pills do nothing."""
-        if 0 <= tier < len(self.buttons) and self.buttons[tier].enabled:
-            self._on_pick(tier)
-            try:
-                self.buttons[tier].flash()
-            except tk.TclError:
-                pass
 
-    def set_enabled(self, enabled):
-        for b in self.buttons:
-            b.set_enabled(enabled)
+class TierChip(tk.Canvas):
+    """A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for
+    places that name a tier without being a button: the Anchor words dialog (UI-28).
+
+        TierChip(parent, "S", TIER_COLORS[0], font("head")).grid(row=0, column=0)
+    """
+
+    def __init__(self, parent, text, color, font, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self._text, self._color, self._font = text, color, font
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        line = self._font.metrics("linespace")
+        h = int(line * 1.5)
+        w = max(h, self._font.measure(self._text) + line)
+        super().configure(width=w + 2, height=h + 2)
+        self.create_polygon(_rounded_points(1, 1, w, h, h // 2 - 1), smooth=True, fill=self._color,
+                            outline=lerp_color(self._color, PALETTE["text"], 0.14))
+        self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=PALETTE["text"])
+
+    def refresh(self):
+        self._draw()
 
 
 class DuelCards(tk.Frame):
@@ -314,23 +328,20 @@ class DuelCards(tk.Frame):
 
         duel = DuelCards(parent, on_answer, font("pair"), font("body"), animator=app.anim)
         duel.show("apple", "pear")
-        duel.press("left")   # what the Left key does: on_answer("left") runs, then the card dips
 
-    on_answer(side) gets "left", "right", "tie" or "skip", from a click or from press(). `left`, `right`,
-    `tie` and `skip` are the RoundButtons (App.left_btn and friends).
+    on_answer(side) gets "left", "right", "tie" or "skip" on a click; the keys are wired in App._key_target.
+    `left`, `right`, `tie` and `skip` are the RoundButtons (also App.left_btn and friends).
     """
-    SIDES = ("left", "right", "tie", "skip")
 
     def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
         super().__init__(parent, bg=PALETTE["bg"])
-        self._on_answer = on_answer
         self.columnconfigure((0, 1), uniform="duel")
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
-                                padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3,
+                                padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3, lift=self.LIFT,
                                 hint_font=small_font)
         self.left.grid(row=0, column=0, padx=12, sticky="nsew")
         self.right = RoundButton(self, "", lambda: on_answer("right"), bg=PALETTE["right"], font=card_font,
-                                 padx=40, pady=40, radius=24, hint="L  \u2192", animator=animator, ring=3,
+                                 padx=40, pady=40, radius=24, hint="L  \u2192", animator=animator, ring=3, lift=self.LIFT,
                                  hint_font=small_font)
         self.right.grid(row=0, column=1, padx=12, sticky="nsew")
         small = tk.Frame(self, bg=PALETTE["bg"])
@@ -346,26 +357,34 @@ class DuelCards(tk.Frame):
     def buttons(self):
         return {"left": self.left, "right": self.right, "tie": self.tie, "skip": self.skip}
 
-    def show(self, left, right):
-        """Show a new pair (and enable everything)."""
-        self.left.config(text=left)
-        self.right.config(text=right)
+    RESOLVE_MS = 120
+    LIFT = 4                                 # the cards rise this much on hover and when they win
+
+    def resolve(self, side, animator, on_done):
+        """UI-19: the winning card ("left" / "right") lifts a few pixels and the other dims (it fades to its
+        disabled look), then on_done() shows the next pair. A key press (Animator.finish_all) or Reduce
+        motion goes straight to on_done."""
+        win, lose = (self.left, self.right) if side == "left" else (self.right, self.left)
+        lose.set_enabled(False)              # fades to its disabled look
+        win._set_lift(True)                  # rises off its shadow, as on hover
+        animator.run(self.anim_key, self.RESOLVE_MS, lambda p: None, on_done)
+
+    @property
+    def anim_key(self):
+        """The Animator key of the result animation (a key press finishes it: the next pair waits on it)."""
+        return f"duel{id(self)}"
+
+    def show(self, left, right, colors=None):
+        """Show a new pair (and enable everything). `colors` = (left fill, right fill), e.g. each word's tier
+        colour; without it the cards keep their own pastel blue / peach."""
+        left_bg, right_bg = colors or (PALETTE["left"], PALETTE["right"])
+        self.left.config(text=left, bg=left_bg)
+        self.right.config(text=right, bg=right_bg)
         self.set_enabled(True)
 
     def set_enabled(self, enabled):
         for b in self.buttons.values():
             b.set_enabled(enabled)
-
-    def press(self, side):
-        """The keyboard version of a click: on_answer(side) runs first, then that button dips."""
-        b = self.buttons.get(side)
-        if b is None or not b.enabled:
-            return
-        self._on_answer(side)
-        try:
-            b.flash()
-        except tk.TclError:
-            pass
 
 
 class AnchorLadder(tk.Canvas):
@@ -454,9 +473,11 @@ class TabBar(tk.Canvas):
                       animator=app.anim, page_bg=PALETTE["bg"])
         tabs.pack(fill="x")
         tabs.set("refine")        # move to a tab without calling on_change (e.g. after a key)
+        tabs.show_only({"place", "refine"})   # the other tabs fold away (UI-46)
 
     A click on another tab slides the open tab there (SLIDE_MS, ease-out; jumps with Reduce motion) and
-    calls on_change(key). Tabs are all as wide as the widest label and sit centred.
+    calls on_change(key). Tabs are all as wide as the widest label and sit centred. A tab that is shown or
+    hidden grows or folds over SLIDE_MS too; its label shows once its tab is wide enough for it.
     """
     SLIDE_MS = 180
 
@@ -467,7 +488,10 @@ class TabBar(tk.Canvas):
         self._on_change, self._font, self._anim = on_change, font, animator
         self._page = page_bg or PALETTE["bg"]
         self.value = self._keys[0]
-        self._x = 0.0                        # position of the open tab, in tabs (animated)
+        self.visible = set(self._keys)
+        self._open = {k: 1.0 for k in self._keys}   # how open each tab is, 0 (folded away) .. 1 (animated)
+        self._x = 0.0                        # left edge of the open tab, in tab widths (animated)
+        self._sliding = False
         self._hover = None
         self.bind("<Motion>", self._on_motion)
         self.bind("<Leave>", lambda e: self._set_hover(None))
@@ -483,22 +507,25 @@ class TabBar(tk.Canvas):
         h = int(line * 2.1)
         n = len(self.options)
         width = max(self.winfo_width(), n * tab_w + 20)
-        return tab_w, h, (width - n * tab_w) / 2, width       # tab width, height, left edge of the tabs, width
+        shown = sum(self._open.values())
+        return tab_w, h, (width - shown * tab_w) / 2, width   # tab width, height, left edge of the tabs, width
+
+    def _slot(self, key):
+        """Left edge of a tab, in tab widths from the left edge of the tabs."""
+        return sum(self._open[k] for k in self._keys[:self._keys.index(key)])
 
     def _draw(self):
         self.delete("all")
         tab_w, h, x0, width = self._metrics()
         super().configure(height=h + 1, cursor="hand2")
-        n = len(self.options)
-        super().configure(width=n * tab_w + 20)
+        super().configure(width=len(self.options) * tab_w + 20)
         self.create_polygon(0, 0, 0, 0, fill=PALETTE["surface2"], outline="", tags="hoverfill")
         self.create_polygon(0, 0, 0, 0, fill=self._page, outline="", tags="tabfill")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], smooth=True, tags="tabedge")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_left")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_right")
-        for i, (key, label) in enumerate(self.options):
-            self.create_text(x0 + tab_w * i + tab_w / 2, 2 + h / 2, text=label, font=self._font,
-                             tags=("label", f"label_{key}"))
+        for key, label in self.options:
+            self.create_text(0, 2 + h / 2, text=label, font=self._font, tags=("label", f"label_{key}"))
         self._place_tab()
 
     @staticmethod
@@ -514,34 +541,40 @@ class TabBar(tk.Canvas):
         top = 4
         r = max(4, h // 4)
         x1 = x0 + self._x * tab_w + 2
-        x2 = x1 + tab_w - 4
-        shape = self._tab_shape(x1, x2, top, base + 1, r)
+        x2 = x1 + self._open[self.value] * tab_w - 4
+        shape = self._tab_shape(x1, max(x2, x1 + 2 * r), top, base + 1, r)
         self.coords("tabfill", *shape)
         self.coords("tabedge", *shape[2:-2])       # sides and top only: open at the bottom
         self.coords("baseline_left", 0, base, x1, base)
         self.coords("baseline_right", x2, base, width, base)
         hov = self._hover if self._hover != self.value else None
         if hov is not None:
-            i = self._keys.index(hov)
-            hx1 = x0 + i * tab_w + 6
+            hx1 = x0 + self._slot(hov) * tab_w + 6
             self.coords("hoverfill", *self._tab_shape(hx1, hx1 + tab_w - 12, top + 4, base - 1, r))
             self.itemconfigure("hoverfill", state="normal")
         else:
             self.itemconfigure("hoverfill", state="hidden")
-        for key in self._keys:
+        for key, label in self.options:
             on = key == self.value or key == self._hover
-            self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"])
+            w = self._open[key] * tab_w
+            fits = w >= (self._font.measure(label) if self._font else 8 * len(label)) + 4
+            self.coords(f"label_{key}", x0 + self._slot(key) * tab_w + w / 2, 2 + h / 2)
+            self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"],
+                               state="normal" if fits else "hidden")
         self.tag_raise("label")
 
     def _index_at(self, x):
         tab_w, _h, x0, _w = self._metrics()
-        i = int((x - x0) // tab_w) if x >= x0 else -1
-        return self._keys[i] if 0 <= i < len(self._keys) else None
+        for key in self._keys:
+            left = x0 + self._slot(key) * tab_w
+            if key in self.visible and left <= x < left + self._open[key] * tab_w:
+                return key
+        return None
 
     def tab_x(self, key):
         """Centre x of a tab, in canvas pixels (for tests)."""
         tab_w, _h, x0, _w = self._metrics()
-        return x0 + self._keys.index(key) * tab_w + tab_w / 2
+        return x0 + (self._slot(key) + self._open[key] / 2) * tab_w
 
     def _on_motion(self, e):
         self._set_hover(self._index_at(e.x))
@@ -562,15 +595,39 @@ class TabBar(tk.Canvas):
         if key not in self._keys:
             return
         self.value = key
-        start, goal = self._x, float(self._keys.index(key))
+        start = self._x
 
         def frame(p):
-            self._x = start + (goal - start) * p
+            self._sliding = p < 1
+            self._x = start + (self._slot(self.value) - start) * p   # follows tabs that fold meanwhile
             self._place_tab()
         if self._anim is None:
             frame(1.0)
         else:
             self._anim.run(f"tabs{id(self)}", self.SLIDE_MS, frame)
+
+    def show_only(self, keys, animate=True):
+        """Show just these tabs (the open one always stays): the others fold away and new ones grow in
+        (UI-46). animate=False sets them at once (when the window is first built)."""
+        keys = set(keys) | {self.value}
+        if keys == self.visible:
+            return
+        self.visible = keys
+        start = dict(self._open)
+
+        def frame(p):
+            for k in self._keys:
+                goal = 1.0 if k in self.visible else 0.0
+                self._open[k] = start[k] + (goal - start[k]) * p
+            if not self._sliding:
+                self._x = self._slot(self.value)
+            if self._hover not in self.visible:
+                self._hover = None
+            self._place_tab()
+        if self._anim is None or not animate:
+            frame(1.0)
+        else:
+            self._anim.run(f"tabfold{id(self)}", self.SLIDE_MS, frame)
 
     def get(self):
         return self.value
@@ -585,23 +642,28 @@ class DropMenu:
 
         items = [("command", "Export tier list...", app.export, None),
                  ("check", "Reduce motion", app.motion_var, app.toggle_motion),
+                 ("radio", "Tier S", app.filter_var, "S", app.refresh),
                  ("separator",),
                  ("command", "Undo", app.undo, "Ctrl+Z")]
         DropMenu(root, items, font("body")).open(x, y, on_close)
 
     Mouse: hover highlights, click runs the item and closes. Keys: Up / Down move, Return runs, Escape
-    closes. It also closes when the main window is clicked elsewhere, moved, or loses focus.
+    closes. It never grabs input (unlike tk's own menus and ttk drop-down lists), so switching to another
+    program closes it (watch_focus -> close_popups, UI-43); a click elsewhere in the window does too.
     """
+    open_menus = set()                 # every DropMenu showing right now (close_popups closes them all)
 
     def __init__(self, root, items, font=None):
         self.root, self.items, self.font = root, list(items), font
         self.win = None
         self._rows, self._active, self._on_close = [], None, None
+        self._prev_focus = ""
+        self.on_side = None              # called with -1 / +1 for Left / Right (HeaderMenus: the next menu)
 
     @staticmethod
     def labels(items):
         """The labels of the clickable items (for tests and docs)."""
-        return [it[1] for it in items if it[0] in ("command", "check")]
+        return [it[1] for it in items if it[0] in ("command", "check", "radio")]
 
     def is_open(self):
         return self.win is not None
@@ -610,13 +672,11 @@ class DropMenu:
         """Show the menu with its top-left corner at screen position (x, y)."""
         self.close()
         self._on_close = on_close
+        self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
         win = self.win = tk.Toplevel(self.root, bg=PALETTE["border"])
         win.withdraw()
         win.overrideredirect(True)
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
+        # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
         body = tk.Frame(win, bg=PALETTE["surface"], padx=6, pady=6)
         body.pack(padx=1, pady=1)                 # the 1 px border is the window's own colour
         self._rows = []
@@ -631,6 +691,8 @@ class DropMenu:
             mark = ""
             if kind == "check":
                 mark = "\u2713" if target.get() else ""
+            elif kind == "radio":
+                mark = "\u2713" if target.get() == extra else ""
             parts = [tk.Label(row, text=mark, width=2, bg=PALETTE["surface"], fg=PALETTE["accent_text"],
                               font=self.font, anchor="w"),
                      tk.Label(row, text=label, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
@@ -652,7 +714,8 @@ class DropMenu:
         win.bind("<Up>", lambda e: self._step(-1))
         win.bind("<Down>", lambda e: self._step(1))
         win.bind("<Return>", lambda e: self._active is not None and self.invoke(self._active))
-        win.bind("<FocusOut>", self._on_focus_out)
+        win.bind("<Left>", lambda e: self.on_side and self.on_side(-1))
+        win.bind("<Right>", lambda e: self.on_side and self.on_side(1))
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -661,14 +724,11 @@ class DropMenu:
         win.geometry(f"+{x}+{y}")
         win.deiconify()
         win.lift()
+        DropMenu.open_menus.add(self)
         try:
             win.focus_force()
         except tk.TclError:
             pass
-
-    def _on_focus_out(self, _e):
-        # only when focus left the menu for good (not moving between its own rows)
-        self.root.after(50, lambda: self.win is not None and self.win.focus_get() is None and self.close())
 
     def _highlight(self, i):
         self._active = i
@@ -693,14 +753,26 @@ class DropMenu:
             var.set(not var.get())
             if command:
                 command()
+        elif it[0] == "radio":
+            var, value, command = it[2], it[3], (it[4] if len(it) > 4 else None)
+            var.set(value)
+            if command:
+                command()
         else:
             it[2]()
 
     def close(self):
+        """Close it. If it had the keyboard focus, the focus goes back to where it was before it opened, so
+        keys keep working (closing with Escape used to leave no focus at all); not when the program has
+        lost the focus to another one."""
+        DropMenu.open_menus.discard(self)
         if self.win is not None:
             try:
+                had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
                 self.win.destroy()
-            except tk.TclError:
+                if had_focus:                # forced: the window manager does not hand focus back from a
+                    self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
+            except (tk.TclError, KeyError):
                 pass
             self.win = None
             self._rows, self._active = [], None
@@ -709,14 +781,57 @@ class DropMenu:
                 cb()
 
 
+class ChoiceButton(RoundButton):
+    """A drop-down choice (UI-43): a soft button showing the current value and a little arrow; a click opens a
+    DropMenu with the choices (a check mark on the current one). Replaces ttk.Combobox, whose list grabs all
+    input and so stayed in front of other programs.
+
+        ChoiceButton(parent, app.filter_var, ["All tiers", "S", "A"], on_change=app.refresh, font=font("body"))
+
+    It is as wide as its longest choice, so it does not change size when the value does.
+    """
+
+    def __init__(self, parent, variable, values, on_change=None, font=None, animator=None, canvas_bg=None):
+        self.var, self.values, self._on_change = variable, list(values), on_change
+        super().__init__(parent, "", self.toggle, bg=PALETTE["surface"], font=font, padx=12, pady=5, radius=10,
+                         animator=animator, canvas_bg=canvas_bg)
+        self.menu = DropMenu(self.winfo_toplevel(), [], font)
+        variable.trace_add("write", lambda *_: self._show())
+        self._show()
+
+    def set_values(self, values):
+        self.values = list(values)
+        self._show()
+
+    def _show(self):
+        """Label it with the current value; the minimum width fits the longest choice."""
+        f = self._font
+        self._minwidth = max((f.measure(f"{v}   \u25be") for v in self.values), default=0) + 2 * self._padx + 4
+        self.config(text=f"{self.var.get()}   \u25be")
+
+    def toggle(self):
+        if self.menu.is_open():
+            self.menu.close()
+            return
+        self.menu.items = [("radio", v, self.var, v, self._picked) for v in self.values]
+        self.menu.open(self.winfo_rootx(), self.winfo_rooty() + self.winfo_height() + 2)
+
+    def _picked(self):
+        if self._on_change:
+            self._on_change()
+
+    def refresh(self):
+        self._show()
+
+
 class HeaderMenus(tk.Frame):
     """The row of header menu buttons (File, Edit, View, Settings) with their DropMenus (UI-10).
 
         HeaderMenus(parent, [("File", items), ("Edit", items), ...], font("body"), animator=app.anim)
 
     Clicking a button opens its menu under it (clicking again closes it); while one menu is open,
-    hovering another button switches to that menu, like a desktop menu bar. open_menu(name) opens one
-    from the keyboard (Alt+F and friends, F10).
+    hovering another button switches to that menu, like a desktop menu bar, and so do Left / Right.
+    open_menu(name) opens one from the keyboard (Alt+F and friends, F10).
     """
 
     def __init__(self, parent, menus, font=None, animator=None, bg=None):
@@ -731,6 +846,7 @@ class HeaderMenus(tk.Frame):
             b.bind("<Enter>", lambda e, n=name: self._hover_switch(n), add="+")
             self.buttons[name] = b
             self.drops[name] = DropMenu(self.winfo_toplevel(), items, font)
+            self.drops[name].on_side = lambda d, n=name: self._side(n, d)
         top = self.winfo_toplevel()
         top.bind("<ButtonPress-1>", self._click_outside, add="+")
         top.bind("<Configure>", lambda e: e.widget is top and self.close(), add="+")
@@ -767,6 +883,11 @@ class HeaderMenus(tk.Frame):
         except tk.TclError:
             pass
 
+    def _side(self, name, d):
+        """Left / Right in an open menu: open the neighbouring one (wrapping round, like a menu bar)."""
+        names = list(self.buttons)
+        self.open_menu(names[(names.index(name) + d) % len(names)])
+
     def _hover_switch(self, name):
         if self._open is not None and self._open != name:
             self.open_menu(name)
@@ -777,30 +898,35 @@ class HeaderMenus(tk.Frame):
 
 
 class Toast(tk.Canvas):
-    """A small rounded message that fades in over the page, stays a moment, and fades out (UI-11).
+    """A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
 
-        toast = Toast(root, font("label"), animator=app.anim)
+        toast = Toast(root, font("label"), animator=app.anim, on_gone=forget)
         toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
 
-    It floats (place), so showing it never moves anything else. A new message replaces the current one.
-    fling() is the placement version: the message rises out of the word, rests while it pales a little,
-    then swipes sideways (toward its tier) and fades out completely.
+    It floats (place), so showing it never moves anything else. Each message is its own Toast: when a new
+    one starts, the app calls hurry() on the older ones so they speed out of the way underneath it.
+    fling() is the placement version: the message rises out of the word card, rests while it pales a
+    little, then shrinks into a drop that flies to a landing point (its tier's bar), fading out.
     "Fades" are colour blends from the page colour (FADE_IN_MS / FADE_OUT_MS; they jump with Reduce
     motion). cget("text") is the message on screen ("" once it is gone); cget("font") its Font.
+    on_gone(toast) is called when it has fully gone.
     """
     FADE_IN_MS, FADE_OUT_MS = 160, 220
-    RISE_MS, SETTLE_MS, SWIPE_MS = 200, 250, 240      # fling(): rise out of the word, settle, swipe away
+    RISE_MS, SETTLE_MS, FLY_MS = 200, 250, 240        # fling(): rise out of the card, settle, fly to the bar
 
-    def __init__(self, parent, font=None, animator=None, page_bg=None):
+    def __init__(self, parent, font=None, animator=None, page_bg=None, on_gone=None):
         page = page_bg or PALETTE["bg"]
         super().__init__(parent, bd=0, highlightthickness=0, bg=page)
         self._font, self._anim, self._page = font, animator, page
         self._home = page              # the page colour (fling may borrow another backdrop for a moment)
         self._text, self._tint = "", (PALETTE["info"][0], PALETTE["info"][1])
-        self._job = None
+        self._job = self._next = None  # the pending timer, and what it will start (hurry() starts it now)
+        self._hurried = False
         self._wrap = 600
         self._gen = 0                  # bumped by every show / fling, so stale stages of an old one stop
         self._in = None
+        self._on_gone = on_gone
+        self._key = f"toast{id(self)}"
 
     def cget(self, key):
         if key == "text":
@@ -808,6 +934,27 @@ class Toast(tk.Canvas):
         if key == "font":
             return self._font
         return super().cget(key)
+
+    def _later(self, ms, fn):
+        self._next = fn
+        self._job = self.after(ms, self._fire)
+
+    def _fire(self):
+        fn, self._job, self._next = self._next, None, None
+        if fn:
+            fn()
+
+    def hurry(self):
+        """A newer message has started: get out of the way quickly (within HURRY_MS of each stage),
+        finishing the same way as normal (a fling still lands in its bar)."""
+        if not self._text or self._hurried:
+            return
+        self._hurried = True
+        if self._anim is not None:
+            self._anim.hurry(self._key, HURRY_MS)
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._fire()
 
     def show(self, text, tint=None, ms=3500, in_=None, wraplength=None):
         """Show `text` on a pill coloured `tint` = (background, text colour) for `ms` milliseconds."""
@@ -818,20 +965,21 @@ class Toast(tk.Canvas):
             self._wrap = wraplength
         self._draw()
         self._in = in_ or self.master
-        self._put(0, 6)
+        self.place(in_=self._in, relx=0.5, rely=1.0, y=-10, anchor="s")   # near the bottom: never over the card
+        self._on_top()
         self._fade(0.0, 1.0, self.FADE_IN_MS)
-        self._job = self.after(ms, self.hide)
+        self._later(ms, self.hide)
 
-    def fling(self, text, tint, start_mid, rest_bottom, dx, hold_ms=550, in_=None, wraplength=None, under=None,
-              target=None, on_arrive=None):
-        """The placement message: rise from its centre at y=start_mid (the word) until its bottom edge is at
-        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then slide dx pixels sideways
-        (negative = left) while fading out completely. y values are inside `in_`. Every stage is <= 250 ms and a new
-        message (or Animator.finish_all from a key press) cuts it short; with Reduce motion it stays put.
-        `under(y_mid)` returns the colour behind the toast at that height (tk has no transparency, so the
-        toast takes that colour as its own background and blends toward it).
-        With `target` = (x offset from the centre of `in_`, y of the landing point inside `in_`), the last stage
-        flies there instead of swiping sideways (UI-17: into its tier's bar) and calls on_arrive() on landing."""
+    def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
+              on_arrive=None):
+        """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
+        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
+        flies to `target` = (x offset from the centre of `in_`, y of the landing point), fading out, and call
+        on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
+        replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
+        transparency, so a full-size pill would be an opaque box passing over the chart.
+        `under(y_mid)` returns the colour behind the toast at that height (the toast takes that colour as its
+        own background and blends toward it)."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -839,15 +987,15 @@ class Toast(tk.Canvas):
             self._wrap = wraplength
         self._draw()
         self._in = in_ or self.master
-        key = f"toast{id(self)}"
+        self._on_top()
+        key = self._key
         alive = lambda: gen == self._gen
+        w0, h0 = int(self.cget("width")), int(self.cget("height"))
+        from_y, to_y = start_mid - h0 / 2, rest_bottom - h0
 
-        h = int(self.cget("height"))
-        from_y, to_y = start_mid - h / 2, rest_bottom - h
-
-        def backdrop(y):
+        def backdrop(y_mid):
             if under is not None:
-                c = under(y + h / 2)
+                c = under(y_mid)
                 if c != self._page:
                     self._page = c
                     super(Toast, self).configure(bg=c)
@@ -855,7 +1003,7 @@ class Toast(tk.Canvas):
         def rise(p):
             if alive():
                 y = from_y + (to_y - from_y) * p
-                backdrop(y)
+                backdrop(y + h0 / 2)
                 self._put(0, y)
                 self._paint(p)
 
@@ -863,30 +1011,41 @@ class Toast(tk.Canvas):
             if alive():
                 self._paint(1.0 - 0.3 * p)
 
-        def swipe(p):
+        def fly(p):
             if alive():
-                if target is None:
-                    self._put(dx * p, to_y)
-                else:
-                    y = to_y + (target[1] - h / 2 - to_y) * p
-                    backdrop(y)
-                    self._put(target[0] * p, y)
-                self._paint(0.7 * (1.0 - p))
+                scale = 1.0 - 0.85 * p                         # shrinks to a small drop
+                y_mid = to_y + h0 / 2 + (target[1] - to_y - h0 / 2) * p
+                backdrop(y_mid)
+                self._resize(max(4, w0 * scale), max(4, h0 * scale), text_alpha=max(0.0, 1.0 - p * 2.5))
+                self._put(target[0] * p, y_mid - h0 * scale / 2)
+                self._paint(0.7 * (1.0 - 0.6 * p), text=max(0.0, 0.7 - p * 2.5))
 
         def gone():
             if alive():
-                self._text = ""
-                self.place_forget()
-                self._page = self._home
-                super(Toast, self).configure(bg=self._home)
+                self._gone()
                 if on_arrive is not None:
                     on_arrive()
 
+        def to_fly():
+            if alive():
+                self._anim_run(key, HURRY_MS if self._hurried else self.FLY_MS, fly, gone)
+
         def after_rise():
             if alive():
-                self._job = self.after(hold_ms, lambda: alive() and self._anim_run(key, self.SWIPE_MS, swipe, gone))
+                if self._hurried:
+                    to_fly()
+                    return
+                self._later(hold_ms, to_fly)
                 self._anim_run(key, self.SETTLE_MS, settle)
-        self._anim_run(key, self.RISE_MS, rise, after_rise)
+        self._anim_run(key, HURRY_MS if self._hurried else self.RISE_MS, rise, after_rise)
+
+    def _gone(self):
+        self._text = ""
+        self.place_forget()
+        self._page = self._home
+        super().configure(bg=self._home)
+        if self._on_gone is not None:
+            self._on_gone(self)
 
     def _anim_run(self, key, ms, frame, done=None):
         if self._anim is None:
@@ -899,31 +1058,34 @@ class Toast(tk.Canvas):
     def _reset(self):
         """Stop whatever the previous message was doing (its pending stages see a new generation)."""
         self._gen += 1
+        self._hurried = False
         if self._page != self._home:
             self._page = self._home
             super().configure(bg=self._home)
         if self._job is not None:
             self.after_cancel(self._job)
-            self._job = None
+            self._job = self._next = None
         if self._anim is not None:
-            self._anim.finish(f"toast{id(self)}")
+            self._anim.finish(self._key)
 
     def _put(self, x, y):
-        self.place(in_=self._in, relx=0.5, x=int(x), y=int(y), anchor="n")
+        self.place(in_=self._in, relx=0.5, rely=0, x=int(x), y=int(y), anchor="n")
+
+    def _on_top(self):
+        """Raise above everything once, when a message starts (not every frame: then a newer message,
+        started later, stays above an older one still flying out)."""
         self.tk.call("raise", self._w)          # (Canvas.lift raises canvas items, not the widget)
 
     def hide(self):
         """Fade out now (also what happens when the time is up)."""
         if self._job is not None:
             self.after_cancel(self._job)
-            self._job = None
+            self._job = self._next = None
         if not self._text:
             return
-
-        def gone():
-            self._text = ""
-            self.place_forget()
-        self._fade(1.0, 0.0, self.FADE_OUT_MS, gone)
+        gen = self._gen
+        self._fade(1.0, 0.0, HURRY_MS if self._hurried else self.FADE_OUT_MS,
+                   lambda: gen == self._gen and self._gone())
 
     def _draw(self):
         self.delete("all")
@@ -935,17 +1097,26 @@ class Toast(tk.Canvas):
         x1, y1, x2, y2 = self.bbox(t)
         w = min(x2 - x1, self._wrap) + 2 * padx
         h = (y2 - y1) + 2 * pady
+        self._line, self._pady = line, pady
         super().configure(width=w + 2, height=h + 2)
         self.create_polygon(_rounded_points(1, 1, w, h, min(h // 2, line)), smooth=True, tags="pill")
         self.coords(t, 1 + w / 2, 1 + pady)
         self.tag_raise("text")
 
-    def _paint(self, a):
+    def _resize(self, w, h, text_alpha=1.0):
+        """Redraw the pill at another size (the flying drop); the text stays centred, then fades away."""
+        w, h = int(w), int(h)
+        super().configure(width=w + 2, height=h + 2)
+        self.coords("pill", *_rounded_points(1, 1, w, h, max(2, min(h // 2, self._line))))
+        self.coords("text", 1 + w / 2, 1 + max(0, (h - self._line) / 2))
+        self.itemconfigure("text", state="normal" if text_alpha > 0 else "hidden")
+
+    def _paint(self, a, text=None):
         bg, fg = self._tint
         try:
             self.itemconfigure("pill", fill=lerp_color(self._page, bg, a),
                                outline=lerp_color(self._page, lerp_color(bg, PALETTE["text"], 0.12), a))
-            self.itemconfigure("text", fill=lerp_color(self._page, fg, a))
+            self.itemconfigure("text", fill=lerp_color(self._page, fg, a if text is None else text))
         except tk.TclError:
             pass
 
@@ -955,7 +1126,7 @@ class Toast(tk.Canvas):
             if done:
                 done()
             return
-        self._anim.run(f"toast{id(self)}", ms, lambda p: self._paint(a + (b - a) * p), done)
+        self._anim.run(self._key, ms, lambda p: self._paint(a + (b - a) * p), done)
 
 
 class DefinitionDrawer(tk.Frame):
@@ -974,10 +1145,9 @@ class DefinitionDrawer(tk.Frame):
         super().__init__(parent, bg=PALETTE["bg"])
         self._anim = animator
         body, head = fonts["body"], fonts["head"]
-        self._italic = tkfont.Font(root=self, font=body)
-        self._italic.configure(slant="italic")
         self._body = body
-        inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"])
+        inner = self._inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1,
+                                       highlightbackground=PALETTE["border"])
         inner.pack(fill="x", anchor="n")
         self.text = tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                             padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow")
@@ -985,21 +1155,20 @@ class DefinitionDrawer(tk.Frame):
         t = self.text
         t.tag_configure("head", font=head, spacing1=2, spacing3=4)
         t.tag_configure("num", foreground=PALETTE["muted"])
-        t.tag_configure("pos", font=self._italic, foreground=PALETTE["muted"])
+        t.tag_configure("pos", foreground=PALETTE["muted"])
         t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
-        t.tag_configure("ex", font=self._italic, foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
+        t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
         t.tag_configure("wait", foreground=PALETTE["muted"])
         self._shown = False
-
-    def refresh_fonts(self):
-        """Follow the body font after it was resized (the italic copy is this widget's own)."""
-        self._italic.configure(size=self._body.cget("size"), family=self._body.cget("family"))
 
     def show_words(self, words, get_def):
         """Fill the pane: for each word, its name and its senses (get_def(word) -> text, or None while
         it is still being looked up)."""
         from definitions import parse_definition
         t = self.text
+        italic = (self._body.cget("family"), self._body.cget("size"), "italic")   # follows the body size
+        t.tag_configure("pos", font=italic)
+        t.tag_configure("ex", font=italic)
         t.config(state="normal")
         t.delete("1.0", "end")
         for i, w in enumerate(words):
@@ -1043,12 +1212,20 @@ class DefinitionDrawer(tk.Frame):
         except tk.TclError:
             pass
 
+    def collapse(self):
+        """Fold to nothing before it is packed for opening, so it never shows at full height first."""
+        self.pack_propagate(False)
+        super().configure(height=1)
+
+    def natural_height(self):
+        """The height the contents want (whether or not it is folded right now)."""
+        self.update_idletasks()
+        return self._inner.winfo_reqheight()
+
     def open(self):
         """Ease open from nothing to the height the contents want (the caller has packed it already)."""
         self._shown = True
-        self.update_idletasks()
-        goal = self.winfo_reqheight()
-        self._slide(0, goal, self._natural)
+        self._slide(0, self.natural_height(), self._natural)
 
     def close(self, on_closed=None):
         """Ease shut, then call on_closed (the caller unpacks it there)."""
@@ -1074,6 +1251,51 @@ class DefinitionDrawer(tk.Frame):
                 done()
         else:
             self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
+
+
+class EmptyCard(tk.Canvas):
+    """A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of
+    help, shown instead of greyed-out controls.
+
+        card = EmptyCard(parent, font("title"), font("body"))
+        card.set("No conflicts", "Nicely consistent. Nothing to look at here.")
+    """
+
+    def __init__(self, parent, title_font, body_font, width_chars=34, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self._tf, self._bf, self._chars = title_font, body_font, width_chars
+        self.title = self.text = ""
+        self._draw()
+
+    def set(self, title, text):
+        self.title, self.text = title, text
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        line = self._tf.metrics("linespace")
+        pad, gap = int(line * 1.2), int(line * 0.35)
+        wrap = self._bf.measure("n" * self._chars)
+        t = self.create_text(0, 0, text=self.title, font=self._tf, fill=PALETTE["text"], anchor="n",
+                             justify="center", width=wrap, tags="title")
+        b = self.create_text(0, 0, text=self.text, font=self._bf, fill=PALETTE["muted"], anchor="n",
+                             justify="center", width=wrap, tags="body")
+        tb, bb = self.bbox(t), self.bbox(b)
+        tw, th = (tb[2] - tb[0], tb[3] - tb[1]) if tb else (0, 0)
+        bw, bh = (bb[2] - bb[0], bb[3] - bb[1]) if bb else (0, 0)
+        w = max(tw, bw, wrap * 0.6) + 2 * pad
+        h = th + gap + bh + 2 * int(pad * 0.8)
+        super().configure(width=w + 2, height=h + 2)
+        self.create_polygon(_rounded_points(1, 1, w, h, min(22, h // 3)), smooth=True, fill=PALETTE["surface2"],
+                            outline=PALETTE["border"], tags="panel")
+        top = 1 + int(pad * 0.8)
+        self.coords(t, 1 + w / 2, top)
+        self.coords(b, 1 + w / 2, top + th + gap)
+        self.tag_raise("title")
+        self.tag_raise("body")
+
+    def refresh(self):
+        self._draw()
 
 
 class WordCard(tk.Canvas):
@@ -1162,6 +1384,8 @@ class WordCard(tk.Canvas):
             self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
                              justify="center", anchor="n", tags=("old", "oldsub"))
         self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
+        # sorting fast (this interrupts a running transition): the new word shows at once instead of waiting
+        delay = 0.0 if animator.is_running(f"card{id(self)}") else 0.35
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
         ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
@@ -1170,7 +1394,7 @@ class WordCard(tk.Canvas):
             self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
             if osub:
                 self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
-            q = max(0.0, (p - 0.35) / 0.65)       # the new word starts once the old one is mostly gone
+            q = max(0.0, (p - delay) / (1 - delay))   # the new word starts once the old one is mostly gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
             wx, wy, sy = self._layout
             self.coords("word", wx, wy + back)
@@ -1278,10 +1502,7 @@ class Tooltip:
             return
         win = self.win = tk.Toplevel(self.widget, bg=PALETTE["border"])
         win.overrideredirect(True)
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
+        # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
         self._label = tk.Label(win, text=text, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
                                padx=8, pady=4, justify="left")
         self._label.pack(padx=1, pady=1)
@@ -1307,6 +1528,128 @@ class Tooltip:
             except tk.TclError:
                 pass
             self.win = self._label = None
+
+
+def close_popups():
+    """Close every drop-down the program has open (UI-43): all DropMenus (header menus, ChoiceButtons). Called
+    when the program loses focus, so nothing is left floating in front of another program."""
+    for menu in list(DropMenu.open_menus):
+        menu.close()
+
+
+def watch_focus(root, on_lost=None):
+    """When the whole program loses focus (another program came to the front), close its drop-downs
+    (close_popups) and call on_lost(). Moving focus between the program's own windows does nothing.
+    (ttk drop-down lists cannot be closed this way: they grab all input, so no focus event arrives at
+    all; the program uses ChoiceButton instead.)"""
+    state = {"job": None}
+
+    def check():
+        state["job"] = None
+        try:
+            # ask Tcl, not focus_get(): while a ttk drop-down list is open the focus is in its pop-down,
+            # which tkinter does not know, and focus_get() raises instead of answering
+            focused = root.tk.call("focus")
+        except tk.TclError:
+            return
+        if not str(focused):
+            close_popups()
+            if on_lost:
+                on_lost()
+
+    def later(_e):
+        if state["job"] is None:
+            state["job"] = root.after(120, check)
+    root.bind_all("<FocusOut>", later, add="+")
+    return check
+
+
+class StyledDialog:
+    """The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and
+    a row of rounded buttons, the default one (what Enter presses) in lilac and on the right.
+
+        dlg = StyledDialog(parent, "Anchor words", "Pick one word per tier", "New words are compared...")
+        ttk.Entry(dlg.body, ...).pack()
+        dlg.button("Cancel", dlg.close)
+        dlg.button("Save anchors", save, default=True)
+        dlg.show()                    # centre over the parent and take the input; wait=True blocks
+
+    Buttons line up left to right in the order added, at the right edge (side="left" puts one at the
+    far left instead, like "Show details"). Escape and the close box call on_cancel (default: close).
+    """
+
+    def __init__(self, parent, title, headline=None, intro=None, animator=None, wrap_chars=52):
+        self.parent, self._anim, self._default = parent, animator, None
+        self.on_cancel = self.close
+        bg = PALETTE["bg"]
+        self.win = tk.Toplevel(parent)
+        self.win.title(title)
+        self.win.configure(bg=bg)
+        self.win.resizable(False, False)
+        try:
+            if parent.winfo_viewable():
+                self.win.transient(parent)
+        except tk.TclError:
+            pass
+        self.wrap = max(380, font("body").measure("n") * wrap_chars)
+        box = tk.Frame(self.win, bg=bg, padx=26, pady=22)
+        box.pack(fill="both", expand=True)
+        if headline:
+            tk.Label(box, text=headline, font=font("head"), bg=bg, fg=PALETTE["text"], wraplength=self.wrap,
+                     justify="left").pack(anchor="w")
+        if intro:
+            tk.Label(box, text=intro, font=font("body"), bg=bg, fg=PALETTE["muted"], wraplength=self.wrap,
+                     justify="left").pack(anchor="w", pady=(8 if headline else 0, 0))
+        self.body = tk.Frame(box, bg=bg)
+        self.body.pack(fill="both", expand=True, pady=(14 if headline or intro else 0, 0))
+        self.button_row = tk.Frame(box, bg=bg)
+        self.button_row.pack(fill="x", pady=(18, 0))
+        self._right = tk.Frame(self.button_row, bg=bg)
+        self._right.pack(side="right")
+        self.buttons = {}
+        self.win.bind("<Return>", lambda e: self._default.invoke() if self._default else None)
+        self.win.bind("<Escape>", lambda e: self.on_cancel())
+        self.win.protocol("WM_DELETE_WINDOW", lambda: self.on_cancel())
+
+    def button(self, text, command, default=False, side="right"):
+        """Add a rounded button; `default` makes it the lilac one Enter presses."""
+        row = self._right if side == "right" else self.button_row
+        b = RoundButton(row, text, command, bg=PALETTE["select_bg"] if default else PALETTE["surface"],
+                        font=font("body"), padx=16, pady=6, radius=12, animator=self._anim)
+        b.pack(side="left", padx=(8, 0) if row is self._right and self.buttons else 0)
+        self.buttons[text] = b
+        if default:
+            self._default = b
+        return b
+
+    def show(self, wait=False):
+        """Size to the contents, centre over the parent, take the input (and with wait, block until closed)."""
+        place_dialog(self.win, self.parent)
+        try:                             # some Linux window managers refuse a grab before the window shows
+            self.win.wait_visibility()
+            self.win.grab_set()
+        except tk.TclError:
+            pass
+        self.win.focus_force()
+        if wait:
+            self.win.wait_window()
+
+    def refit(self):
+        """Re-size to the contents after something was shown or hidden."""
+        self.win.update_idletasks()
+        self.win.geometry("")
+
+    def close(self):
+        try:
+            self.win.destroy()
+        except tk.TclError:
+            pass
+
+    def alive(self):
+        try:
+            return bool(self.win.winfo_exists())
+        except tk.TclError:
+            return False
 
 
 def refresh_widgets(widget):

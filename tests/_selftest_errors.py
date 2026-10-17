@@ -1,6 +1,6 @@
 """Friendly errors (ST-2): plain-language messages, the dialog, the safety net and the exit paths."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import contextlib, errno, io, os, sqlite3, sys, tempfile, threading, time, urllib.error
+import contextlib, errno, io, os, sqlite3, sys, tempfile, threading, urllib.error
 import tkinter as tk
 import errors as E
 import problems as P
@@ -77,6 +77,7 @@ assert "KeyError" in open(log).read()                                           
 root = tk.Tk(); root.withdraw()
 from fonts import init_fonts
 from ui_style import apply_ttk_style
+from widgets import RoundButton
 init_fonts(root); apply_ttk_style(root)
 shown.clear()
 log2 = os.path.join(tmp, "h.log")
@@ -119,7 +120,7 @@ def drive():
     assert "Headline here" in labels and "Explain it" in labels
     txt = [w for w in walk(dlg) if isinstance(w, tk.Text)][0]
     assert not txt.winfo_ismapped()
-    btns = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TButton"}
+    btns = {w.cget("text"): w for w in walk(dlg) if isinstance(w, RoundButton)}
     assert set(btns) == {"OK", "Copy details", "Show details"}, set(btns)
     btns["Show details"].invoke(); dlg.update()
     assert txt.winfo_ismapped() and "tb line" in txt.get("1.0", "end")
@@ -135,7 +136,7 @@ assert not [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)]     
 # with no details there is no Copy / Show buttons
 def drive2():
     dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
-    btns = [w.cget("text") for w in walk(dlg) if w.winfo_class() == "TButton"]
+    btns = [w.cget("text") for w in walk(dlg) if isinstance(w, RoundButton)]
     assert btns == ["OK"], btns
     dlg.destroy()
 root.after(150, drive2)
