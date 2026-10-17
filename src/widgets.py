@@ -253,8 +253,9 @@ class RoundButton(tk.Canvas):
             self._command()
 
     def flash(self, ms=110):
-        """Show the pressed look briefly (used to give keyboard shortcuts visible feedback)."""
-        if not self._enabled or self._pressed:
+        """Show the pressed look briefly (used to give keyboard shortcuts visible feedback). Not on a disabled
+        button, and not with Reduce motion (UI-18: the action still happens, only the dip is skipped)."""
+        if not self._enabled or self._pressed or (self._anim is not None and self._anim.reduce_motion):
             return
         self._pressed = True
         self._set_lift(False)

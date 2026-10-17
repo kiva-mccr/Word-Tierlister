@@ -198,6 +198,37 @@ assert len(pages) == 1, pages                                       # the Tier /
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 assert app.opt_frame.winfo_ismapped() and app.opt_frame.winfo_rooty() < app.pair_title.winfo_rooty()
 
+# ---- UI-18: every hotkey dips the button it stands for (after doing its job); never a disabled one
+app.mode_var.set("place"); app.on_mode_change(); app.cmp = None; app._render_place_state(); pump(2)
+flashed = []
+def spy(b, name):
+    real = b.flash
+    b.flash = lambda *a, **k: (flashed.append(name), real(*a, **k))
+for i, b in enumerate(app.tier_btns): spy(b, f"tier{i}")
+spy(app.compare_btn, "compare"); spy(app.later_btn, "later")
+for k, b in app.cmp_btns.items(): spy(b, k)
+for k, b in app.duel.buttons.items(): spy(b, "duel_" + k)
+w = app.cur_word; key("5"); assert flashed[-1] == "tier4" and s.get_word(w)["tier"] == 4   # placed AND dipped
+w = app.cur_word; key("u"); assert flashed[-1] == "later" and s.get_word(w)["skips"] >= 1
+key("space"); assert flashed[-1] == "compare" and app.cmp
+key("Up"); assert flashed[-1] == "better"
+if app.cmp:
+    key("BackSpace"); assert flashed[-1] == "back"
+key("Escape"); assert app.cmp is None
+for m in ("refine",):
+    app.mode_var.set(m); app.on_mode_change(); pump(2)
+    for k, name in (("Left", "duel_left"), ("l", "duel_right"), ("t", "duel_tie"), ("s", "duel_skip")):
+        if app.pair:
+            key(k); assert flashed[-1] == name, (k, flashed[-1:])
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+app.compare_btn.set_enabled(False); n = len(flashed)
+key("space"); pump(1); assert not app.compare_btn._pressed and app.cmp is None    # disabled: its key is off too
+app.compare_btn.set_enabled(all(app.anchors))
+app.motion_var.set(True); app.toggle_motion()
+y0 = app.tier_btns[0].coords("label")[1]; w = app.cur_word; key("1")
+assert s.get_word(w)["tier"] == 0 and app.tier_btns[0].coords("label")[1] == y0              # Reduce motion: no dip
+app.motion_var.set(False); app.toggle_motion()
+
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A
 line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})

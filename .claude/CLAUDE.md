@@ -55,6 +55,8 @@ missed). Keep the README current in the same commit as the change (the user aske
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
 - Finish a step with: tests passing, roadmap ticked, README updated, a short summary.
+- Every prompt, before finishing: tidy what was touched (dead code, stale comments and names, leftover
+  debug lines, unused imports via pyflakes, scratch files out of the repo), then:
 - Last thing on every prompt, after the work itself: update this CLAUDE.md if anything important
   changed (Status, Known gaps, new files, commands, conventions or user preferences), then commit and
   push it with the rest. Keep it short; skip it when nothing worth recording changed.
@@ -67,7 +69,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-16..21, UI-23..27, then
+Done: UI-0..UI-13, UI-15..UI-18, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-19 (duel result), UI-20, UI-21, UI-23..27, then
 ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, why-each-package hovers). UI-14 stays on hold.
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 

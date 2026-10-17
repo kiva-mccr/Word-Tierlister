@@ -327,12 +327,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built that way: Toast.fling(target=, on_arrive=) flies the resting message to its bar's top
 #           (DistributionChart.bar_top) over 240 ms, fading, and the bar pulses (chart.pulse) as it lands.
 #           A message replaced mid-way never "lands". Without the chart (other tabs) it swipes sideways.
-# [ ] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
+# [x] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
 #           Backspace (Better / Same tier / Worse / Back), and in the duel view Left/A, Right/L,
 #           Down/T and S (cards, Tie, Skip). Disabled buttons do not dip. Respects Reduce motion
 #           (no dip, the action still happens). Input is never delayed: the action runs first.
+#           Built: App._key_target(ks) is the one key -> (button, action) map for each view (place, comparing,
+#           duels); on_key runs the action, then button.flash(). A disabled button's key is off too (Space
+#           no longer starts a comparison while Compare is greyed out). RoundButton.flash skips the dip with
+#           Reduce motion. Covered in tests/_selftest_ui.py.
 # [ ] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
 #           dims (~120 ms) before the next pair; a boundary swap shows the two chips trading
 #           places.

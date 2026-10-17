@@ -229,22 +229,26 @@ class App:
 
         self.cmp_row = ttk.Frame(inner)
         self.cmp_row.grid(row=4, column=0, pady=6)
+        self.cmp_btns = {}
         for col, (text, hint, ans, key) in enumerate((("Better", "Up / B", "better", "better"),
                                                       ("Same tier", "E", "same", "same"),
                                                       ("Worse", "Down / W", "worse", "worse"))):
-            RoundButton(self.cmp_row, text, lambda ans=ans: self.cmp_answer(ans), bg=PALETTE[key],
-                        font=font("choice"), padx=22, pady=12, hint=hint, animator=self.anim
-                        ).grid(row=0, column=col, padx=8)
-        RoundButton(self.cmp_row, "Back", self.cmp_back, font=font("body"), padx=14, pady=8, hint="Bksp",
-                    animator=self.anim).grid(row=0, column=3, padx=(24, 0))
+            b = RoundButton(self.cmp_row, text, lambda ans=ans: self.cmp_answer(ans), bg=PALETTE[key],
+                            font=font("choice"), padx=22, pady=12, hint=hint, animator=self.anim)
+            b.grid(row=0, column=col, padx=8)
+            self.cmp_btns[ans] = b
+        self.cmp_btns["back"] = RoundButton(self.cmp_row, "Back", self.cmp_back, font=font("body"), padx=14, pady=8,
+                                            hint="Bksp", animator=self.anim)
+        self.cmp_btns["back"].grid(row=0, column=3, padx=(24, 0))
 
         self.act_row = ttk.Frame(inner)
         self.act_row.grid(row=5, column=0, pady=(16, 0))
         self.compare_btn = RoundButton(self.act_row, "Compare to anchors", self.start_compare,
                                        bg=PALETTE["left"], font=font("label"), hint="Space", animator=self.anim)
         self.compare_btn.grid(row=0, column=0, padx=8)
-        RoundButton(self.act_row, "Don't know / later", self.skip_word, bg=PALETTE["neutral"],
-                    font=font("label"), hint="U", animator=self.anim).grid(row=0, column=1, padx=8)
+        self.later_btn = RoundButton(self.act_row, "Don't know / later", self.skip_word, bg=PALETTE["neutral"],
+                                     font=font("label"), hint="U", animator=self.anim)
+        self.later_btn.grid(row=0, column=1, padx=8)
 
         # ---- pair view
         self.pair_frame = ttk.Frame(self.center)
@@ -849,39 +853,56 @@ class App:
         if low == "d":
             self.toggle_defs()
             return
-        if ks == "BackSpace":
-            if self.mode == "place" and self.cmp:
-                self.cmp_back()
-            else:
-                self.undo()
+        if ks == "BackSpace" and not (self.mode == "place" and self.cmp):
+            self.undo()
             return
+        if self.mode == "place" and not self.cmp and ks == "Escape":
+            return
+        target = self._key_target(ks, low)
+        if target is None:
+            return
+        button, action = target
+        if button is not None and not button.enabled:
+            return                                 # a greyed-out button's key is off too
+        action()                                   # the action first: input is never delayed (UI-18) ...
+        if button is not None:
+            button.flash()                         # ... then the button it stands for dips (not when disabled,
+                                                   # not with Reduce motion: RoundButton.flash checks both)
+
+    def _key_target(self, ks, low):
+        """The one key -> (button, action) map (UI-18), for the current view; None if the key does nothing here.
+        Every hotkey that has a button on screen names it, so pressing the key looks like pressing it."""
         if self.mode == "place":
             if self.cmp:
+                b = self.cmp_btns
                 if ks == "Up" or low == "b":
-                    self.cmp_answer("better")
-                elif ks == "Down" or low == "w":
-                    self.cmp_answer("worse")
-                elif low == "e" or ks in ("equal", "Return"):
-                    self.cmp_answer("same")
-                elif ks == "Escape":
-                    self.cmp = None
-                    self._render_place_state()
-            else:
-                if ks in ("1", "2", "3", "4", "5", "6"):
-                    self.tier_row.press(int(ks) - 1)      # places the word, and the pill dips
-                elif ks == "space":
-                    self.start_compare()
-                elif low == "u" or ks == "question":
-                    self.skip_word()
-        else:
-            if ks == "Left" or low == "a":
-                self.pair_answer("left")
-            elif ks == "Right" or low == "l":
-                self.pair_answer("right")
-            elif ks == "Down" or low == "t":
-                self.pair_answer("tie")
-            elif low == "s":
-                self.skip_pair()
+                    return b["better"], lambda: self.cmp_answer("better")
+                if ks == "Down" or low == "w":
+                    return b["worse"], lambda: self.cmp_answer("worse")
+                if low == "e" or ks in ("equal", "Return"):
+                    return b["same"], lambda: self.cmp_answer("same")
+                if ks == "BackSpace":
+                    return b["back"], self.cmp_back
+                if ks == "Escape":
+                    return None, self._cancel_compare
+                return None
+            if ks in ("1", "2", "3", "4", "5", "6"):
+                t = int(ks) - 1
+                return self.tier_btns[t], lambda: self.place_word(t)
+            if ks == "space":
+                return self.compare_btn, self.start_compare
+            if low == "u" or ks == "question":
+                return self.later_btn, self.skip_word
+            return None
+        sides = {"Left": "left", "a": "left", "Right": "right", "l": "right", "Down": "tie", "t": "tie", "s": "skip"}
+        side = sides.get(ks) or sides.get(low)
+        if side is None:
+            return None
+        return self.duel.buttons[side], lambda: self._on_duel(side)
+
+    def _cancel_compare(self):
+        self.cmp = None
+        self._render_place_state()
 
     # ---- definitions -----------------------------------------------------------------------------------------------------------
     def get_def(self, word):
