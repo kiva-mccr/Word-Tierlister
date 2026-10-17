@@ -31,7 +31,7 @@ replacing the other folders never loses your list.
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults. No dependencies. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, merging. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, boundary swaps, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, queue prep. |
 | `src/saves.py` | Finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
@@ -45,7 +45,7 @@ replacing the other folders never loses your list.
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread) and the window's package install step. |
 | `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` and other small widgets. |
-| `src/ui_chart.py` | The tier chart: six bars, S..F, with counts (Place new words). |
+| `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `SwapStrip` (Boundary), `ConflictCard` (Conflicts). |
 | `src/browser.py` | The Browse / edit window: search, Show / Sort, rows in soft tier colours, Move to, definition. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |

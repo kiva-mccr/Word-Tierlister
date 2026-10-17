@@ -6,6 +6,7 @@ bottom in the order things happen:
     construction (header, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
     undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
 """
+import gc
 import json
 import math
 import os
@@ -26,7 +27,7 @@ from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from ui_chart import DistributionChart
+from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
@@ -102,6 +103,7 @@ class App:
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
+        self._settled_ready = False
 
         init_fonts(root)
         apply_ttk_style(root)
@@ -213,8 +215,17 @@ class App:
         self.today_lbl = ttk.Label(band, anchor="w", foreground=PALETTE["muted"])
         self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
         self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"))
-        self.chart = DistributionChart(band, TIERS, font("body"), font("head"), animator=self.anim)
-        self.chart.pack(side="right")
+        # each tab's own view in one spot (UI-31): they share its space, so switching tabs never moves the page
+        views = tk.Frame(band, bg=PALETTE["bg"])
+        views.pack(side="right", anchor="n")
+        self.chart = DistributionChart(views, TIERS, font("body"), font("head"), animator=self.anim)
+        self.settled_chart = SettledChart(views, TIERS, font("body"), font("head"), animator=self.anim)
+        self.swap_strip = SwapStrip(views, TIERS, font("body"), font("head"))
+        self.conflict_card = ConflictCard(views, font("title"), font("body"))
+        self.tab_views = {"place": self.chart, "refine": self.settled_chart, "boundary": self.swap_strip,
+                          "conflict": self.conflict_card}
+        for v in self.tab_views.values():
+            v.grid(row=0, column=0, sticky="ne")
 
 
         # bottom bar first so it keeps the bottom edge
@@ -666,20 +677,35 @@ class App:
         self.refresh()
 
     def _update_stats(self):
-        """Status band: one quiet line (format_stats), "+N today", and the tier chart."""
+        """Status band: one quiet line (format_stats), "+N today", which tabs show (UI-46), and the current
+        tab's own view: the tier chart, how settled each tier is, the swaps per boundary, or the conflicts."""
         s = self.store.stats()
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
-        # the tier chart belongs to Place new words; the other tabs get their own views later (UI-31)
-        # (it keeps its space in the other tabs, so the page does not move when switching)
         self.mode_switch.show_only(self.modes_with_work(s))
+        # each tab shows its own view in the chart's spot (UI-31); the others keep their space, hidden
+        for mode, view in self.tab_views.items():
+            if view.shown != (mode == self.mode):
+                view.show(mode == self.mode)
+        # on top of the others (a hidden canvas still paints its background); Canvas.lift would raise its items
+        self.root.tk.call("raise", str(self.tab_views[self.mode]))
         if self.mode == "place":
             self.chart.set([s["tiers"].get(t, 0) for t in range(len(TIERS))], animate=self._chart_ready)
             self._chart_ready = True             # the first fill does not grow from zero
-            self.chart.show(True)
-        elif self.chart.shown:
-            self.chart.show(False)
+        else:
             self._chart_ready = False            # back in Place it shows the counts as they are, no growth
+        if self.mode == "refine":
+            self.settled_chart.set(self.store.settled_shares(self.SETTLED_DUELS, s["tiers"]),
+                                   animate=self._settled_ready)
+            self._settled_ready = True
+        else:
+            self._settled_ready = False
+        if self.mode == "boundary":
+            self.swap_strip.set(self.store.swap_counts(), self.swap_strip.current)
+        if self.mode == "conflict":
+            self.conflict_card.set(s["conflicts"])
+
+    SETTLED_DUELS = 5   # duels a word needs before its place in its tier counts as settled (UI-31)
 
     @staticmethod
     def modes_with_work(s):
@@ -914,6 +940,7 @@ class App:
             if not res:
                 return None
             a, b, t = res
+            join = t
             ctx = (f"Boundary {TIERS[t]} | {TIERS[t + 1]}: if you prefer the {TIERS[t + 1]}-tier word, "
                    f"the two swap tiers")
         else:
@@ -924,7 +951,7 @@ class App:
             ctx = "Conflict: your answers about this pair contradict each other. Decide again."
         pair = [a, b]
         random.shuffle(pair)  # avoid left/right position bias
-        return {"left": pair[0], "right": pair[1], "ctx": ctx}
+        return {"left": pair[0], "right": pair[1], "ctx": ctx, "join": join if self.mode == "boundary" else None}
 
     EMPTY = {   # UI-20: what an empty duel tab says instead of greyed-out cards
         "refine": ("Nothing to refine yet", "Duels start as soon as a tier holds two words. Keep placing!"),
@@ -938,6 +965,8 @@ class App:
         self.place_frame.pack_forget()
         self.pair_frame.pack(fill="both", expand=True)
         self.pair = self._pick_pair()
+        if self.mode == "boundary":                # the join being checked is the bold one in the strip (UI-31)
+            self.swap_strip.set(self.swap_strip.counts, self.pair["join"] if self.pair else None)
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:
@@ -1373,6 +1402,8 @@ class App:
                 bar.start(12)                        # the back-and-forth bar: no percentage to show
             dlg.refit()
             self.busy = True                         # nothing else writes to the save meanwhile (_poll_defs)
+            gc.collect()                             # tk objects may only be freed on this thread: tidy up now and
+            gc.disable()                             # pause the collector, so it never runs inside the worker
             result = {}
             worker = threading.Thread(target=lambda: result.update(error=self._reshuffle_quietly(new)), daemon=True)
             worker.start()
@@ -1382,6 +1413,7 @@ class App:
                     dlg.win.after(50, wait)
                     return
                 self.busy = False
+                gc.enable()
                 bar.stop()
                 if result.get("error"):
                     for b in (*dlg.buttons.values(), new_seed):

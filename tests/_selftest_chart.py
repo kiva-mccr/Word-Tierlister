@@ -4,7 +4,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import DistributionChart, compact
+from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip, compact
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
 assert compact(12345) == "12.3K" and compact(20000) == "20K" and compact(1234567) == "1.2M" and compact(3000000) == "3M"
@@ -62,5 +62,40 @@ ch.refresh(); assert ch.itemcget("letter0", "state") == "hidden"                
 ch.show(True); assert ch.itemcget("letter0", "state") == "normal" and ch.itemcget("bar1", "state") == "hidden"  # (empty)
 # a font change re-measures
 w0 = ch.winfo_reqwidth(); body.configure(size=20); ch.refresh(); assert ch.winfo_reqwidth() > w0
+body.configure(size=12)
+
+# ---- each tab's own view (UI-31)
+# Refine: how settled each tier's order is, a track per tier (100%), the percentage on top, a caption
+sc = SettledChart(root, list("SABCDF"), body, head, animator=anim); sc.pack(); root.update()
+sc.set([0.8, 0.5, 0.0, 0.25, None, 1.0], animate=False)
+def sh(i):
+    ys = sc.coords(f"bar{i}")[1::2]; return max(ys) - min(ys)
+track = max(sc.coords("track0")[1::2]) - min(sc.coords("track0")[1::2])
+assert abs(sh(5) - track) <= 2 and abs(sh(1) - track / 2) <= 2 and sh(0) > sh(1)    # absolute shares, not peak
+assert sc.itemcget("count0", "text") == "80%" and sc.itemcget("count4", "text") == "" and sc.itemcget("bar4", "state") == "hidden"
+assert sc.itemcget("count2", "text") == "0%" and sc.itemcget("bar2", "state") == "hidden"   # none settled yet: no sliver
+assert "settled" in sc.itemcget("caption", "text") and max(sc.bbox("caption")[0::2]) < min(sc.coords("track0")[0::2])
+sc.set([0.2] * 6); assert anim.is_running(f"chart{id(sc)}"); anim.finish_all()           # grows like the tier chart
+sc.show(False); assert sc.itemcget("track0", "state") == "hidden"; sc.show(True)
+# Boundary: six pills, one swap count per join under it, one "swaps" caption, the current join bold
+st = SwapStrip(root, list("SABCDF"), body, head); st.pack(); root.update()
+st.set([3, 2, 4, 1, 0], current=2)
+assert [st.itemcget(f"num{j}", "text") for j in range(5)] == ["3", "2", "4", "1", "0"]
+assert st.itemcget("caption", "text") == "swaps" and len(st.find_withtag("chip")) == 6
+for j in range(5):                                                               # each number under its join
+    nx = st.coords(f"num{j}")[0]
+    assert max(st.coords(f"chip{j}")[0::2]) < nx < min(st.coords(f"chip{j + 1}")[0::2])
+assert st.itemcget("num2", "font") != st.itemcget("num1", "font") and st.itemcget("join2", "fill") == PALETTE["accent"]
+st.set([3, 2, 4, 1, 0], current=None); assert st.itemcget("join2", "fill") == PALETTE["border"]
+st.show(False); st.set([5, 2, 4, 1, 0]); assert st.itemcget("num0", "state") == "hidden"   # stays hidden on redraw
+w0 = st.winfo_reqwidth(); body.configure(size=20); head.configure(size=22); st.refresh()
+assert st.winfo_reqwidth() > w0; body.configure(size=12); head.configure(size=14)
+# Conflicts: one number on a soft card
+title = tkfont.Font(root=root, family="TkDefaultFont", size=20)
+cc = ConflictCard(root, title, body); cc.pack(); root.update()
+assert cc.itemcget("big", "text") == "None" and cc.itemcget("small", "text") == "nicely consistent"
+cc.set(3); assert cc.itemcget("big", "text") == "3" and cc.itemcget("small", "text") == "to look at"
+cc.set(1234); assert cc.itemcget("big", "text") == "1,234"
+cc.show(False); cc.set(2); assert cc.itemcget("big", "state") == "hidden"
 root.destroy()
 print("CHART OK")

@@ -73,11 +73,24 @@ assert s.stats()["conflicts"] == 1
 # boundary swap: lower-tier word wins -> swap
 hi = s.db.execute("SELECT word FROM words WHERE tier=0 AND word NOT IN (SELECT word FROM anchors) LIMIT 1").fetchone()[0]
 lo = s.db.execute("SELECT word FROM words WHERE tier=1 AND word NOT IN (SELECT word FROM anchors) LIMIT 1").fetchone()[0]
+assert s.swap_counts() == [0, 0, 0, 0, 0]
 info = s.record_comparison(hi, lo, "b", "boundary")
 assert info["swapped"], info
 assert s.get_word(lo)["tier"] == 0 and s.get_word(hi)["tier"] == 1
+assert s.swap_counts() == [1, 0, 0, 0, 0]                                       # counted at S|A (UI-31)
 s.undo()
 assert s.get_word(lo)["tier"] == 1 and s.get_word(hi)["tier"] == 0
+assert s.swap_counts() == [0, 0, 0, 0, 0]                                       # undo takes it back off
+s.record_comparison(hi, lo, "a", "boundary"); assert s.swap_counts() == [0] * 5   # no swap: not counted
+s.undo()
+# how settled each tier's order is (UI-31): the share of its words with at least N duels
+shares = s.settled_shares(1)
+assert len(shares) == 6 and all(x is None or 0 <= x <= 1 for x in shares)
+s.db.execute("UPDATE words SET games=0 WHERE tier=0"); s.db.commit()
+w0 = s.db.execute("SELECT word FROM words WHERE tier=0 LIMIT 1").fetchone()[0]
+n0 = s.tier_counts()[0]
+s.db.execute("UPDATE words SET games=3 WHERE word=?", (w0,)); s.db.commit()
+assert abs(s.settled_shares(3)[0] - 1 / n0) < 1e-9 and s.settled_shares(4)[0] == 0
 bp = s.pick_boundary()
 assert bp and s.get_word(bp[0])["tier"] + 1 == s.get_word(bp[1])["tier"]
 

@@ -42,6 +42,9 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
+* Each tab has its own little view at the top right: the tier chart (Place), how
+  settled each tier's order is (Refine), swaps per boundary (Boundary), and the
+  number of conflicts (Conflicts).
 * A mode's tab only shows once it has work (Refine: a tier with two words;
   Boundary: two neighbouring tiers with words; Resolve conflicts: a conflict).
 * Every action is committed to SQLite immediately: close the window or lose
@@ -431,11 +434,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Fixed: DropMenu gives the focus back to where it was when it opened, only if it still had it
 #           (switching to another program still closes it and leaves that program in front). Left / Right
 #           in an open header menu open the neighbouring one, wrapping round.
-# [ ] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
+# [x] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
 #           each to be shown and approved first: Refine: how settled each tier's order is (the share of
 #           its words with enough duels), six bars in the same tier colours. Boundary: the five
 #           boundaries S|A .. D|F as a short strip, each with how many checks and swaps it has had.
 #           Conflicts: not a chart, a single number ("3 to look at" / "none - nicely consistent").
+#           Approved from mock-ups: Refine as shown; Boundary as the pill strip (option A) with only the swaps,
+#           one number per join and a single "swaps" caption (no check totals); Conflicts as shown.
+#           Built (ui_chart.py): SettledChart (a word counts as settled at App.SETTLED_DUELS = 5 duels;
+#           Store.settled_shares, index-only on the new idx_words_tg, ~50 ms with a million placed words),
+#           SwapStrip (Store.swap_counts from the new swaps table: one row per boundary duel that swapped,
+#           taken off again by undo; counted from now on, earlier swaps were never recorded; the join being
+#           checked is bold), ConflictCard. All four views share one spot in the status band, the current
+#           one raised and the others hidden, so switching tabs never moves the page.
 # [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
 #           drifting and jiggling slowly. Two things to settle before building:
 #           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your

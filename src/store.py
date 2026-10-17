@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS comparisons(
 CREATE INDEX IF NOT EXISTS idx_cmp_w ON comparisons(winner, loser);
 CREATE INDEX IF NOT EXISTS idx_cmp_l ON comparisons(loser, winner);
 CREATE TABLE IF NOT EXISTS conflicts(a TEXT NOT NULL, b TEXT NOT NULL, PRIMARY KEY(a, b));
+CREATE TABLE IF NOT EXISTS swaps(comp_id INTEGER PRIMARY KEY, boundary INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -96,6 +97,7 @@ class Store:
             self.db.execute("ALTER TABLE words ADD COLUMN pen INTEGER NOT NULL DEFAULT 0")
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
@@ -241,6 +243,21 @@ class Store:
             "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
         }
 
+    def settled_shares(self, min_games, totals=None):
+        """Per tier, the share of its words with at least `min_games` duels (how settled its order is, UI-31);
+        None for an empty tier. `totals` is tier_counts() if the caller has it already. Index-only
+        (idx_words_tg): ~50 ms with a million placed words."""
+        total = totals if totals is not None else self.tier_counts()
+        done = dict(self.db.execute("SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL AND games >= ? "
+                                    "GROUP BY tier", (min_games,)).fetchall())
+        return [done.get(t, 0) / total[t] if total.get(t) else None for t in range(len(TIERS))]
+
+    def swap_counts(self):
+        """Per boundary (0 = S|A ... 4 = D|F), how many boundary checks swapped the two words (UI-31; counted
+        from when this was added, and undo takes a swap back off)."""
+        got = dict(self.db.execute("SELECT boundary, COUNT(*) FROM swaps GROUP BY boundary").fetchall())
+        return [got.get(b, 0) for b in range(len(TIERS) - 1)]
+
     def actions_since(self, ts):
         """How many actions (placements, skips, duels, edits) were saved since time `ts`; undone ones do not
         count (undo removes them). For the quiet "+N today" in the status line (UI-15)."""
@@ -303,6 +320,7 @@ class Store:
             )
         for cid in p["comp_ids"]:
             self.db.execute("DELETE FROM comparisons WHERE id=?", (cid,))
+            self.db.execute("DELETE FROM swaps WHERE comp_id=?", (cid,))
         for a, b in p["conf_added"]:
             self.db.execute("DELETE FROM conflicts WHERE a=? AND b=?", (a, b))
         for r in p["comps_deleted"]:
@@ -445,6 +463,7 @@ class Store:
                     (rw["tier"], rw["rating"] - 1.0, l),
                 )
                 info["swapped"] = (w, rl["tier"], l, rw["tier"])
+                self.db.execute("INSERT INTO swaps(comp_id, boundary) VALUES(?, ?)", (comp_id, rl["tier"]))
             else:
                 self.db.execute("UPDATE words SET games=games+1 WHERE word IN (?, ?)", (a, b))
 
