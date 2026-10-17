@@ -433,6 +433,28 @@ for m in ("refine", "boundary", "conflict"):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
     assert not app.chart.shown and app.chart.itemcget("letter0", "state") == "hidden", m
 app.mode_var.set("place"); app.on_mode_change(); pump(2); assert app.chart.shown
+# switching tabs while a placement's animations still run: the tier chart must not show under the next tab's view
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+key("4"); app.mode_var.set("boundary"); app.on_mode_change(); app.anim.finish_all(); pump(3)
+assert all(app.chart.itemcget(i, "state") == "hidden" for i in app.chart.find_withtag("all"))
+# a held key's next repeat waits from when the last action finished (a slow save must still get to draw)
+app.mode_var.set("refine"); app.on_mode_change(); pump(2)
+real_mono = time.monotonic
+clock = {"t": 1000.0}
+time.monotonic = lambda: clock["t"]
+def hold(dt):                                                 # an X11 auto-repeat: release + press, same timestamp
+    clock["t"] += dt
+    app.on_key_release(types.SimpleNamespace(keysym="Left", time=77)); app.on_key(types.SimpleNamespace(keysym="Left", time=77))
+n0 = s.stats()["comparisons"]
+app.on_key(types.SimpleNamespace(keysym="Left", time=1)); app.anim.finish_all()   # the first press acts
+hold(0.6); app.anim.finish_all(); n1 = s.stats()["comparisons"]                       # past the delay: acts
+assert n1 == n0 + 2
+real_act = app._action_done
+app._action_done = lambda e: (clock.__setitem__("t", clock["t"] + 0.4), real_act(e))   # each action takes 400 ms
+hold(0.3); app.anim.finish_all(); n2 = s.stats()["comparisons"]; assert n2 == n1 + 1   # 300 ms since the last: acts
+hold(0.1); app.anim.finish_all(); assert s.stats()["comparisons"] == n2               # only 100 ms since it finished
+app._action_done = real_act; time.monotonic = real_mono
+app.on_key_release(types.SimpleNamespace(keysym="Left", time=99)); pump(2)
 # UI-31: each tab shows its own view in the chart's spot, on top of the others, which keep their space
 sizes = set()
 for m in ("place", "refine", "boundary", "conflict"):

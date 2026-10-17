@@ -60,6 +60,12 @@ ch.show(False); assert not ch.shown and ch.itemcget("bar0", "state") == "hidden"
 assert (ch.winfo_reqwidth(), ch.winfo_reqheight()) == (w1, h1)
 ch.refresh(); assert ch.itemcget("letter0", "state") == "hidden"                     # stays hidden on refresh
 ch.show(True); assert ch.itemcget("letter0", "state") == "normal" and ch.itemcget("bar1", "state") == "hidden"  # (empty)
+# hidden in the middle of a growth or a glow (switching tabs while it runs): it stays hidden (reported)
+ch.set([5, 3, 0, 0, 0, 0]); ch.show(False); anim.finish_all()
+assert all(ch.itemcget(i, "state") == "hidden" for i in ch.find_withtag("all"))
+ch.show(True); ch.pulse(0); ch.show(False); anim.finish_all()
+assert all(ch.itemcget(i, "state") == "hidden" for i in ch.find_withtag("all"))
+ch.show(True)
 # a font change re-measures
 w0 = ch.winfo_reqwidth(); body.configure(size=20); ch.refresh(); assert ch.winfo_reqwidth() > w0
 body.configure(size=12)

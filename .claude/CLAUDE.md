@@ -47,6 +47,8 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
   Main window: what shows = min(zoom, biggest size that fits the screen, in 0.1 steps) x grow (window
   bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
   minimum sizes at grow 1. Main and Browse zooms are separate and saved.
+- Test speed on a big save (300k-1M words) for anything run per duel or per refresh: a query that sorts a
+  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier.
 - Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
   else may write the save meanwhile.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
@@ -98,5 +100,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
 - A read-only save file's dialog could not be verified (the test machine ran as root).
+- Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
+  hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).
+  Ask what OS / save size / key if it happens again.
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.

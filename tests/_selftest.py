@@ -93,6 +93,11 @@ s.db.execute("UPDATE words SET games=3 WHERE word=?", (w0,)); s.db.commit()
 assert abs(s.settled_shares(3)[0] - 1 / n0) < 1e-9 and s.settled_shares(4)[0] == 0
 bp = s.pick_boundary()
 assert bp and s.get_word(bp[0])["tier"] + 1 == s.get_word(bp[1])["tier"]
+# a big tier draws from at most BOUNDARY_POOL words a side (it built every pair of 5% of each tier: millions)
+seen_sql = []
+s.db.set_trace_callback(seen_sql.append)
+s.pick_boundary(); s.db.set_trace_callback(None)
+assert all(int(q.rsplit("LIMIT", 1)[1]) <= s.BOUNDARY_POOL for q in seen_sql if "ORDER BY rating" in q), seen_sql
 
 # unplace puts word back at the front of the queue
 s.unplace("w050")

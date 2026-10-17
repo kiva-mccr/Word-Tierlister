@@ -104,6 +104,8 @@ class DistributionChart(tk.Canvas):
             self.coords(f"count{i}", x, base - h - 2)
             self.itemconfigure(f"count{i}", text=compact(self.counts[i]) if self.counts[i] else "")
         self.tag_raise("count")
+        if not self._visible:                 # hidden (another tab): a growth or glow still running stays unseen
+            self.itemconfigure("all", state="hidden")
 
     # ---- data --------------------------------------------------------------------------------------
     def set(self, counts, animate=True):

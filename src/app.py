@@ -1106,6 +1106,14 @@ class App:
         h["last"] = now
         return True
 
+    def _action_done(self, e):
+        """A held key's next repeat waits REPEAT_INTERVAL_MS from when this action finished, not from when it
+        started: on a big save an action can take longer than the interval, and the window must still get
+        time to draw and answer between repeats."""
+        h = self._held.get(e.keysym)
+        if h is not None:
+            h["last"] = time.monotonic() * 1000
+
     def on_key_release(self, e):
         h = self._held.get(e.keysym)
         if h is not None:
@@ -1144,6 +1152,7 @@ class App:
         if button is not None and not button.enabled:
             return                                 # a greyed-out button's key is off too
         action()                                   # the action first: input is never delayed (UI-18) ...
+        self._action_done(e)
         if button is not None:
             button.flash()                         # ... then the button it stands for dips (not when disabled,
                                                    # not with Reduce motion: RoundButton.flash checks both)

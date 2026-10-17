@@ -447,6 +447,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           taken off again by undo; counted from now on, earlier swaps were never recorded; the join being
 #           checked is bold), ConflictCard. All four views share one spot in the status band, the current
 #           one raised and the others hidden, so switching tabs never moves the page.
+#           Fixed (reported): switching from Place new words while the chart was still growing (or a bar
+#           glowing) left the chart drawn under the next tab's view; a hidden chart now stays hidden mid-animation.
 # [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
 #           drifting and jiggling slowly. Two things to settle before building:
 #           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
@@ -570,6 +572,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Windows (presses without releases) and X11 (release + press with the same timestamp). Applies to
 #           every action key. Measured with a real held key (xdotool): 1.5 s held placed 23 words before, 5
 #           now, and none after release.
+#           Later (reported: holding a key in Refine crashed the PC): could not be reproduced here (a held key
+#           in Refine or Boundary on a 300,000-word save: memory flat, ~3.5 duels/s, stops on release), but
+#           two hazards were fixed: Boundary check built every pair of the weakest / strongest 5% of two
+#           tiers (25 million pairs, gigabytes and ~40 s on a big save; now at most 30 a side, ~0.15 s,
+#           Store.BOUNDARY_POOL), and a held key's next repeat now waits 250 ms from when the last action
+#           finished (App._action_done), so a slow save still gets time to draw between repeats.
 # [x] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes

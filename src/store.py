@@ -529,6 +529,8 @@ class Store:
                     return a["word"], c["word"], a["tier"]
         return None
 
+    BOUNDARY_POOL = 30      # words per side a boundary pair is drawn from (at most 900 pairs)
+
     def pick_boundary(self, boundary=None):
         """Weakest words of tier t vs strongest of tier t+1. Returns (higher, lower, t)."""
         order = [boundary] if boundary is not None else random.sample(range(len(TIERS) - 1), len(TIERS) - 1)
@@ -537,7 +539,9 @@ class Store:
             n_hi, n_lo = counts.get(t, 0), counts.get(t + 1, 0)
             if n_hi < 1 or n_lo < 1:
                 continue
-            k = max(5, int(0.05 * min(n_hi, n_lo)))
+            # the weakest few of the upper tier against the strongest few of the lower one. Capped: 5% of a
+            # big tier was 5,000 words a side, 25 million pairs held in memory (gigabytes, ~40 s) to try 60
+            k = min(self.BOUNDARY_POOL, max(5, int(0.05 * min(n_hi, n_lo))))
             hi = [r[0] for r in self.db.execute(
                 "SELECT word FROM words WHERE tier=? ORDER BY rating ASC, RANDOM() LIMIT ?", (t, k))]
             lo = [r[0] for r in self.db.execute(
