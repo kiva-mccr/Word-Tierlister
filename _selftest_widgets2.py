@@ -1,9 +1,10 @@
-"""Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons)."""
+"""Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
+SegmentedControl, DropMenu and HeaderMenus (UI-10)."""
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import AnchorLadder, DuelCards, RoundButton, TierRow
+from widgets import AnchorLadder, DropMenu, DuelCards, HeaderMenus, RoundButton, SegmentedControl, TierRow
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -113,5 +114,69 @@ lad.update_range(4, 4, 4); assert lad.possible() == [4] and lad.itemcget("pill5"
 anim.reduce_motion = False
 w0 = lad.winfo_reqwidth(); small.configure(size=20); lad.refresh(); assert lad.winfo_reqwidth() > w0
 small.configure(size=11)
+
+# ---- SegmentedControl (UI-10)
+changes = []
+opts = [("place", "Place new words"), ("refine", "Refine within tier"), ("boundary", "Boundary check")]
+seg = SegmentedControl(root, opts, changes.append, small, animator=anim); seg.pack(); update()
+assert seg.get() == "place" and len(seg.find_withtag("label")) == 3
+seg_w = (seg.winfo_reqwidth() - 2 - 8) / 3
+def seg_click(i):
+    x = int(5 + seg_w * i + seg_w / 2)
+    seg.event_generate("<Motion>", x=x, y=10); seg.event_generate("<ButtonRelease-1>", x=x, y=10); update()
+assert seg.itemcget("label_place", "fill") == PALETTE["text"] and seg.itemcget("label_refine", "fill") == PALETTE["muted"]
+t0 = seg.coords("thumb")[0]
+seg_click(2)
+assert changes == ["boundary"] and seg.get() == "boundary"
+anim.finish_all(); assert seg.coords("thumb")[0] > t0 + seg_w * 1.5           # the thumb slid two segments
+seg_click(2); assert changes == ["boundary"]                                     # clicking the chosen one: nothing
+seg.set("refine"); anim.finish_all(); assert seg.get() == "refine" and changes == ["boundary"]   # set() is silent
+seg.set("nonsense"); assert seg.get() == "refine"
+seg.event_generate("<Leave>"); update()
+assert seg.itemcget("label_refine", "fill") == PALETTE["text"] and seg.itemcget("label_place", "fill") == PALETTE["muted"]
+
+# ---- DropMenu and HeaderMenus (UI-10)
+ran, chk = [], tk.BooleanVar(value=False)
+items = [("command", "Export...", lambda: ran.append("export"), None), ("separator",),
+         ("check", "Reduce motion", chk, lambda: ran.append(("motion", chk.get()))),
+         ("command", "Undo", lambda: ran.append("undo"), "Ctrl+Z")]
+assert DropMenu.labels(items) == ["Export...", "Reduce motion", "Undo"]
+dm = DropMenu(root, items, small)
+dm.open(50, 60); update()
+assert dm.is_open() and dm.win.winfo_viewable() and len(dm._rows) == 3
+texts = [[p.cget("text") for p in parts] for _r, parts, _i in dm._rows]
+assert texts[2] == ["", "Undo", "Ctrl+Z"] and texts[1][1] == "Reduce motion" and texts[1][0] == ""   # unchecked
+dm._step(1); dm._step(1)
+assert dm._rows[1][0].cget("bg") == PALETTE["select_bg"] and dm._rows[0][0].cget("bg") == PALETTE["surface"]
+dm.invoke(1); update()
+assert not dm.is_open() and chk.get() is True and ran == [("motion", True)]
+dm.open(50, 60); update()
+assert dm._rows[1][1][0].cget("text") == "\u2713"                              # now shows its check mark
+dm._rows[0][1][1].event_generate("<ButtonRelease-1>"); update()
+assert ran[-1] == "export" and not dm.is_open()
+closed = []
+dm.open(10 ** 5, 10 ** 5, on_close=lambda: closed.append(1)); update()          # kept on screen
+assert dm.win.winfo_rootx() + dm.win.winfo_width() <= dm.win.winfo_screenwidth()
+dm.win.event_generate("<Escape>"); update()
+assert not dm.is_open() and closed == [1]
+
+hm = HeaderMenus(root, [("File", items), ("Edit", items[3:])], small, animator=anim); hm.pack(side="top"); update()
+fb, eb = hm.buttons["File"], hm.buttons["Edit"]
+fb.event_generate("<Enter>"); fb.event_generate("<ButtonPress-1>", x=5, y=5); update()
+fb.event_generate("<ButtonRelease-1>", x=5, y=5); update()
+assert hm.open_name == "File" and hm.drops["File"].is_open()
+anim.finish_all(); assert fb.itemcget("shape", "fill") == PALETTE["select_bg"]  # its button looks open
+d = hm.drops["File"].win
+assert abs(d.winfo_rootx() - fb.winfo_rootx()) <= 1 and d.winfo_rooty() >= fb.winfo_rooty() + fb.winfo_height()
+eb.event_generate("<Enter>"); update()                                         # hover switches menus
+assert hm.open_name == "Edit" and hm.drops["Edit"].is_open() and not hm.drops["File"].is_open()
+anim.finish_all(); assert fb.itemcget("shape", "fill") != PALETTE["select_bg"]
+eb.event_generate("<ButtonPress-1>", x=5, y=5); eb.event_generate("<ButtonRelease-1>", x=5, y=5); update()
+assert hm.open_name is None                                                    # its own button closes it
+hm.open_menu("File"); update()
+seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      # a click elsewhere closes it
+assert hm.open_name is None and not hm.drops["File"].is_open()
+hm.open_menu("Edit"); update(); hm.drops["Edit"].invoke(0); update()
+assert ran[-1] == "undo" and hm.open_name is None
 root.destroy()
 print("WIDGETS2 OK")

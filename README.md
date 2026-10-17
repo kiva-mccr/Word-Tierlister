@@ -31,7 +31,7 @@ redesign plan (UI-0 .. UI-26, ticked as built) is the comment block right under 
 | `sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `startup.py` | First-run progress window: runs set-up on a worker thread and shows what it is doing. |
-| `widgets.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing) and other small widgets. |
+| `widgets.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`SegmentedControl` mode switch, `HeaderMenus` + `DropMenu`) and other small widgets. |
 | `browser.py` | The Browse / edit window. |
 | `app.py` | The main window and all four modes. |
 
@@ -44,6 +44,7 @@ earlier in that list. Only the UI files import `tkinter`.
 - A rule about ranking, duels, undo or the queue: `store.py`.
 - Colours: `theme.py`. Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_show_place`, `_show_pair`).
+- The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 
 ## Tests

@@ -234,11 +234,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Sits between the word card and the question.
 #
 # --- Phase 3: layout and chrome ----------------------------------------------------------------
-# [ ] UI-10 Modern top bar. adds SegmentedControl(options, on_change) and build_header(): a
+# [x] UI-10 Modern top bar. adds SegmentedControl(options, on_change) and build_header(): a
 #           pill-shaped mode switch (Place / Refine / Boundary / Conflicts) replacing the
 #           Radiobuttons, and the File / Edit / View / Settings menus as soft rounded header buttons
 #           with styled drop-down menus instead of the plain system menu bar (same items, same
 #           shortcuts). By request: modernize the top; the bottom bar stays as it is.
+#           Built: widgets.py SegmentedControl (sliding white thumb, 180 ms), DropMenu (borderless
+#           drop-down: roomy rows, pastel highlight, check marks, shortcut hints; Up/Down/Return/Escape;
+#           closes on a click elsewhere, a window move, or when the app loses focus) and HeaderMenus
+#           (File / Edit / View / Settings as flat buttons; hovering another while one is open switches,
+#           like a menu bar). App._build_header; Alt+F/E/V/S and F10 open the menus; keys do nothing
+#           else while a menu is open. The system menu bar is gone.
 # [ ] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
 #           blend) instead of the full-width flash banner. App.flash() keeps its signature.
 # [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed

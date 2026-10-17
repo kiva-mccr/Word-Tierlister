@@ -52,6 +52,7 @@ class RoundButton(tk.Canvas):
         self._padx, self._pady, self._radius = padx, pady, radius
         self._lift, self._lifted = lift, False
         self._flat, self._ring = flat, ring
+        self._selected = False
         self._anim = animator
         self._font = font if isinstance(font, tkfont.Font) else tkfont.Font(root=self, font=font or "TkDefaultFont")
         self._own_hint_font = hint_font is None          # else a shared font: never resize it here
@@ -108,6 +109,11 @@ class RoundButton(tk.Canvas):
     def enabled(self):
         return self._enabled
 
+    def set_selected(self, on):
+        """Flat buttons only: keep the 'open' look (a header menu button while its menu is shown)."""
+        self._selected = bool(on)
+        self._go(self._target())
+
     def refresh(self):
         """Re-measure and redraw (after the Font object it uses was resized)."""
         self._draw()
@@ -121,6 +127,8 @@ class RoundButton(tk.Canvas):
             base = super().cget("bg")
             if not self._enabled:
                 return (base, base, 1, PALETTE["disabled"])
+            if self._selected:
+                return (PALETTE["select_bg"], PALETTE["select_bg"], 1, fg)
             if self._pressed:
                 return (PALETTE["select_bg"], PALETTE["select_bg"], 1, fg)
             if self._hover:
@@ -436,6 +444,304 @@ class AnchorLadder(tk.Canvas):
         self._draw()
 
 
+class SegmentedControl(tk.Canvas):
+    """A pill-shaped switch between a few options, with a white thumb that slides to the chosen one (UI-10).
+
+        seg = SegmentedControl(parent, [("place", "Place new words"), ...], on_change, font("label"),
+                               animator=app.anim)
+        seg.set("refine")        # move the thumb without calling on_change (e.g. after a key)
+
+    A click on another segment moves the thumb (SLIDE_MS, ease-out; jumps with Reduce motion) and calls
+    on_change(key). Segments are all as wide as the widest label so the thumb keeps its size.
+    """
+    SLIDE_MS = 180
+
+    def __init__(self, parent, options, on_change, font=None, animator=None, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"], takefocus=0)
+        self.options = list(options)
+        self._keys = [k for k, _ in self.options]
+        self._on_change, self._font, self._anim = on_change, font, animator
+        self.value = self._keys[0]
+        self._x = 0.0                        # thumb position, in segments (animated)
+        self._hover = None
+        self.bind("<Motion>", self._on_motion)
+        self.bind("<Leave>", lambda e: self._set_hover(None))
+        self.bind("<ButtonRelease-1>", self._on_click)
+        self._draw()
+
+    def _metrics(self):
+        f = self._font
+        line = f.metrics("linespace") if f else 16
+        widest = max((f.measure(lbl) if f else 8 * len(lbl)) for _, lbl in self.options)
+        pad = int(line * 1.1)
+        return widest + 2 * pad, int(line * 2.0), 4      # segment width, height, inset of the thumb
+
+    def _draw(self):
+        self.delete("all")
+        seg, h, inset = self._metrics()
+        n = len(self.options)
+        total = seg * n + 2 * inset
+        super().configure(width=total + 2, height=h + 4, cursor="hand2")
+        self.create_polygon(_rounded_points(1, 1, total, h, h // 2), smooth=True, fill=PALETTE["surface2"],
+                            outline=PALETTE["border"], tags="track")
+        self.create_polygon(_rounded_points(0, 0, 1, 1, 1), smooth=True, fill=PALETTE["shadow"], outline="",
+                            tags="thumbshadow")
+        self.create_polygon(_rounded_points(0, 0, 1, 1, 1), smooth=True, fill=PALETTE["surface"],
+                            outline=PALETTE["border"], tags="thumb")
+        for i, (key, label) in enumerate(self.options):
+            self.create_text(1 + inset + seg * i + seg / 2, 1 + h / 2, text=label, font=self._font,
+                             tags=("label", f"label_{key}"))
+        self._place_thumb()
+
+    def _place_thumb(self):
+        seg, h, inset = self._metrics()
+        x1 = 1 + inset + self._x * seg
+        r = (h - 2 * inset) // 2
+        self.coords("thumbshadow", *_rounded_points(x1, 1 + inset + 1, x1 + seg, h - inset + 1, r))
+        self.coords("thumb", *_rounded_points(x1, 1 + inset, x1 + seg, h - inset, r))
+        for key in self._keys:
+            on = key == self.value or key == self._hover
+            self.itemconfigure(f"label_{key}", fill=PALETTE["text"] if on else PALETTE["muted"])
+        self.tag_raise("label")
+
+    def _index_at(self, x):
+        seg, _h, inset = self._metrics()
+        i = int((x - 1 - inset) // seg)
+        return self._keys[i] if 0 <= i < len(self._keys) else None
+
+    def _on_motion(self, e):
+        self._set_hover(self._index_at(e.x))
+
+    def _set_hover(self, key):
+        if key != self._hover:
+            self._hover = key
+            self._place_thumb()
+
+    def _on_click(self, e):
+        key = self._index_at(e.x)
+        if key is not None and key != self.value:
+            self.set(key)
+            self._on_change(key)
+
+    def set(self, key):
+        """Show `key` as chosen (slides the thumb; does not call on_change)."""
+        if key not in self._keys:
+            return
+        self.value = key
+        start, goal = self._x, float(self._keys.index(key))
+
+        def frame(p):
+            self._x = start + (goal - start) * p
+            self._place_thumb()
+        if self._anim is None:
+            frame(1.0)
+        else:
+            self._anim.run(f"seg{id(self)}", self.SLIDE_MS, frame)
+
+    def get(self):
+        return self.value
+
+    def refresh(self):
+        self._draw()
+
+
+class DropMenu:
+    """A styled drop-down menu (UI-10): a borderless window with roomy rows, the pastel highlight, check
+    marks and shortcut hints, used by the header's File / Edit / View / Settings buttons.
+
+        items = [("command", "Export tier list...", app.export, None),
+                 ("check", "Reduce motion", app.motion_var, app.toggle_motion),
+                 ("separator",),
+                 ("command", "Undo", app.undo, "Ctrl+Z")]
+        DropMenu(root, items, font("body")).open(x, y, on_close)
+
+    Mouse: hover highlights, click runs the item and closes. Keys: Up / Down move, Return runs, Escape
+    closes. It also closes when the main window is clicked elsewhere, moved, or loses focus.
+    """
+
+    def __init__(self, root, items, font=None):
+        self.root, self.items, self.font = root, list(items), font
+        self.win = None
+        self._rows, self._active, self._on_close = [], None, None
+
+    @staticmethod
+    def labels(items):
+        """The labels of the clickable items (for tests and docs)."""
+        return [it[1] for it in items if it[0] in ("command", "check")]
+
+    def is_open(self):
+        return self.win is not None
+
+    def open(self, x, y, on_close=None):
+        """Show the menu with its top-left corner at screen position (x, y)."""
+        self.close()
+        self._on_close = on_close
+        win = self.win = tk.Toplevel(self.root, bg=PALETTE["border"])
+        win.withdraw()
+        win.overrideredirect(True)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        body = tk.Frame(win, bg=PALETTE["surface"], padx=6, pady=6)
+        body.pack(padx=1, pady=1)                 # the 1 px border is the window's own colour
+        self._rows = []
+        for it in self.items:
+            if it[0] == "separator":
+                tk.Frame(body, height=1, bg=PALETTE["border"]).pack(fill="x", padx=8, pady=5)
+                continue
+            kind, label, target = it[0], it[1], it[2]
+            extra = it[3] if len(it) > 3 else None
+            row = tk.Frame(body, bg=PALETTE["surface"], cursor="hand2")
+            row.pack(fill="x")
+            mark = ""
+            if kind == "check":
+                mark = "\u2713" if target.get() else ""
+            parts = [tk.Label(row, text=mark, width=2, bg=PALETTE["surface"], fg=PALETTE["accent_text"],
+                              font=self.font, anchor="w"),
+                     tk.Label(row, text=label, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
+                              anchor="w", padx=4, pady=5)]
+            accel = extra if kind == "command" else None
+            if accel:
+                parts.append(tk.Label(row, text=accel, bg=PALETTE["surface"], fg=PALETTE["muted"],
+                                      font=self.font, anchor="e", padx=10))
+            parts[0].pack(side="left", padx=(6, 0))
+            parts[1].pack(side="left")
+            if accel:
+                parts[2].pack(side="right")
+            i = len(self._rows)
+            self._rows.append((row, parts, it))
+            for w in [row] + parts:
+                w.bind("<Enter>", lambda e, i=i: self._highlight(i))
+                w.bind("<ButtonRelease-1>", lambda e, i=i: self.invoke(i))
+        win.bind("<Escape>", lambda e: self.close())
+        win.bind("<Up>", lambda e: self._step(-1))
+        win.bind("<Down>", lambda e: self._step(1))
+        win.bind("<Return>", lambda e: self._active is not None and self.invoke(self._active))
+        win.bind("<FocusOut>", self._on_focus_out)
+        win.update_idletasks()
+        # keep it on screen
+        w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+        x = max(0, min(x, win.winfo_screenwidth() - w))
+        y = max(0, min(y, win.winfo_screenheight() - h))
+        win.geometry(f"+{x}+{y}")
+        win.deiconify()
+        win.lift()
+        try:
+            win.focus_force()
+        except tk.TclError:
+            pass
+
+    def _on_focus_out(self, _e):
+        # only when focus left the menu for good (not moving between its own rows)
+        self.root.after(50, lambda: self.win is not None and self.win.focus_get() is None and self.close())
+
+    def _highlight(self, i):
+        self._active = i
+        for j, (row, parts, _it) in enumerate(self._rows):
+            bg = PALETTE["select_bg"] if j == i else PALETTE["surface"]
+            for w in [row] + parts:
+                w.configure(bg=bg)
+
+    def _step(self, d):
+        if not self._rows:
+            return
+        i = 0 if self._active is None and d > 0 else (len(self._rows) - 1 if self._active is None else
+                                                      (self._active + d) % len(self._rows))
+        self._highlight(i)
+
+    def invoke(self, i):
+        """Run row `i` (0 = first clickable item) and close the menu."""
+        _row, _parts, it = self._rows[i]
+        self.close()
+        if it[0] == "check":
+            var, command = it[2], (it[3] if len(it) > 3 else None)
+            var.set(not var.get())
+            if command:
+                command()
+        else:
+            it[2]()
+
+    def close(self):
+        if self.win is not None:
+            try:
+                self.win.destroy()
+            except tk.TclError:
+                pass
+            self.win = None
+            self._rows, self._active = [], None
+            cb, self._on_close = self._on_close, None
+            if cb:
+                cb()
+
+
+class HeaderMenus(tk.Frame):
+    """The row of header menu buttons (File, Edit, View, Settings) with their DropMenus (UI-10).
+
+        HeaderMenus(parent, [("File", items), ("Edit", items), ...], font("body"), animator=app.anim)
+
+    Clicking a button opens its menu under it (clicking again closes it); while one menu is open,
+    hovering another button switches to that menu, like a desktop menu bar. open_menu(name) opens one
+    from the keyboard (Alt+F and friends, F10).
+    """
+
+    def __init__(self, parent, menus, font=None, animator=None, bg=None):
+        bg = bg or PALETTE["surface"]
+        super().__init__(parent, bg=bg)
+        self.menus, self.buttons, self.drops = dict(menus), {}, {}
+        self._open = None
+        for name, items in menus:
+            b = RoundButton(self, name, lambda n=name: self.toggle(n), font=font, padx=12, pady=5, radius=10,
+                            animator=animator, canvas_bg=bg, flat=True)
+            b.pack(side="left", padx=(0, 2))
+            b.bind("<Enter>", lambda e, n=name: self._hover_switch(n), add="+")
+            self.buttons[name] = b
+            self.drops[name] = DropMenu(self.winfo_toplevel(), items, font)
+        top = self.winfo_toplevel()
+        top.bind("<ButtonPress-1>", self._click_outside, add="+")
+        top.bind("<Configure>", lambda e: e.widget is top and self.close(), add="+")
+        top.bind("<Unmap>", lambda e: e.widget is top and self.close(), add="+")
+
+    def _click_outside(self, e):
+        """A click anywhere in the main window closes the open menu (its own button toggles it instead)."""
+        if self._open is not None and e.widget not in self.buttons.values():
+            self.close()
+
+    @property
+    def open_name(self):
+        return self._open
+
+    def toggle(self, name):
+        if self._open == name:
+            self.close()
+        else:
+            self.open_menu(name)
+
+    def open_menu(self, name):
+        self.close()
+        b = self.buttons[name]
+        self._open = name
+        b.set_selected(True)
+        self.drops[name].open(b.winfo_rootx(), b.winfo_rooty() + b.winfo_height() + 2,
+                              on_close=lambda n=name: self._closed(n))
+
+    def _closed(self, name):
+        if self._open == name:
+            self._open = None
+        try:
+            self.buttons[name].set_selected(False)
+        except tk.TclError:
+            pass
+
+    def _hover_switch(self, name):
+        if self._open is not None and self._open != name:
+            self.open_menu(name)
+
+    def close(self):
+        if self._open is not None:
+            self.drops[self._open].close()
+
+
 class WordCard(tk.Canvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").
@@ -546,7 +852,7 @@ class WordCard(tk.Canvas):
 def refresh_widgets(widget):
     """Re-measure every RoundButton, WordCard and AnchorLadder under `widget` (after fonts were resized)."""
     for child in widget.winfo_children():
-        if isinstance(child, (RoundButton, WordCard, AnchorLadder)):
+        if isinstance(child, (RoundButton, WordCard, AnchorLadder, SegmentedControl)):
             child.refresh()
         else:
             refresh_widgets(child)

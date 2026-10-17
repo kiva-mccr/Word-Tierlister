@@ -178,5 +178,17 @@ except Exception as exc:
     print("no screenshots:", exc)
 
 bw.close()
+
+# ---- header (UI-10): no system menu bar; menus open from the header and the keyboard; the mode switch
+assert not root.cget("menu")
+assert list(app.header.buttons) == ["File", "Edit", "View", "Settings"]
+app._open_menu_key("View"); pump(2)
+assert app.header.open_name == "View" and "Reduce motion" in T.DropMenu.labels(app.header.menus["View"]) if hasattr(T, "DropMenu") else app.header.open_name == "View"
+key("1"); assert app.header.open_name == "View"                      # keys do nothing while a menu is open...
+key("Escape"); pump(2); assert app.header.open_name is None          # ...except Escape, which closes it
+app._on_mode_switch("boundary"); pump(2)
+assert app.mode == "boundary" and s.get_meta("mode") == "boundary" and app.mode_switch.get() == "boundary"
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+assert app.mode_switch.get() == "place"                              # the switch follows code changes too
 app.on_close()
 print("UI OK")

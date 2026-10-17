@@ -1,9 +1,9 @@
-"""The main window: place / refine / boundary / conflict modes, menus, key handling, definitions pane.
+"""The main window: place / refine / boundary / conflict modes, header menus, key handling, definitions pane.
 
 App is a thin controller. It never touches the database directly: every read/write goes through
 self.store (store.py), and after each change it calls refresh() to redraw. The file reads top to
 bottom in the order things happen:
-    construction (menu, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
+    construction (header, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
     undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
 """
 import json
@@ -25,7 +25,8 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import AnchorLadder, DuelCards, RoundButton, TierRow, WordCard, refresh_widgets
+from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, SegmentedControl, TierRow, WordCard,
+                     refresh_widgets)
 
 
 class App:
@@ -83,7 +84,7 @@ class App:
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
-        self._build_menu()
+        self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
         root.bind("<Control-z>", lambda e: self.undo())
@@ -106,41 +107,57 @@ class App:
             self.edit_anchors()
 
     # ---- construction ------------------------------------------------------------------
-    def _build_menu(self):
-        """Menu bar: File (import/export), Edit (undo), View (browse, definitions), Settings (anchors, queue)."""
-        m = tk.Menu(self.root)
-        self.root.config(menu=m)
-        fm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="File", menu=fm)
-        fm.add_command(label="Import earlier progress...", command=self.import_progress)
-        fm.add_command(label="Export tier list...", command=self.export)
-        fm.add_command(label="Where is my save file?", command=self.show_save_location)
-        fm.add_separator()
-        fm.add_command(label="Quit", command=self.on_close)
-        em = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="Edit", menu=em)
-        em.add_command(label="Undo", accelerator="Ctrl+Z", command=self.undo)
-        vm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="View", menu=vm)
-        vm.add_command(label="Browse / edit tier list...", command=self.open_browser)
-        vm.add_checkbutton(label="Show definitions (D)", variable=self.defs_var,
-                           command=lambda: self.toggle_defs(self.defs_var.get()))
-        vm.add_checkbutton(label="Reduce motion", variable=self.motion_var, command=self.toggle_motion)
-        sm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="Settings", menu=sm)
-        sm.add_command(label="Anchor words...", command=self.edit_anchors)
-        sm.add_command(label="Queue randomness & seed...", command=self.edit_queue)
-        sm.add_checkbutton(label="Always compare new words to anchors", variable=self.auto_var,
-                           command=self.toggle_auto)
+    def _menu_items(self):
+        """The header menus (UI-10): File (import/export), Edit (undo), View (browse, definitions, motion),
+        Settings (anchors, queue). Each item is a DropMenu row: ("command", label, command, shortcut)
+        or ("check", label, variable, command)."""
+        return [
+            ("File", [("command", "Import earlier progress...", self.import_progress, None),
+                      ("command", "Export tier list...", self.export, None),
+                      ("command", "Where is my save file?", self.show_save_location, None),
+                      ("separator",),
+                      ("command", "Quit", self.on_close, None)]),
+            ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
+            ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
+                      ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
+                      ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
+            ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
+                          ("command", "Queue randomness & seed...", self.edit_queue, None),
+                          ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
+        ]
+
+    def _build_header(self):
+        """The top of the window (UI-10): a white bar with the File / Edit / View / Settings menu buttons,
+        a hairline, then the pill-shaped mode switch. Replaces the system menu bar and the radio buttons.
+        Alt+F / Alt+E / Alt+V / Alt+S (and F10 for File) open the menus from the keyboard."""
+        r = self.root
+        bar = tk.Frame(r, bg=PALETTE["surface"], padx=8, pady=5)
+        bar.pack(side="top", fill="x")
+        self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
+        self.header.pack(side="left")
+        tk.Frame(r, height=1, bg=PALETTE["border"]).pack(side="top", fill="x")
+        for name in self.header.buttons:
+            r.bind(f"<Alt-{name[0].lower()}>", lambda e, n=name: self._open_menu_key(n))
+        r.bind("<F10>", lambda e: self._open_menu_key("File"))
+        row = ttk.Frame(r, padding=(10, 10, 10, 4))
+        row.pack(side="top", fill="x")
+        self.mode_switch = SegmentedControl(row, MODES, self._on_mode_switch, font("label"), animator=self.anim)
+        self.mode_switch.set(self.mode)
+        self.mode_switch.pack()
+
+    def _open_menu_key(self, name):
+        self.header.open_menu(name)
+        return "break"
+
+    def _on_mode_switch(self, key):
+        """A segment of the mode switch was clicked."""
+        self.mode_var.set(key)
+        self.on_mode_change()
 
     def _build_ui(self):
-        """Create every widget once: header, banner, bottom bar, definition pane, place view and pair view."""
+        """Create every widget below the header once: stats, banner, bottom bar, definition pane, place view
+        and pair view."""
         r = self.root
-        top = ttk.Frame(r, padding=(10, 8))
-        top.pack(side="top", fill="x")
-        for key, label in MODES:
-            ttk.Radiobutton(top, text=label, value=key, variable=self.mode_var,
-                            command=self.on_mode_change, takefocus=0).pack(side="left", padx=(0, 14))
         self.stats_lbl = ttk.Label(r, anchor="w", padding=(10, 0))
         self.stats_lbl.pack(side="top", fill="x")
         self.tier_lbl = ttk.Label(r, anchor="w", padding=(10, 0), foreground=PALETTE["muted"])
@@ -681,6 +698,7 @@ class App:
         self.focus, self.focus_left = word, FOCUS_ROUNDS
         self.mode = "refine"
         self.mode_var.set("refine")
+        self.mode_switch.set("refine")
         self.store.set_meta("mode", "refine")
         self.cmp = None
         self._update_options()
@@ -694,8 +712,10 @@ class App:
         self.refresh()
 
     def on_mode_change(self):
-        """A mode radio button was clicked: save it and reset any in-progress comparison, pair or focus."""
+        """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
+        comparison, pair or focus."""
         self.mode = self.mode_var.get()
+        self.mode_switch.set(self.mode)
         self.store.set_meta("mode", self.mode)
         self.cmp = None
         self.pair = None
@@ -726,6 +746,10 @@ class App:
         """
         self.anim.finish_all()  # a key press never waits for an animation
         ks = e.keysym
+        if self.header.open_name is not None:      # a header menu is open: Escape closes it, nothing else runs
+            if ks == "Escape":
+                self.header.close()
+            return
         low = ks.lower()
         if low == "d":
             self.toggle_defs()
