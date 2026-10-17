@@ -263,6 +263,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: Toast(parent, font) in widgets.py, floating at the top of the page (place), so it
 #           never pushes the layout; fades in 160 ms, out 220 ms; long messages wrap. App.banner is the
 #           Toast (cget("text") still works). Messages use a real arrow (apple  \u2192  S).
+#           Placement messages (by request) use Toast.fling: the message rises out of the word card
+#           (200 ms, fading in), rests just above it while paling slightly (550 ms), then swipes sideways
+#           toward its tier (S, A, B left; C, D, F right; further for the outer tiers) while fading out
+#           completely (240 ms). It borrows the white of the card as its backdrop while over it (no
+#           transparency in tk). A key press or a new message cuts it short; Reduce motion keeps it still.
 # [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
 #           instead of snapping; nicer text (bold word, italic part of speech, muted examples).
 #           Replaces def_frame / def_text.

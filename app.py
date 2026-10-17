@@ -536,8 +536,26 @@ class App:
         """Shared tail of every placement: count it, confirm in the toast, show the next word."""
         self.session_count += 1
         self.cmp = None
-        self.flash(f"{word}  \u2192  {TIERS[tier]}", bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
         self.refresh()
+        self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
+
+    def _fling_toast(self, text, tier):
+        """The placement message rises out of the word card, rests above it, then swipes toward its tier's
+        side (S, A, B to the left; C, D, F to the right; further for the outer tiers) and fades out."""
+        card, c = self.word_card, self.center
+        if not card.winfo_ismapped():
+            self.flash(text, bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
+            return
+        t = self.banner
+        f = ui_factor(self.root)
+        card_top = card.winfo_rooty() - c.winfo_rooty()
+        card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
+        mid = (card_top + card_bottom) // 2
+
+        def under(y):          # the card is white, the page around it cream
+            return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
+        t.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=mid, rest_bottom=card_top - int(8 * f),
+                dx=int((tier - 2.5) * 70 * f), in_=c, wraplength=max(240, c.winfo_width() - 120), under=under)
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""

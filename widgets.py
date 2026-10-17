@@ -782,18 +782,24 @@ class Toast(tk.Canvas):
         toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
 
     It floats (place), so showing it never moves anything else. A new message replaces the current one.
+    fling() is the placement version: the message rises out of the word, rests while it pales a little,
+    then swipes sideways (toward its tier) and fades out completely.
     "Fades" are colour blends from the page colour (FADE_IN_MS / FADE_OUT_MS; they jump with Reduce
     motion). cget("text") is the message on screen ("" once it is gone); cget("font") its Font.
     """
     FADE_IN_MS, FADE_OUT_MS = 160, 220
+    RISE_MS, SETTLE_MS, SWIPE_MS = 200, 250, 240      # fling(): rise out of the word, settle, swipe away
 
     def __init__(self, parent, font=None, animator=None, page_bg=None):
         page = page_bg or PALETTE["bg"]
         super().__init__(parent, bd=0, highlightthickness=0, bg=page)
         self._font, self._anim, self._page = font, animator, page
+        self._home = page              # the page colour (fling may borrow another backdrop for a moment)
         self._text, self._tint = "", (PALETTE["info"][0], PALETTE["info"][1])
         self._job = None
         self._wrap = 600
+        self._gen = 0                  # bumped by every show / fling, so stale stages of an old one stop
+        self._in = None
 
     def cget(self, key):
         if key == "text":
@@ -804,20 +810,96 @@ class Toast(tk.Canvas):
 
     def show(self, text, tint=None, ms=3500, in_=None, wraplength=None):
         """Show `text` on a pill coloured `tint` = (background, text colour) for `ms` milliseconds."""
-        if self._job is not None:
-            self.after_cancel(self._job)
-            self._job = None
-        if self._anim is not None:
-            self._anim.finish(f"toast{id(self)}")
+        self._reset()
         self._text = text
         self._tint = tint or self._tint
         if wraplength:
             self._wrap = wraplength
         self._draw()
-        self.place(in_=in_ or self.master, relx=0.5, y=6, anchor="n")
-        self.tk.call("raise", self._w)          # (Canvas.lift raises canvas items, not the widget)
+        self._in = in_ or self.master
+        self._put(0, 6)
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._job = self.after(ms, self.hide)
+
+    def fling(self, text, tint, start_mid, rest_bottom, dx, hold_ms=550, in_=None, wraplength=None, under=None):
+        """The placement message: rise from its centre at y=start_mid (the word) until its bottom edge is at
+        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then slide dx pixels sideways
+        (negative = left) while fading out completely. y values are inside `in_`. Every stage is <= 250 ms and a new
+        message (or Animator.finish_all from a key press) cuts it short; with Reduce motion it stays put.
+        `under(y_mid)` returns the colour behind the toast at that height (tk has no transparency, so the
+        toast takes that colour as its own background and blends toward it)."""
+        self._reset()
+        gen = self._gen
+        self._text, self._tint = text, tint
+        if wraplength:
+            self._wrap = wraplength
+        self._draw()
+        self._in = in_ or self.master
+        key = f"toast{id(self)}"
+        alive = lambda: gen == self._gen
+
+        h = int(self.cget("height"))
+        from_y, to_y = start_mid - h / 2, rest_bottom - h
+
+        def backdrop(y):
+            if under is not None:
+                c = under(y + h / 2)
+                if c != self._page:
+                    self._page = c
+                    super(Toast, self).configure(bg=c)
+
+        def rise(p):
+            if alive():
+                y = from_y + (to_y - from_y) * p
+                backdrop(y)
+                self._put(0, y)
+                self._paint(p)
+
+        def settle(p):
+            if alive():
+                self._paint(1.0 - 0.3 * p)
+
+        def swipe(p):
+            if alive():
+                self._put(dx * p, to_y)
+                self._paint(0.7 * (1.0 - p))
+
+        def gone():
+            if alive():
+                self._text = ""
+                self.place_forget()
+                self._page = self._home
+                super(Toast, self).configure(bg=self._home)
+
+        def after_rise():
+            if alive():
+                self._job = self.after(hold_ms, lambda: alive() and self._anim_run(key, self.SWIPE_MS, swipe, gone))
+                self._anim_run(key, self.SETTLE_MS, settle)
+        self._anim_run(key, self.RISE_MS, rise, after_rise)
+
+    def _anim_run(self, key, ms, frame, done=None):
+        if self._anim is None:
+            frame(1.0)
+            if done:
+                done()
+        else:
+            self._anim.run(key, ms, frame, done)
+
+    def _reset(self):
+        """Stop whatever the previous message was doing (its pending stages see a new generation)."""
+        self._gen += 1
+        if self._page != self._home:
+            self._page = self._home
+            super().configure(bg=self._home)
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._job = None
+        if self._anim is not None:
+            self._anim.finish(f"toast{id(self)}")
+
+    def _put(self, x, y):
+        self.place(in_=self._in, relx=0.5, x=int(x), y=int(y), anchor="n")
+        self.tk.call("raise", self._w)          # (Canvas.lift raises canvas items, not the widget)
 
     def hide(self):
         """Fade out now (also what happens when the time is up)."""

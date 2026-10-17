@@ -215,7 +215,41 @@ root.after(120, root.quit); root.mainloop(); anim.finish_all(); update()        
 assert toast.cget("text") == "" and not toast.winfo_ismapped()
 toast.show("x " * 200, ms=1000, in_=page, wraplength=300); anim.finish_all(); update()
 assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40             # long messages wrap
+# fling(): rises from the word, rests, then swipes toward its tier and fades out completely
+def toast_xy():
+    return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
+toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-150, hold_ms=60, in_=page)
+update(); x0, y0 = toast_xy()
+assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts at the word, faint
+anim.finish_all(); update(); x1, y1 = toast_xy()
+assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                                 # risen to its resting place
+anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
+assert toast.cget("text") == "apple  ->  S"
+root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: swiping
+mid_x, _ = toast_xy(); assert toast.winfo_ismapped()
+anim.finish_all(); update()
+assert toast.cget("text") == "" and not toast.winfo_ismapped()                  # gone, fully faded
+assert toast.itemcget("pill", "fill") == PALETTE["bg"]
+toast.fling("pear  ->  F", (TIER_COLORS[5], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=150, hold_ms=10, in_=page)
+anim.finish_all(); anim.finish_all(); root.after(40, root.quit); root.mainloop()
+update(); rx, _ = toast_xy(); assert rx >= 0                                    # F swipes to the right
+# under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
+toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=50,
+            hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
+update(); assert toast.cget("bg") == PALETTE["surface"]
+anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
+anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
+# a new message cuts a fling short, and the old one's pending stages do nothing
+toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=10, in_=page)
+toast.show("new", ms=5000, in_=page); anim.finish_all()
+root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
+assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
+toast.hide(); anim.finish_all()
 anim.reduce_motion = True
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=30, in_=page); update()
+assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
+root.after(80, root.quit); root.mainloop(); update()
+assert toast.cget("text") == ""                                                # then simply gone
 toast.show("jump", (PALETTE["ok"][0], PALETTE["ok"][1]), in_=page); assert toast.itemcget("pill", "fill") == PALETTE["ok"][0]
 toast.hide(); assert toast.cget("text") == ""                                     # no fade with Reduce motion
 anim.reduce_motion = False
