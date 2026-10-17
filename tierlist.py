@@ -291,17 +291,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
 #           letter + count on every bar already tell the tiers apart without colour.
 #           Covered by tests/_selftest_chart.py.
-# [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
-#           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
-#           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for
-#           ages. Candidates: (a) plain placed/total; (b) "common-word coverage", the share of the
-#           top ~20k frequency ranks already placed or skipped; (c) the tier chart (UI-13) alone,
-#           with no bar at all. Whatever we pick must stay calm: no goals, no streaks.
+# [ ] UI-14 ProgressBar. Measure decided (no longer on hold): frequency-weighted coverage, the share of all
+#           everyday word use (wordfreq frequency) that the placed words account for, e.g. "covers 93% of
+#           everyday English". Common words count for a lot, rare ones for very little, so it moves even when
+#           placed / total is tiny. Kept up to date from a running sum in the Store (no full scan per refresh).
+#           Shown on a logarithmic "nines" scale, so it never looks stuck at 99%: the bar is split into equal
+#           steps 0-90%, 90-99%, 99-99.9%, 99.9-99.99% (each step = one more nine), filled by
+#           -log10(1 - coverage) and labelled with as many decimals as it takes to show the last change
+#           (93%, 99.4%, 99.97%). Faint marks at each nine; calm, no goals, no streaks. Placed / total stays
+#           as text. No ETA: this is a measure of the list, not a task running (the ETA rule is for
+#           set-up bars).
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
 #           only in a tooltip when you hover over "+N today" (adds Tooltip(widget, text_fn)).
-#           While UI-14 is on hold, the placed/total figure stays.
+#           The placed/total figure stays alongside the UI-14 bar.
 #           Built: app.format_stats(): "Placed 6,506 of 9,006 (72.2%) · 2,500 left · 0 skipped" (duels
 #           dropped from the line; conflicts only when there are some). "+N today" counts the actions
 #           saved since local midnight (Store.actions_since over the undo history, so undo takes one
@@ -391,39 +395,41 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
-# [ ] UI-34 Status line: "Placed N of M (x%)" stays; the "N left" part goes (it repeats what placed / total
-#           already says) and in its place a completeness figure that weighs words by how common they are
-#           (asked for): e.g. "covers 93% of everyday English", the share of all word use (wordfreq
-#           frequency) that the placed words account for. Common words count for a lot, rare ones for very
-#           little, so it moves meaningfully even when placed / total is tiny. Computed in the Store from a
-#           running sum (never a full scan per refresh). This is close to UI-14 option (b); see the questions.
+# [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
+#           already says). The frequency-weighted completeness figure is saved for the progress bar (UI-14).
 # [ ] UI-35 The definition drawer does not open smoothly (reported): find out why (likely the window-fitting
 #           pass runs during the slide, or the frame jumps to full height first) and make it ease open
 #           and shut in one even motion. Check with a frame-by-frame capture.
-# [ ] UI-36 Tier chart: no hover note over the letters (asked for); hovering the bar itself still shows it.
+# [ ] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart).
 # [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
-#           stepping back one answer while comparing. The Compare button's key hint and the bottom-right
+#           stepping back one answer while comparing (confirmed). The Compare button's key hint and the bottom-right
 #           hint follow.
 # [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
-#           in from slightly smaller, or fades in where the system allows window transparency), and a
-#           click on the main window outside it closes it. Its unsaved state (search, filter, scroll) is
+#           in from slightly smaller; preferred over a fade), and a click on the main window's empty
+#           background closes it (not a click on a pill, card or button, so a quick click never loses your
+#           place). Its unsaved state (search, filter, scroll) is
 #           remembered for the next open, so closing by accident costs nothing.
 # [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
 #           the Unplace button, with undo.
 # [ ] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
 #           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
 #           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
-#           toast says so ("table moved to C; the B anchor is now gristle"). Today the moved word stays
+#           toast says so ("table moved to C; the B anchor is now gristle"). If the old tier has no other
+#           words, its anchor slot stays empty until one is picked (confirmed). Today the moved word stays
 #           registered as the old tier's anchor, which is quietly wrong.
 # [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
 #           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
 #           highlighted and redrawn live as spread changes. The intro text shrinks to one line.
 # [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
 #           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
-#           browser in general. On Linux tk draws this dialog itself, so it can be fixed (or replaced with
-#           a small themed file picker that matches the app); on Windows and macOS it is the system's own
-#           dialog. See the questions.
+#           browser in general. Seen on Linux, where tk draws this dialog itself: fix it there, or replace
+#           it with a small themed file picker that matches the app (Windows and macOS keep the system's
+#           own dialog).
+# [x] UI-43 Bug (reported, Linux): open a drop-down, switch to another program (Chrome, say), and the drop-down
+#           stayed in front of that program. Fixed: the header menus' DropMenu no longer asks to be always
+#           on top, and when the program loses focus every open drop-down closes (header menus and the
+#           ttk drop-downs such as Tier / Boundary and Browse's Show / Sort).
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
@@ -554,13 +560,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
-#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be added later: theme.py is built so a second
-#             palette with the same keys drops in); the session count stays as a muted "+N today",
-#             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
+#   Settled:  progress bar (UI-14): frequency-weighted coverage on a logarithmic "nines" scale;
+#             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
+#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
+#             added later: theme.py is built so a second palette with the same keys drops in); the
+#             session count stays as a muted "+N today", with the pace only in a hover note.
 #   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
-#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
+#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
+#             stay notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).

@@ -613,10 +613,7 @@ class DropMenu:
         win = self.win = tk.Toplevel(self.root, bg=PALETTE["border"])
         win.withdraw()
         win.overrideredirect(True)
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
+        # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
         body = tk.Frame(win, bg=PALETTE["surface"], padx=6, pady=6)
         body.pack(padx=1, pady=1)                 # the 1 px border is the window's own colour
         self._rows = []
@@ -1278,10 +1275,7 @@ class Tooltip:
             return
         win = self.win = tk.Toplevel(self.widget, bg=PALETTE["border"])
         win.overrideredirect(True)
-        try:
-            win.attributes("-topmost", True)
-        except tk.TclError:
-            pass
+        # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
         self._label = tk.Label(win, text=text, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
                                padx=8, pady=4, justify="left")
         self._label.pack(padx=1, pady=1)
@@ -1307,6 +1301,45 @@ class Tooltip:
             except tk.TclError:
                 pass
             self.win = self._label = None
+
+
+def close_popups(root):
+    """Close every drop-down the program has open (UI-43): the header menus' DropMenus and any ttk drop-down
+    list (Tier / Boundary, Browse's Show / Sort). Called when the program loses focus, so nothing is left
+    floating in front of another program."""
+    def walk(w):
+        for child in list(w.winfo_children()):
+            try:
+                if isinstance(child, HeaderMenus):
+                    child.close()
+                elif child.winfo_class() == "TCombobox":
+                    child.tk.call("ttk::combobox::Unpost", str(child))
+                walk(child)
+            except tk.TclError:
+                pass                     # a window that is already gone
+    walk(root)
+
+
+def watch_focus(root, on_lost=None):
+    """When the whole program loses focus (another program came to the front), close its drop-downs
+    (close_popups) and call on_lost(). Moving focus between the program's own windows does nothing."""
+    state = {"job": None}
+
+    def check():
+        state["job"] = None
+        try:
+            if root.focus_get() is None:
+                close_popups(root)
+                if on_lost:
+                    on_lost()
+        except (tk.TclError, KeyError):
+            pass                         # focus_get can fail on a half-destroyed popup: nothing to close then
+
+    def later(_e):
+        if state["job"] is None:
+            state["job"] = root.after(120, check)
+    root.bind_all("<FocusOut>", later, add="+")
+    return check
 
 
 def refresh_widgets(widget):

@@ -65,7 +65,8 @@ missed). Keep the README current in the same commit as the change (the user aske
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
   "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): frequency-weighted coverage on a
+  log "nines" scale, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
@@ -73,7 +74,7 @@ Done: UI-0..UI-13, UI-15..UI-18, ST-1..ST-4 (terminal: tkinter only; window: a t
 ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, a web link per package in the install dialog), UI-33
 (pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32
-(moving pastel background: needs the user's OK to relax the no-motion-while-idle guardrail). UI-14 stays on hold.
+(moving pastel background: needs the user's OK to relax the no-motion-while-idle guardrail). UI-14 is planned (measure decided).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps

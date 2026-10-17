@@ -27,7 +27,7 @@ from ui_motion import Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
 from widgets import (AnchorLadder, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
-                     Tooltip, WordCard, refresh_widgets)
+                     Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
 def format_stats(stats):
@@ -106,6 +106,7 @@ class App:
         self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
+        self._focus_check = watch_focus(root)     # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)

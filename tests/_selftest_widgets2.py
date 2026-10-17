@@ -6,7 +6,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from widgets import close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -195,6 +195,29 @@ seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      #
 assert hm.open_name is None and not hm.drops["File"].is_open()
 hm.open_menu("Edit"); update(); hm.drops["Edit"].invoke(0); update()
 assert ran[-1] == "undo" and hm.open_name is None
+
+# ---- UI-43: switching to another program closes every open drop-down; none is "always on top"
+from tkinter import ttk
+cbw = tk.Toplevel(root)
+cb = ttk.Combobox(cbw, values=["All tiers", "S", "A"], state="readonly"); cb.pack(); update()
+cb.tk.call("ttk::combobox::Post", str(cb)); update()
+pop = cb.tk.call("ttk::combobox::PopdownWindow", str(cb))
+assert int(cb.tk.call("winfo", "ismapped", pop)) == 1
+hm.open_menu("File"); update()
+assert hm.open_name == "File" and str(hm.drops["File"].win.attributes("-topmost")) in ("0", "False")
+close_popups(root); update()
+assert hm.open_name is None and int(cb.tk.call("winfo", "ismapped", pop)) == 0
+lost = []
+check = watch_focus(root, on_lost=lambda: lost.append(1))
+hm.open_menu("Edit"); update()
+real_focus_get = root.focus_get
+root.focus_get = lambda: None                                                   # the program lost focus
+check(); update()
+assert hm.open_name is None and lost == [1]
+root.focus_get = lambda: root                                                   # focus moved inside the program
+hm.open_menu("Edit"); update(); check(); assert hm.open_name == "Edit"
+hm.close(); root.focus_get = real_focus_get
+cbw.destroy()
 
 # ---- Toast (UI-11)
 page = tk.Frame(root, width=600, height=300, bg=PALETTE["bg"]); page.pack(); update()
