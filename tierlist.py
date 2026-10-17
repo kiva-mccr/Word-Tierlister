@@ -537,7 +537,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the conflicts count, already read for the status line), never a scan per refresh.
 #           Built: TabBar.show_only(keys) folds tabs away / grows them in; App.modes_with_work(stats).
 # [x] UI-50 Queue randomness Apply (asked for): Apply & reshuffle with nothing changed says "No settings
-#           changed" (inline, cleared by the next edit) instead of reshuffling. Otherwise the reshuffle runs on
+#           changed" (inline, cleared by the next edit; the dialog stays open, confirmed) instead of reshuffling. Otherwise the reshuffle runs on
 #           a worker thread while the dialog shows a back-and-forth (indeterminate) bar, its buttons greyed
 #           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
 #           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
