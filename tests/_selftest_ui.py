@@ -264,7 +264,7 @@ import widgets as _W
 assert {"Zoom in", "Zoom out", "Actual size"} <= set(_W.DropMenu.labels(app.header.menus["View"]))
 app.set_zoom(1.3); pump(3)
 assert app.zoom == 1.3 and s.get_meta("zoom") == "1.3"
-assert app.toast.cget("text") == "Zoom 130%" and app.toast._tint[0] == T.PALETTE["surface"]   # a white card
+assert app.toast.cget("text") == "Zoom 130%" and app.toast._tint[0] == T.PALETTE["info"][0] == "#FFFFFF"   # a white card
 assert _font("body").cget("size") > body0 and _font("word").cget("size") > word0
 assert root.winfo_width() <= app.root.winfo_screenwidth()                          # never past the screen
 root.event_generate("<Control-minus>"); pump(3); assert app.zoom == 1.2

@@ -16,7 +16,7 @@ PALETTE = {
     "shadow":   "#E9E2E6",   # offset shape under cards
     # feedback messages (toasts): (background, text)
     "ok":       ("#DDF3E4", "#25523A"),
-    "info":     ("#EFEAF4", "#4A4560"),
+    "info":     ("#FFFFFF", "#3D3A4B"),   # plain messages (skip, undo, zoom): a white card
     "warn":     ("#FFF1C9", "#6B5200"),
     "alert":    ("#FFDCC8", "#6B3210"),
     "bad":      ("#FFD9DF", "#7A2438"),
