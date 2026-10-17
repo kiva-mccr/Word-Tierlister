@@ -220,10 +220,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: TierRow(parent, tiers, on_pick) in widgets.py; RoundButton gained lift= (rises 3 px off
 #           a soft shadow on hover). press() runs the action first, then dips. Covered by
 #           _selftest_widgets2.py (the test file for every widget from UI-7 on).
-# [ ] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
+# [x] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
 #           arrow-key hints, plus quiet Tie / Skip text buttons. Replaces left_btn / right_btn /
 #           tie_btn / skip_pair_btn. Offers press(side) for left / right / tie / skip so the
 #           hotkeys (Left/A, Right/L, Down/T, S) can show the pressed look (wired in UI-18).
+#           Built: DuelCards(parent, on_answer) in widgets.py, App.duel (left_btn etc. are its buttons).
+#           RoundButton gained flat= (quiet text button), ring= (hover ring width) and hint_font=.
 # [ ] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
 #           still-possible tiers shaded and the anchor being asked about marked; it narrows
 #           smoothly after each answer. Shown in the Better / Same / Worse view.

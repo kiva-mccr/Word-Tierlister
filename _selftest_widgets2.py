@@ -1,9 +1,9 @@
-"""Widgets from UI-7 on: TierRow (and RoundButton's hover lift)."""
+"""Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons)."""
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import RoundButton, TierRow
+from widgets import DuelCards, RoundButton, TierRow
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -58,5 +58,38 @@ p.event_generate("<ButtonRelease-1>", x=6, y=8); update()
 assert picked == [2, 0, 5]
 # pill shape: radius clamps to half the height (a true pill)
 assert str(p.itemcget("shape", "smooth")) in ("1", "true")
+
+# ---- flat RoundButton (UI-8): no fill or outline at rest, a soft fill on hover
+f = RoundButton(root, "Skip pair", lambda: None, font=fnt, flat=True); f.pack(); update()
+assert f.itemcget("shape", "fill") == PALETTE["bg"] == f.itemcget("shape", "outline")
+assert f.itemcget("label", "fill") == PALETTE["muted"]
+f.event_generate("<Enter>"); update()
+assert f.itemcget("shape", "fill") == PALETTE["surface2"] and f.itemcget("label", "fill") == PALETTE["text"]
+f.set_enabled(False); update(); assert f.itemcget("label", "fill") == PALETTE["disabled"]
+
+# ---- DuelCards (UI-8)
+answers = []
+small = tkfont.Font(root=root, family="TkDefaultFont", size=11)
+duel = DuelCards(root, answers.append, fnt, small, animator=anim)
+duel.pack(); duel.show("apple", "pear"); update()
+assert duel.left.cget("text") == "apple" and duel.right.cget("text") == "pear"
+assert "A" in duel.left.cget("hint") and "L" in duel.right.cget("hint") and "T" in duel.tie.cget("hint")
+assert duel.left.cget("bg") == PALETTE["left"] and duel.right.cget("bg") == PALETTE["right"]
+assert duel.left.winfo_width() == duel.right.winfo_width()                   # same width, whatever the words
+assert duel.left.winfo_x() < duel.right.winfo_x()
+assert duel.tie.winfo_rooty() > duel.left.winfo_rooty() + duel.left.winfo_height() - 5   # Tie / Skip under the cards
+duel.left.event_generate("<Enter>"); update(); anim.finish_all()
+assert duel.left.itemcget("shape", "outline") == PALETTE["accent"] and float(duel.left.itemcget("shape", "width")) == 3
+duel.left.event_generate("<Leave>"); update()
+yl = duel.left.coords("label")[1]
+for side in DuelCards.SIDES:
+    duel.press(side)
+assert answers == ["left", "right", "tie", "skip"]
+update(1); assert duel.left.coords("label")[1] == yl + 2                     # the pressed dip
+duel.press("nonsense"); assert len(answers) == 4
+duel.set_enabled(False); duel.press("left"); assert len(answers) == 4        # disabled: nothing
+duel.show("a", "b"); duel.press("right"); assert answers[-1] == "right"      # show() re-enables
+b = duel.tie; b.event_generate("<Enter>"); b.event_generate("<ButtonPress-1>", x=6, y=6); update()
+b.event_generate("<ButtonRelease-1>", x=6, y=6); update(); assert answers[-1] == "tie"
 root.destroy()
 print("WIDGETS2 OK")

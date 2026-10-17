@@ -36,10 +36,14 @@ class RoundButton(tk.Canvas):
     * refresh() re-measures after the shared Font object was resized (call it after a font change).
     * With an Animator the hover tint fades over HOVER_MS; without one (or with reduce motion) it jumps.
     * `lift` (pixels, default 0): on hover the button rises by that much over a soft shadow (UI-7).
+    * `hint_font`: a Font for the caption (default: 72% of the label font, which is too big on big cards).
+    * `flat=True` is a quiet text button: no fill or outline until hovered (UI-8). `ring` is the
+      width of the accent outline on hover (2; the duel cards use 3).
     """
 
     def __init__(self, parent, text, command, bg=PALETTE["neutral"], fg=PALETTE["text"], font=None,
-                 padx=14, pady=8, hint=None, wraplength=0, radius=14, animator=None, canvas_bg=None, lift=0):
+                 padx=14, pady=8, hint=None, wraplength=0, radius=14, animator=None, canvas_bg=None, lift=0,
+                 flat=False, ring=2, hint_font=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"],
                          cursor="hand2", takefocus=0)
         self._command = command
@@ -47,9 +51,11 @@ class RoundButton(tk.Canvas):
         self._fill, self._fg = bg, fg
         self._padx, self._pady, self._radius = padx, pady, radius
         self._lift, self._lifted = lift, False
+        self._flat, self._ring = flat, ring
         self._anim = animator
         self._font = font if isinstance(font, tkfont.Font) else tkfont.Font(root=self, font=font or "TkDefaultFont")
-        self._hint_font = tkfont.Font(root=self, font=self._font)
+        self._own_hint_font = hint_font is None          # else a shared font: never resize it here
+        self._hint_font = hint_font if hint_font is not None else tkfont.Font(root=self, font=self._font)
         self._enabled, self._hover, self._pressed = True, False, False
         self._look = self._target()          # the colours currently drawn: (fill, outline, outline width, text colour)
         self._draw()
@@ -111,12 +117,21 @@ class RoundButton(tk.Canvas):
         """(fill, outline, outline width, text colour) for the current state."""
         fill, fg = self._fill, self._fg
         edge = lerp_color(fill, PALETTE["text"], 0.14)
+        if self._flat:
+            base = super().cget("bg")
+            if not self._enabled:
+                return (base, base, 1, PALETTE["disabled"])
+            if self._pressed:
+                return (PALETTE["select_bg"], PALETTE["select_bg"], 1, fg)
+            if self._hover:
+                return (PALETTE["surface2"], PALETTE["surface2"], 1, fg)
+            return (base, base, 1, PALETTE["muted"])
         if not self._enabled:
             return (lerp_color(fill, PALETTE["bg"], 0.6), lerp_color(edge, PALETTE["bg"], 0.6), 1, PALETTE["disabled"])
         if self._pressed:
             return (lerp_color(fill, PALETTE["text"], 0.10), edge, 1, fg)
         if self._hover:
-            return (lerp_color(fill, "#FFFFFF", 0.45), PALETTE["accent"], 2, fg)
+            return (lerp_color(fill, "#FFFFFF", 0.45), PALETTE["accent"], self._ring, fg)
         return (fill, edge, 1, fg)
 
     def _go(self, target):
@@ -152,8 +167,9 @@ class RoundButton(tk.Canvas):
         wrap = self._wrap if self._wrap > 0 else 0
         s = self._font.cget("size")
         hs = int(round(s * 0.72))
-        self._hint_font.configure(family=self._font.cget("family"), weight="normal",
-                                  size=max(7, hs) if s > 0 else min(-9, hs))
+        if self._own_hint_font:
+            self._hint_font.configure(family=self._font.cget("family"), weight="normal",
+                                      size=max(7, hs) if s > 0 else min(-9, hs))
         label = self.create_text(0, 0, text=self._text, font=self._font, width=wrap, justify="center",
                                  tags=("label", "body"), anchor="n")
         lb = self.bbox(label)
@@ -281,6 +297,66 @@ class TierRow(tk.Frame):
     def set_enabled(self, enabled):
         for b in self.buttons:
             b.set_enabled(enabled)
+
+
+class DuelCards(tk.Frame):
+    """The duel view's controls (UI-8): two big word cards side by side, each with a hover ring and its
+    key hint, and quiet Tie / Skip text buttons under them.
+
+        duel = DuelCards(parent, on_answer, font("pair"), font("body"), animator=app.anim)
+        duel.show("apple", "pear")
+        duel.press("left")   # what the Left key does: on_answer("left") runs, then the card dips
+
+    on_answer(side) gets "left", "right", "tie" or "skip", from a click or from press(). `left`, `right`,
+    `tie` and `skip` are the RoundButtons (App.left_btn and friends).
+    """
+    SIDES = ("left", "right", "tie", "skip")
+
+    def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
+        super().__init__(parent, bg=PALETTE["bg"])
+        self._on_answer = on_answer
+        self.columnconfigure((0, 1), uniform="duel")
+        self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
+                                padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3,
+                                hint_font=small_font)
+        self.left.grid(row=0, column=0, padx=12, sticky="nsew")
+        self.right = RoundButton(self, "", lambda: on_answer("right"), bg=PALETTE["right"], font=card_font,
+                                 padx=40, pady=40, radius=24, hint="L  \u2192", animator=animator, ring=3,
+                                 hint_font=small_font)
+        self.right.grid(row=0, column=1, padx=12, sticky="nsew")
+        small = tk.Frame(self, bg=PALETTE["bg"])
+        small.grid(row=1, column=0, columnspan=2, pady=(12, 0))
+        self.tie = RoundButton(small, "Tie / can't decide", lambda: on_answer("tie"), font=small_font,
+                               hint="\u2193  T", animator=animator, flat=True)
+        self.tie.grid(row=0, column=0, padx=8)
+        self.skip = RoundButton(small, "Skip pair", lambda: on_answer("skip"), font=small_font, hint="S",
+                                animator=animator, flat=True)
+        self.skip.grid(row=0, column=1, padx=8)
+
+    @property
+    def buttons(self):
+        return {"left": self.left, "right": self.right, "tie": self.tie, "skip": self.skip}
+
+    def show(self, left, right):
+        """Show a new pair (and enable everything)."""
+        self.left.config(text=left)
+        self.right.config(text=right)
+        self.set_enabled(True)
+
+    def set_enabled(self, enabled):
+        for b in self.buttons.values():
+            b.set_enabled(enabled)
+
+    def press(self, side):
+        """The keyboard version of a click: on_answer(side) runs first, then that button dips."""
+        b = self.buttons.get(side)
+        if b is None or not b.enabled:
+            return
+        self._on_answer(side)
+        try:
+            b.flash()
+        except tk.TclError:
+            pass
 
 
 class WordCard(tk.Canvas):

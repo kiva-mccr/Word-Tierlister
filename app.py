@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import RoundButton, TierRow, WordCard, refresh_widgets
+from widgets import DuelCards, RoundButton, TierRow, WordCard, refresh_widgets
 
 
 class App:
@@ -215,25 +215,14 @@ class App:
         pi = ttk.Frame(self.pair_frame)
         self.pair_inner = pi
         pi.place(relx=0.5, rely=0.42, anchor="center")
-        pi.columnconfigure((0, 1), uniform="pair")
         self.pair_title = ttk.Label(pi, text="Which word is better?", font=font("title"))
-        self.pair_title.grid(row=0, column=0, columnspan=2, pady=(0, 12))
-        self.left_btn = RoundButton(pi, "", lambda: self.pair_answer("left"), bg=PALETTE["left"],
-                                    font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
-        self.left_btn.grid(row=1, column=0, padx=12, sticky="nsew")
-        self.right_btn = RoundButton(pi, "", lambda: self.pair_answer("right"), bg=PALETTE["right"],
-                                     font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
-        self.right_btn.grid(row=1, column=1, padx=12, sticky="nsew")
-        small = ttk.Frame(pi)
-        small.grid(row=2, column=0, columnspan=2, pady=14)
-        self.tie_btn = RoundButton(small, "Tie / can't decide", lambda: self.pair_answer("tie"),
-                                   font=font("body"), hint="Down / T", animator=self.anim)
-        self.tie_btn.grid(row=0, column=0, padx=8)
-        self.skip_pair_btn = RoundButton(small, "Skip pair", self.skip_pair, font=font("body"), hint="S",
-                                         animator=self.anim)
-        self.skip_pair_btn.grid(row=0, column=1, padx=8)
+        self.pair_title.grid(row=0, column=0, pady=(0, 12))
+        self.duel = DuelCards(pi, self._on_duel, font("pair"), font("body"), animator=self.anim)
+        self.duel.grid(row=1, column=0, sticky="nsew")
+        self.left_btn, self.right_btn = self.duel.left, self.duel.right
+        self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
-        self.ctx_lbl.grid(row=3, column=0, columnspan=2)
+        self.ctx_lbl.grid(row=2, column=0, pady=(10, 0))
         self.center.bind("<Configure>", self._on_center_configure)
 
     # ---- window size: fits the screen and the contents ------------------------------------------
@@ -636,16 +625,12 @@ class App:
             self.left_btn.config(text="-")
             self.right_btn.config(text="-")
             self.ctx_lbl.config(text=msg)
-            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
-                b.set_enabled(False)
+            self.duel.set_enabled(False)
             self._render_defs([])
         else:
-            self.left_btn.config(text=self.pair["left"])
-            self.right_btn.config(text=self.pair["right"])
+            self.duel.show(self.pair["left"], self.pair["right"])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
-            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
-                b.set_enabled(True)
             self._render_defs([self.pair["left"], self.pair["right"]])
         self._hint()
 
@@ -670,6 +655,13 @@ class App:
                 self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
                 self.focus = None
         self.refresh()
+
+    def _on_duel(self, side):
+        """A duel card or the Tie / Skip button was clicked (or pressed with its key)."""
+        if side == "skip":
+            self.skip_pair()
+        else:
+            self.pair_answer(side)
 
     def skip_pair(self):
         """Show a different pair without recording anything."""
