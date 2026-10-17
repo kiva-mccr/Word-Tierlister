@@ -1130,6 +1130,54 @@ class WordCard(tk.Canvas):
     def refresh(self):
         self._draw()
 
+    TRANSITION_MS = 180
+
+    def transition_from(self, old_word, old_sub, dx, dy, animator):
+        """UI-16: call right after set() showed the next word. The previous word is drawn on top where it was,
+        nudges (dx, dy) pixels (toward the tier it went to) while fading into the card, and the new word
+        eases in from a few pixels below. Never blocks: Animator.finish_all (any key) jumps to the end."""
+        if animator is None or animator.reduce_motion or not old_word:
+            return
+        self.delete("old")
+        wrap = self._wrap if self._wrap > 0 else 0
+        word_xy, sub_xy = self.coords("word"), self.coords("sub")
+        if not word_xy:
+            return
+        # the old text, at the place the word was drawn (the card may have resized: centre on it)
+        self.create_text(*word_xy, text=old_word, font=self._wfont, fill=PALETTE["text"], width=wrap,
+                         justify="center", anchor="n", tags=("old", "oldword"))
+        if old_sub:
+            y = sub_xy[1] if sub_xy else word_xy[1] + self._wfont.metrics("linespace")
+            self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
+                             justify="center", anchor="n", tags=("old", "oldsub"))
+        self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
+        rise = max(4, self._wfont.metrics("linespace") // 10)
+        card = PALETTE["surface"]
+        ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
+
+        def frame(p):
+            self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
+            if osub:
+                self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
+            q = max(0.0, (p - 0.35) / 0.65)       # the new word starts once the old one is mostly gone
+            back = rise * (1 - q)                # it rises into place (from the latest layout)
+            wx, wy, sy = self._layout
+            self.coords("word", wx, wy + back)
+            if sy is not None:
+                self.coords("sub", wx, sy + back)
+            gone = min(1.0, p / 0.55)
+            self.itemconfigure("oldword", fill=lerp_color(PALETTE["text"], card, gone))
+            self.itemconfigure("oldsub", fill=lerp_color(PALETTE["muted"], card, gone))
+            self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
+            self.itemconfigure("sub", fill=lerp_color(card, PALETTE["muted"], q))
+
+        def done():
+            self.delete("old")
+        try:
+            animator.run(f"card{id(self)}", self.TRANSITION_MS, frame, done)
+        except tk.TclError:
+            pass
+
     @staticmethod
     def _text_width(text, fnt, wrap):
         """Width of `text` on one line, capped at the wrap width (a wrapped canvas text reports the
@@ -1168,6 +1216,7 @@ class WordCard(tk.Canvas):
         self.coords(word, bw / 2, top)
         if self._sub:
             self.coords("sub", bw / 2, top + th + gap)
+        self._layout = (bw / 2, top, top + th + gap if self._sub else None)   # resting places (transition_from)
         self.tag_raise("word")
         self.tag_raise("sub")
 

@@ -207,7 +207,10 @@ assert A.format_stats({"placed": 1, "total": 2, "skipped": 0, "conflicts": 1}).e
 assert "/hr" not in app.stats_lbl.cget("text") and "today" not in app.stats_lbl.cget("text")
 n0 = int(app.today_lbl.cget("text").split()[0].lstrip("+").replace(",", ""))
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
-key("4"); app.anim.finish_all(); pump(2)
+key("4")
+assert app.word_card.find_withtag("old")                            # UI-16: the old word is on its way out
+app.anim.finish_all(); pump(2)
+assert not app.word_card.find_withtag("old")
 assert app.today_lbl.cget("text") == f"+{n0 + 1:,} today" and str(app.today_lbl.cget("foreground")) == T.PALETTE["muted"]
 key("BackSpace"); pump(2); assert app.today_lbl.cget("text") == f"+{n0:,} today"   # undo takes it back
 app.session_count, app.session_start = 0, time.time() - 1800

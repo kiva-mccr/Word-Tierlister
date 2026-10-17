@@ -1,12 +1,12 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
-DefinitionDrawer (UI-12)."""
+DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from widgets import WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
@@ -285,5 +285,29 @@ dr.set_open(True); assert dr.is_open
 small.configure(size=14); dr.refresh_fonts()
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
 small.configure(size=11)
+
+# ---- WordCard.transition_from (UI-16): the old word nudges toward its tier and fades, the new one eases in
+cwin = tk.Toplevel(root)
+wf = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
+card = WordCard(cwin, wf, small); card.pack(padx=20, pady=20)
+card.set("apple", "rank #1"); update()
+rest = card.coords("word")
+card.set("pear", "rank #2"); card.transition_from("apple", "rank #1", dx=10, dy=12, animator=anim); update(1)
+assert card.itemcget("oldword", "text") == "apple" and card.itemcget("word", "text") == "pear"
+assert card.coords("word")[1] > rest[1]                                    # new word starts a little low...
+assert card.itemcget("word", "fill") != PALETTE["text"]                     # ...and faint
+root.after(90, root.quit); root.mainloop()
+mid = card.coords("oldword"); assert mid[0] > rest[0] and mid[1] > rest[1]   # old word on its way (right, down)
+anim.finish_all(); update(1)                                                # a key press: straight to the end
+assert not card.find_withtag("old") and card.coords("word") == card.coords("word")
+assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
+# a redraw in the middle (window resized) still ends with the word exactly in place
+card.set("plum", "rank #3"); card.transition_from("pear", "rank #2", dx=-10, dy=12, animator=anim); update(1)
+card.set("plum", "rank #3"); anim.finish_all(); update(1)
+assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and not card.find_withtag("old")
+anim.reduce_motion = True                                                   # Reduce motion: no transition at all
+card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)
+assert not card.find_withtag("old") and card.itemcget("word", "fill") == PALETTE["text"]
+anim.reduce_motion = False
 root.destroy()
 print("WIDGETS2 OK")

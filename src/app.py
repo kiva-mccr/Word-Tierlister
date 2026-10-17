@@ -588,18 +588,26 @@ class App:
         word = self.cur_word
         self.store.skip(word)
         self.session_count += 1
+        old_sub = self.word_card.sub
         self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
         self.refresh()
+        f = ui_factor(self.root)               # "later": it drifts back (up and away) instead of toward a tier
+        self.word_card.transition_from(word, old_sub, dx=0, dy=-int(10 * f), animator=self.anim)
 
     def _after_place(self, word, tier):
-        """Shared tail of every placement: count it, confirm in the toast, show the next word."""
+        """Shared tail of every placement: count it, show the next word (the old one nudges toward its tier
+        and fades, UI-16), confirm in the toast."""
         self.session_count += 1
         self.cmp = None
+        old_sub = self.word_card.sub
         self.refresh()
+        f = ui_factor(self.root)
+        self.word_card.transition_from(word, old_sub, dx=int((tier - 2.5) * 5 * f), dy=int(12 * f),
+                                       animator=self.anim)
         self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
 
     def _fling_toast(self, text, tier):
-        """The placement message rises out of the word card, rests above it, then swipes toward its tier's
+        """The placement message rises out of the word card's top edge, rests above it, then swipes toward its tier's
         side (S, A, B to the left; C, D, F to the right; further for the outer tiers) and fades out."""
         card, c = self.word_card, self.center
         if not card.winfo_ismapped():
@@ -609,7 +617,9 @@ class App:
         f = ui_factor(self.root)
         card_top = card.winfo_rooty() - c.winfo_rooty()
         card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
-        mid = (card_top + card_bottom) // 2
+        # it emerges from the card's top edge: starting over the word itself would hide the letters (the
+        # toast is an opaque canvas; tk has no transparency)
+        mid = card_top + int(14 * f)
 
         def under(y):          # the card is white, the page around it cream
             return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
