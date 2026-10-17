@@ -342,9 +342,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           duels); on_key runs the action, then button.flash(). A disabled button's key is off too (Space
 #           no longer starts a comparison while Compare is greyed out). RoundButton.flash skips the dip with
 #           Reduce motion. Covered in tests/_selftest_ui.py.
-# [ ] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
+# [x] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
 #           dims (~120 ms) before the next pair; a boundary swap shows the two chips trading
 #           places.
+#           Built: DuelCards.resolve(side): the answer is saved at once; the winning card rises off its
+#           shadow (the same lift the cards now have on hover) and the other fades to its disabled look
+#           for 120 ms, then the next pair. A key press goes straight on; clicks during it are ignored.
+#           The "two chips trade places" for a boundary swap was left out to keep things lean: the swap
+#           toast already says what moved.
 # [ ] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 # [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two

@@ -773,7 +773,11 @@ class App:
             if self.focus_left <= 0:
                 self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
                 self.focus = None
-        self.refresh()
+        self.pair = None                       # answered: nothing more to click until the next pair is up
+        if ans in ("left", "right"):
+            self.duel.resolve(ans, self.anim, self.refresh)    # winner lifts, loser dims, then the next pair
+        else:
+            self.refresh()
 
     def _on_duel(self, side):
         """A duel card or the Tie / Skip button was clicked (or pressed with its key)."""

@@ -308,11 +308,11 @@ class DuelCards(tk.Frame):
         super().__init__(parent, bg=PALETTE["bg"])
         self.columnconfigure((0, 1), uniform="duel")
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
-                                padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3,
+                                padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3, lift=self.LIFT,
                                 hint_font=small_font)
         self.left.grid(row=0, column=0, padx=12, sticky="nsew")
         self.right = RoundButton(self, "", lambda: on_answer("right"), bg=PALETTE["right"], font=card_font,
-                                 padx=40, pady=40, radius=24, hint="L  \u2192", animator=animator, ring=3,
+                                 padx=40, pady=40, radius=24, hint="L  \u2192", animator=animator, ring=3, lift=self.LIFT,
                                  hint_font=small_font)
         self.right.grid(row=0, column=1, padx=12, sticky="nsew")
         small = tk.Frame(self, bg=PALETTE["bg"])
@@ -327,6 +327,18 @@ class DuelCards(tk.Frame):
     @property
     def buttons(self):
         return {"left": self.left, "right": self.right, "tie": self.tie, "skip": self.skip}
+
+    RESOLVE_MS = 120
+    LIFT = 4                                 # the cards rise this much on hover and when they win
+
+    def resolve(self, side, animator, on_done):
+        """UI-19: the winning card ("left" / "right") lifts a few pixels and the other dims (it fades to its
+        disabled look), then on_done() shows the next pair. A key press (Animator.finish_all) or Reduce
+        motion goes straight to on_done."""
+        win, lose = (self.left, self.right) if side == "left" else (self.right, self.left)
+        lose.set_enabled(False)              # fades to its disabled look
+        win._set_lift(True)                  # rises off its shadow, as on hover
+        animator.run(f"duel{id(self)}", self.RESOLVE_MS, lambda p: None, on_done)
 
     def show(self, left, right):
         """Show a new pair (and enable everything)."""

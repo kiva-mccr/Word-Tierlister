@@ -229,6 +229,18 @@ y0 = app.tier_btns[0].coords("label")[1]; w = app.cur_word; key("1")
 assert s.get_word(w)["tier"] == 0 and app.tier_btns[0].coords("label")[1] == y0              # Reduce motion: no dip
 app.motion_var.set(False); app.toggle_motion()
 
+# ---- duel result (UI-19): answered at once, the next pair after the short resolve; no double answers
+app.mode_var.set("refine"); app.on_mode_change(); pump(2)
+if app.pair:
+    first = dict(app.pair); n0 = s.stats()["comparisons"]
+    key("Left")
+    assert s.stats()["comparisons"] == n0 + 1 and app.pair is None              # saved straight away
+    app.pair_answer("left"); app._on_duel("right")                             # clicks during the resolve
+    assert s.stats()["comparisons"] == n0 + 1                                   # ...are ignored
+    key("Right")                                                                 # a key finishes it and answers
+    assert s.stats()["comparisons"] == n0 + 2                                   # the next pair at once
+app.anim.finish_all(); pump(2)
+
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A
 line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})

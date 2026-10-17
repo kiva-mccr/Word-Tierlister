@@ -70,7 +70,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-18, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-19 (duel result), UI-20, UI-21, UI-23..27, then
+Done: UI-0..UI-13, UI-15..UI-19, UI-36, UI-43, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-20 (empty states), UI-21, UI-23..27, then
 ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, a web link per package in the install dialog), UI-33
 (pace timeout + hover-note polish), UI-34..42 (a round of edits; the "Window by window" list in the
 roadmap shows which steps touch which window), UI-32

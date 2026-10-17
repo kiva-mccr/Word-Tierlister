@@ -87,6 +87,20 @@ duel.show("a", "b"); assert all(b.enabled for b in duel.buttons.values())    # s
 b = duel.tie; b.event_generate("<Enter>"); b.event_generate("<ButtonPress-1>", x=6, y=6); update()
 b.event_generate("<ButtonRelease-1>", x=6, y=6); update(); assert answers[-1] == "tie"
 
+# resolve (UI-19): the winner lifts, the loser dims, then the next pair
+nxt = []
+duel.show("a", "b"); update(); anim.finish_all()
+yw = duel.right.coords("label")[1]
+duel.resolve("right", anim, lambda: nxt.append(1)); update(1)
+assert not duel.left.enabled and duel.right.enabled and not nxt                 # loser dims at once
+anim.finish_all(); update(1)
+assert duel.right.coords("label")[1] == yw - DuelCards.LIFT and nxt == [1]      # winner up, then on to the next
+duel.show("c", "d"); update()
+assert duel.right.coords("label")[1] == yw and duel.left.enabled                # the next pair starts fresh
+anim.reduce_motion = True
+duel.resolve("left", anim, lambda: nxt.append(2)); assert nxt == [1, 2]         # Reduce motion: straight on
+anim.reduce_motion = False
+
 # ---- AnchorLadder (UI-9)
 lad = AnchorLadder(root, list("SABCDF"), small, animator=anim); lad.pack(); update()
 assert len(lad.find_withtag("pill")) == 6 and lad.itemcget("txt0", "text") == "S"
