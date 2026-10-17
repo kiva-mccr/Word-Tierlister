@@ -99,6 +99,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
+# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -168,6 +169,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           asking. Installing tkinter also restarts the program (it could not be imported at start).
 #           Without a terminal (pythonw, a double-clicked shortcut) the window asks as before.
 #           Covered by _selftest_install.py; tried for real in a fresh venv without wordfreq.
+# [ ] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
+#           start from a terminal keeps that terminal busy until the window closes, and closing the
+#           terminal ends the program. Plan: once the terminal stage (ST-4) has nothing left to ask, the
+#           program starts itself again in its own session (setsid; output to tierlist.log, like the
+#           Windows console detach in ST-1) and the terminal gets its prompt back at once, so closing it
+#           no longer matters. It stays attached only while a question is being asked (ST-4), with
+#           --console, or when output is redirected on purpose. Plus File > "Add to applications menu"
+#           writes a .desktop launcher (Terminal=false) so the program can start with no terminal at
+#           all; anything that must be installed is then asked in the window (ST-3). A program cannot
+#           close a terminal window the user opened themselves; giving the prompt back is the most it
+#           can do. macOS behaves the same way and gets the same treatment if it is cheap.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -307,19 +319,33 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
 #
-# --- Tentative: packaging as a program (NOT planned yet; ignore for now) ------------------------
-# Idea only, to revisit once the UI is finished. Notes from the discussion: PyInstaller builds only
+# --- Packaging as a program (T-6 / T-7 asked for; built after the UI steps) ---------------------
+# T-1..T-3 are the groundwork for T-6 / T-7; T-4 and T-5 stay notes.
+# Notes from the discussion: PyInstaller builds only
 # for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
 # Linux can be tested from here (Windows / macOS builds would need testing on those machines).
-# [?] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
+# [ ] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
 #          when frozen. REQUIRED before any build: a one-file build unpacks to a temporary folder,
 #          so a save kept "next to the script" would be deleted when the program exits.
-# [?] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
+# [ ] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
 #          stays an optional download as it is now.
-# [?] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
+# [ ] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
 #          Depends on ST-1 and ST-2 (a windowed program has no console for messages).
 # [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
 #          dependencies once and start the program. Roughly ten lines each, nothing to sign.
+# [ ] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running
+#           from source): asks first, installs PyInstaller if missing (the ST-4 way), builds a one-file
+#           program for this OS behind the progress window (T-3 is the engine), bundles the complete
+#           source inside it (see T-7), then starts the new program and closes this window. Both use the
+#           same save (T-1), so nothing is lost. Needs T-1 and T-2 first. Only builds for the OS it runs
+#           on (PyInstaller cannot cross-compile).
+# [ ] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
+#           (shown in the built program): writes the exact source files that were bundled (no real
+#           decompiling is needed or attempted) into a folder you pick: the program files at the top,
+#           and the Claude files (CLAUDE.md, CHECKLIST.md) plus the tests (_selftest_*.py, run_tests.sh,
+#           check_release.py) in a separate folder inside it. run_tests.sh and check_release.py learn
+#           to find the program files one level up. Then it opens the folder and offers to start
+#           tierlist.py from it.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
@@ -330,7 +356,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             palette with the same keys drops in); the session count stays as a muted "+N today",
 #             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
 #   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
-#   Parked:   Packaging as a program (T-1..T-5 above): tentative, ignored until asked for.
+#   Planned:  Packaging, now asked for: T-6 (make a program) and T-7 (back to source), which need T-1,
+#             T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).
