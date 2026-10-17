@@ -14,7 +14,7 @@ PALETTE = {
     "accent_text": "#3D3A4B",
     "select_bg": "#DCD2FA",  # selected row / pressed fill
     "shadow":   "#E9E2E6",   # offset shape under cards
-    # feedback banners: (background, text)
+    # feedback messages (toasts): (background, text)
     "ok":       ("#DDF3E4", "#25523A"),
     "info":     ("#EFEAF4", "#4A4560"),
     "warn":     ("#FFF1C9", "#6B5200"),

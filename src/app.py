@@ -106,7 +106,7 @@ class App:
         self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
-        self._focus_check = watch_focus(root)     # switching to another program closes open drop-downs (UI-43)
+        watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -209,7 +209,7 @@ class App:
         self.center = ttk.Frame(r)
         self.center.pack(side="top", fill="both", expand=True)
         # messages float over the top of the page as a toast (UI-11); App.flash() shows them
-        self.banner = Toast(r, font("label"), animator=self.anim)
+        self.toast = Toast(r, font("label"), animator=self.anim)
 
         # ---- place view
         self.place_frame = ttk.Frame(self.center)
@@ -468,7 +468,7 @@ class App:
     def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
         """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
         replaces the old one."""
-        self.banner.show(text, (bg, fg), ms, in_=self.center,
+        self.toast.show(text, (bg, fg), ms, in_=self.center,
                          wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
@@ -613,31 +613,25 @@ class App:
 
     def _fling_toast(self, text, tier):
         """The placement message rises out of the word card's top edge, rests above it, then flies into its
-        tier's bar in the chart, fading as it goes, and the bar pulses (UI-17). Without the chart it swipes
-        toward its tier's side instead (S, A, B left; C, D, F right)."""
-        card, c = self.word_card, self.center
-        if not card.winfo_ismapped():
+        tier's bar in the chart, fading as it goes, and the bar pulses (UI-11, UI-17)."""
+        card, c, ch = self.word_card, self.center, self.chart
+        if not (card.winfo_ismapped() and ch.shown and ch.winfo_ismapped()):
             self.flash(text, bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
             return
-        t = self.banner
         f = ui_factor(self.root)
         card_top = card.winfo_rooty() - c.winfo_rooty()
         card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
-        # it emerges from the card's top edge: starting over the word itself would hide the letters (the
-        # toast is an opaque canvas; tk has no transparency)
-        mid = card_top + int(14 * f)
+        bx, by = ch.bar_top(tier)
 
         def under(y):          # the card is white, the page around it cream
             return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
-        target, arrive = None, None
-        ch = self.chart
-        if ch.shown and ch.winfo_ismapped():    # UI-17: it lands in its tier's bar, which pulses
-            bx, by = ch.bar_top(tier)
-            target = (bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty())
-            arrive = lambda: ch.pulse(tier)
-        t.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=mid, rest_bottom=card_top - int(8 * f),
-                dx=int((tier - 2.5) * 70 * f), in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
-                target=target, on_arrive=arrive)
+        # it starts at the card's top edge: over the word itself it would hide the letters (the toast is an
+        # opaque canvas; tk has no transparency)
+        self.toast.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=card_top + int(14 * f),
+                          rest_bottom=card_top - int(8 * f),
+                          target=(bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty()),
+                          in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
+                          on_arrive=lambda: ch.pulse(tier))
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""

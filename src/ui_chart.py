@@ -2,7 +2,7 @@
 
 Built to the dataviz rules where they apply: bars at most 24 px wide with a rounded data end and a square
 baseline on one hairline axis; the tier letter under each bar and its count on the cap are in text colours
-(never the bar colour); one hover note per bar; bars grow with ease-out when a count changes. The bars are
+(never the bar colour); bars grow with ease-out when a count changes. No hover note (UI-36: not needed). The bars are
 the tier pastels with the pills' faint edge (theme.TIER_BAR): identity comes from the letter and the fixed
 S..F order, not from colour, so the colours can stay pastel (the user's choice over a colour-blind-tuned set).
 """
@@ -10,7 +10,6 @@ import tkinter as tk
 
 from theme import PALETTE, TIER_BAR
 from ui_motion import lerp_color
-from widgets import Tooltip
 
 GROW_MS = 220
 PULSE_MS = 240
@@ -46,7 +45,6 @@ class DistributionChart(tk.Canvas):
         self._glow = [0.0] * len(self.tiers)
         self._visible = True
         self._draw()
-        self.tooltip = Tooltip(self, self._tip_text, font=font)
 
     # ---- geometry --------------------------------------------------------------------------------
     def _metrics(self):
@@ -142,20 +140,6 @@ class DistributionChart(tk.Canvas):
         h = max(self._shown[tier] * plot_h, 3 if self.counts[tier] else 0)
         return self.winfo_rootx() + int(self._x(tier)), self.winfo_rooty() + int(self._base - h)
 
-    def tier_at(self, x):
-        """Which tier's column is under canvas x (None between / outside)."""
-        _bw, slot, _ph, _top, _ll = self._metrics()
-        i = int((x - 4) // slot)
-        return i if 0 <= i < len(self.tiers) and x >= 4 else None
-
-    def _tip_text(self, e):
-        i = self.tier_at(e.x) if self._visible else None
-        if i is None:
-            return None
-        total = sum(self.counts) or 1
-        n = self.counts[i]
-        return f"Tier {self.tiers[i]}: {n:,} word{'s' if n != 1 else ''} ({100 * n / total:.0f}% of placed)"
-
     @property
     def shown(self):
         return self._visible
@@ -166,8 +150,6 @@ class DistributionChart(tk.Canvas):
         self.itemconfigure("all", state="normal" if on else "hidden")
         if on:
             self._paint()                     # (empty tiers keep their bar hidden)
-        else:
-            self.tooltip.hide()
 
     def refresh(self):
         self._draw()

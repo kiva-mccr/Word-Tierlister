@@ -278,9 +278,9 @@ class TierRow(tk.Frame):
     """The six tier pills S..F, each with its key hint (1-6), a hover lift and the pressed dip (UI-7).
 
         row = TierRow(parent, ["S", "A", "B", "C", "D", "F"], on_pick, font("tier"), animator=app.anim)
-        row.press(2)        # what the "3" key does: the B pill dips, then on_pick(2) runs
 
-    `buttons` are the RoundButtons (App.tier_btns), in tier order. on_pick(tier) runs on a click too.
+    `buttons` are the RoundButtons (App.tier_btns), in tier order; on_pick(tier) runs on a click. The 1-6
+    keys are wired in App._key_target (UI-18), which runs the action and then the pill's flash().
     """
 
     def __init__(self, parent, tiers, on_pick, font=None, animator=None, colors=TIER_COLORS, gap=5):
@@ -291,21 +291,6 @@ class TierRow(tk.Frame):
                             hint=str(t + 1), radius=999, animator=animator, lift=3)
             b.grid(row=0, column=t, padx=gap)
             self.buttons.append(b)
-        self._on_pick = on_pick
-
-    def press(self, tier):
-        """The keyboard version of a click: the action runs first (input is never delayed), then the pill
-        shows its pressed dip. Out-of-range tiers and disabled pills do nothing."""
-        if 0 <= tier < len(self.buttons) and self.buttons[tier].enabled:
-            self._on_pick(tier)
-            try:
-                self.buttons[tier].flash()
-            except tk.TclError:
-                pass
-
-    def set_enabled(self, enabled):
-        for b in self.buttons:
-            b.set_enabled(enabled)
 
 
 class DuelCards(tk.Frame):
@@ -314,16 +299,13 @@ class DuelCards(tk.Frame):
 
         duel = DuelCards(parent, on_answer, font("pair"), font("body"), animator=app.anim)
         duel.show("apple", "pear")
-        duel.press("left")   # what the Left key does: on_answer("left") runs, then the card dips
 
-    on_answer(side) gets "left", "right", "tie" or "skip", from a click or from press(). `left`, `right`,
-    `tie` and `skip` are the RoundButtons (App.left_btn and friends).
+    on_answer(side) gets "left", "right", "tie" or "skip" on a click; the keys are wired in App._key_target.
+    `left`, `right`, `tie` and `skip` are the RoundButtons (also App.left_btn and friends).
     """
-    SIDES = ("left", "right", "tie", "skip")
 
     def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
         super().__init__(parent, bg=PALETTE["bg"])
-        self._on_answer = on_answer
         self.columnconfigure((0, 1), uniform="duel")
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
                                 padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3,
@@ -355,17 +337,6 @@ class DuelCards(tk.Frame):
     def set_enabled(self, enabled):
         for b in self.buttons.values():
             b.set_enabled(enabled)
-
-    def press(self, side):
-        """The keyboard version of a click: on_answer(side) runs first, then that button dips."""
-        b = self.buttons.get(side)
-        if b is None or not b.enabled:
-            return
-        self._on_answer(side)
-        try:
-            b.flash()
-        except tk.TclError:
-            pass
 
 
 class AnchorLadder(tk.Canvas):
@@ -780,13 +751,13 @@ class Toast(tk.Canvas):
         toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
 
     It floats (place), so showing it never moves anything else. A new message replaces the current one.
-    fling() is the placement version: the message rises out of the word, rests while it pales a little,
-    then swipes sideways (toward its tier) and fades out completely.
+    fling() is the placement version: the message rises out of the word card, rests while it pales a
+    little, then flies to a landing point (its tier's bar) and fades out completely.
     "Fades" are colour blends from the page colour (FADE_IN_MS / FADE_OUT_MS; they jump with Reduce
     motion). cget("text") is the message on screen ("" once it is gone); cget("font") its Font.
     """
     FADE_IN_MS, FADE_OUT_MS = 160, 220
-    RISE_MS, SETTLE_MS, SWIPE_MS = 200, 250, 240      # fling(): rise out of the word, settle, swipe away
+    RISE_MS, SETTLE_MS, FLY_MS = 200, 250, 240        # fling(): rise out of the card, settle, fly to the bar
 
     def __init__(self, parent, font=None, animator=None, page_bg=None):
         page = page_bg or PALETTE["bg"]
@@ -819,16 +790,15 @@ class Toast(tk.Canvas):
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._job = self.after(ms, self.hide)
 
-    def fling(self, text, tint, start_mid, rest_bottom, dx, hold_ms=550, in_=None, wraplength=None, under=None,
-              target=None, on_arrive=None):
-        """The placement message: rise from its centre at y=start_mid (the word) until its bottom edge is at
-        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then slide dx pixels sideways
-        (negative = left) while fading out completely. y values are inside `in_`. Every stage is <= 250 ms and a new
-        message (or Animator.finish_all from a key press) cuts it short; with Reduce motion it stays put.
+    def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
+              on_arrive=None):
+        """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
+        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then fly to `target` = (x offset from
+        the centre of `in_`, y of the landing point), fading out completely, and call on_arrive(). y values are
+        inside `in_`. Every stage is <= 250 ms; a new message (or Animator.finish_all from a key press) cuts it
+        short, and a cut-short one never arrives. With Reduce motion it stays put, then goes.
         `under(y_mid)` returns the colour behind the toast at that height (tk has no transparency, so the
-        toast takes that colour as its own background and blends toward it).
-        With `target` = (x offset from the centre of `in_`, y of the landing point inside `in_`), the last stage
-        flies there instead of swiping sideways (UI-17: into its tier's bar) and calls on_arrive() on landing."""
+        toast takes that colour as its own background and blends toward it)."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -860,14 +830,11 @@ class Toast(tk.Canvas):
             if alive():
                 self._paint(1.0 - 0.3 * p)
 
-        def swipe(p):
+        def fly(p):
             if alive():
-                if target is None:
-                    self._put(dx * p, to_y)
-                else:
-                    y = to_y + (target[1] - h / 2 - to_y) * p
-                    backdrop(y)
-                    self._put(target[0] * p, y)
+                y = to_y + (target[1] - h / 2 - to_y) * p
+                backdrop(y)
+                self._put(target[0] * p, y)
                 self._paint(0.7 * (1.0 - p))
 
         def gone():
@@ -881,7 +848,7 @@ class Toast(tk.Canvas):
 
         def after_rise():
             if alive():
-                self._job = self.after(hold_ms, lambda: alive() and self._anim_run(key, self.SWIPE_MS, swipe, gone))
+                self._job = self.after(hold_ms, lambda: alive() and self._anim_run(key, self.FLY_MS, fly, gone))
                 self._anim_run(key, self.SETTLE_MS, settle)
         self._anim_run(key, self.RISE_MS, rise, after_rise)
 
@@ -971,8 +938,6 @@ class DefinitionDrawer(tk.Frame):
         super().__init__(parent, bg=PALETTE["bg"])
         self._anim = animator
         body, head = fonts["body"], fonts["head"]
-        self._italic = tkfont.Font(root=self, font=body)
-        self._italic.configure(slant="italic")
         self._body = body
         inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"])
         inner.pack(fill="x", anchor="n")
@@ -982,21 +947,20 @@ class DefinitionDrawer(tk.Frame):
         t = self.text
         t.tag_configure("head", font=head, spacing1=2, spacing3=4)
         t.tag_configure("num", foreground=PALETTE["muted"])
-        t.tag_configure("pos", font=self._italic, foreground=PALETTE["muted"])
+        t.tag_configure("pos", foreground=PALETTE["muted"])
         t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
-        t.tag_configure("ex", font=self._italic, foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
+        t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
         t.tag_configure("wait", foreground=PALETTE["muted"])
         self._shown = False
-
-    def refresh_fonts(self):
-        """Follow the body font after it was resized (the italic copy is this widget's own)."""
-        self._italic.configure(size=self._body.cget("size"), family=self._body.cget("family"))
 
     def show_words(self, words, get_def):
         """Fill the pane: for each word, its name and its senses (get_def(word) -> text, or None while
         it is still being looked up)."""
         from definitions import parse_definition
         t = self.text
+        italic = (self._body.cget("family"), self._body.cget("size"), "italic")   # follows the body size
+        t.tag_configure("pos", font=italic)
+        t.tag_configure("ex", font=italic)
         t.config(state="normal")
         t.delete("1.0", "end")
         for i, w in enumerate(words):

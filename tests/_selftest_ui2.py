@@ -49,7 +49,7 @@ assert store.path in root.title()
 # --- startup: the note shows, and the merge offer is asked once (answered "no" here)
 pump(12)
 assert asked and "tierlist.db" in asked[0][1] and "306 placed" in asked[0][1], asked
-assert app.banner.cget("text").startswith("Not merged") or "Resumed" in app.banner.cget("text")
+assert app.toast.cget("text").startswith("Not merged") or "Resumed" in app.toast.cget("text")
 assert store.stats()["placed"] == 26
 n_asked = len(asked)
 app.offer_merge(others)                                   # already answered: it must not ask again

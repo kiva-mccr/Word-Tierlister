@@ -43,6 +43,7 @@ class Browser:
         self._scale_job = None
         self.current = None
         self.loaded = self.total = 0
+        self._count_digits = None                 # digits in the total the minimum size was last set for
         self._seen_version = -1
         self._loading = False
         self.fsize = 0
@@ -305,13 +306,13 @@ class Browser:
 
     def _longest_count(self):
         """The longest text the word count can show for the current total (for the minimum size)."""
-        t = max(getattr(self, "total", 0) or 0, 1)
+        t = max(self.total, 1)
         return f"{t:,} of {t:,} (more on scroll)"
 
     def _update_count(self):
         """Show 'N words' or 'N of M (more on scroll)'. A total with more digits than before raises the
         window's minimum size, so the count is never clipped."""
-        if len(f"{self.total:,}") != getattr(self, "_count_digits", None):
+        if len(f"{self.total:,}") != self._count_digits:
             self._count_digits = len(f"{self.total:,}")
             self._update_minsize()
         if self.loaded < self.total:

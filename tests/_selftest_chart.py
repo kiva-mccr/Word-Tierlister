@@ -1,6 +1,5 @@
-"""The tier chart (UI-13, ui_chart.py): bar sizes and shapes, labels in text colours, growth, pulse, hover."""
+"""The tier chart (UI-13, ui_chart.py): bar sizes and shapes, labels in text colours, growth, pulse, hiding."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import types
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
@@ -53,19 +52,12 @@ anim.finish_all(); assert ch.itemcget("bar1", "fill") == TIER_BAR[1]
 x, y = ch.bar_top(1)
 assert abs(x - (ch.winfo_rootx() + (min(ch.coords("bar1")[0::2]) + max(ch.coords("bar1")[0::2])) / 2)) <= 1
 assert abs(y - (ch.winfo_rooty() + min(ch.coords("bar1")[1::2]))) <= 1
-# hover note per bar
-ev = types.SimpleNamespace(x=int((min(ch.coords("bar3")[0::2]) + max(ch.coords("bar3")[0::2])) / 2), y=40)
-assert ch.tier_at(ev.x) == 3 and ch.tier_at(-5) is None
-assert ch._tip_text(ev) == "Tier C: 25 words (11% of placed)"                   # 25 of 236
-ch.tooltip.show_at(ev); root.update()
-assert ch.tooltip.text.startswith("Tier C") and ch.tooltip.win.winfo_ismapped()
-ch.tooltip.hide(); assert ch.tooltip.text == ""
-ch.set([1, 0, 0, 0, 0, 0], animate=False)
-assert ch._tip_text(types.SimpleNamespace(x=ev.x - 3 * (xs[1] - xs[0]), y=40)).endswith("1 word (100% of placed)")
+assert not ch.bind("<Motion>")                                                     # no hover note (UI-36)
 # hidden (other tabs): nothing drawn, no hover note, but the same size
+ch.set([1, 0, 0, 0, 0, 0], animate=False)
 w1, h1 = ch.winfo_reqwidth(), ch.winfo_reqheight()
 ch.show(False); assert not ch.shown and ch.itemcget("bar0", "state") == "hidden" and ch.itemcget("axis", "state") == "hidden"
-assert ch._tip_text(ev) is None and (ch.winfo_reqwidth(), ch.winfo_reqheight()) == (w1, h1)
+assert (ch.winfo_reqwidth(), ch.winfo_reqheight()) == (w1, h1)
 ch.refresh(); assert ch.itemcget("letter0", "state") == "hidden"                     # stays hidden on refresh
 ch.show(True); assert ch.itemcget("letter0", "state") == "normal" and ch.itemcget("bar1", "state") == "hidden"  # (empty)
 # a font change re-measures

@@ -47,18 +47,15 @@ assert [x.cget("bg") for x in row.buttons] == TIER_COLORS
 xs = [x.winfo_x() for x in row.buttons]
 assert xs == sorted(xs), "pills run S..F left to right"
 ys = row.buttons[2].coords("label")[1]
-row.press(2); update(1)
-assert picked == [2] and row.buttons[2].coords("label")[1] == ys + 2           # action ran, pill dipped
+row.buttons[2].flash(); update(1)
+assert row.buttons[2].coords("label")[1] == ys + 2                             # the key's dip (UI-18 calls it)
 root.after(150, root.quit); root.mainloop()
-assert row.buttons[2].coords("label")[1] == ys                                 # ...and came back up
-row.press(9); assert picked == [2]                                             # out of range: nothing
-row.buttons[0].set_enabled(False); row.press(0); assert picked == [2]          # disabled: nothing
-row.set_enabled(True); row.press(0); assert picked == [2, 0]
-# a click on a pill picks too
+assert row.buttons[2].coords("label")[1] == ys                                 # ...and back up
+# a click on a pill picks it
 p = row.buttons[5]
 p.event_generate("<Enter>"); p.event_generate("<ButtonPress-1>", x=6, y=8); update()
 p.event_generate("<ButtonRelease-1>", x=6, y=8); update()
-assert picked == [2, 0, 5]
+assert picked == [5]
 # pill shape: radius clamps to half the height (a true pill)
 assert str(p.itemcget("shape", "smooth")) in ("1", "true")
 
@@ -84,14 +81,9 @@ assert duel.tie.winfo_rooty() > duel.left.winfo_rooty() + duel.left.winfo_height
 duel.left.event_generate("<Enter>"); update(); anim.finish_all()
 assert duel.left.itemcget("shape", "outline") == PALETTE["accent"] and float(duel.left.itemcget("shape", "width")) == 3
 duel.left.event_generate("<Leave>"); update()
-yl = duel.left.coords("label")[1]
-for side in DuelCards.SIDES:
-    duel.press(side)
-assert answers == ["left", "right", "tie", "skip"]
-update(1); assert duel.left.coords("label")[1] == yl + 2                     # the pressed dip
-duel.press("nonsense"); assert len(answers) == 4
-duel.set_enabled(False); duel.press("left"); assert len(answers) == 4        # disabled: nothing
-duel.show("a", "b"); duel.press("right"); assert answers[-1] == "right"      # show() re-enables
+assert set(duel.buttons) == {"left", "right", "tie", "skip"}
+duel.set_enabled(False); assert not any(b.enabled for b in duel.buttons.values())
+duel.show("a", "b"); assert all(b.enabled for b in duel.buttons.values())    # show() re-enables
 b = duel.tie; b.event_generate("<Enter>"); b.event_generate("<ButtonPress-1>", x=6, y=6); update()
 b.event_generate("<ButtonRelease-1>", x=6, y=6); update(); assert answers[-1] == "tie"
 
@@ -240,52 +232,44 @@ root.after(120, root.quit); root.mainloop(); anim.finish_all(); update()        
 assert toast.cget("text") == "" and not toast.winfo_ismapped()
 toast.show("x " * 200, ms=1000, in_=page, wraplength=300); anim.finish_all(); update()
 assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40             # long messages wrap
-# fling(): rises from the word, rests, then swipes toward its tier and fades out completely
+# fling(): rises from the card, rests, then flies to its landing point (its tier's bar) and fades out completely
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
-toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-150, hold_ms=60, in_=page)
-update(); x0, y0 = toast_xy()
-assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts at the word, faint
-anim.finish_all(); update(); x1, y1 = toast_xy()
-assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                                 # risen to its resting place
-anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
-assert toast.cget("text") == "apple  ->  S"
-root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: swiping
-mid_x, _ = toast_xy(); assert toast.winfo_ismapped()
-anim.finish_all(); update()
-assert toast.cget("text") == "" and not toast.winfo_ismapped()                  # gone, fully faded
-assert toast.itemcget("pill", "fill") == PALETTE["bg"]
-toast.fling("pear  ->  F", (TIER_COLORS[5], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=150, hold_ms=10, in_=page)
-anim.finish_all(); anim.finish_all(); root.after(40, root.quit); root.mainloop()
-update(); rx, _ = toast_xy(); assert rx >= 0                                    # F swipes to the right
-# target: the last stage flies to a landing point (UI-17: its tier's bar) and calls on_arrive there
 landed = []
-toast.fling("kiwi", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
-            target=(200, -30), on_arrive=lambda: landed.append(1))
-anim.finish_all(); root.after(40, root.quit); root.mainloop(); update()
+toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+            hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
+update(); x0, y0 = toast_xy()
+assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
+anim.finish_all(); update(); x1, y1 = toast_xy()
+assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                 # risen to its resting place
+anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
+assert toast.cget("text") == "apple  ->  S" and not landed
+root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: flying
 xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
 xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
-anim.finish_all(); update(); assert landed == [1] and toast.cget("text") == ""
-toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=0, hold_ms=10, in_=page,
-            target=(200, -30), on_arrive=lambda: landed.append(2))
+anim.finish_all(); update()
+assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
+assert toast.itemcget("pill", "fill") == PALETTE["bg"]
+toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+            hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
 assert landed == [1]                                                           # a replaced fling never "lands"
 toast.hide(); anim.finish_all()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
-toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=50,
+toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(50, 0),
             hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 # a new message cuts a fling short, and the old one's pending stages do nothing
-toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=10, in_=page)
+toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
 toast.show("new", ms=5000, in_=page); anim.finish_all()
 root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, dx=-100, hold_ms=30, in_=page); update()
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
 assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
 root.after(80, root.quit); root.mainloop(); update()
 assert toast.cget("text") == ""                                                # then simply gone
@@ -319,7 +303,7 @@ dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()
 assert not dr.is_open and not closed and dr.winfo_height() > 1                   # still closing
 anim.finish_all(); update(); assert closed == [1] and not dr.winfo_manager()
 dr.set_open(True); assert dr.is_open
-small.configure(size=14); dr.refresh_fonts()
+small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
 small.configure(size=11)
 

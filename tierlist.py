@@ -330,7 +330,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           pulsing as it arrives. One motion instead of two, and it says where the word went.
 #           Built that way: Toast.fling(target=, on_arrive=) flies the resting message to its bar's top
 #           (DistributionChart.bar_top) over 240 ms, fading, and the bar pulses (chart.pulse) as it lands.
-#           A message replaced mid-way never "lands". Without the chart (other tabs) it swipes sideways.
+#           A message replaced mid-way never "lands". (The sideways swipe was removed in the tidy-up:
+#           placing only happens in Place, where the chart is always there.)
 # [x] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
@@ -400,7 +401,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-35 The definition drawer does not open smoothly (reported): find out why (likely the window-fitting
 #           pass runs during the slide, or the frame jumps to full height first) and make it ease open
 #           and shut in one even motion. Check with a frame-by-frame capture.
-# [ ] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart).
+# [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
 # [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
 #           stepping back one answer while comparing (confirmed). The Compare button's key hint and the bottom-right
