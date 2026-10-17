@@ -20,7 +20,7 @@ REQUIRED = ["wordfreq"]
 OPTIONAL = ["nltk"]
 
 # what each one is for, in the words used in the install question
-PURPOSE = {"wordfreq": "word frequency data (needed to rank the words)",
+PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",
            "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)"}
 

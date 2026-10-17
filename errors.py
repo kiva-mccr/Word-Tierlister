@@ -86,7 +86,8 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None):
 def ask_choices(title, headline, message, choices, yes="OK", no="Cancel", parent=None):
     """A styled question with one tick box per choice (ST-4: each package is its own choice).
 
-    `choices` are (key, label, detail, ticked) tuples; the detail is a muted line under the label.
+    `choices` are (key, label, detail, ticked[, required]) tuples; the detail is a muted line under the
+    label, and a required choice gets a red asterisk after its label.
     Returns the set of ticked keys for the `yes` button, or None for `no`, Escape or closing (also when
     no window can be shown)."""
     answer = {"yes": False}
@@ -126,9 +127,13 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
     if choices:                      # one tick box per choice, each with a muted line saying what it is for
         cbox = ttk.Frame(box)
         cbox.pack(fill="x", pady=(12, 0))
-        for key, label, detail, ticked in choices:
+        for key, label, detail, ticked, *rest in choices:
             var = tk.BooleanVar(value=ticked)
-            ttk.Checkbutton(cbox, text=label, variable=var, takefocus=1).pack(anchor="w", pady=(6, 0))
+            line = ttk.Frame(cbox)
+            line.pack(anchor="w", pady=(6, 0))
+            ttk.Checkbutton(line, text=label, variable=var, takefocus=1).pack(side="left")
+            if rest and rest[0]:             # required: the classic red asterisk
+                ttk.Label(line, text="*", foreground=PALETTE["required"], font=font("head")).pack(side="left")
             if detail:
                 ttk.Label(cbox, text=detail, wraplength=wrap - 30, justify="left",
                           foreground=PALETTE["muted"]).pack(anchor="w", padx=(26, 0))

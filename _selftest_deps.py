@@ -4,6 +4,7 @@ import os, subprocess, sys
 import tkinter as tk
 from tkinter import ttk
 import deps, errors as E, startup as S
+from theme import PALETTE
 from problems import SetupError
 from fonts import init_fonts
 from ui_style import apply_ttk_style
@@ -57,7 +58,7 @@ state.update(missing=["wordfreq"], answer=None)
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is False and installs == []       # "Not now"
 headline, message, choices, yes, no = asked[-1]
 assert headline == "A package is needed" and (yes, no) == ("Install selected", "Not now")
-assert choices == [("wordfreq", "wordfreq  (needed)", deps.PURPOSE["wordfreq"], True)]              # its own tick box
+assert choices == [("wordfreq", "wordfreq  (required)", deps.PURPOSE["wordfreq"], True, True)]       # its own tick box
 state.update(answer=["wordfreq"])
 assert S.ensure_packages(root, ["wordfreq"], installer=installer(True)) is True and installs == [["wordfreq"]]
 state.update(missing=["wordfreq"], answer=[])                                                      # unticked it
@@ -86,6 +87,7 @@ assert installs == [ALL]                                                        
 headline, message, choices = asked[-1][:3]
 assert headline == "Some packages are needed" and [c[0] for c in choices] == ALL
 assert choices[1][1] == "nltk  (optional)" and "offline definitions" in choices[1][2] and all(c[3] for c in choices)
+assert [c[4] for c in choices] == [True, False]                                     # only the required one gets the *
 # required ticked, optional unticked: installs only the required one, remembers the optional "no"
 state.update(missing=list(ALL), answer=["wordfreq"]); installs.clear(); remembered = []
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], installer=installer(True), on_decline=remembered.append) is True
@@ -156,13 +158,15 @@ def drive_choices(untick, press):
     def go():
         dlg = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
         boxes = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TCheckbutton"}
-        assert set(boxes) == {"wordfreq  (needed)", "nltk  (optional)"}, set(boxes)
+        assert set(boxes) == {"wordfreq  (required)", "nltk  (optional)"}, set(boxes)
+        stars = [w for w in walk(dlg) if w.winfo_class() == "TLabel" and w.cget("text") == "*"]
+        assert len(stars) == 1 and str(stars[0].cget("foreground")) == PALETTE["required"]   # red, on wordfreq only
         for label in untick:
             boxes[label].invoke()
         btns = {w.cget("text"): w for w in walk(dlg) if w.winfo_class() == "TButton"}
         btns[press].invoke()
     return go
-CH = [("wordfreq", "wordfreq  (needed)", "ranks words", True), ("nltk", "nltk  (optional)", "definitions", True)]
+CH = [("wordfreq", "wordfreq  (required)", "ranks words", True, True), ("nltk", "nltk  (optional)", "definitions", True, False)]
 def pick(): return E.ask_choices("T", "Some packages are needed", "Tick", CH, yes="Install selected", no="Not now", parent=root)
 root.after(150, drive_choices([], "Install selected")); assert pick() == {"wordfreq", "nltk"}
 root.after(150, drive_choices(["nltk  (optional)"], "Install selected")); assert pick() == {"wordfreq"}

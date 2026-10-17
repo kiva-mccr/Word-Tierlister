@@ -27,6 +27,7 @@ PALETTE = {
     "left":     "#DDE7FB",
     "right":    "#FFE6D2",
     "neutral":  "#EFEAF4",
+    "required": "#D0364F",   # the classic red asterisk on a required choice (>= 4.5:1 on bg)
 }
 
 TIER_COLORS = ["#FFB3C1", "#FFCBA4", "#FFF0A8", "#BDEBC8", "#A9DDF5", "#D5C6F5"]  # S A B C D F

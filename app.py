@@ -165,17 +165,6 @@ class App:
         self.tier_lbl = ttk.Label(r, anchor="w", padding=(10, 0), foreground=PALETTE["muted"])
         self.tier_lbl.pack(side="top", fill="x")
 
-        self.opt_frame = ttk.Frame(r, padding=(10, 4))
-        self.opt_label = ttk.Label(self.opt_frame, text="Tier:")
-        self.opt_label.pack(side="left")
-        self.filter_cb = ttk.Combobox(self.opt_frame, textvariable=self.filter_var,
-                                      state="readonly", width=16, takefocus=0)
-        self.filter_cb.pack(side="left", padx=6)
-        self.filter_cb.bind("<<ComboboxSelected>>", self._on_filter)
-        self.focus_lbl = ttk.Label(self.opt_frame, text="")
-        self.focus_lbl.pack(side="left", padx=12)
-        self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
-
 
         # bottom bar first so it keeps the bottom edge
         bottom = ttk.Frame(r, padding=(10, 6))
@@ -198,7 +187,7 @@ class App:
         self.place_frame = ttk.Frame(self.center)
         inner = ttk.Frame(self.place_frame)
         self.place_inner = inner
-        inner.place(relx=0.5, rely=0.42, anchor="center")
+        inner.place(relx=0.5, rely=0.5, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 6))
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
@@ -223,7 +212,7 @@ class App:
                     animator=self.anim).grid(row=0, column=3, padx=(24, 0))
 
         self.act_row = ttk.Frame(inner)
-        self.act_row.grid(row=5, column=0, pady=16)
+        self.act_row.grid(row=5, column=0, pady=(16, 0))
         self.compare_btn = RoundButton(self.act_row, "Compare to anchors", self.start_compare,
                                        bg=PALETTE["left"], font=font("label"), hint="Space", animator=self.anim)
         self.compare_btn.grid(row=0, column=0, padx=8)
@@ -234,15 +223,29 @@ class App:
         self.pair_frame = ttk.Frame(self.center)
         pi = ttk.Frame(self.pair_frame)
         self.pair_inner = pi
-        pi.place(relx=0.5, rely=0.42, anchor="center")
+        pi.place(relx=0.5, rely=0.5, anchor="center")
+        # Refine / Boundary: which tier or boundary to work on, right above the duel it affects (so the page
+        # area is the same in every tab and the content does not jump when switching)
+        self.opt_frame = ttk.Frame(pi)
+        self.opt_frame.grid(row=0, column=0, pady=(0, 16))
+        self.opt_label = ttk.Label(self.opt_frame, text="Tier:", foreground=PALETTE["muted"])
+        self.opt_label.pack(side="left")
+        self.filter_cb = ttk.Combobox(self.opt_frame, textvariable=self.filter_var,
+                                      state="readonly", width=16, takefocus=0)
+        self.filter_cb.pack(side="left", padx=6)
+        self.filter_cb.bind("<<ComboboxSelected>>", self._on_filter)
+        self.focus_lbl = ttk.Label(self.opt_frame, text="")
+        self.focus_lbl.pack(side="left", padx=12)
+        self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
+        self.opt_frame.grid_remove()
         self.pair_title = ttk.Label(pi, text="Which word is better?", font=font("title"))
-        self.pair_title.grid(row=0, column=0, pady=(0, 12))
+        self.pair_title.grid(row=1, column=0, pady=(0, 12))
         self.duel = DuelCards(pi, self._on_duel, font("pair"), font("body"), animator=self.anim)
-        self.duel.grid(row=1, column=0, sticky="nsew")
+        self.duel.grid(row=2, column=0, sticky="nsew")
         self.left_btn, self.right_btn = self.duel.left, self.duel.right
         self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
-        self.ctx_lbl.grid(row=2, column=0, pady=(10, 0))
+        self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.center.bind("<Configure>", self._on_center_configure)
 
     # ---- window size: fits the screen and the contents ------------------------------------------
@@ -297,11 +300,11 @@ class App:
         r.update_idletasks()
         f = ui_factor(r) * self.font_scale
         rows = [w for w in r.pack_slaves() if w is not self.center]
-        extra = 0 if self.opt_frame in rows else self.opt_frame.winfo_reqheight()   # refine/boundary row
+        extra = 0 if self.opt_frame.winfo_manager() else self.opt_frame.winfo_reqheight() + 16  # refine/boundary row
         inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
-        inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight())
+        inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight() + extra)
         width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
-        height = sum(w.winfo_reqheight() for w in rows) + extra + inner_h + int(50 * f)
+        height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
         return width, height
 
     def _fit_window(self, initial=False):
@@ -404,15 +407,15 @@ class App:
             self.opt_label.config(text="Tier:")
             self.filter_cb["values"] = ["All tiers"] + TIERS
             self.filter_var.set("All tiers")
-            self.opt_frame.pack(side="top", fill="x", before=self.center)
+            self.opt_frame.grid()
         elif self.mode == "boundary":
             self.opt_label.config(text="Boundary:")
             vals = [f"{TIERS[i]} | {TIERS[i + 1]}" for i in range(len(TIERS) - 1)]
             self.filter_cb["values"] = ["All boundaries"] + vals
             self.filter_var.set("All boundaries")
-            self.opt_frame.pack(side="top", fill="x", before=self.center)
+            self.opt_frame.grid()
         else:
-            self.opt_frame.pack_forget()
+            self.opt_frame.grid_remove()
         self._update_focus_label()
 
     def _update_focus_label(self):
@@ -484,7 +487,7 @@ class App:
         if row is None:
             self.cur_word = None
             self.word_card.set("All words placed", "Switch to Refine / Boundary to keep improving the ranking.")
-            self.vs_lbl.config(text="")
+            self._set_question("")
             self.tier_row.grid_remove()
             self.cmp_row.grid_remove()
             self.act_row.grid_remove()
@@ -510,8 +513,7 @@ class App:
         if self.cmp:
             mid = self.cmp["mid"]
             anchor = self.anchors[mid]
-            self.vs_lbl.config(
-                text=f"Is it better or worse than  \"{anchor}\"  ?\n(anchor for tier {TIERS[mid]})")
+            self._set_question(f"Is it better or worse than  \"{anchor}\"  ?\n(anchor for tier {TIERS[mid]})")
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
@@ -521,11 +523,19 @@ class App:
             self.ladder.update_range(self.cmp["lo"], self.cmp["hi"], mid)
         else:
             self.ladder.grid_remove()
-            self.vs_lbl.config(text="" if all(self.anchors) else "Set anchor words (Settings) to enable comparing.")
+            self._set_question("" if all(self.anchors) else "Set anchor words (Settings) to enable comparing.")
             self.cmp_row.grid_remove()
             self.tier_row.grid()
             self.act_row.grid()
         self._hint()
+
+    def _set_question(self, text):
+        """The line under the card (the anchor question); hidden when empty so it leaves no gap."""
+        self.vs_lbl.config(text=text)
+        if text:
+            self.vs_lbl.grid()
+        else:
+            self.vs_lbl.grid_remove()
 
     def place_word(self, tier):
         """Put the current word straight into `tier` (keys 1-6 or the tier buttons)."""

@@ -181,6 +181,22 @@ except Exception as exc:
 
 bw.close()
 
+# ---- every tab's content is centred in the page, and the page is the same size in every tab
+c = app.center
+pages = set()
+for m in ("place", "refine", "boundary", "conflict"):
+    app.mode_var.set(m); app.on_mode_change(); pump(4)
+    inner = app.place_inner if m == "place" else app.pair_inner
+    kids = [w for w in inner.winfo_children() if w.winfo_ismapped()]
+    l = min(w.winfo_rootx() for w in kids); r = max(w.winfo_rootx() + w.winfo_width() for w in kids)
+    t = min(w.winfo_rooty() for w in kids); b = max(w.winfo_rooty() + w.winfo_height() for w in kids)
+    assert abs((l + r) / 2 - (c.winfo_rootx() + c.winfo_width() / 2)) <= 2, ("not centred across", m)
+    assert abs((t + b) / 2 - (c.winfo_rooty() + c.winfo_height() / 2)) <= 2, ("not centred down", m)
+    pages.add((c.winfo_rooty(), c.winfo_height()))
+assert len(pages) == 1, pages                                       # the Tier / Boundary choice lives inside
+app.mode_var.set("refine"); app.on_mode_change(); pump(2)
+assert app.opt_frame.winfo_ismapped() and app.opt_frame.winfo_rooty() < app.pair_title.winfo_rooty()
+
 # ---- header (UI-10): no system menu bar; menus open from the header and the keyboard; the mode switch
 assert not root.cget("menu")
 assert list(app.header.buttons) == ["File", "Edit", "View", "Settings"]

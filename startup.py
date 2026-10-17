@@ -332,7 +332,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
 
     Names are import names (see deps.PACKAGES). Does nothing unless something is missing. Then one
     dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
-    or optional (all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
+    or optional (required ones marked with a red asterisk; all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
     the usual progress window and checks again, without a restart.
 
     * Optional packages already declined (`declined`) are not offered again; an optional one left unticked
@@ -359,7 +359,8 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
                          f"to install it.\n\nInstall pip, then run:\n    {cmd}")
     headline = ("Some packages are needed" if len(gone) > 1 else "A package is needed") if need \
         else ("Optional packages are available" if len(extra) > 1 else "An optional package is available")
-    choices = [(n, f"{n}  ({'needed' if n in need else 'optional'})", deps.PURPOSE.get(n, ""), True) for n in gone]
+    choices = [(n, f"{n}  ({'required' if n in need else 'optional'})", deps.PURPOSE.get(n, ""), True, n in need)
+               for n in gone]
     chosen = ask_choices(
         "Word Tier List", headline,
         "Tick what to install. It uses pip, needs an internet connection and takes a minute or so.",
