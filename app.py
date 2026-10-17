@@ -1,0 +1,1047 @@
+"""The main window: place / refine / boundary / conflict modes, menus, key handling, definitions pane.
+
+App is a thin controller. It never touches the database directly: every read/write goes through
+self.store (store.py), and after each change it calls refresh() to redraw. The file reads top to
+bottom in the order things happen:
+    construction (menu, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
+    undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
+"""
+import json
+import math
+import os
+import random
+import sqlite3
+import time
+
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+from browser import Browser
+from errors import show_exception
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
+from fonts import ROLES, init_fonts, font, scale_fonts
+from saves import write_export
+from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_area
+from theme import PALETTE, TIER_COLORS, TIER_TEXT
+from ui_motion import Animator
+from ui_style import apply_ttk_style
+from widgets import RoundButton, WordCard, refresh_widgets
+
+
+class App:
+    """The main window and the state of what is currently on screen.
+
+    State (all in memory; anything that must survive a restart is saved through the Store):
+        mode          "place" | "refine" | "boundary" | "conflict" (saved as meta "mode")
+        cur_word      the word shown in place mode, or None when every word is placed
+        cmp           anchor-comparison in progress, else None. A dict:
+                      lo/hi = range of tiers still possible (binary search over the six anchors),
+                      mid   = index of the anchor being asked about,
+                      stack = (lo, hi, log length) snapshots so Back can undo one answer,
+                      log   = [(anchor word, 'a'|'b'|'tie')] answers to save when the word is placed
+        pair          the two words shown in a duel: {"left", "right", "ctx"}, or None
+        focus         word being refined in a "Refine this word" session; focus_left = duels left
+        session_count words handled since the window opened (shown muted in the header)
+        mem_defs      definitions already fetched this run (def_words = words on screen now)
+        browsers      open Browse windows, so they can be refreshed after a change
+    Widgets: place view (word, tier buttons, compare row, action row) and pair view (two big
+    buttons) are two frames in self.center; refresh() shows the one matching the mode.
+    """
+
+    def __init__(self, root, store, defs, note=None, other_saves=()):
+        """Build the window. `note` is a one-time banner (which save was resumed); `other_saves` are
+        extra saves with progress that _startup() offers to merge. `defs` is a Definitions.
+        """
+        self.root, self.store, self.defs = root, store, defs
+        self.note, self.other_saves = note, list(other_saves)
+        self.mode = store.get_meta("mode", "place")
+        if self.mode not in dict(MODES):
+            self.mode = "place"
+        self.show_defs = store.get_meta("show_defs", "0") == "1"
+        self.auto_compare = store.get_meta("auto_compare", "0") == "1"
+        self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
+        self.anchors = store.get_anchors()
+        self.cur_word = None
+        self.cmp = None
+        self.pair = None
+        self.focus = None
+        self.focus_left = 0
+        self.session_count = 0
+        self.session_start = time.time()
+        self.mem_defs = {}
+        self.def_words = []
+        self.browsers = []
+        self._banner_job = None
+        self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+
+        init_fonts(root)
+        apply_ttk_style(root)
+        root.title(f"Word Tier List  -  {store.path}")
+        self.defs_var = tk.BooleanVar(value=self.show_defs)
+        self.auto_var = tk.BooleanVar(value=self.auto_compare)
+        self.motion_var = tk.BooleanVar(value=self.reduce_motion)
+        self.anim = Animator(root, reduce_motion=self.reduce_motion)
+        self.mode_var = tk.StringVar(value=self.mode)
+        self.filter_var = tk.StringVar()
+        self._build_menu()
+        self._build_ui()
+        root.bind("<Key>", self.on_key)
+        root.bind("<Control-z>", lambda e: self.undo())
+        root.bind("<Command-z>", lambda e: self.undo())
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self._update_options()
+        self._layout_defs()
+        self.refresh()
+        self._fit_window(initial=True)
+        root.after(120, self._poll_defs)
+        root.after(300, self._startup)
+
+    def _startup(self):
+        """One-time prompts after the window opens: which save was resumed, merge offers, anchors."""
+        if self.note:
+            self.flash(self.note, ms=12000)
+        if self.other_saves:
+            self.offer_merge(self.other_saves)
+        if not all(self.anchors):
+            self.edit_anchors()
+
+    # ---- construction ------------------------------------------------------------------
+    def _build_menu(self):
+        """Menu bar: File (import/export), Edit (undo), View (browse, definitions), Settings (anchors, queue)."""
+        m = tk.Menu(self.root)
+        self.root.config(menu=m)
+        fm = tk.Menu(m, tearoff=0)
+        m.add_cascade(label="File", menu=fm)
+        fm.add_command(label="Import earlier progress...", command=self.import_progress)
+        fm.add_command(label="Export tier list...", command=self.export)
+        fm.add_command(label="Where is my save file?", command=self.show_save_location)
+        fm.add_separator()
+        fm.add_command(label="Quit", command=self.on_close)
+        em = tk.Menu(m, tearoff=0)
+        m.add_cascade(label="Edit", menu=em)
+        em.add_command(label="Undo", accelerator="Ctrl+Z", command=self.undo)
+        vm = tk.Menu(m, tearoff=0)
+        m.add_cascade(label="View", menu=vm)
+        vm.add_command(label="Browse / edit tier list...", command=self.open_browser)
+        vm.add_checkbutton(label="Show definitions (D)", variable=self.defs_var,
+                           command=lambda: self.toggle_defs(self.defs_var.get()))
+        vm.add_checkbutton(label="Reduce motion", variable=self.motion_var, command=self.toggle_motion)
+        sm = tk.Menu(m, tearoff=0)
+        m.add_cascade(label="Settings", menu=sm)
+        sm.add_command(label="Anchor words...", command=self.edit_anchors)
+        sm.add_command(label="Queue randomness & seed...", command=self.edit_queue)
+        sm.add_checkbutton(label="Always compare new words to anchors", variable=self.auto_var,
+                           command=self.toggle_auto)
+
+    def _build_ui(self):
+        """Create every widget once: header, banner, bottom bar, definition pane, place view and pair view."""
+        r = self.root
+        top = ttk.Frame(r, padding=(10, 8))
+        top.pack(side="top", fill="x")
+        for key, label in MODES:
+            ttk.Radiobutton(top, text=label, value=key, variable=self.mode_var,
+                            command=self.on_mode_change, takefocus=0).pack(side="left", padx=(0, 14))
+        self.stats_lbl = ttk.Label(r, anchor="w", padding=(10, 0))
+        self.stats_lbl.pack(side="top", fill="x")
+        self.tier_lbl = ttk.Label(r, anchor="w", padding=(10, 0), foreground=PALETTE["muted"])
+        self.tier_lbl.pack(side="top", fill="x")
+
+        self.opt_frame = ttk.Frame(r, padding=(10, 4))
+        self.opt_label = ttk.Label(self.opt_frame, text="Tier:")
+        self.opt_label.pack(side="left")
+        self.filter_cb = ttk.Combobox(self.opt_frame, textvariable=self.filter_var,
+                                      state="readonly", width=16, takefocus=0)
+        self.filter_cb.pack(side="left", padx=6)
+        self.filter_cb.bind("<<ComboboxSelected>>", self._on_filter)
+        self.focus_lbl = ttk.Label(self.opt_frame, text="")
+        self.focus_lbl.pack(side="left", padx=12)
+        self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
+
+        self.banner = tk.Label(r, text="", font=font("label"), pady=5, bg=r.cget("bg"))
+        self.banner.pack(side="top", fill="x")
+
+        # bottom bar first so it keeps the bottom edge
+        bottom = ttk.Frame(r, padding=(10, 6))
+        bottom.pack(side="bottom", fill="x")
+        ttk.Button(bottom, text="Undo", command=self.undo, takefocus=0).pack(side="left")
+        ttk.Button(bottom, text="Browse / edit...", command=self.open_browser, takefocus=0).pack(side="left", padx=6)
+        ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0).pack(side="left")
+        self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right", wraplength=560)
+        self.hint_lbl.pack(side="right")
+
+        self.def_frame = ttk.LabelFrame(r, text="Definition")
+        self.def_text = tk.Text(self.def_frame, height=9, wrap="word", state="disabled", font=font("body"))
+        self.def_text.tag_configure("head", font=font("head"))
+        self.def_text.pack(fill="x", padx=6, pady=6)
+
+        self.center = ttk.Frame(r)
+        self.center.pack(side="top", fill="both", expand=True)
+
+        # ---- place view
+        self.place_frame = ttk.Frame(self.center)
+        inner = ttk.Frame(self.place_frame)
+        self.place_inner = inner
+        inner.place(relx=0.5, rely=0.42, anchor="center")
+        self.word_card = WordCard(inner, font("word"), font("body"))
+        self.word_card.grid(row=0, column=0, pady=(0, 6))
+        self.vs_lbl = ttk.Label(inner, text="", font=font("vs"), justify="center")
+        self.vs_lbl.grid(row=2, column=0, pady=14)
+
+        self.tier_row = ttk.Frame(inner)
+        self.tier_row.grid(row=3, column=0, pady=6)
+        self.tier_btns = []
+        for t in range(len(TIERS)):
+            b = RoundButton(self.tier_row, TIERS[t], lambda t=t: self.place_word(t), bg=TIER_COLORS[t],
+                            font=font("tier"), padx=18, pady=10, hint=str(t + 1), animator=self.anim)
+            b.grid(row=0, column=t, padx=5)
+            self.tier_btns.append(b)
+
+        self.cmp_row = ttk.Frame(inner)
+        self.cmp_row.grid(row=4, column=0, pady=6)
+        for col, (text, hint, ans, key) in enumerate((("Better", "Up / B", "better", "better"),
+                                                      ("Same tier", "E", "same", "same"),
+                                                      ("Worse", "Down / W", "worse", "worse"))):
+            RoundButton(self.cmp_row, text, lambda ans=ans: self.cmp_answer(ans), bg=PALETTE[key],
+                        font=font("choice"), padx=22, pady=12, hint=hint, animator=self.anim
+                        ).grid(row=0, column=col, padx=8)
+        RoundButton(self.cmp_row, "Back", self.cmp_back, font=font("body"), padx=14, pady=8, hint="Bksp",
+                    animator=self.anim).grid(row=0, column=3, padx=(24, 0))
+
+        self.act_row = ttk.Frame(inner)
+        self.act_row.grid(row=5, column=0, pady=16)
+        self.compare_btn = RoundButton(self.act_row, "Compare to anchors", self.start_compare,
+                                       bg=PALETTE["left"], font=font("label"), hint="Space", animator=self.anim)
+        self.compare_btn.grid(row=0, column=0, padx=8)
+        RoundButton(self.act_row, "Don't know / later", self.skip_word, bg=PALETTE["neutral"],
+                    font=font("label"), hint="U", animator=self.anim).grid(row=0, column=1, padx=8)
+
+        # ---- pair view
+        self.pair_frame = ttk.Frame(self.center)
+        pi = ttk.Frame(self.pair_frame)
+        self.pair_inner = pi
+        pi.place(relx=0.5, rely=0.42, anchor="center")
+        pi.columnconfigure((0, 1), uniform="pair")
+        self.pair_title = ttk.Label(pi, text="Which word is better?", font=font("title"))
+        self.pair_title.grid(row=0, column=0, columnspan=2, pady=(0, 12))
+        self.left_btn = RoundButton(pi, "", lambda: self.pair_answer("left"), bg=PALETTE["left"],
+                                    font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
+        self.left_btn.grid(row=1, column=0, padx=12, sticky="nsew")
+        self.right_btn = RoundButton(pi, "", lambda: self.pair_answer("right"), bg=PALETTE["right"],
+                                     font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
+        self.right_btn.grid(row=1, column=1, padx=12, sticky="nsew")
+        small = ttk.Frame(pi)
+        small.grid(row=2, column=0, columnspan=2, pady=14)
+        self.tie_btn = RoundButton(small, "Tie / can't decide", lambda: self.pair_answer("tie"),
+                                   font=font("body"), hint="Down / T", animator=self.anim)
+        self.tie_btn.grid(row=0, column=0, padx=8)
+        self.skip_pair_btn = RoundButton(small, "Skip pair", self.skip_pair, font=font("body"), hint="S",
+                                         animator=self.anim)
+        self.skip_pair_btn.grid(row=0, column=1, padx=8)
+        self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
+        self.ctx_lbl.grid(row=3, column=0, columnspan=2)
+        self.center.bind("<Configure>", self._on_center_configure)
+
+    # ---- window size: fits the screen and the contents ------------------------------------------
+    FONT_STEPS = (1.0, 0.9, 0.8, 0.7, 0.6, 0.5)   # tried in order until the contents fit the screen
+    BASE_SIZE = (1040, 760)                  # preferred window size at the classic 96 dpi
+    MIN_SIZE = (780, 580)                    # never smaller than this (also at 96 dpi)
+
+    def _apply_wraps(self, center_w):
+        """Let long words wrap instead of running off the window (word, duel buttons, context line)."""
+        f = ui_factor(self.root)       # paddings are fixed pixels: they do not shrink with the fonts
+        self.word_card.config(wraplength=max(200, center_w - int(80 * f) - 2 * self.word_card.padx))
+        side = max(150, (center_w - int(220 * f)) // 2)
+        self.left_btn.config(wraplength=side)
+        self.right_btn.config(wraplength=side)
+        self.ctx_lbl.config(wraplength=max(300, center_w - int(80 * f)))
+
+    def _on_center_configure(self, e):
+        """The centre area was resized: re-wrap and re-fit the big words."""
+        self._apply_wraps(e.width)
+        self._fit_big_text()
+
+    def _fit_big_text(self):
+        """Shrink the big word(s) so a long one still fits on a line (down to about a third, then it wraps).
+
+        Short words keep the normal size. The shared role fonts are used only by these labels, so
+        resizing them here affects nothing else.
+        """
+        width = self.center.winfo_width()
+        if width < 50:                         # not laid out yet
+            return
+        f = ui_factor(self.root)
+        for role, texts, avail in (
+                ("word", [self.word_card.word], width - int(80 * f) - 2 * self.word_card.padx),
+                ("pair", [self.left_btn.cget("text"), self.right_btn.cget("text")],
+                 (width - int(220 * f)) // 2 - int(80 * f))):
+            base = max(7, int(round(ROLES[role][0] * self.font_scale)))
+            fnt = font(role)
+            fnt.configure(size=base)
+            need = max((fnt.measure(t) for t in texts if t), default=0)
+            if need > avail > 0:
+                fnt.configure(size=max(7, int(base * 0.35), int(base * avail / need)))
+        refresh_widgets(self.center)           # the word card and duel cards follow the (possibly shrunk) fonts
+
+    def _content_size(self):
+        """(width, height) the window needs to show everything without clipping, in pixels.
+
+        Fixed rows (header, banner, bottom bar, definition pane when shown) report their own size; the
+        centre area uses `place`, which does not report one, so the two views' inner frames are
+        measured and given some breathing room.
+        """
+        r = self.root
+        r.update_idletasks()
+        f = ui_factor(r) * self.font_scale
+        rows = [w for w in r.pack_slaves() if w is not self.center]
+        extra = 0 if self.opt_frame in rows else self.opt_frame.winfo_reqheight()   # refine/boundary row
+        inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
+        inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight())
+        width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
+        height = sum(w.winfo_reqheight() for w in rows) + extra + inner_h + int(50 * f)
+        return width, height
+
+    def _fit_window(self, initial=False):
+        """Size and place the main window for this screen and these contents.
+
+        First call: if the contents cannot fit the screen even at the right size, the fonts are
+        shrunk step by step (FONT_STEPS) until they do; then the window opens at the preferred size
+        (BASE_SIZE scaled for dpi), at least as big as the contents need, no bigger than the usable
+        screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
+        now need more room. The minimum size always follows the contents.
+        """
+        r = self.root
+        f = ui_factor(r)
+        area = usable_area(r)
+        if initial:
+            self.font_scale = 1.0
+        # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),
+        # then take the next font step down, and repeat. Later calls never grow the fonts back.
+        steps = [st for st in self.FONT_STEPS if st <= self.font_scale + 1e-9]
+        for step in steps:
+            self.font_scale = step
+            scale_fonts(step)
+            self._apply_wraps(area[2])
+            refresh_widgets(self.root)
+            for lines in (range(9, 2, -1) if self.show_defs else (9,)):
+                self.def_text.config(height=lines)
+                cw, ch = self._content_size()
+                if cw <= area[2] and ch <= area[3]:
+                    break
+            else:
+                continue
+            break
+        if not self.show_defs and int(self.def_text.cget("height")) != 9:
+            self.def_text.config(height=9)
+        r.update_idletasks()
+        self._fit_big_text()                   # fonts may have changed even if the window size did not
+        fs = self.font_scale
+        min_w = min(max(cw, int(self.MIN_SIZE[0] * f * fs)), area[2])
+        min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
+        r.minsize(min_w, min_h)
+        if initial:
+            pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
+            w, h = fit_size((min_w, min_h), pref, (area[2], area[3]))
+            r.geometry(center_geometry(w, h, area))
+        else:
+            r.update_idletasks()
+            w, h = max(r.winfo_width(), min_w), max(r.winfo_height(), min_h)
+            if (w, h) != (r.winfo_width(), r.winfo_height()):
+                r.geometry(f"{w}x{h}")
+
+    # ---- layout toggles -------------------------------------------------------------------------------
+    def _layout_defs(self):
+        """Show or hide the definition pane to match self.show_defs."""
+        if self.show_defs:
+            self.def_frame.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
+            self._render_defs()
+        else:
+            self.def_frame.pack_forget()
+
+    def toggle_defs(self, value=None):
+        """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
+        self.show_defs = (not self.show_defs) if value is None else bool(value)
+        self.defs_var.set(self.show_defs)
+        self.store.set_meta("show_defs", int(self.show_defs))
+        self._layout_defs()
+        self._fit_window()
+
+    def toggle_motion(self):
+        """View > Reduce motion: turn animations off (they jump to their end state). Saved."""
+        self.reduce_motion = self.motion_var.get()
+        self.anim.reduce_motion = self.reduce_motion
+        self.anim.finish_all()
+        self.store.set_meta("reduce_motion", int(self.reduce_motion))
+
+    def toggle_auto(self):
+        """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
+        self.auto_compare = self.auto_var.get()
+        self.store.set_meta("auto_compare", int(self.auto_compare))
+        self.cmp = None
+        self.refresh()
+
+    def _update_options(self):
+        """Show the tier / boundary drop-down for refine and boundary modes, hide it otherwise."""
+        if self.mode == "refine":
+            self.opt_label.config(text="Tier:")
+            self.filter_cb["values"] = ["All tiers"] + TIERS
+            self.filter_var.set("All tiers")
+            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+        elif self.mode == "boundary":
+            self.opt_label.config(text="Boundary:")
+            vals = [f"{TIERS[i]} | {TIERS[i + 1]}" for i in range(len(TIERS) - 1)]
+            self.filter_cb["values"] = ["All boundaries"] + vals
+            self.filter_var.set("All boundaries")
+            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+        else:
+            self.opt_frame.pack_forget()
+        self._update_focus_label()
+
+    def _update_focus_label(self):
+        """Show 'Focus: word (N duels left)' and the Clear button while a refine session is running."""
+        if self.mode == "refine" and self.focus:
+            self.focus_lbl.config(text=f"Focus: {self.focus} ({self.focus_left} duels left)")
+            self.focus_clear.pack(side="left")
+        else:
+            self.focus_lbl.config(text="")
+            self.focus_clear.pack_forget()
+
+    def _on_filter(self, _e=None):
+        """A tier/boundary was picked in the drop-down: drop any focus word and load a new pair."""
+        self.root.focus_set()
+        self.focus = None
+        self.refresh()
+
+    def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
+        """Show a coloured message in the banner for `ms` milliseconds, then clear it. A new message replaces the old one."""
+        self.banner.config(text=text, bg=bg, fg=fg)
+        if self._banner_job:
+            self.root.after_cancel(self._banner_job)
+        self._banner_job = self.root.after(
+            ms, lambda: self.banner.config(text="", bg=self.root.cget("bg")))
+
+    # ---- refresh ----------------------------------------------------------------------------------------
+    def refresh(self):
+        """Redraw everything from the Store: header numbers, then the place view or the pair view."""
+        self._update_stats()
+        self._update_focus_label()
+        if self.mode == "place":
+            self._show_place()
+        else:
+            self._show_pair()
+
+    def after_external_change(self):
+        """Call after something outside the normal flow changed the save (Browse edits, merge, anchors)."""
+        self.cmp = None
+        self.refresh()
+
+    def _update_stats(self):
+        """Header lines: placed/total, skipped, duels, conflicts, session count, and per-tier counts."""
+        s = self.store.stats()
+        pct = 100.0 * s["placed"] / s["total"] if s["total"] else 0.0
+        rate = ""
+        hours = (time.time() - self.session_start) / 3600.0
+        if self.session_count >= 5 and hours > 0:
+            rate = f" ({self.session_count / hours:,.0f}/hr)"
+        self.stats_lbl.config(
+            text=(f"Placed {s['placed']:,} / {s['total']:,} ({pct:.1f}%)   Skipped {s['skipped']:,}   "
+                  f"Duels {s['comparisons']:,}   Conflicts {s['conflicts']:,}   "
+                  f"This session +{self.session_count}{rate}"))
+        self.tier_lbl.config(text="    ".join(f"{TIERS[t]}: {s['tiers'].get(t, 0):,}" for t in range(len(TIERS))))
+
+    def _hint(self):
+        """Bottom-right key reminder for the current mode."""
+        if self.mode == "place" and self.cmp:
+            h = "Up/B better   Down/W worse   E same tier   Backspace back   Esc cancel"
+        elif self.mode == "place":
+            h = "1-6 tier   Space compare   U don't know   D definition   Ctrl+Z undo"
+        else:
+            h = "Left/A left wins   Right/L right wins   Down/T tie   S skip pair   D definition   Ctrl+Z undo"
+        self.hint_lbl.config(text=h)
+
+    # ---- place mode ------------------------------------------------------------------------------------------
+    def _show_place(self):
+        """Place view: show the next unplaced word (or the 'all placed' message) and set up its buttons."""
+        self.pair_frame.pack_forget()
+        self.place_frame.pack(fill="both", expand=True)
+        row = self.store.next_unplaced()
+        if row is None:
+            self.cur_word = None
+            self.word_card.set("All words placed", "Switch to Refine / Boundary to keep improving the ranking.")
+            self.vs_lbl.config(text="")
+            self.tier_row.grid_remove()
+            self.cmp_row.grid_remove()
+            self.act_row.grid_remove()
+            self._render_defs([])
+            self._hint()
+            return
+        self.cur_word = row["word"]
+        notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
+                (" - compound word" if row["pen"] else "")
+        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")
+        self._fit_big_text()
+        anchors_ok = all(self.anchors)
+        self.compare_btn.set_enabled(anchors_ok)
+        if self.cmp is None and self.auto_compare and anchors_ok:
+            self.cmp = {"lo": 0, "hi": len(TIERS) - 1, "stack": [], "log": [], "mid": None}
+            self._cmp_step()
+        else:
+            self._render_place_state()
+        self._render_defs([row["word"]])
+
+    def _render_place_state(self):
+        """Switch the place view between its three states: tier buttons, anchor question, or 'set anchors'."""
+        if self.cmp:
+            mid = self.cmp["mid"]
+            anchor = self.anchors[mid]
+            self.vs_lbl.config(
+                text=f"Is it better or worse than  \"{anchor}\"  ?\n(anchor for tier {TIERS[mid]})")
+            self.tier_row.grid_remove()
+            self.act_row.grid_remove()
+            self.cmp_row.grid()
+        else:
+            self.vs_lbl.config(text="" if all(self.anchors) else "Set anchor words (Settings) to enable comparing.")
+            self.cmp_row.grid_remove()
+            self.tier_row.grid()
+            self.act_row.grid()
+        self._hint()
+
+    def place_word(self, tier):
+        """Put the current word straight into `tier` (keys 1-6 or the tier buttons)."""
+        if not self.cur_word or self.cmp:
+            return
+        word = self.cur_word
+        self.store.place(word, tier)
+        self._after_place(word, tier)
+
+    def skip_word(self):
+        """'Don't know / later': move the current word behind every fresh word."""
+        if not self.cur_word or self.cmp:
+            return
+        word = self.cur_word
+        self.store.skip(word)
+        self.session_count += 1
+        self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.refresh()
+
+    def _after_place(self, word, tier):
+        """Shared tail of every placement: count it, confirm in the banner, show the next word."""
+        self.session_count += 1
+        self.cmp = None
+        self.flash(f"{word}  ->  {TIERS[tier]}", bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
+        self.refresh()
+
+    def start_compare(self):
+        """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
+        if not self.cur_word or self.mode != "place" or self.cmp:
+            return
+        if not all(self.anchors):
+            self.flash("Set all six anchor words first (Settings > Anchor words...)", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+            return
+        self.cmp = {"lo": 0, "hi": len(TIERS) - 1, "stack": [], "log": [], "mid": None}
+        self._cmp_step()
+
+    def _cmp_step(self):
+        """Ask about the middle anchor of the remaining tier range, or finish if the range is empty."""
+        c = self.cmp
+        if c["lo"] > c["hi"]:
+            # Fell between two anchors: the lower of the two tiers (duels will refine it).
+            self._cmp_finish(min(max(c["lo"], 0), len(TIERS) - 1))
+            return
+        c["mid"] = (c["lo"] + c["hi"]) // 2
+        self._render_place_state()
+
+    def cmp_answer(self, ans):
+        """Handle Better / Worse / Same for the current anchor: 'same' places the word in that tier;
+        better/worse halves the range (better = toward S = lower tier index).
+        """
+        c = self.cmp
+        if not c:
+            return
+        mid = c["mid"]
+        c["stack"].append((c["lo"], c["hi"], len(c["log"])))
+        c["log"].append((self.anchors[mid], {"better": "a", "worse": "b", "same": "tie"}[ans]))
+        if ans == "same":
+            self._cmp_finish(mid)
+            return
+        if ans == "better":
+            c["hi"] = mid - 1
+        else:
+            c["lo"] = mid + 1
+        self._cmp_step()
+
+    def _cmp_finish(self, tier):
+        """Place the word in `tier` and save the anchor answers as comparisons (they feed conflict detection)."""
+        word, log = self.cur_word, self.cmp["log"]
+        self.cmp = None
+        self.store.place(word, tier, comps=log)
+        self._after_place(word, tier)
+
+    def cmp_back(self):
+        """Undo the last anchor answer, or leave the comparison if no answers are left."""
+        c = self.cmp
+        if not c:
+            return
+        if c["stack"]:
+            lo, hi, n = c["stack"].pop()
+            c["lo"], c["hi"] = lo, hi
+            del c["log"][n:]
+            self._cmp_step()
+        else:
+            self.cmp = None
+            self._render_place_state()
+
+    # ---- pair modes -----------------------------------------------------------------------------------------------
+    def _pick_pair(self):
+        """Ask the Store for the next duel for the current mode. Returns {left, right, ctx} or None if there is none."""
+        if self.mode == "refine":
+            sel = self.filter_var.get()
+            tier = TIERS.index(sel) if sel in TIERS else None
+            res = self.store.pick_within(tier, self.focus)
+            if not res:
+                return None
+            a, b, t = res
+            ctx = f"Refining tier {TIERS[t]}"
+            if self.focus:
+                ctx += f"   -   focus word: {self.focus}"
+        elif self.mode == "boundary":
+            sel = self.filter_var.get()
+            bnd = TIERS.index(sel.split("|")[0].strip()) if "|" in sel else None
+            res = self.store.pick_boundary(bnd)
+            if not res:
+                return None
+            a, b, t = res
+            ctx = (f"Boundary {TIERS[t]} | {TIERS[t + 1]}: if you prefer the {TIERS[t + 1]}-tier word, "
+                   f"the two swap tiers")
+        else:
+            res = self.store.pick_conflict()
+            if not res:
+                return None
+            a, b = res
+            ctx = "Conflict: your answers about this pair contradict each other. Decide again."
+        pair = [a, b]
+        random.shuffle(pair)  # avoid left/right position bias
+        return {"left": pair[0], "right": pair[1], "ctx": ctx}
+
+    def _show_pair(self):
+        """Pair view: show the next duel, or a friendly message with the buttons disabled when none is available."""
+        self.place_frame.pack_forget()
+        self.pair_frame.pack(fill="both", expand=True)
+        self.pair = self._pick_pair()
+        if self.pair is None:
+            msg = {
+                "refine": "Nothing to refine yet: you need two words in the same tier "
+                          "(or the focus word has faced all nearby words).",
+                "boundary": "Nothing to compare yet: you need words in two neighbouring tiers.",
+                "conflict": "No conflicts flagged. Nice and consistent.",
+            }[self.mode]
+            if self.focus:
+                self.flash(f"No fresh opponents left for '{self.focus}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+                self.focus = None
+                self._update_focus_label()
+            self.left_btn.config(text="-")
+            self.right_btn.config(text="-")
+            self.ctx_lbl.config(text=msg)
+            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
+                b.set_enabled(False)
+            self._render_defs([])
+        else:
+            self.left_btn.config(text=self.pair["left"])
+            self.right_btn.config(text=self.pair["right"])
+            self._fit_big_text()
+            self.ctx_lbl.config(text=self.pair["ctx"])
+            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
+                b.set_enabled(True)
+            self._render_defs([self.pair["left"], self.pair["right"]])
+        self._hint()
+
+    def pair_answer(self, ans):
+        """Record a duel result ('left' | 'right' | 'tie'), report swaps/conflicts, count down a focus session."""
+        if not self.pair:
+            return
+        a, b = self.pair["left"], self.pair["right"]
+        kind = {"refine": "within", "boundary": "boundary", "conflict": "conflict"}[self.mode]
+        res = {"left": "a", "right": "b", "tie": "tie"}[ans]
+        info = self.store.record_comparison(a, b, res, kind)
+        self.session_count += 1
+        if info["swapped"]:
+            w, wt, l, lt = info["swapped"]
+            self.flash(f"Swapped: {w} -> {TIERS[wt]},  {l} -> {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+        elif info["conflict"]:
+            self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
+                       "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
+        if self.focus:
+            self.focus_left -= 1
+            if self.focus_left <= 0:
+                self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
+                self.focus = None
+        self.refresh()
+
+    def skip_pair(self):
+        """Show a different pair without recording anything."""
+        if self.pair:
+            self.refresh()
+
+    def start_focus(self, word):
+        """Refine one word: switch to refine mode with `word` in every duel for FOCUS_ROUNDS rounds."""
+        self.focus, self.focus_left = word, FOCUS_ROUNDS
+        self.mode = "refine"
+        self.mode_var.set("refine")
+        self.store.set_meta("mode", "refine")
+        self.cmp = None
+        self._update_options()
+        self.refresh()
+        self.root.lift()
+        self.root.focus_force()
+
+    def clear_focus(self):
+        """End a focus session and go back to ordinary refine duels."""
+        self.focus = None
+        self.refresh()
+
+    def on_mode_change(self):
+        """A mode radio button was clicked: save it and reset any in-progress comparison, pair or focus."""
+        self.mode = self.mode_var.get()
+        self.store.set_meta("mode", self.mode)
+        self.cmp = None
+        self.pair = None
+        self.focus = None
+        self._update_options()
+        self.refresh()
+        self._fit_window()
+
+    # ---- undo ------------------------------------------------------------------------------------------------------------
+    def undo(self):
+        """Undo: step back inside an anchor comparison, otherwise revert the last saved action (survives restarts)."""
+        if self.mode == "place" and self.cmp:
+            self.cmp_back()
+            return
+        word = self.store.undo()
+        if word is None:
+            self.flash("Nothing to undo", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+            return
+        self.session_count = max(0, self.session_count - 1)
+        self.cmp = None
+        self.flash(f"Undid last action ({word})", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.refresh()
+
+    # ---- keys --------------------------------------------------------------------------------------------------------------
+    def on_key(self, e):
+        """Every key press. D and Backspace work everywhere; the rest depends on mode and comparison state
+        (see _hint for the full list of keys).
+        """
+        self.anim.finish_all()  # a key press never waits for an animation
+        ks = e.keysym
+        low = ks.lower()
+        if low == "d":
+            self.toggle_defs()
+            return
+        if ks == "BackSpace":
+            if self.mode == "place" and self.cmp:
+                self.cmp_back()
+            else:
+                self.undo()
+            return
+        if self.mode == "place":
+            if self.cmp:
+                if ks == "Up" or low == "b":
+                    self.cmp_answer("better")
+                elif ks == "Down" or low == "w":
+                    self.cmp_answer("worse")
+                elif low == "e" or ks in ("equal", "Return"):
+                    self.cmp_answer("same")
+                elif ks == "Escape":
+                    self.cmp = None
+                    self._render_place_state()
+            else:
+                if ks in ("1", "2", "3", "4", "5", "6"):
+                    self.place_word(int(ks) - 1)
+                elif ks == "space":
+                    self.start_compare()
+                elif low == "u" or ks == "question":
+                    self.skip_word()
+        else:
+            if ks == "Left" or low == "a":
+                self.pair_answer("left")
+            elif ks == "Right" or low == "l":
+                self.pair_answer("right")
+            elif ks == "Down" or low == "t":
+                self.pair_answer("tie")
+            elif low == "s":
+                self.skip_pair()
+
+    # ---- definitions -----------------------------------------------------------------------------------------------------------
+    def get_def(self, word):
+        """Definition text if known (memory, then the save), else None and a lookup starts in the background."""
+        if word in self.mem_defs:
+            return self.mem_defs[word]
+        text = self.defs.request(word)
+        if text is not None:
+            self.mem_defs[word] = text
+        return text
+
+    def _render_defs(self, words=None):
+        """Redraw the definition pane for the words on screen (pass `words` to change which; no-op when hidden)."""
+        if words is not None:
+            self.def_words = words
+        if not self.show_defs:
+            return
+        t = self.def_text
+        t.config(state="normal")
+        t.delete("1.0", "end")
+        for i, w in enumerate(self.def_words):
+            if i:
+                t.insert("end", "\n")
+            t.insert("end", w + "\n", "head")
+            t.insert("end", self.get_def(w) or "Looking up definition...")
+            t.insert("end", "\n")
+        t.config(state="disabled")
+
+    def _poll_defs(self):
+        """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
+        changed = False
+        for word, text, found in self.defs.drain():
+            if found:
+                self.store.set_def(word, text)
+            self.mem_defs[word] = text
+            changed = True
+        if changed:
+            self._render_defs()
+            for bw in list(self.browsers):
+                if bw.alive():
+                    bw.render_def()
+        self.root.after(120, self._poll_defs)
+
+    # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
+    def open_browser(self):
+        """Open the Browse window, or raise it if one is already open."""
+        for bw in self.browsers:
+            if bw.alive():
+                bw.win.lift()
+                return
+        Browser(self)
+
+    def edit_anchors(self):
+        """Dialog to choose the six anchor words (checked: filled in, distinct, and in the word list)."""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Anchor words")
+        dlg.transient(self.root)
+        try:  # some Linux window managers refuse a grab before the window is visible
+            dlg.wait_visibility()
+            dlg.grab_set()
+        except tk.TclError:
+            pass
+        intro = ("Pick one reference word per tier. New words are compared against these\n"
+                 "to find their tier quickly. Choose words you know well that feel typical\n"
+                 "of each tier. Edit freely; every word must be in the word list.")
+        ttk.Label(dlg, text=intro, padding=12, justify="left").grid(row=0, column=0, columnspan=2)
+        current = self.store.get_anchors()
+        vars_ = []
+        for t in range(len(TIERS)):
+            pre = current[t] or (DEFAULT_ANCHORS[t] if self.store.has_word(DEFAULT_ANCHORS[t]) else "")
+            tk.Label(dlg, text=TIERS[t], bg=TIER_COLORS[t], font=font("head"), width=3
+                     ).grid(row=t + 1, column=0, padx=(12, 6), pady=3)
+            v = tk.StringVar(value=pre)
+            ttk.Entry(dlg, textvariable=v, width=26).grid(row=t + 1, column=1, padx=(0, 12), pady=3)
+            vars_.append(v)
+
+        def save():  # validate, store the anchors and close
+            words = [v.get().strip().lower() for v in vars_]
+            if any(not w for w in words):
+                messagebox.showerror("Anchor words", "Fill in all six anchors.", parent=dlg)
+                return
+            if len(set(words)) != len(words):
+                messagebox.showerror("Anchor words", "Anchors must be six different words.", parent=dlg)
+                return
+            for w in words:
+                if not self.store.has_word(w):
+                    messagebox.showerror("Anchor words", f"'{w}' is not in the word list.", parent=dlg)
+                    return
+            self.store.set_anchors(words)
+            self.anchors = self.store.get_anchors()
+            dlg.destroy()
+            self.after_external_change()
+
+        bar = ttk.Frame(dlg, padding=12)
+        bar.grid(row=len(TIERS) + 1, column=0, columnspan=2)
+        ttk.Button(bar, text="Save anchors", command=save).pack(side="left", padx=6)
+        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(side="left")
+        place_dialog(dlg, self.root)
+
+    def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
+        """Validate and apply the queue settings, then reshuffle. Returns an error message or None."""
+        try:
+            seed = int(seed_text.strip())
+            spread = float(spread_text.strip().replace(",", ""))
+            compound = float(compound_text.strip())
+        except ValueError:
+            return "Seed must be a whole number; spread and compound strength must be numbers."
+        if spread < 100:
+            return "Spread must be at least 100 (it is measured in frequency ranks)."
+        if not 0 <= compound <= 10:
+            return "Compound strength must be between 0 (off) and 10."
+        if shape not in ("exp", "gauss"):
+            return "Pick a shape."
+        self.store.reshuffle(seed=seed, spread=spread, shape=shape, compound=compound)
+        self.cmp = None
+        return None
+
+    def edit_queue(self):
+        """Dialog for the queue's seed, spread, shape and compound strength; Apply reshuffles the unplaced words."""
+        cfg = self.store.queue_settings()
+        dlg = tk.Toplevel(self.root)
+        dlg.title("Queue randomness")
+        dlg.transient(self.root)
+        try:
+            dlg.wait_visibility()
+            dlg.grab_set()
+        except tk.TclError:
+            pass
+        intro = ("New words are drawn at random, but the odds fall off with how rare a word is: a word\n"
+                 "'spread' ranks further down the frequency list is about 2.7x less likely to come up\n"
+                 "early (exponential), or drops off faster still (gaussian). The same seed always\n"
+                 "gives the same order. Applying reshuffles the words you haven't placed yet.")
+        ttk.Label(dlg, text=intro, padding=12, justify="left").grid(row=0, column=0, columnspan=3)
+        seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
+        comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
+        ttk.Label(dlg, text="Seed:").grid(row=1, column=0, sticky="e", padx=(12, 6), pady=3)
+        ttk.Entry(dlg, textvariable=seed_v, width=14).grid(row=1, column=1, sticky="w")
+        ttk.Button(dlg, text="New random seed",
+                   command=lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31)))
+                   ).grid(row=1, column=2, padx=12)
+        ttk.Label(dlg, text="Spread (ranks):").grid(row=2, column=0, sticky="e", padx=(12, 6), pady=3)
+        ttk.Entry(dlg, textvariable=spread_v, width=14).grid(row=2, column=1, sticky="w")
+        info = ttk.Label(dlg, text="", foreground=PALETTE["muted"])
+        info.grid(row=2, column=2, sticky="w", padx=12)
+        ttk.Label(dlg, text="Shape:").grid(row=3, column=0, sticky="e", padx=(12, 6), pady=3)
+        sh = ttk.Frame(dlg)
+        sh.grid(row=3, column=1, columnspan=2, sticky="w")
+        ttk.Radiobutton(sh, text="Exponential (e^-x)", value="exp", variable=shape_v).pack(side="left")
+        ttk.Radiobutton(sh, text="Gaussian", value="gauss", variable=shape_v).pack(side="left", padx=12)
+        ttk.Label(dlg, text="Compound strength:").grid(row=4, column=0, sticky="e", padx=(12, 6), pady=3)
+        ttk.Entry(dlg, textvariable=comp_v, width=14).grid(row=4, column=1, sticky="w")
+        ttk.Label(dlg, text="0 = treat compounds like any word, 1 = default, higher = rarer",
+                  foreground=PALETTE["muted"]).grid(row=4, column=2, sticky="w", padx=12)
+        status = ttk.Label(dlg, text="", foreground=PALETTE["bad"][1])
+        status.grid(row=5, column=0, columnspan=3, pady=(6, 0))
+
+        def update_info(*_):  # live hint under "Spread": the median rank of early words
+            try:
+                s = float(spread_v.get().replace(",", ""))
+            except ValueError:
+                info.config(text="")
+                return
+            med = s * math.log(2) if shape_v.get() == "exp" else s * 0.6745
+            info.config(text=f"half of early words rank below ~{med:,.0f}")
+
+        spread_v.trace_add("write", update_info)
+        shape_v.trace_add("write", update_info)
+        update_info()
+
+        def apply():  # validate and reshuffle through apply_queue_settings()
+            status.config(text="Shuffling...", foreground=PALETTE["muted"])
+            dlg.update_idletasks()
+            err = self.apply_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
+            if err:
+                status.config(text=err, foreground=PALETTE["bad"][1])
+                return
+            dlg.destroy()
+            self.after_external_change()
+            self.flash("Queue reshuffled", ms=2000)
+
+        bar = ttk.Frame(dlg, padding=12)
+        bar.grid(row=6, column=0, columnspan=3)
+        ttk.Button(bar, text="Apply & reshuffle", command=apply).pack(side="left", padx=6)
+        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(side="left")
+        place_dialog(dlg, self.root)
+
+    # ---- earlier progress ------------------------------------------------------------------------
+    def show_save_location(self):
+        """File > Where is my save file?"""
+        messagebox.showinfo(
+            "Save file",
+            f"Your progress is saved automatically, after every action, in:\n\n{self.store.path}\n\n"
+            "If you replace or move tierlist.py, this file is found and reused automatically. "
+            "To back it up, copy it somewhere safe.", parent=self.root)
+
+    @staticmethod
+    def describe_merge(res):
+        placed = f"{res['placed']:,} words placed"
+        if res["added"]:
+            placed += f" ({res['added']:,} of them were not in this list yet)"
+        parts = [placed]
+        if res["skipped"]:
+            parts.append(f"{res['skipped']:,} skipped words")
+        if res["comparisons"]:
+            parts.append(f"{res['comparisons']:,} past duels")
+        text = "Brought over " + ", ".join(parts) + "."
+        if res["same"]:
+            text += f"\n{res['same']:,} words were already placed the same way."
+        if res["differs"]:
+            text += f"\n{res['differs']:,} words were in a different tier here and were left as they are."
+        if res["backup"]:
+            text += f"\n\nA backup of this list from before the merge is at:\n{res['backup']}"
+        return text
+
+    def merge_file(self, path, backup=True):
+        """Merge another save or export into this list. Returns (ok, message)."""
+        name = os.path.basename(path)
+        try:
+            res = self.store.merge(path, backup=backup)
+        except (ValueError, OSError, sqlite3.Error) as exc:
+            return False, f"{name}: could not import ({exc})"
+        self.cmp = None
+        return True, f"{name}\n{self.describe_merge(res)}"
+
+    def import_progress(self):
+        """File > Import earlier progress: pick a save file or export and merge it in."""
+        path = filedialog.askopenfilename(
+            parent=self.root, title="Import earlier progress",
+            filetypes=[("Tier list save or export", "*.db *.csv *.txt *.md"), ("All files", "*.*")])
+        if not path:
+            return
+        ok, text = self.merge_file(path)
+        (messagebox.showinfo if ok else messagebox.showerror)("Import earlier progress", text, parent=self.root)
+        self.after_external_change()
+
+    def offer_merge(self, others):
+        """Other save files with progress were found: offer (once per file) to merge them in."""
+        done = set(json.loads(self.store.get_meta("merge_prompted", "[]")))
+        todo = [o for o in others if o["key"] not in done]
+        if not todo:
+            return
+        lines = "\n".join(f"   {o['path']}   ({o['placed']:,} placed, {o['skipped']:,} skipped)" for o in todo)
+        yes = messagebox.askyesno(
+            "Merge your earlier progress?",
+            f"Found other tier list save files with progress:\n\n{lines}\n\n"
+            f"Merge their progress into the list you're using now?\n\n   {self.store.path}\n\n"
+            "Nothing already placed here is overwritten, the other files are not changed, and a "
+            "backup of this list is saved first. You can also do this later from "
+            "File > Import earlier progress.", parent=self.root)
+        self.store.set_meta("merge_prompted", json.dumps(sorted(done | {o["key"] for o in todo})))
+        if not yes:
+            self.flash("Not merged. You can do it any time from File > Import earlier progress...", ms=8000)
+            return
+        msgs = [self.merge_file(o["path"], backup=(i == 0))[1] for i, o in enumerate(todo)]
+        self.after_external_change()
+        messagebox.showinfo("Merged", "\n\n".join(msgs), parent=self.root)
+
+    def export(self):
+        """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md."""
+        path = filedialog.asksaveasfilename(
+            parent=self.root, title="Export tier list", defaultextension=".txt", initialfile="tierlist.txt",
+            filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
+        if not path:
+            return
+        rows = self.store.export_rows()
+        try:
+            write_export(path, rows, self.store.skipped_words())
+        except OSError as exc:
+            show_exception("Export failed", exc, self.root, f"The tier list could not be saved to\n{path}")
+            return
+        self.flash(f"Exported {len(rows):,} placed words", ms=3000)
+
+    def on_close(self):
+        """Close the save cleanly and quit."""
+        self.anim.cancel_all()
+        self.store.close()
+        self.root.destroy()
