@@ -25,7 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import RoundButton, WordCard, refresh_widgets
+from widgets import RoundButton, TierRow, WordCard, refresh_widgets
 
 
 class App:
@@ -187,14 +187,9 @@ class App:
         self.vs_lbl = ttk.Label(inner, text="", font=font("vs"), justify="center")
         self.vs_lbl.grid(row=2, column=0, pady=14)
 
-        self.tier_row = ttk.Frame(inner)
+        self.tier_row = TierRow(inner, TIERS, self.place_word, font=font("tier"), animator=self.anim)
         self.tier_row.grid(row=3, column=0, pady=6)
-        self.tier_btns = []
-        for t in range(len(TIERS)):
-            b = RoundButton(self.tier_row, TIERS[t], lambda t=t: self.place_word(t), bg=TIER_COLORS[t],
-                            font=font("tier"), padx=18, pady=10, hint=str(t + 1), animator=self.anim)
-            b.grid(row=0, column=t, padx=5)
-            self.tier_btns.append(b)
+        self.tier_btns = self.tier_row.buttons
 
         self.cmp_row = ttk.Frame(inner)
         self.cmp_row.grid(row=4, column=0, pady=6)
@@ -754,7 +749,7 @@ class App:
                     self._render_place_state()
             else:
                 if ks in ("1", "2", "3", "4", "5", "6"):
-                    self.place_word(int(ks) - 1)
+                    self.tier_row.press(int(ks) - 1)      # places the word, and the pill dips
                 elif ks == "space":
                     self.start_compare()
                 elif low == "u" or ks == "question":

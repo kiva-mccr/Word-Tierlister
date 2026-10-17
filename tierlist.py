@@ -213,10 +213,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           font so it shrinks with the rest when a small screen forces smaller text. The old
 #           refresh_buttons() became refresh_widgets() (handles buttons and cards).
 #           Covered by _selftest_widgets.py.
-# [ ] UI-7  TierRow.      adds TierRow: six pastel pills (letter + key hint) with a hover lift and
+# [x] UI-7  TierRow.      adds TierRow: six pastel pills (letter + key hint) with a hover lift and
 #           press(tier), which plays the same pressed "dip" as a mouse click (RoundButton.flash, built
 #           in UI-5) so pressing 1-6 on the keyboard looks like pressing the pill. Revives
 #           App.tier_btns. (UI-18 wires every other hotkey the same way.)
+#           Built: TierRow(parent, tiers, on_pick) in widgets.py; RoundButton gained lift= (rises 3 px off
+#           a soft shadow on hover). press() runs the action first, then dips. Covered by
+#           _selftest_widgets2.py (the test file for every widget from UI-7 on).
 # [ ] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
 #           arrow-key hints, plus quiet Tie / Skip text buttons. Replaces left_btn / right_btn /
 #           tie_btn / skip_pair_btn. Offers press(side) for left / right / tie / skip so the

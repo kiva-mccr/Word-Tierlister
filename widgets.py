@@ -1,4 +1,4 @@
-"""Small reusable tk widgets: RoundButton (UI-5), WordCard (UI-6); TierRow and friends arrive in UI-7+.
+"""Small reusable tk widgets: RoundButton (UI-5), WordCard (UI-6), TierRow (UI-7) and friends.
 
 Both are canvases drawn with smoothed rounded corners. Canvas (not tk.Button or ttk) because the
 colours then look the same on macOS, Windows and Linux, and corners can be round everywhere.
@@ -7,7 +7,7 @@ After a shared Font object is resized, call refresh_widgets(window) so they re-m
 import tkinter as tk
 import tkinter.font as tkfont
 
-from theme import PALETTE
+from theme import PALETTE, TIER_COLORS
 from ui_motion import lerp_color
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
@@ -35,16 +35,18 @@ class RoundButton(tk.Canvas):
     * set_enabled(False) greys it out; it stays visible but ignores clicks.
     * refresh() re-measures after the shared Font object was resized (call it after a font change).
     * With an Animator the hover tint fades over HOVER_MS; without one (or with reduce motion) it jumps.
+    * `lift` (pixels, default 0): on hover the button rises by that much over a soft shadow (UI-7).
     """
 
     def __init__(self, parent, text, command, bg=PALETTE["neutral"], fg=PALETTE["text"], font=None,
-                 padx=14, pady=8, hint=None, wraplength=0, radius=14, animator=None, canvas_bg=None):
+                 padx=14, pady=8, hint=None, wraplength=0, radius=14, animator=None, canvas_bg=None, lift=0):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"],
                          cursor="hand2", takefocus=0)
         self._command = command
         self._text, self._hint, self._wrap = text, hint, wraplength
         self._fill, self._fg = bg, fg
         self._padx, self._pady, self._radius = padx, pady, radius
+        self._lift, self._lifted = lift, False
         self._anim = animator
         self._font = font if isinstance(font, tkfont.Font) else tkfont.Font(root=self, font=font or "TkDefaultFont")
         self._hint_font = tkfont.Font(root=self, font=self._font)
@@ -92,6 +94,7 @@ class RoundButton(tk.Canvas):
         self._enabled = enabled
         if not enabled:
             self._pressed = self._hover = False
+            self._set_lift(False)
         self.tk.call(str(self), "configure", "-cursor", "hand2" if enabled else "arrow")
         self._go(self._target())
 
@@ -152,51 +155,69 @@ class RoundButton(tk.Canvas):
         self._hint_font.configure(family=self._font.cget("family"), weight="normal",
                                   size=max(7, hs) if s > 0 else min(-9, hs))
         label = self.create_text(0, 0, text=self._text, font=self._font, width=wrap, justify="center",
-                                 tags="label", anchor="n")
+                                 tags=("label", "body"), anchor="n")
         lb = self.bbox(label)
         tw, th = (lb[2] - lb[0], lb[3] - lb[1]) if lb else (0, 0)
         hw = hh = 0
         if self._hint:
             h = self.create_text(0, 0, text=self._hint, font=self._hint_font, width=wrap, justify="center",
-                                 tags="hint", anchor="n")
+                                 tags=("hint", "body"), anchor="n")
             hb = self.bbox(h)
             hw, hh = hb[2] - hb[0], hb[3] - hb[1]
         gap = 1 if self._hint else 0
         need_w = max(tw, hw) + 2 * self._padx
-        need_h = th + gap + hh + 2 * self._pady + DIP + 1
+        lift = self._lift
+        need_h = th + gap + hh + 2 * self._pady + DIP + 1 + lift
         super().configure(width=need_w, height=need_h)
         w, h = max(self.winfo_width(), need_w), max(self.winfo_height(), need_h)   # (1 x 1 before it is laid out)
-        body_h = h - DIP - 1
+        body_h = h - DIP - 1 - lift
         r = max(4, min(self._radius, body_h // 2))
-        self.create_polygon(_rounded_points(1, 1, w - 1, 1 + body_h, r), smooth=True, tags="shape")
-        top = 1 + (body_h - (th + gap + hh)) / 2
+        if lift:     # the shadow stays put; the body sits on it and rises off it on hover
+            self.create_polygon(_rounded_points(2, 1 + lift + 1, w - 2, 1 + lift + body_h, r), smooth=True,
+                                fill=super().cget("bg"), outline="", tags="shadow")
+        self.create_polygon(_rounded_points(1, 1 + lift, w - 1, 1 + lift + body_h, r), smooth=True, tags=("shape", "body"))
+        top = 1 + lift + (body_h - (th + gap + hh)) / 2
         self.coords(label, w / 2, top)
         if self._hint:
             self.coords("hint", w / 2, top + th + gap)
         self.tag_raise("label")
         self.tag_raise("hint")
+        self._lifted = False
         self._paint()
         if self._pressed:
-            self.move("all", 0, DIP)
+            self.move("body", 0, DIP)
+        elif self._hover:
+            self._set_lift(True)
+
+    def _set_lift(self, up):
+        """Raise the body off its shadow (hover) or set it back down. Only for buttons made with lift=."""
+        if not self._lift or up == self._lifted:
+            return
+        self._lifted = up
+        self.move("body", 0, -self._lift if up else self._lift)
+        self.itemconfigure("shadow", fill=PALETTE["shadow"] if up else super().cget("bg"))
 
     # ---- mouse ----------------------------------------------------------------------------------
     def _set_hover(self, on):
         self._hover = on and self._enabled
         if not self._pressed:
             self._go(self._target())
+            self._set_lift(self._hover)
 
     def _on_press(self, _e):
         if not self._enabled:
             return
         self._pressed = True
+        self._set_lift(False)
         self._go(self._target())
-        self.move("all", 0, DIP)
+        self.move("body", 0, DIP)
 
     def _on_release(self, e):
         if not self._pressed:
             return
         self._pressed = False
-        self.move("all", 0, -DIP)
+        self.move("body", 0, -DIP)
+        self._set_lift(self._hover)
         self._go(self._target())
         if 0 <= e.x < self.winfo_width() and 0 <= e.y < self.winfo_height():
             self._command()
@@ -212,18 +233,54 @@ class RoundButton(tk.Canvas):
         if not self._enabled or self._pressed:
             return
         self._pressed = True
+        self._set_lift(False)
         self._go(self._target())
-        self.move("all", 0, DIP)
+        self.move("body", 0, DIP)
 
         def undo():
             if self._pressed:
                 self._pressed = False
                 try:
-                    self.move("all", 0, -DIP)
+                    self.move("body", 0, -DIP)
+                    self._set_lift(self._hover)
                     self._go(self._target())
                 except tk.TclError:
                     pass
         self.after(ms, undo)
+
+
+class TierRow(tk.Frame):
+    """The six tier pills S..F, each with its key hint (1-6), a hover lift and the pressed dip (UI-7).
+
+        row = TierRow(parent, ["S", "A", "B", "C", "D", "F"], on_pick, font("tier"), animator=app.anim)
+        row.press(2)        # what the "3" key does: the B pill dips, then on_pick(2) runs
+
+    `buttons` are the RoundButtons (App.tier_btns), in tier order. on_pick(tier) runs on a click too.
+    """
+
+    def __init__(self, parent, tiers, on_pick, font=None, animator=None, colors=TIER_COLORS, gap=5):
+        super().__init__(parent, bg=PALETTE["bg"])
+        self.buttons = []
+        for t, name in enumerate(tiers):
+            b = RoundButton(self, name, lambda t=t: on_pick(t), bg=colors[t], font=font, padx=22, pady=10,
+                            hint=str(t + 1), radius=999, animator=animator, lift=3)
+            b.grid(row=0, column=t, padx=gap)
+            self.buttons.append(b)
+        self._on_pick = on_pick
+
+    def press(self, tier):
+        """The keyboard version of a click: the action runs first (input is never delayed), then the pill
+        shows its pressed dip. Out-of-range tiers and disabled pills do nothing."""
+        if 0 <= tier < len(self.buttons) and self.buttons[tier].enabled:
+            self._on_pick(tier)
+            try:
+                self.buttons[tier].flash()
+            except tk.TclError:
+                pass
+
+    def set_enabled(self, enabled):
+        for b in self.buttons:
+            b.set_enabled(enabled)
 
 
 class WordCard(tk.Canvas):
