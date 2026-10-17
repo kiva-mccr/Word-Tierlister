@@ -1,9 +1,9 @@
-"""The main window: place / refine / boundary / conflict modes, menus, key handling, definitions pane.
+"""The main window: place / refine / boundary / conflict modes, header menus, key handling, definitions pane.
 
 App is a thin controller. It never touches the database directly: every read/write goes through
 self.store (store.py), and after each change it calls refresh() to redraw. The file reads top to
 bottom in the order things happen:
-    construction (menu, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
+    construction (header, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
     undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
 """
 import json
@@ -25,7 +25,8 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
-from widgets import RoundButton, WordCard, refresh_widgets
+from widgets import (AnchorLadder, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
+                     refresh_widgets)
 
 
 class App:
@@ -49,7 +50,7 @@ class App:
     """
 
     def __init__(self, root, store, defs, note=None, other_saves=()):
-        """Build the window. `note` is a one-time banner (which save was resumed); `other_saves` are
+        """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
         extra saves with progress that _startup() offers to merge. `defs` is a Definitions.
         """
         self.root, self.store, self.defs = root, store, defs
@@ -71,7 +72,6 @@ class App:
         self.mem_defs = {}
         self.def_words = []
         self.browsers = []
-        self._banner_job = None
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
 
         init_fonts(root)
@@ -83,7 +83,7 @@ class App:
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
-        self._build_menu()
+        self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
         root.bind("<Control-z>", lambda e: self.undo())
@@ -106,41 +106,60 @@ class App:
             self.edit_anchors()
 
     # ---- construction ------------------------------------------------------------------
-    def _build_menu(self):
-        """Menu bar: File (import/export), Edit (undo), View (browse, definitions), Settings (anchors, queue)."""
-        m = tk.Menu(self.root)
-        self.root.config(menu=m)
-        fm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="File", menu=fm)
-        fm.add_command(label="Import earlier progress...", command=self.import_progress)
-        fm.add_command(label="Export tier list...", command=self.export)
-        fm.add_command(label="Where is my save file?", command=self.show_save_location)
-        fm.add_separator()
-        fm.add_command(label="Quit", command=self.on_close)
-        em = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="Edit", menu=em)
-        em.add_command(label="Undo", accelerator="Ctrl+Z", command=self.undo)
-        vm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="View", menu=vm)
-        vm.add_command(label="Browse / edit tier list...", command=self.open_browser)
-        vm.add_checkbutton(label="Show definitions (D)", variable=self.defs_var,
-                           command=lambda: self.toggle_defs(self.defs_var.get()))
-        vm.add_checkbutton(label="Reduce motion", variable=self.motion_var, command=self.toggle_motion)
-        sm = tk.Menu(m, tearoff=0)
-        m.add_cascade(label="Settings", menu=sm)
-        sm.add_command(label="Anchor words...", command=self.edit_anchors)
-        sm.add_command(label="Queue randomness & seed...", command=self.edit_queue)
-        sm.add_checkbutton(label="Always compare new words to anchors", variable=self.auto_var,
-                           command=self.toggle_auto)
+    def _menu_items(self):
+        """The header menus (UI-10): File (import/export), Edit (undo), View (browse, definitions, motion),
+        Settings (anchors, queue). Each item is a DropMenu row: ("command", label, command, shortcut)
+        or ("check", label, variable, command)."""
+        return [
+            ("File", [("command", "Import earlier progress...", self.import_progress, None),
+                      ("command", "Export tier list...", self.export, None),
+                      ("command", "Where is my save file?", self.show_save_location, None),
+                      ("separator",),
+                      ("command", "Quit", self.on_close, None)]),
+            ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
+            ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
+                      ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
+                      ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
+            ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
+                          ("command", "Queue randomness & seed...", self.edit_queue, None),
+                          ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
+        ]
+
+    def _build_header(self):
+        """The top of the window (UI-10): a white bar with the File / Edit / View / Settings menu buttons,
+        then the mode tabs on a hairline, the open tab joined to the page below. Replaces the system menu
+        bar and the radio buttons.
+        Alt+F / Alt+E / Alt+V / Alt+S (and F10 for File) open the menus from the keyboard."""
+        r = self.root
+        head = tk.Frame(r, bg=PALETTE["surface"])
+        head.pack(side="top", fill="x")
+        bar = tk.Frame(head, bg=PALETTE["surface"], padx=8, pady=5)
+        bar.pack(side="top", fill="x")
+        self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
+        self.header.pack(side="left")
+        for name in self.header.buttons:
+            r.bind(f"<Alt-{name[0].lower()}>", lambda e, n=name: self._open_menu_key(n))
+        r.bind("<F10>", lambda e: self._open_menu_key("File"))
+        # the mode tabs sit on the line that is the top edge of the page
+        self.mode_switch = TabBar(head, MODES, self._on_mode_switch, font("label"), animator=self.anim,
+                                  page_bg=PALETTE["bg"])
+        self.mode_switch.set(self.mode)
+        self.mode_switch.pack(side="top", fill="x")
+        tk.Frame(r, height=6, bg=PALETTE["bg"]).pack(side="top", fill="x")
+
+    def _open_menu_key(self, name):
+        self.header.open_menu(name)
+        return "break"
+
+    def _on_mode_switch(self, key):
+        """A segment of the mode switch was clicked."""
+        self.mode_var.set(key)
+        self.on_mode_change()
 
     def _build_ui(self):
-        """Create every widget once: header, banner, bottom bar, definition pane, place view and pair view."""
+        """Create every widget below the header once: stats, toast, bottom bar, definition pane, place view
+        and pair view."""
         r = self.root
-        top = ttk.Frame(r, padding=(10, 8))
-        top.pack(side="top", fill="x")
-        for key, label in MODES:
-            ttk.Radiobutton(top, text=label, value=key, variable=self.mode_var,
-                            command=self.on_mode_change, takefocus=0).pack(side="left", padx=(0, 14))
         self.stats_lbl = ttk.Label(r, anchor="w", padding=(10, 0))
         self.stats_lbl.pack(side="top", fill="x")
         self.tier_lbl = ttk.Label(r, anchor="w", padding=(10, 0), foreground=PALETTE["muted"])
@@ -157,8 +176,6 @@ class App:
         self.focus_lbl.pack(side="left", padx=12)
         self.focus_clear = ttk.Button(self.opt_frame, text="Clear focus", command=self.clear_focus, takefocus=0)
 
-        self.banner = tk.Label(r, text="", font=font("label"), pady=5, bg=r.cget("bg"))
-        self.banner.pack(side="top", fill="x")
 
         # bottom bar first so it keeps the bottom edge
         bottom = ttk.Frame(r, padding=(10, 6))
@@ -176,6 +193,8 @@ class App:
 
         self.center = ttk.Frame(r)
         self.center.pack(side="top", fill="both", expand=True)
+        # messages float over the top of the page as a toast (UI-11); App.flash() shows them
+        self.banner = Toast(r, font("label"), animator=self.anim)
 
         # ---- place view
         self.place_frame = ttk.Frame(self.center)
@@ -184,17 +203,15 @@ class App:
         inner.place(relx=0.5, rely=0.42, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 6))
+        self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
+        self.ladder.grid(row=1, column=0, pady=(10, 0))
+        self.ladder.grid_remove()               # only while comparing to anchors (UI-9)
         self.vs_lbl = ttk.Label(inner, text="", font=font("vs"), justify="center")
         self.vs_lbl.grid(row=2, column=0, pady=14)
 
-        self.tier_row = ttk.Frame(inner)
+        self.tier_row = TierRow(inner, TIERS, self.place_word, font=font("tier"), animator=self.anim)
         self.tier_row.grid(row=3, column=0, pady=6)
-        self.tier_btns = []
-        for t in range(len(TIERS)):
-            b = RoundButton(self.tier_row, TIERS[t], lambda t=t: self.place_word(t), bg=TIER_COLORS[t],
-                            font=font("tier"), padx=18, pady=10, hint=str(t + 1), animator=self.anim)
-            b.grid(row=0, column=t, padx=5)
-            self.tier_btns.append(b)
+        self.tier_btns = self.tier_row.buttons
 
         self.cmp_row = ttk.Frame(inner)
         self.cmp_row.grid(row=4, column=0, pady=6)
@@ -220,25 +237,14 @@ class App:
         pi = ttk.Frame(self.pair_frame)
         self.pair_inner = pi
         pi.place(relx=0.5, rely=0.42, anchor="center")
-        pi.columnconfigure((0, 1), uniform="pair")
         self.pair_title = ttk.Label(pi, text="Which word is better?", font=font("title"))
-        self.pair_title.grid(row=0, column=0, columnspan=2, pady=(0, 12))
-        self.left_btn = RoundButton(pi, "", lambda: self.pair_answer("left"), bg=PALETTE["left"],
-                                    font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
-        self.left_btn.grid(row=1, column=0, padx=12, sticky="nsew")
-        self.right_btn = RoundButton(pi, "", lambda: self.pair_answer("right"), bg=PALETTE["right"],
-                                     font=font("pair"), padx=40, pady=44, radius=24, animator=self.anim)
-        self.right_btn.grid(row=1, column=1, padx=12, sticky="nsew")
-        small = ttk.Frame(pi)
-        small.grid(row=2, column=0, columnspan=2, pady=14)
-        self.tie_btn = RoundButton(small, "Tie / can't decide", lambda: self.pair_answer("tie"),
-                                   font=font("body"), hint="Down / T", animator=self.anim)
-        self.tie_btn.grid(row=0, column=0, padx=8)
-        self.skip_pair_btn = RoundButton(small, "Skip pair", self.skip_pair, font=font("body"), hint="S",
-                                         animator=self.anim)
-        self.skip_pair_btn.grid(row=0, column=1, padx=8)
+        self.pair_title.grid(row=0, column=0, pady=(0, 12))
+        self.duel = DuelCards(pi, self._on_duel, font("pair"), font("body"), animator=self.anim)
+        self.duel.grid(row=1, column=0, sticky="nsew")
+        self.left_btn, self.right_btn = self.duel.left, self.duel.right
+        self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
-        self.ctx_lbl.grid(row=3, column=0, columnspan=2)
+        self.ctx_lbl.grid(row=2, column=0, pady=(10, 0))
         self.center.bind("<Configure>", self._on_center_configure)
 
     # ---- window size: fits the screen and the contents ------------------------------------------
@@ -285,7 +291,7 @@ class App:
     def _content_size(self):
         """(width, height) the window needs to show everything without clipping, in pixels.
 
-        Fixed rows (header, banner, bottom bar, definition pane when shown) report their own size; the
+        Fixed rows (header, stats, bottom bar, definition pane when shown) report their own size; the
         centre area uses `place`, which does not report one, so the two views' inner frames are
         measured and given some breathing room.
         """
@@ -385,13 +391,13 @@ class App:
             self.opt_label.config(text="Tier:")
             self.filter_cb["values"] = ["All tiers"] + TIERS
             self.filter_var.set("All tiers")
-            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+            self.opt_frame.pack(side="top", fill="x", before=self.center)
         elif self.mode == "boundary":
             self.opt_label.config(text="Boundary:")
             vals = [f"{TIERS[i]} | {TIERS[i + 1]}" for i in range(len(TIERS) - 1)]
             self.filter_cb["values"] = ["All boundaries"] + vals
             self.filter_var.set("All boundaries")
-            self.opt_frame.pack(side="top", fill="x", before=self.banner)
+            self.opt_frame.pack(side="top", fill="x", before=self.center)
         else:
             self.opt_frame.pack_forget()
         self._update_focus_label()
@@ -412,12 +418,10 @@ class App:
         self.refresh()
 
     def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
-        """Show a coloured message in the banner for `ms` milliseconds, then clear it. A new message replaces the old one."""
-        self.banner.config(text=text, bg=bg, fg=fg)
-        if self._banner_job:
-            self.root.after_cancel(self._banner_job)
-        self._banner_job = self.root.after(
-            ms, lambda: self.banner.config(text="", bg=self.root.cget("bg")))
+        """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
+        replaces the old one."""
+        self.banner.show(text, (bg, fg), ms, in_=self.center,
+                         wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
     def refresh(self):
@@ -498,7 +502,12 @@ class App:
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
+            if not self.ladder.winfo_manager():                     # not shown yet
+                self.ladder.update_range(0, len(TIERS) - 1, None)   # a fresh comparison starts full
+            self.ladder.grid()
+            self.ladder.update_range(self.cmp["lo"], self.cmp["hi"], mid)
         else:
+            self.ladder.grid_remove()
             self.vs_lbl.config(text="" if all(self.anchors) else "Set anchor words (Settings) to enable comparing.")
             self.cmp_row.grid_remove()
             self.tier_row.grid()
@@ -524,11 +533,29 @@ class App:
         self.refresh()
 
     def _after_place(self, word, tier):
-        """Shared tail of every placement: count it, confirm in the banner, show the next word."""
+        """Shared tail of every placement: count it, confirm in the toast, show the next word."""
         self.session_count += 1
         self.cmp = None
-        self.flash(f"{word}  ->  {TIERS[tier]}", bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
         self.refresh()
+        self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
+
+    def _fling_toast(self, text, tier):
+        """The placement message rises out of the word card, rests above it, then swipes toward its tier's
+        side (S, A, B to the left; C, D, F to the right; further for the outer tiers) and fades out."""
+        card, c = self.word_card, self.center
+        if not card.winfo_ismapped():
+            self.flash(text, bg=TIER_COLORS[tier], fg=TIER_TEXT, ms=1500)
+            return
+        t = self.banner
+        f = ui_factor(self.root)
+        card_top = card.winfo_rooty() - c.winfo_rooty()
+        card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
+        mid = (card_top + card_bottom) // 2
+
+        def under(y):          # the card is white, the page around it cream
+            return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
+        t.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=mid, rest_bottom=card_top - int(8 * f),
+                dx=int((tier - 2.5) * 70 * f), in_=c, wraplength=max(240, c.winfo_width() - 120), under=under)
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
@@ -641,16 +668,12 @@ class App:
             self.left_btn.config(text="-")
             self.right_btn.config(text="-")
             self.ctx_lbl.config(text=msg)
-            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
-                b.set_enabled(False)
+            self.duel.set_enabled(False)
             self._render_defs([])
         else:
-            self.left_btn.config(text=self.pair["left"])
-            self.right_btn.config(text=self.pair["right"])
+            self.duel.show(self.pair["left"], self.pair["right"])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
-            for b in (self.left_btn, self.right_btn, self.tie_btn, self.skip_pair_btn):
-                b.set_enabled(True)
             self._render_defs([self.pair["left"], self.pair["right"]])
         self._hint()
 
@@ -665,7 +688,7 @@ class App:
         self.session_count += 1
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
-            self.flash(f"Swapped: {w} -> {TIERS[wt]},  {l} -> {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
                        "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
@@ -675,6 +698,13 @@ class App:
                 self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
                 self.focus = None
         self.refresh()
+
+    def _on_duel(self, side):
+        """A duel card or the Tie / Skip button was clicked (or pressed with its key)."""
+        if side == "skip":
+            self.skip_pair()
+        else:
+            self.pair_answer(side)
 
     def skip_pair(self):
         """Show a different pair without recording anything."""
@@ -686,6 +716,7 @@ class App:
         self.focus, self.focus_left = word, FOCUS_ROUNDS
         self.mode = "refine"
         self.mode_var.set("refine")
+        self.mode_switch.set("refine")
         self.store.set_meta("mode", "refine")
         self.cmp = None
         self._update_options()
@@ -699,8 +730,10 @@ class App:
         self.refresh()
 
     def on_mode_change(self):
-        """A mode radio button was clicked: save it and reset any in-progress comparison, pair or focus."""
+        """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
+        comparison, pair or focus."""
         self.mode = self.mode_var.get()
+        self.mode_switch.set(self.mode)
         self.store.set_meta("mode", self.mode)
         self.cmp = None
         self.pair = None
@@ -731,6 +764,10 @@ class App:
         """
         self.anim.finish_all()  # a key press never waits for an animation
         ks = e.keysym
+        if self.header.open_name is not None:      # a header menu is open: Escape closes it, nothing else runs
+            if ks == "Escape":
+                self.header.close()
+            return
         low = ks.lower()
         if low == "d":
             self.toggle_defs()
@@ -754,7 +791,7 @@ class App:
                     self._render_place_state()
             else:
                 if ks in ("1", "2", "3", "4", "5", "6"):
-                    self.place_word(int(ks) - 1)
+                    self.tier_row.press(int(ks) - 1)      # places the word, and the pill dips
                 elif ks == "space":
                     self.start_compare()
                 elif low == "u" or ks == "question":

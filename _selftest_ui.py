@@ -42,6 +42,13 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
+pump(2)
+assert app.ladder.winfo_ismapped() and app.ladder.possible() == [0, 1, 2, 3, 4, 5]   # UI-9: the ladder shows
+assert app.ladder.mid == app.cmp["mid"]
+key("Up"); pump(2)                                                  # better than the middle anchor
+if app.cmp:
+    assert app.ladder.possible() == list(range(app.cmp["lo"], app.cmp["hi"] + 1)) and max(app.ladder.possible()) < 2
+key("BackSpace"); pump(2)
 key("Up"); key("Down")
 pump(2)
 if app.cmp:
@@ -171,5 +178,17 @@ except Exception as exc:
     print("no screenshots:", exc)
 
 bw.close()
+
+# ---- header (UI-10): no system menu bar; menus open from the header and the keyboard; the mode switch
+assert not root.cget("menu")
+assert list(app.header.buttons) == ["File", "Edit", "View", "Settings"]
+app._open_menu_key("View"); pump(2)
+assert app.header.open_name == "View" and "Reduce motion" in T.DropMenu.labels(app.header.menus["View"]) if hasattr(T, "DropMenu") else app.header.open_name == "View"
+key("1"); assert app.header.open_name == "View"                      # keys do nothing while a menu is open...
+key("Escape"); pump(2); assert app.header.open_name is None          # ...except Escape, which closes it
+app._on_mode_switch("boundary"); pump(2)
+assert app.mode == "boundary" and s.get_meta("mode") == "boundary" and app.mode_switch.get() == "boundary"
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+assert app.mode_switch.get() == "place"                              # the switch follows code changes too
 app.on_close()
 print("UI OK")

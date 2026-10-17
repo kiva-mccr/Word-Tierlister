@@ -58,7 +58,7 @@ Code map (all files live in one folder; run tierlist.py)
     ui_motion.py    easing, colour blend, Animator (UI-4).
     startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
-    deps.py         required packages: detect and pip-install them (ST-3; no tkinter).
+    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     errors.py       friendly error dialog, error handlers, run_guarded (ST-2).
     browser.py      Browser: the Browse / edit window.
     app.py          App: the main window and all modes.
@@ -96,9 +96,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # on its own, leaves the app working, and updates the tests that read the widgets it replaces.
 # Tick [x] as steps land. IDs are stable; the order is a suggestion.
 #
-# Suggested order: the start-up phase (ST-1, ST-2, ST-3; all done) came first by request, then the new look
+# Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
+# Added later, in this order after the UI steps: ST-5 (Linux terminal), then T-1..T-3 -> T-6, T-7, T-8.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -154,6 +155,31 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           itself is downloaded the first time it is needed (definitions.py). --no-install turns
 #           the offer off; packaged builds skip it. Pillow is only for the tests' screenshots and is
 #           never offered. errors.py gained ask_yes_no. Covered by _selftest_deps.py.
+# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3). Started
+#           from a terminal, deps.terminal_setup() runs before any window and handles only what the
+#           program cannot start without: tkinter and the REQUIRED packages (wordfreq). It lists them
+#           with what each is for, asks once "Install them now? [Y/n]" (Enter = yes), installs tkinter
+#           through the system package manager (apt-get / dnf / pacman / zypper, Homebrew on macOS; sudo
+#           may ask for your password) and wordfreq with pip, with the output shown in the terminal,
+#           then says "Opening the window..." and the window opens (on Windows the console then closes,
+#           ST-1). Everything OPTIONAL (nltk) is offered later in the window by ensure_packages, which
+#           no longer asks about the required ones when the terminal already did. If this Python
+#           refuses pip installs (externally-managed), it offers to make a private .venv next to the
+#           program, installs there and restarts with it; later starts find .venv and use it without
+#           asking. Installing tkinter also restarts the program (it could not be imported at start).
+#           Without a terminal (pythonw, a double-clicked shortcut) the window asks as before.
+#           Covered by _selftest_install.py; tried for real in a fresh venv without wordfreq.
+# [ ] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
+#           start from a terminal keeps that terminal busy until the window closes, and closing the
+#           terminal ends the program. Plan: once the terminal stage (ST-4) has nothing left to ask, the
+#           program starts itself again in its own session (setsid; output to tierlist.log, like the
+#           Windows console detach in ST-1) and the terminal gets its prompt back at once, so closing it
+#           no longer matters. It stays attached only while a question is being asked (ST-4), with
+#           --console, or when output is redirected on purpose. Plus File > "Add to applications menu"
+#           writes a .desktop launcher (Terminal=false) so the program can start with no terminal at
+#           all; anything that must be installed is then asked in the window (ST-3). A program cannot
+#           close a terminal window the user opened themselves; giving the prompt back is the most it
+#           can do. macOS behaves the same way and gets the same treatment if it is cheap.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -199,24 +225,49 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           font so it shrinks with the rest when a small screen forces smaller text. The old
 #           refresh_buttons() became refresh_widgets() (handles buttons and cards).
 #           Covered by _selftest_widgets.py.
-# [ ] UI-7  TierRow.      adds TierRow: six pastel pills (letter + key hint) with a hover lift and
+# [x] UI-7  TierRow.      adds TierRow: six pastel pills (letter + key hint) with a hover lift and
 #           press(tier), which plays the same pressed "dip" as a mouse click (RoundButton.flash, built
 #           in UI-5) so pressing 1-6 on the keyboard looks like pressing the pill. Revives
 #           App.tier_btns. (UI-18 wires every other hotkey the same way.)
-# [ ] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
+#           Built: TierRow(parent, tiers, on_pick) in widgets.py; RoundButton gained lift= (rises 3 px off
+#           a soft shadow on hover). press() runs the action first, then dips. Covered by
+#           _selftest_widgets2.py (the test file for every widget from UI-7 on).
+# [x] UI-8  DuelCards.    adds DuelCards.show(left, right): two big cards with a hover ring and
 #           arrow-key hints, plus quiet Tie / Skip text buttons. Replaces left_btn / right_btn /
 #           tie_btn / skip_pair_btn. Offers press(side) for left / right / tie / skip so the
 #           hotkeys (Left/A, Right/L, Down/T, S) can show the pressed look (wired in UI-18).
-# [ ] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
+#           Built: DuelCards(parent, on_answer) in widgets.py, App.duel (left_btn etc. are its buttons).
+#           RoundButton gained flat= (quiet text button), ring= (hover ring width) and hint_font=.
+# [x] UI-9  AnchorLadder. adds AnchorLadder.update(lo, hi, mid): an S-A-B-C-D-F strip with the
 #           still-possible tiers shaded and the anchor being asked about marked; it narrows
 #           smoothly after each answer. Shown in the Better / Same / Worse view.
+#           Built: AnchorLadder.update_range(lo, hi, mid) in widgets.py (named so it does not hide
+#           Canvas.update): ruled-out tiers fade over 180 ms, the asked tier has an accent ring and caret.
+#           Sits between the word card and the question.
 #
 # --- Phase 3: layout and chrome ----------------------------------------------------------------
-# [ ] UI-10 SegmentedControl. adds SegmentedControl(options, on_change) and build_header(): a
-#           pill-shaped mode switch (Place / Refine / Boundary / Conflicts) replacing the
-#           Radiobuttons.
-# [ ] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
+# [x] UI-10 Modern top bar. adds a mode switch (Place / Refine / Boundary / Conflicts; first planned as a
+#           pill SegmentedControl, built as tabs on the page line by request) replacing the
+#           Radiobuttons, and the File / Edit / View / Settings menus as soft rounded header buttons
+#           with styled drop-down menus instead of the plain system menu bar (same items, same
+#           shortcuts). By request: modernize the top; the bottom bar stays as it is.
+#           Built: widgets.py TabBar (folder tabs on a full-width page line; the open tab is page
+#           coloured and open at the bottom so it joins the page below; it slides, 180 ms), DropMenu (borderless
+#           drop-down: roomy rows, pastel highlight, check marks, shortcut hints; Up/Down/Return/Escape;
+#           closes on a click elsewhere, a window move, or when the app loses focus) and HeaderMenus
+#           (File / Edit / View / Settings as flat buttons; hovering another while one is open switches,
+#           like a menu bar). App._build_header; Alt+F/E/V/S and F10 open the menus; keys do nothing
+#           else while a menu is open. The system menu bar is gone.
+# [x] UI-11 Toast.       adds Toast.show(text, tint): a small pill that fades in and out (colour
 #           blend) instead of the full-width flash banner. App.flash() keeps its signature.
+#           Built: Toast(parent, font) in widgets.py, floating at the top of the page (place), so it
+#           never pushes the layout; fades in 160 ms, out 220 ms; long messages wrap. App.banner is the
+#           Toast (cget("text") still works). Messages use a real arrow (apple  \u2192  S).
+#           Placement messages (by request) use Toast.fling: the message rises out of the word card
+#           (200 ms, fading in), rests just above it while paling slightly (550 ms), then swipes sideways
+#           toward its tier (S, A, B left; C, D, F right; further for the outer tiers) while fading out
+#           completely (240 ms). It borrows the white of the card as its backdrop while over it (no
+#           transparency in tk). A key press or a new message cuts it short; Reduce motion keeps it still.
 # [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
 #           instead of snapping; nicer text (bold word, italic part of speech, muted examples).
 #           Replaces def_frame / def_text.
@@ -263,7 +314,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
 #           and RoundButton "Move to" chips. Keeps its scale-with-window behaviour.
 # [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
-#           Merge dialogs match the rest.
+#           Merge dialogs match the rest. The bottom bar (Undo, Browse / edit, Definition, key
+#           hints) keeps its current look by request; only dialogs change here.
 # [x] SZ-1  Screen- and content-aware window sizing (sizing.py). Windows open at a size derived from
 #           the monitor under the pointer and the dpi scaling, fonts step down (and the definition
 #           pane shortens) when contents would not fit, dialogs are centred on screen.
@@ -275,29 +327,63 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
 #
-# --- Tentative: packaging as a program (NOT planned yet; ignore for now) ------------------------
-# Idea only, to revisit once the UI is finished. Notes from the discussion: PyInstaller builds only
+# --- Packaging as a program (T-6..T-8 asked for; built after the UI steps) ----------------------
+# T-1..T-3 are the groundwork for T-6..T-8; T-4 and T-5 stay notes.
+# Notes from the discussion: PyInstaller builds only
 # for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
 # Linux can be tested from here (Windows / macOS builds would need testing on those machines).
-# [?] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
+# [ ] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
 #          when frozen. REQUIRED before any build: a one-file build unpacks to a temporary folder,
 #          so a save kept "next to the script" would be deleted when the program exits.
-# [?] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
+# [ ] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
 #          stays an optional download as it is now.
-# [?] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
+# [ ] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
 #          Depends on ST-1 and ST-2 (a windowed program has no console for messages).
 # [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
 #          dependencies once and start the program. Roughly ten lines each, nothing to sign.
+# [ ] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running
+#           from source): asks first, installs PyInstaller if missing (the ST-4 way), builds a one-file
+#           program for this OS behind the progress window (T-3 is the engine), bundles the complete
+#           source inside it (see T-7), then starts the new program and closes this window. Both use the
+#           same save (T-1), so nothing is lost. Needs T-1 and T-2 first. Only builds for the OS it runs
+#           on (PyInstaller cannot cross-compile; T-8 covers the other OS).
+#           Always builds from the source as it is now, so every change since the last build (files
+#           edited, added or deleted) is in the new program. Each build records a manifest (file list
+#           + hashes) inside the program; if nothing changed since the last build, it says so and just
+#           starts the existing program instead of rebuilding.
+# [ ] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
+#           (shown in the built program): writes the exact source files that were bundled (no real
+#           decompiling is needed or attempted) into a folder you pick: the program files at the top,
+#           and the Claude files (CLAUDE.md, CHECKLIST.md) plus the tests (_selftest_*.py, run_tests.sh,
+#           check_release.py) in a separate folder inside it. run_tests.sh and check_release.py learn
+#           to find the program files one level up. Then it opens the folder and offers to start
+#           tierlist.py from it.
+#           Unpacking into a folder that already has the source syncs it with the program instead of
+#           copying blindly: changed files are updated, new ones added, and files the program no longer
+#           has are removed. Only files listed in the program's manifest (T-6) are ever touched, so a
+#           save (.db), tierlist.log, a .venv or anything else of yours is never removed. A summary
+#           ("3 updated, 1 added, 1 removed") is shown first, with Cancel; a file you edited in the
+#           folder since the last unpack is backed up (name.py.bak) rather than overwritten silently.
+# [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
+#           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
+#           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
+#           on a Linux and a Windows machine at the same time from the pushed source and attaches
+#           word-tierlist-linux and word-tierlist-windows.exe as downloads; --all waits and fetches them
+#           into dist/. Needs the code pushed to GitHub and a GitHub login (gh) for --all; without
+#           them it explains and builds for this OS only. Building a Windows .exe on Linux through
+#           Wine was considered and rejected: fragile, and the result would still need testing on Windows.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  light theme only (a dark theme can be added later: theme.py is built so a second
+#   Settled:  modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
+#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be added later: theme.py is built so a second
 #             palette with the same keys drops in); the session count stays as a muted "+N today",
 #             with the "/hr" rate shown only in a hover tooltip; the progress bar waits (UI-14).
 #   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
-#   Parked:   Packaging as a program (T-1..T-5 above): tentative, ignored until asked for.
+#   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
+#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5 stay notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).
@@ -306,6 +392,8 @@ import argparse
 import json
 import os
 import sys
+
+import deps
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
@@ -365,10 +453,15 @@ def main():
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
-    # --- 1. tkinter is needed for the window (everything else works without it)
-    if tk is None:
-        sys.exit("tkinter is not installed. On Debian/Ubuntu:  sudo apt install python3-tk")
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    # --- 1. in a terminal, before any window: install only what the program cannot start without
+    #        (tkinter, wordfreq), asking first; optional extras are offered later, in the window (ST-4)
+    asked_in_terminal = deps.wants_terminal_setup(args.no_install)
+    if asked_in_terminal:
+        deps.terminal_setup([os.path.abspath(__file__), *sys.argv[1:]], script_dir)
+    # tkinter is needed for the window (everything else works without it)
+    if tk is None:
+        sys.exit("tkinter is not installed. " + deps.tk_advice())
 
     def start():
         # --- 2. find the save file: --db, else the earlier save (see saves.choose_save)
@@ -438,12 +531,14 @@ def main():
             apply_ttk_style(root)
             install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
             try:
-                # a missing package is offered for install (only asks when something is missing)
+                # a missing package is offered for install (only asks when something is missing). The
+                # required ones were already asked about in the terminal when there is one (ST-4).
                 if not args.no_install:
                     wordnet_build = args.source == "wordnet" and existing == 0 and not args.wordlist
                     declined = set(json.loads(store.get_meta("declined_packages", "[]")))
+                    required = [] if asked_in_terminal else list(deps.REQUIRED)
                     ensure_packages(
-                        root, ["wordfreq"] + (["nltk"] if wordnet_build else []), optional=["nltk"],
+                        root, required + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
                         declined=declined,
                         on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
                 run_with_progress(root, set_up,

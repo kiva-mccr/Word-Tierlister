@@ -10,6 +10,8 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
   (Debian/Ubuntu: `sudo apt install python3-tk`). The program needs internet only for the first-run
   Wiktionary download (~3 GB) and for online definitions.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
+- This container: `python3.12` is the one with tkinter (`PY=python3.12 sh run_tests.sh`); packages for it
+  need `pip install --break-system-packages`. Xvfb is available for screenshots.
 - Tests: `sh run_tests.sh` (stops at the first failure and checks every exit status). If the default
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
@@ -46,16 +48,21 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
   changed (Status, Known gaps, new files, commands, conventions or user preferences), then commit and
   push it with the rest. Keep it short; skip it when nothing worth recording changed.
 - The repo on GitHub is the source of truth for this file; a copy inside an uploaded zip may be older.
+- UI styling: keep the bottom bar (Undo, Browse / edit, Definition and the key-hint line) roughly as it
+  looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
+  "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging (T-1..T-5) tentative.
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-6, ST-1, ST-2, ST-3 (auto-install of missing packages), SZ-1 (sizing). Next: UI-7 (TierRow), UI-8 (DuelCards), then UI-9, UI-13,
+Done: UI-0..UI-6, ST-1..ST-4 (ST-4: required packages + tkinter asked/installed in the terminal first,
+optional ones in the window), SZ-1 (sizing). Next: UI-7 (TierRow), UI-8 (DuelCards), then UI-9, UI-13,
 UI-16/17. UI-18 wires every hotkey to its button's pressed look via `RoundButton.flash`.
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- The ttk buttons (Undo, Browse / edit, dialogs) are still square until UI-24.
+- Dialog buttons are still square until UI-24 (the bottom bar keeps its square look on purpose).
 - A read-only save file's dialog could not be verified (the test machine ran as root).

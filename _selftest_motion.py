@@ -90,13 +90,8 @@ s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "mo
 root = tk.Tk()
 app = T.App(root, s, T.Definitions(s)); root.update()
 assert app.reduce_motion is False and app.anim.reduce_motion is False
-menus = [root.nametowidget(root.cget("menu"))]
-view = menus[0]
-labels = []
-for i in range(view.index("end") + 1):
-    if view.type(i) == "cascade":
-        sub = view.nametowidget(view.entrycget(i, "menu"))
-        labels += [sub.entrycget(j, "label") for j in range(sub.index("end") + 1) if sub.type(j) in ("command", "checkbutton")]
+from widgets import DropMenu
+labels = DropMenu.labels(app.header.menus["View"])                       # the header's View menu (UI-10)
 assert "Reduce motion" in labels, labels
 got = []
 app.anim.run("w", 200, got.append)
