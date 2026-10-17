@@ -299,6 +299,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
 #           tier's bar (~250 ms) and the bar ticks up with a soft pulse. The main "that felt
 #           good" moment.
+#           Idea (pending your OK): build this as the END of the placement toast's swipe (UI-11) instead
+#           of a second chip: the toast already rises out of the word, so once the chart (UI-13) is on
+#           screen above the card it can swipe up and toward its tier's bar and land in it, the bar
+#           pulsing as it arrives. One motion instead of two, and it says where the word went.
 # [ ] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
