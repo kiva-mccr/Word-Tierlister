@@ -60,6 +60,7 @@ earlier in that list. Only the UI files import `tkinter`.
 - Colours: `theme.py`. Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_show_place`, `_show_pair`).
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
+- Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom`, saved).
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 
 ## Tests

@@ -257,6 +257,22 @@ if app.pair:
     assert s.stats()["comparisons"] == n0 + 2                                   # the next pair at once
 app.anim.finish_all(); pump(2)
 
+# ---- zoom: View menu and Ctrl + / - / 0 scale the whole main window, remembered in the save
+from fonts import font as _font
+body0, word0 = _font("body").cget("size"), _font("word").cget("size")
+import widgets as _W
+assert {"Zoom in", "Zoom out", "Actual size"} <= set(_W.DropMenu.labels(app.header.menus["View"]))
+app.set_zoom(1.3); pump(3)
+assert app.zoom == 1.3 and s.get_meta("zoom") == "1.3"
+assert _font("body").cget("size") > body0 and _font("word").cget("size") > word0
+assert root.winfo_width() <= app.root.winfo_screenwidth()                          # never past the screen
+root.event_generate("<Control-minus>"); pump(3); assert app.zoom == 1.2
+app.set_zoom(9); assert app.zoom == app.ZOOM_MAX; app.set_zoom(0); assert app.zoom == app.ZOOM_MIN   # limits
+root.event_generate("<Control-0>"); pump(3)
+assert app.zoom == 1.0 and abs(_font("body").cget("size") - body0) <= 1
+app.set_zoom(1.1); zoom_saved = s.get_meta("zoom"); app.set_zoom(1.0)
+assert zoom_saved == "1.1"
+
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A
 line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})

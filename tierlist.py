@@ -452,6 +452,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           interrupts the card's transition shows at once; (4) content is centred in the visible page
 #           (tab line to bottom bar), which fixes Resolve conflicts sitting low; (5) more room between
 #           the word card and the tier pills.
+# [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
+#           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
+#           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
+#           scale, so a zoom never pushes the window past the screen. (Browse keeps its own zoom.)
+#           Plain messages (zoom, skip, duel results) now appear just above the bottom bar, clear of the card.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes

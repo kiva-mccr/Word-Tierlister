@@ -237,7 +237,7 @@ assert toast.cget("text") == "apple  ->  S" and toast.winfo_ismapped() and other
 assert toast.itemcget("pill", "fill") != TIER_COLORS[0]                         # fading in from the page colour
 anim.finish_all(); assert toast.itemcget("pill", "fill") == TIER_COLORS[0] and toast.itemcget("text", "fill") == PALETTE["text"]
 cx = toast.winfo_rootx() + toast.winfo_width() / 2; px = page.winfo_rootx() + page.winfo_width() / 2
-assert abs(cx - px) <= 2 and toast.winfo_rooty() - page.winfo_rooty() < 20       # centred at the top of the page
+assert abs(cx - px) <= 2 and 0 < (page.winfo_rooty() + page.winfo_height()) - (toast.winfo_rooty() + toast.winfo_height()) <= 20   # centred, near the bottom
 toast.show("pear", ms=5000, in_=page); anim.finish_all()                         # a new message replaces it
 assert toast.cget("text") == "pear" and toast.itemcget("pill", "fill") == TIER_COLORS[0]   # (keeps the last tint)
 toast.hide(); assert toast.cget("text") == "pear"; anim.finish_all(); update()   # fades out, then it is gone

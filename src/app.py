@@ -92,6 +92,7 @@ class App:
         self.def_words = []
         self.browsers = []
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+        self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
 
         init_fonts(root)
@@ -106,6 +107,12 @@ class App:
         self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
+        for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
+            root.bind(seq, lambda e: self.set_zoom(self.zoom + self.ZOOM_STEP))
+        for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
+            root.bind(seq, lambda e: self.set_zoom(self.zoom - self.ZOOM_STEP))
+        for seq in ("<Control-0>", "<Control-KP_0>"):
+            root.bind(seq, lambda e: self.set_zoom(1.0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<Command-z>", lambda e: self.undo())
@@ -139,6 +146,11 @@ class App:
                       ("command", "Quit", self.on_close, None)]),
             ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
             ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
+                      ("separator",),
+                      ("command", "Zoom in", lambda: self.set_zoom(self.zoom + self.ZOOM_STEP), "Ctrl +"),
+                      ("command", "Zoom out", lambda: self.set_zoom(self.zoom - self.ZOOM_STEP), "Ctrl \u2212"),
+                      ("command", "Actual size", lambda: self.set_zoom(1.0), "Ctrl 0"),
+                      ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
                       ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
@@ -280,6 +292,23 @@ class App:
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.center.bind("<Configure>", self._on_center_configure)
 
+    # ---- zoom (View menu, Ctrl + / Ctrl - / Ctrl 0) ---------------------------------------------------------
+    ZOOM_MIN, ZOOM_MAX, ZOOM_STEP = 0.6, 2.0, 0.1
+
+    def set_zoom(self, z):
+        """Make everything in the main window bigger or smaller (every shared font scales, so buttons, cards,
+        the chart and the menus follow). Saved. The window grows if it has to; it never goes past the screen
+        (the fitting step shrinks the fonts back if a zoom would not fit)."""
+        z = round(min(self.ZOOM_MAX, max(self.ZOOM_MIN, z)), 2)
+        if z == self.zoom:
+            return "break"
+        self.zoom = z
+        self.store.set_meta("zoom", z)
+        self.font_scale = 1.0                  # re-fit from the full size at the new zoom
+        self._fit_window()
+        self.flash(f"Zoom {round(z * 100)}%", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=900)
+        return "break"
+
     # ---- window size: fits the screen and the contents ------------------------------------------
     FONT_STEPS = (1.0, 0.9, 0.8, 0.7, 0.6, 0.5)   # tried in order until the contents fit the screen
     BASE_SIZE = (1040, 760)                  # preferred window size at the classic 96 dpi
@@ -324,7 +353,7 @@ class App:
                 ("word", [self.word_card.word], width - int(80 * f) - 2 * self.word_card.padx),
                 ("pair", [self.left_btn.cget("text"), self.right_btn.cget("text")],
                  (width - int(220 * f)) // 2 - int(80 * f))):
-            base = max(7, int(round(ROLES[role][0] * self.font_scale)))
+            base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom)))
             fnt = font(role)
             fnt.configure(size=base)
             need = max((fnt.measure(t) for t in texts if t), default=0)
@@ -341,7 +370,7 @@ class App:
         """
         r = self.root
         r.update_idletasks()
-        f = ui_factor(r) * self.font_scale
+        f = ui_factor(r) * self.font_scale * self.zoom
         rows = [w for w in r.pack_slaves() if w is not self.center]
         extra = 0 if self.opt_frame.winfo_manager() else self.opt_frame.winfo_reqheight() + 16  # refine/boundary row
         inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
@@ -369,7 +398,7 @@ class App:
         steps = [st for st in self.FONT_STEPS if st <= self.font_scale + 1e-9]
         for step in steps:
             self.font_scale = step
-            scale_fonts(step)
+            scale_fonts(step * self.zoom)
             self._apply_wraps(area[2])
             refresh_widgets(self.root)
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
@@ -384,7 +413,7 @@ class App:
             self.def_text.config(height=9)
         r.update_idletasks()
         self._fit_big_text()                   # fonts may have changed even if the window size did not
-        fs = self.font_scale
+        fs = self.font_scale * self.zoom
         min_w = min(max(cw, int(self.MIN_SIZE[0] * f * fs)), area[2])
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
         r.minsize(min_w, min_h)

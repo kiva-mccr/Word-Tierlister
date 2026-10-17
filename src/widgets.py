@@ -762,7 +762,7 @@ class HeaderMenus(tk.Frame):
 
 
 class Toast(tk.Canvas):
-    """A small rounded message that fades in over the page, stays a moment, and fades out (UI-11).
+    """A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
 
         toast = Toast(root, font("label"), animator=app.anim, on_gone=forget)
         toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
@@ -829,7 +829,7 @@ class Toast(tk.Canvas):
             self._wrap = wraplength
         self._draw()
         self._in = in_ or self.master
-        self._put(0, 6)
+        self.place(in_=self._in, relx=0.5, rely=1.0, y=-10, anchor="s")   # near the bottom: never over the card
         self._on_top()
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._later(ms, self.hide)
@@ -933,7 +933,7 @@ class Toast(tk.Canvas):
             self._anim.finish(self._key)
 
     def _put(self, x, y):
-        self.place(in_=self._in, relx=0.5, x=int(x), y=int(y), anchor="n")
+        self.place(in_=self._in, relx=0.5, rely=0, x=int(x), y=int(y), anchor="n")
 
     def _on_top(self):
         """Raise above everything once, when a message starts (not every frame: then a newer message,
