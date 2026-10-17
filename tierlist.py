@@ -410,9 +410,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #              today", later ones).
 # [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
 #           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
-# [ ] UI-35 The definition drawer does not open smoothly (reported): find out why (likely the window-fitting
-#           pass runs during the slide, or the frame jumps to full height first) and make it ease open
-#           and shut in one even motion. Check with a frame-by-frame capture.
+# [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window
+#           manager: pressing D blocked ~150 ms in a full window-fitting pass, then the first update took
+#           ~280 ms more because every frame of the slide re-fitted and redrew every button (each change
+#           of the page's height ran _fit_big_text + refresh_widgets), so the 200 ms slide had already
+#           ended when the screen first showed it. Fixed: a height-only change of the page only re-centres
+#           (wrapping depends on the width); opening does one quick size check instead of the full fit
+#           (the full fit runs only when the drawer does not fit); _fit_window skips re-scaling fonts that
+#           are already the right size; and the drawer is packed folded, so it never flashes at full
+#           height first. Now: the slide starts within ~25 ms (was ~430) and runs one frame every ~17 ms,
+#           opening and closing. Also: switching tabs finishes a duel result still showing.
 # [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
 # [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep

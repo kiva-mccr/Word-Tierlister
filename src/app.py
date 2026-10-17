@@ -92,6 +92,8 @@ class App:
         self.def_words = []
         self.browsers = []
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+        self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
+        self._applied_scale = None  # font scale last applied by _fit_window (skip re-applying the same)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
 
@@ -323,9 +325,13 @@ class App:
         self.ctx_lbl.config(wraplength=max(300, center_w - int(80 * f)))
 
     def _on_center_configure(self, e):
-        """The centre area was resized: re-wrap and re-fit the big words."""
-        self._apply_wraps(e.width)
-        self._fit_big_text()
+        """The centre area was resized. Wrapping and the big words' size depend only on the width, so a
+        height-only change (the definition drawer sliding, UI-35) just re-centres: re-fitting every
+        button on every frame of the slide is what made it stutter."""
+        if e.width != self._center_w:
+            self._center_w = e.width
+            self._apply_wraps(e.width)
+            self._fit_big_text()
         self._recenter()
 
     def _recenter(self):
@@ -395,11 +401,15 @@ class App:
         # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),
         # then take the next font step down, and repeat. Later calls never grow the fonts back.
         steps = [st for st in self.FONT_STEPS if st <= self.font_scale + 1e-9]
+        rescaled = False
         for step in steps:
             self.font_scale = step
-            scale_fonts(step * self.zoom)
-            self._apply_wraps(area[2])
-            refresh_widgets(self.root)
+            if self._applied_scale != step * self.zoom:     # re-scaling and redrawing everything is the slow
+                self._applied_scale = step * self.zoom      # part: skip it when the size is already right
+                rescaled = True
+                scale_fonts(step * self.zoom)
+                self._apply_wraps(area[2])
+                refresh_widgets(self.root)
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
                 self.def_text.config(height=lines)
                 cw, ch = self._content_size()
@@ -411,7 +421,8 @@ class App:
         if not self.show_defs and int(self.def_text.cget("height")) != 9:
             self.def_text.config(height=9)
         r.update_idletasks()
-        self._fit_big_text()                   # fonts may have changed even if the window size did not
+        if rescaled:
+            self._fit_big_text()               # the fonts changed even if the window size did not
         fs = self.font_scale * self.zoom
         min_w = min(max(cw, int(self.MIN_SIZE[0] * f * fs)), area[2])
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
@@ -434,12 +445,14 @@ class App:
         if animate and self.show_defs == d.is_open:      # no change: nothing to animate
             animate = False
         if self.show_defs:
-            if not animate:
+            if animate:
+                d.collapse()                   # packed folded: it must not show at full height first
+            else:
                 d.set_open(True)
             d.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
             self._render_defs()
             if animate:
-                self._fit_window()             # size for the open drawer first, then ease it open
+                self._make_room(d.natural_height())   # grow the window first only if it must, then ease open
                 d.open()
         elif d.winfo_manager():
             if animate:
@@ -447,6 +460,16 @@ class App:
             else:
                 d.set_open(False)
                 d.pack_forget()
+
+    def _make_room(self, extra):
+        """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
+        (which took long enough to swallow the slide). The page usually has room; if not, the full fit
+        runs (it may shorten the pane), with the drawer measured at its full height."""
+        cw, ch = self._content_size()
+        if ch + extra > self.root.winfo_height() or cw > self.root.winfo_width():
+            self.def_frame.set_open(True)
+            self._fit_window()
+            self.def_frame.collapse()
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
@@ -879,6 +902,7 @@ class App:
     def on_mode_change(self):
         """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
         comparison, pair or focus."""
+        self.anim.finish(self.duel.anim_key)   # a duel result still showing finishes first (it loads a pair)
         self.mode = self.mode_var.get()
         self.mode_switch.set(self.mode)
         self.store.set_meta("mode", self.mode)

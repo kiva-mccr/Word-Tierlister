@@ -1061,7 +1061,8 @@ class DefinitionDrawer(tk.Frame):
         self._anim = animator
         body, head = fonts["body"], fonts["head"]
         self._body = body
-        inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"])
+        inner = self._inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1,
+                                       highlightbackground=PALETTE["border"])
         inner.pack(fill="x", anchor="n")
         self.text = tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                             padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow")
@@ -1126,12 +1127,20 @@ class DefinitionDrawer(tk.Frame):
         except tk.TclError:
             pass
 
+    def collapse(self):
+        """Fold to nothing before it is packed for opening, so it never shows at full height first."""
+        self.pack_propagate(False)
+        super().configure(height=1)
+
+    def natural_height(self):
+        """The height the contents want (whether or not it is folded right now)."""
+        self.update_idletasks()
+        return self._inner.winfo_reqheight()
+
     def open(self):
         """Ease open from nothing to the height the contents want (the caller has packed it already)."""
         self._shown = True
-        self.update_idletasks()
-        goal = self.winfo_reqheight()
-        self._slide(0, goal, self._natural)
+        self._slide(0, self.natural_height(), self._natural)
 
     def close(self, on_closed=None):
         """Ease shut, then call on_closed (the caller unpacks it there)."""
