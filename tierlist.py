@@ -479,6 +479,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           state (UI-20), so the page never vanishes under you. The saved mode falls back to Place new
 #           words if its tab is hidden at start-up. The check uses cheap counts (Store.tier_counts and
 #           the conflicts count, already read for the status line), never a scan per refresh.
+# [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
+#           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
+#           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by
+#           view, each with its current key(s). Click a key, press the new one, done; a key already used
+#           in the same view is pointed out ("U is already Don't know: swap them?") instead of silently
+#           taken. "Reset to defaults" per row and for all. Saved in the save (meta keymap), so it
+#           survives restarts. Everything that shows a key follows the change: the button hints (1, Space,
+#           U, Up / B...), the bottom-right hint and the menus' shortcut column. Builds on UI-18's single
+#           key map (App._key_target), which becomes a table the dialog edits. Reserved keys that cannot be
+#           rebound: Escape (cancel / close) and the Alt+letter menu keys.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
@@ -509,6 +519,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
 #   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
+#   Keyboard shortcuts . new dialog (UI-48)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24)
 #   Import / Export .... file dialog (UI-42)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24; today these are plain message boxes)
