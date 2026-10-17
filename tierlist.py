@@ -407,6 +407,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           save (.db), tierlist.log, a .venv or anything else of yours is never removed. A summary
 #           ("3 updated, 1 added, 1 removed") is shown first, with Cancel; a file you edited in the
 #           folder since the last unpack is backed up (name.py.bak) rather than overwritten silently.
+#           "Source & Updates" (asked for: unpacking doubles as updating). T-6 and T-7 are one File menu
+#           item and one dialog, File > Source & Updates..., whose action fits the form you are running:
+#           in the built program "Unpack the source code", from source "Make a standalone program".
+#           Either way the dialog has a tick box, ticked to start with: [x] Update to the newest version
+#           first. Ticked, it fetches the newest release from GitHub (T-8 publishes them) and unpacks or
+#           builds from that, so unpacking is also how you update; unticked, it uses exactly the version
+#           you have. Offline or no newer version: it says so in a line and carries on with yours. The
+#           update keeps your save untouched and, like any unpack, only changes files the program owns.
 # [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
 #           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
 #           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
