@@ -43,6 +43,7 @@ r, log = setup(answers=[""], tk=False)
 assert r is True and state["runs"] == [APT] and state["restarts"] == [(sys.executable, ["tierlist.py", "--db", "x.db"])]
 assert "needs tkinter" in log and "sudo apt-get install -y python3-tk" in log and log.endswith("Opening the window...")
 assert "asked about in the window" in log and "wordfreq" not in log                  # no Python packages here
+assert "More about it: " + deps.HOMEPAGE["tkinter"] in log                           # its page (UI-30)
 assert state["asked"] == ["Install it now? [Y/n] "]
 # a stray answer is asked again
 r, log = setup(answers=["maybe", "y"], tk=False)

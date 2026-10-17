@@ -564,12 +564,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: App.next_tab(d), from on_key (so held-key repeat and "nothing while a menu is open" apply);
 #           Shift+Tab is ISO_Left_Tab on X11 and Shift-state Tab elsewhere. The hint shows "Tab next tab"
 #           only while there is more than one tab. Checked with real keys (openbox + xdotool), dialogs too.
-# [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
+# [x] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
 #           says what each package is for). Each package's name in the dialog links to its own web page
 #           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the
 #           browser with webbrowser.open; styled as a quiet underlined link in the muted colour. In the
 #           terminal (tkinter), the page address is printed after the package's line. One table
 #           (deps.HOMEPAGE) feeds both.
+#           Built: a choice in errors.ask_choices can carry (link text, url); the tick box, the name as the
+#           link (darker on hover, opens with errors.open_link = webbrowser.open), then the rest of the
+#           label, which still ticks the box. terminal_setup prints "More about it: <address>".
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.

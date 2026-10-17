@@ -359,11 +359,12 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
                          f"to install it.\n\nInstall pip, then run:\n    {cmd}")
     headline = ("Some packages are needed" if len(gone) > 1 else "A package is needed") if need \
         else ("Optional packages are available" if len(extra) > 1 else "An optional package is available")
-    def label(n):
+    def label(n):                                         # the name itself is the link to its page (UI-30)
         kind = "required" if n in need else "optional"
         size = deps.SIZE.get(n)
-        return f"{n}  ({kind}, about {size} MB)" if size else f"{n}  ({kind})"
-    choices = [(n, label(n), deps.PURPOSE.get(n, ""), True, n in need) for n in gone]
+        return f" ({kind}, about {size} MB)" if size else f" ({kind})"
+    choices = [(n, label(n), deps.PURPOSE.get(n, ""), True, n in need, (n, deps.HOMEPAGE.get(n)))
+               for n in gone]
     chosen = ask_choices(
         "Word Tier List", headline,
         "Tick what to install. It uses pip, needs an internet connection and takes a minute or so.",

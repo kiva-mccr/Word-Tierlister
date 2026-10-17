@@ -29,6 +29,11 @@ PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word l
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",
            "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)"}
 
+# each one's own web page (UI-30): a link on its name in the install dialog, printed in the terminal
+HOMEPAGE = {"wordfreq": "https://pypi.org/project/wordfreq/",
+            "nltk": "https://www.nltk.org/",
+            "tkinter": "https://docs.python.org/3/library/tkinter.html"}
+
 
 def missing(names):
     """The import names in `names` that cannot be imported right now."""
@@ -196,6 +201,7 @@ def terminal_setup(argv, ask=input, out=print, run=subprocess.call, has_tk=None,
     tk_cmd = tk_command if tk_command is not None else tk_install_command()
     out("")
     out(f"Word Tier List needs tkinter, {PURPOSE['tkinter']}, to open its window.")
+    out(f"More about it: {HOMEPAGE['tkinter']}")
     if not tk_cmd:
         raise SystemExit("tkinter cannot be installed from here. " + tk_advice())
     out(f"It can be installed with: {' '.join(tk_cmd)}")

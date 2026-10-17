@@ -17,7 +17,9 @@ import sys
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 import traceback
+import webbrowser
 from tkinter import ttk
 
 from fonts import font, init_fonts
@@ -27,6 +29,7 @@ from ui_style import apply_ttk_style
 from widgets import StyledDialog
 
 APP_TITLE = "Word Tier List"
+open_link = webbrowser.open     # how a link in a dialog opens its page (tests replace it)
 REPEAT_SECONDS = 5      # the same error again within this time only goes to the log
 _state = {"open": False, "last_key": None, "last_time": 0.0}
 
@@ -93,8 +96,9 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None, wra
 def ask_choices(title, headline, message, choices, yes="OK", no="Cancel", parent=None):
     """A styled question with one tick box per choice (ST-4: each package is its own choice).
 
-    `choices` are (key, label, detail, ticked[, required]) tuples; the detail is a muted line under the
-    label, and a required choice gets a red asterisk after its label.
+    `choices` are (key, label, detail, ticked[, required[, (link text, url)]]) tuples; the detail is a muted
+    line under the label, a required choice gets a red asterisk after its label, and a link (UI-30) is shown
+    between the tick box and the label as a quiet underlined word that opens its page in the browser.
     Returns the set of ticked keys for the `yes` button, or None for `no`, Escape or closing (also when
     no window can be shown)."""
     answer = {"yes": False}
@@ -125,7 +129,14 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
             var = tk.BooleanVar(value=ticked)
             line = ttk.Frame(box)
             line.pack(anchor="w", pady=(6, 0))
-            ttk.Checkbutton(line, text=label, variable=var, takefocus=1).pack(side="left")
+            link = rest[1] if len(rest) > 1 and rest[1] and rest[1][1] else None
+            tick = ttk.Checkbutton(line, text="" if link else label, variable=var, takefocus=1)
+            tick.pack(side="left")
+            if link:                         # the tick box, the name as a link, then the rest of the label
+                _link_label(line, *link).pack(side="left")
+                rest_lbl = ttk.Label(line, text=label)
+                rest_lbl.pack(side="left")
+                rest_lbl.bind("<Button-1>", lambda e, t=tick: t.invoke())     # still toggles, like the box's text
             if rest and rest[0]:             # required: the classic red asterisk
                 ttk.Label(line, text="*", foreground=PALETTE["required"], font=font("head")).pack(side="left")
             if detail:
@@ -168,6 +179,19 @@ def _dialog(parent, title, headline, message, details, buttons=None, answer=None
     else:
         dlg.button("OK", dlg.close, default=True)
     dlg.show(wait=True)
+
+
+def _link_label(parent, text, url):
+    """A quiet link: muted and underlined, darker on hover; a click opens `url` in the browser (UI-30)."""
+    f = tkfont.Font(font=font("body"))
+    f.configure(underline=True)
+    lbl = tk.Label(parent, text=text, font=f, fg=PALETTE["muted"], bg=PALETTE["bg"], cursor="hand2", padx=0, bd=0)
+    lbl.font = f                                          # keep a reference (tk does not)
+    lbl.url = url
+    lbl.bind("<Enter>", lambda e: lbl.config(fg=PALETTE["text"]))
+    lbl.bind("<Leave>", lambda e: lbl.config(fg=PALETTE["muted"]))
+    lbl.bind("<Button-1>", lambda e: open_link(url))
+    return lbl
 
 
 def _report(exc, tb_text, log_path, save_path, parent):
