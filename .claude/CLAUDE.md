@@ -80,7 +80,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-28, UI-30, UI-31, UI-33, UI-34, UI-37..42, UI-47, UI-48, UI-14, then UI-26 (final pass), then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-30, UI-31, UI-33, UI-34, UI-37..42, UI-47, UI-48, UI-14, then UI-26 (final pass), then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.

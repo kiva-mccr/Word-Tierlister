@@ -438,5 +438,13 @@ cancelled = []
 dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
+
+# ---- TierChip (UI-28): a rounded pastel tier label, sized from its font
+from widgets import TierChip
+chip = TierChip(root, "S", TIER_COLORS[0], small); chip.pack(); update()
+poly = chip.find_withtag("all")[0]
+assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.itemcget(poly, "smooth") in ("1", "true", "bezier")
+w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
+small.configure(size=11); chip.destroy()
 root.destroy()
 print("WIDGETS2 OK")

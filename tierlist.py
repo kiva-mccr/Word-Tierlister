@@ -70,7 +70,7 @@ live in src/, the self-tests in tests/, check_release.py in tools/, the Claude n
     app.py          App: the main window and all modes.
 
 Layers: constants -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-ui_style, ui_motion, widgets, startup -> browser -> app -> tierlist. Nothing lower imports anything higher, and
+sizing, ui_style, ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
 # ==========================================================================================
@@ -544,11 +544,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Windows (presses without releases) and X11 (release + press with the same timestamp). Applies to
 #           every action key. Measured with a real held key (xdotool): 1.5 s held placed 23 words before, 5
 #           now, and none after release.
-# [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
+# [x] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
 #           under the field instead of separate error boxes, RoundButton Save / Cancel. (UI-24 restyles
 #           the other dialogs; this one gets its own pass because it is the first thing a new user sees.)
+#           Built: widgets.TierChip (a rounded pastel tier label like the pills), wider entries, a two-line
+#           intro, and per-field notes ("Fill this one in", "Used twice...", "Not in the word list") that
+#           clear as soon as that field is edited. On the shared StyledDialog (UI-24).
 # [-] UI-29 Tier letters as hotkeys: dropped by request; placing stays on the number keys 1-6 (and the
 #           buttons), so D keeps showing definitions and the duel keys keep their meanings.
 # [ ] UI-47 Tab moves between the tabs (asked for): Tab goes to the next tab (Place new words -> Refine ->

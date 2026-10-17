@@ -26,7 +26,7 @@ from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -1159,36 +1159,50 @@ class App:
         Browser(self)
 
     def edit_anchors(self):
-        """Dialog to choose the six anchor words (checked: filled in, distinct, and in the word list)."""
+        """Dialog to choose the six anchor words (UI-28): a pill per tier, and any problem (empty, used twice,
+        not in the word list) shown as a note under its own field."""
         dlg = StyledDialog(self.root, "Anchor words", "Anchor words",
-                           "Pick one reference word per tier. New words are compared against these to find "
-                           "their tier quickly. Choose words you know well that feel typical of each tier. "
-                           "Every word must be in the word list.", animator=self.anim)
+                           "One familiar word per tier. New words are compared against these to find their "
+                           "tier in a few questions.", animator=self.anim, wrap_chars=40)
         current = self.store.get_anchors()
-        vars_ = []
+        vars_, notes = [], []
         for t in range(len(TIERS)):
             pre = current[t] or (DEFAULT_ANCHORS[t] if self.store.has_word(DEFAULT_ANCHORS[t]) else "")
-            tk.Label(dlg.body, text=TIERS[t], bg=TIER_COLORS[t], fg=TIER_TEXT, font=font("head"), width=3
-                     ).grid(row=t, column=0, padx=(0, 10), pady=3)
+            TierChip(dlg.body, TIERS[t], TIER_COLORS[t], font("head")).grid(row=2 * t, column=0, padx=(0, 12),
+                                                                           pady=(6, 0))
             v = tk.StringVar(value=pre)
-            ttk.Entry(dlg.body, textvariable=v, width=26).grid(row=t, column=1, sticky="w", pady=3)
+            entry = ttk.Entry(dlg.body, textvariable=v, width=24, font=font("body"))
+            entry.grid(row=2 * t, column=1, sticky="we", pady=(6, 0), ipady=2)
+            if t == 0:
+                entry.focus_set()
+            note = ttk.Label(dlg.body, text="", foreground=PALETTE["bad"][1])     # shown only with a problem
+            v.trace_add("write", lambda *_, n=note: n.grid_remove())                # editing clears it
             vars_.append(v)
-        status = ttk.Label(dlg.body, text="", foreground=PALETTE["bad"][1])     # shown only with a problem
+            notes.append(note)
+        dlg.body.columnconfigure(1, weight=1)
 
-        def problem(words):
-            if any(not w for w in words):
-                return "Fill in all six anchors."
-            if len(set(words)) != len(words):
-                return "Anchors must be six different words."
-            missing = next((w for w in words if not self.store.has_word(w)), None)
-            return f"'{missing}' is not in the word list." if missing else None
+        def problems(words):
+            """{field index: note} for every field that needs fixing."""
+            out = {}
+            for i, w in enumerate(words):
+                if not w:
+                    out[i] = "Fill this one in"
+                elif words.count(w) > 1:
+                    out[i] = "Used twice: each tier needs its own word"
+                elif not self.store.has_word(w):
+                    out[i] = "Not in the word list"
+            return out
 
         def save():  # validate, store the anchors and close
             words = [v.get().strip().lower() for v in vars_]
-            err = problem(words)
-            if err:
-                status.config(text=err)
-                status.grid(row=len(TIERS), column=0, columnspan=2, sticky="w", pady=(8, 0))
+            found = problems(words)
+            for i, note in enumerate(notes):
+                if i in found:
+                    note.config(text=found[i])
+                    note.grid(row=2 * i + 1, column=1, sticky="w")
+                else:
+                    note.grid_remove()
+            if found:
                 dlg.refit()
                 return
             self.store.set_anchors(words)

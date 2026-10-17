@@ -296,6 +296,32 @@ class TierRow(tk.Frame):
             self.buttons.append(b)
 
 
+class TierChip(tk.Canvas):
+    """A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for
+    places that name a tier without being a button: the Anchor words dialog (UI-28).
+
+        TierChip(parent, "S", TIER_COLORS[0], font("head")).grid(row=0, column=0)
+    """
+
+    def __init__(self, parent, text, color, font, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self._text, self._color, self._font = text, color, font
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        line = self._font.metrics("linespace")
+        h = int(line * 1.5)
+        w = max(h, self._font.measure(self._text) + line)
+        super().configure(width=w + 2, height=h + 2)
+        self.create_polygon(_rounded_points(1, 1, w, h, h // 2 - 1), smooth=True, fill=self._color,
+                            outline=lerp_color(self._color, PALETTE["text"], 0.14))
+        self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=PALETTE["text"])
+
+    def refresh(self):
+        self._draw()
+
+
 class DuelCards(tk.Frame):
     """The duel view's controls (UI-8): two big word cards side by side, each with a hover ring and its
     key hint, and quiet Tie / Skip text buttons under them.

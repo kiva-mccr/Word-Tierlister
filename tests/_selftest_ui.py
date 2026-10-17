@@ -97,9 +97,20 @@ qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
 ad = app.edit_anchors(); pump(3)
 entries = [w for w in ad.body.winfo_children() if w.winfo_class() == "TEntry"]
 assert len(entries) == 6 and entries[0].get() == "serendipity"
+assert len([w for w in ad.body.winfo_children() if w.winfo_class() == "Canvas"]) == 6     # pills, not square labels
+notes = lambda: {int(w.grid_info()["row"]) // 2: str(w.cget("text")) for w in ad.body.winfo_children()
+                 if w.winfo_class() == "TLabel" and w.winfo_manager()}
+assert notes() == {}                                                            # no notes until there is a problem
 entries[1].delete(0, "end"); entries[1].insert(0, "serendipity")
+entries[3].delete(0, "end"); entries[3].insert(0, "notaword")
+entries[5].delete(0, "end")
 ad.buttons["Save anchors"].invoke(); pump(2)
-assert ad.alive() and any("different" in str(w.cget("text")) for w in ad.body.winfo_children() if w.winfo_class() == "TLabel")
+n = notes()
+assert ad.alive() and set(n) == {0, 1, 3, 5}, n                                 # each note under its own field
+assert "twice" in n[0] and "twice" in n[1] and "word list" in n[3] and "Fill" in n[5]
+entries[3].delete(0, "end"); entries[3].insert(0, "bureaucracy"); pump(1)
+assert 3 not in notes()                                                         # editing a field clears its note
+entries[5].insert(0, "moist")
 entries[1].delete(0, "end"); entries[1].insert(0, "luminous")
 ad.buttons["Save anchors"].invoke(); pump(2)
 assert not ad.alive() and s.get_anchors()[1] == "luminous"
