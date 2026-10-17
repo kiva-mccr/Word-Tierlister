@@ -65,8 +65,8 @@ missed). Keep the README current in the same commit as the change (the user aske
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
   "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): frequency-weighted coverage on a
-  log "nines" scale, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): equal segments by commonness (rank
+  decades) with a "covers 99.4%" tag to its right, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status

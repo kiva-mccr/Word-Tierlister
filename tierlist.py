@@ -291,16 +291,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
 #           letter + count on every bar already tell the tiers apart without colour.
 #           Covered by tests/_selftest_chart.py.
-# [ ] UI-14 ProgressBar. Measure decided (no longer on hold): frequency-weighted coverage, the share of all
-#           everyday word use (wordfreq frequency) that the placed words account for, e.g. "covers 93% of
-#           everyday English". Common words count for a lot, rare ones for very little, so it moves even when
-#           placed / total is tiny. Kept up to date from a running sum in the Store (no full scan per refresh).
-#           Shown on a logarithmic "nines" scale, so it never looks stuck at 99%: the bar is split into equal
-#           steps 0-90%, 90-99%, 99-99.9%, 99.9-99.99% (each step = one more nine), filled by
-#           -log10(1 - coverage) and labelled with as many decimals as it takes to show the last change
-#           (93%, 99.4%, 99.97%). Faint marks at each nine; calm, no goals, no streaks. Placed / total stays
-#           as text. No ETA: this is a measure of the list, not a task running (the ETA rule is for
-#           set-up bars).
+# [ ] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
+#           words are, each segment holding ten times the words of the one before: everyday (frequency rank
+#           top 1,000), common (1,000-10,000), uncommon (10,000-100,000), rare (100,000 and beyond, including
+#           words wordfreq does not know). Each segment fills by the share of its own words placed, so it
+#           is a log scale over commonness: every placed word counts (also zero-frequency ones, which a
+#           coverage measure would ignore), segments fill roughly left to right because the queue favours
+#           common words, and the rare words get a quarter of the bar instead of a millionth of it.
+#           Hover / small text: "everyday 100% · common 97% · uncommon 41% · rare 0.3%"; the segment being
+#           worked in can show its own count ("rare: 1,204 of 640,000").
+#           To the right of the bar, a tag: the share of everyday English the placed words cover (wordfreq
+#           frequency-weighted, e.g. "covers 99.4%"), formatted with as many decimals as it takes to show
+#           the last change (93%, 99.4%, 99.97%) so it never sits at a flat 99%. It is a label only; it does
+#           not drive the bar (on its own it barely moves for rare words).
+#           Both come from per-segment counts and a running coverage sum in the Store (no full scan per
+#           refresh). Calm: no goals, no streaks. Placed / total stays as text. No ETA: this measures the
+#           list, it is not a task running (the ETA rule is for set-up bars).
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
@@ -402,7 +408,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
 # [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
-#           already says). The frequency-weighted completeness figure is saved for the progress bar (UI-14).
+#           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
 # [ ] UI-35 The definition drawer does not open smoothly (reported): find out why (likely the window-fitting
 #           pass runs during the slide, or the frame jumps to full height first) and make it ease open
 #           and shut in one even motion. Check with a frame-by-frame capture.
@@ -566,7 +572,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  progress bar (UI-14): frequency-weighted coverage on a logarithmic "nines" scale;
+#   Settled:  progress bar (UI-14): segments by commonness (rank decades), with the covered share as a tag;
 #             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
 #             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
 #             added later: theme.py is built so a second palette with the same keys drops in); the
