@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, tempfile
+import os, tempfile, time
 import tkinter as tk
 from ui_motion import Animator, ease_out_cubic, lerp_color
 import tierlist as T
@@ -81,9 +81,23 @@ assert not A.busy and len(root.tk.call("after", "info")) == before
 cf = []
 A.run("c", 200, cf.append); A.cancel_all()
 assert cf == [0.0] and not A.busy
+# hurry: a running animation finishes within the given time, carrying on from where it is
+clock = [0.0]
+H = Animator(root, clock=lambda: clock[0])
+hv = []
+H.run("h", 1000, hv.append)
+clock[0] = 0.5; H._tick("h", H._running["h"]); p_before = hv[-1]
+H.hurry("h", 100)
+assert H._running["h"]["ms"] < 1000 and hv[-1] == p_before                  # same spot, shorter run
+clock[0] = 0.55; H._tick("h", H._running["h"]); assert 0.5 < hv[-1] < 1.0 and H.busy
+clock[0] = 0.61; H._tick("h", H._running["h"]); assert hv[-1] == 1.0 and not H.busy   # done ~100 ms later
+H.run("a", 1000, hv.append); H.run("b", 1000, hv.append)
+H.hurry_all(50, finish=("b",)); assert "b" not in H._running and "a" in H._running   # b jumped, a hurried
+H.hurry("missing", 10)                                                       # no-op
+H.cancel_all()
 root.destroy()
 
-# ---- App wiring: saved switch, View menu entry, key press finishes animations, close is clean
+# ---- App wiring: saved switch, View menu entry, a key press hurries animations, close is clean
 tmp = tempfile.mkdtemp()
 s = T.Store(os.path.join(tmp, "m.db"))
 s.insert_words(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist", "w1", "w2"])
@@ -95,10 +109,14 @@ from widgets import DropMenu
 labels = DropMenu.labels(app.header.menus["View"])                       # the header's View menu (UI-10)
 assert "Reduce motion" in labels, labels
 got = []
-app.anim.run("w", 200, got.append)
+app.anim.run("w", 2000, got.append)
 class E: keysym = "x"
 app.on_key(E())
-assert got[-1] == 1.0 and not app.anim.busy                                # key press finished it
+assert app.anim.busy and got[-1] < 1.0                                     # a key press does not jump it...
+t0 = time.perf_counter()
+while app.anim.busy and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert got[-1] == 1.0 and time.perf_counter() - t0 < 0.6                   # ...it speeds it out of the way
 app.motion_var.set(True); app.toggle_motion()
 assert app.reduce_motion and app.anim.reduce_motion and s.get_meta("reduce_motion") == "1"
 root.destroy()

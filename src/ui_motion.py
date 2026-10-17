@@ -2,8 +2,9 @@
 
 Rules every animation here follows (they are the promises in the roadmap guardrails):
     * short: callers pass <= 250 ms, with ease-out so things settle gently;
-    * never blocks input: starting a new animation under the same key, or pressing a key
-      (App.on_key calls finish_all), jumps the running one straight to its end state;
+    * never blocks input: starting a new animation under the same key jumps the running one to its end;
+      pressing a key (App.on_key calls hurry_all) makes every running one speed out of the way within
+      HURRY_MS while the new one starts on top (the duel result, which the next pair waits for, finishes);
     * nothing runs while idle, and nothing loops;
     * "Reduce motion" (View menu, saved) makes run() jump to the end state with no frames;
     * per-frame callbacks must be tiny and must never query the database.
@@ -11,6 +12,8 @@ Rules every animation here follows (they are the promises in the roadmap guardra
 tkinter has no transparency, so a "fade" is a colour blend toward the background (lerp_color).
 """
 import time
+
+HURRY_MS = 90          # how fast a running animation gets out of the way when a new action starts
 
 
 def ease_out_cubic(t):
@@ -93,6 +96,36 @@ class Animator:
         anim["frame"](anim["ease"](1.0))
         if anim["done"]:
             anim["done"]()
+
+    def is_running(self, key):
+        return key in self._running
+
+    def hurry(self, key, ms):
+        """Make the animation under `key` finish within `ms` from now, carrying on from where it is (used when a
+        new action starts: the old animation speeds out of the way instead of jumping). No-op if none, or if
+        it would finish sooner anyway."""
+        anim = self._running.get(key)
+        if anim is None:
+            return
+        now = self.clock()
+        p = (now - anim["start"]) * 1000.0 / anim["ms"]
+        if p >= 1.0:
+            self.finish(key)
+            return
+        if (1.0 - p) * anim["ms"] <= ms:
+            return
+        total = ms / (1.0 - p)                         # a new length that leaves exactly `ms` to go
+        anim["ms"] = total
+        anim["start"] = now - p * total / 1000.0
+
+    def hurry_all(self, ms, finish=()):
+        """A key press: every running animation speeds out of the way (hurry); those under the keys in
+        `finish` (ones the next action depends on) jump to their end instead."""
+        for key in list(self._running):
+            if key in finish:
+                self.finish(key)
+            else:
+                self.hurry(key, ms)
 
     def finish_all(self):
         """Finish everything now (called on every key press so input is never held up)."""

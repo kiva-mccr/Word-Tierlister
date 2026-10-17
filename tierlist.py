@@ -82,7 +82,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #     compares you to yesterday.
 #   - Satisfaction comes from speed, clarity and smooth feedback, not from psychological hooks.
 #   - Motion: every animation <= 250 ms with ease-out; it never blocks input (pressing the next
-#     key finishes the running animation instantly); nothing loops or moves while idle; and
+#     key makes running animations speed out of the way within 90 ms while the new one starts on
+#     top; changed by request from "finishes instantly"); nothing loops or moves while idle; and
 #     View > Reduce motion turns all of it off (UI-4).
 #   - No sound by default.
 #
@@ -442,6 +443,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           stayed in front of that program. Fixed: the header menus' DropMenu no longer asks to be always
 #           on top, and when the program loses focus every open drop-down closes (header menus and the
 #           ttk drop-downs such as Tier / Boundary and Browse's Show / Sort).
+# [x] UI-44 Fixes after trying UI-16..19 (reported): (1) the placement pill no longer flies as a box over
+#           the chart: it shrinks into a small drop as it flies (tk has no transparency, so a full-size
+#           pill was an opaque box); (2) Refine within tier (and every duel) now shows a short result
+#           message, "apple > pear", like Boundary's swap note; (3) sorting fast: each message is its own
+#           pill, the newest on top, and older ones (and every other running animation) speed out of the
+#           way within 90 ms (Animator.hurry / hurry_all, Toast.hurry) instead of jumping; a word that
+#           interrupts the card's transition shows at once; (4) content is centred in the visible page
+#           (tab line to bottom bar), which fixes Resolve conflicts sitting low; (5) more room between
+#           the word card and the tier pills.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes

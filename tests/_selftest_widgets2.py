@@ -2,6 +2,7 @@
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
 DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
+import time
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
@@ -263,12 +264,30 @@ xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
 xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
-assert toast.itemcget("pill", "fill") == PALETTE["bg"]
+assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
 toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
             hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
 assert landed == [1]                                                           # a replaced fling never "lands"
 toast.hide(); anim.finish_all()
+
+# hurry(): a newer message has started; the old one speeds through its stages and still lands
+toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(100, -30),
+            hold_ms=5000, in_=page, on_arrive=lambda: landed.append(3))
+update(); toast.hurry()
+t0 = time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert landed[-1] == 3 and time.perf_counter() - t0 < 0.6                      # landed well before the 5 s rest
+gone = []
+t2 = Toast(root, small, animator=anim, on_gone=gone.append)
+t2.show("bye", ms=5000, in_=page); update(); t2.hurry()
+t0 = time.perf_counter()
+while t2.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert gone == [t2] and time.perf_counter() - t0 < 0.6                         # a plain message fades out fast
+t2.hurry()                                                                     # already gone: no-op
+t2.destroy()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
 toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(50, 0),

@@ -23,7 +23,7 @@ from fonts import ROLES, init_fonts, font, scale_fonts
 from saves import write_export
 from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
-from ui_motion import Animator
+from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
 from widgets import (AnchorLadder, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
@@ -208,8 +208,8 @@ class App:
 
         self.center = ttk.Frame(r)
         self.center.pack(side="top", fill="both", expand=True)
-        # messages float over the top of the page as a toast (UI-11); App.flash() shows them
-        self.toast = Toast(r, font("label"), animator=self.anim)
+        # messages float over the page as toasts (UI-11); each message is its own Toast (see _new_toast)
+        self.toasts = [Toast(r, font("label"), animator=self.anim, on_gone=self._toast_gone)]
 
         # ---- place view
         self.place_frame = ttk.Frame(self.center)
@@ -476,10 +476,33 @@ class App:
         self.focus = None
         self.refresh()
 
+    @property
+    def toast(self):
+        """The newest message (the one on top)."""
+        return self.toasts[-1]
+
+    def _new_toast(self):
+        """A fresh Toast for a new message, on top; the older ones still showing speed out of the way
+        underneath (hurry), so fast sorting never piles messages up or cuts one off mid-air."""
+        for t in list(self.toasts):
+            if t.cget("text"):
+                t.hurry()
+            else:                                   # already gone (it was the newest when it went)
+                self.toasts.remove(t)
+                t.destroy()
+        t = Toast(self.root, font("label"), animator=self.anim, on_gone=self._toast_gone)
+        self.toasts.append(t)
+        return t
+
+    def _toast_gone(self, t):
+        if t is not self.toasts[-1] and t in self.toasts:     # the newest stays (hidden) for the next message
+            self.toasts.remove(t)
+            t.destroy()
+
     def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
         """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
         replaces the old one."""
-        self.toast.show(text, (bg, fg), ms, in_=self.center,
+        self._new_toast().show(text, (bg, fg), ms, in_=self.center,
                          wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
@@ -639,7 +662,7 @@ class App:
             return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
         # it starts at the card's top edge: over the word itself it would hide the letters (the toast is an
         # opaque canvas; tk has no transparency)
-        self.toast.fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=card_top + int(14 * f),
+        self._new_toast().fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=card_top + int(14 * f),
                           rest_bottom=card_top - int(8 * f),
                           target=(bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty()),
                           in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
@@ -780,6 +803,11 @@ class App:
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
                        "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
+        else:                                  # every duel answer gets its little message, not only swaps
+            win, lose = (a, b) if ans != "right" else (b, a)
+            tier = self.store.get_word(win)["tier"]
+            tint = TIER_COLORS[tier] if tier is not None else PALETTE["info"][0]
+            self.flash(f"{win}  {'=' if ans == 'tie' else '>'}  {lose}", bg=tint, fg=TIER_TEXT, ms=1400)
         if self.focus:
             self.focus_left -= 1
             if self.focus_left <= 0:
@@ -854,7 +882,9 @@ class App:
         """Every key press. D and Backspace work everywhere; the rest depends on mode and comparison state
         (see _hint for the full list of keys).
         """
-        self.anim.finish_all()  # a key press never waits for an animation
+        # a key press never waits for an animation: running ones speed out of the way (the new one starts on
+        # top), except the duel result, which the next pair waits for
+        self.anim.hurry_all(HURRY_MS, finish=(self.duel.anim_key,))
         ks = e.keysym
         if self.header.open_name is not None:      # a header menu is open: Escape closes it, nothing else runs
             if ks == "Escape":

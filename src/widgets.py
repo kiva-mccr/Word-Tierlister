@@ -8,7 +8,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from theme import PALETTE, TIER_COLORS
-from ui_motion import lerp_color
+from ui_motion import HURRY_MS, lerp_color
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
 DIP = 2                 # pixels the button sinks while pressed
@@ -338,7 +338,12 @@ class DuelCards(tk.Frame):
         win, lose = (self.left, self.right) if side == "left" else (self.right, self.left)
         lose.set_enabled(False)              # fades to its disabled look
         win._set_lift(True)                  # rises off its shadow, as on hover
-        animator.run(f"duel{id(self)}", self.RESOLVE_MS, lambda p: None, on_done)
+        animator.run(self.anim_key, self.RESOLVE_MS, lambda p: None, on_done)
+
+    @property
+    def anim_key(self):
+        """The Animator key of the result animation (a key press finishes it: the next pair waits on it)."""
+        return f"duel{id(self)}"
 
     def show(self, left, right):
         """Show a new pair (and enable everything)."""
@@ -759,28 +764,33 @@ class HeaderMenus(tk.Frame):
 class Toast(tk.Canvas):
     """A small rounded message that fades in over the page, stays a moment, and fades out (UI-11).
 
-        toast = Toast(root, font("label"), animator=app.anim)
+        toast = Toast(root, font("label"), animator=app.anim, on_gone=forget)
         toast.show("serendipity  ->  S", tint=("#FFB3C1", "#3D3A4B"), ms=1500, in_=app.center)
 
-    It floats (place), so showing it never moves anything else. A new message replaces the current one.
+    It floats (place), so showing it never moves anything else. Each message is its own Toast: when a new
+    one starts, the app calls hurry() on the older ones so they speed out of the way underneath it.
     fling() is the placement version: the message rises out of the word card, rests while it pales a
-    little, then flies to a landing point (its tier's bar) and fades out completely.
+    little, then shrinks into a drop that flies to a landing point (its tier's bar), fading out.
     "Fades" are colour blends from the page colour (FADE_IN_MS / FADE_OUT_MS; they jump with Reduce
     motion). cget("text") is the message on screen ("" once it is gone); cget("font") its Font.
+    on_gone(toast) is called when it has fully gone.
     """
     FADE_IN_MS, FADE_OUT_MS = 160, 220
     RISE_MS, SETTLE_MS, FLY_MS = 200, 250, 240        # fling(): rise out of the card, settle, fly to the bar
 
-    def __init__(self, parent, font=None, animator=None, page_bg=None):
+    def __init__(self, parent, font=None, animator=None, page_bg=None, on_gone=None):
         page = page_bg or PALETTE["bg"]
         super().__init__(parent, bd=0, highlightthickness=0, bg=page)
         self._font, self._anim, self._page = font, animator, page
         self._home = page              # the page colour (fling may borrow another backdrop for a moment)
         self._text, self._tint = "", (PALETTE["info"][0], PALETTE["info"][1])
-        self._job = None
+        self._job = self._next = None  # the pending timer, and what it will start (hurry() starts it now)
+        self._hurried = False
         self._wrap = 600
         self._gen = 0                  # bumped by every show / fling, so stale stages of an old one stop
         self._in = None
+        self._on_gone = on_gone
+        self._key = f"toast{id(self)}"
 
     def cget(self, key):
         if key == "text":
@@ -788,6 +798,27 @@ class Toast(tk.Canvas):
         if key == "font":
             return self._font
         return super().cget(key)
+
+    def _later(self, ms, fn):
+        self._next = fn
+        self._job = self.after(ms, self._fire)
+
+    def _fire(self):
+        fn, self._job, self._next = self._next, None, None
+        if fn:
+            fn()
+
+    def hurry(self):
+        """A newer message has started: get out of the way quickly (within HURRY_MS of each stage),
+        finishing the same way as normal (a fling still lands in its bar)."""
+        if not self._text or self._hurried:
+            return
+        self._hurried = True
+        if self._anim is not None:
+            self._anim.hurry(self._key, HURRY_MS)
+        if self._job is not None:
+            self.after_cancel(self._job)
+            self._fire()
 
     def show(self, text, tint=None, ms=3500, in_=None, wraplength=None):
         """Show `text` on a pill coloured `tint` = (background, text colour) for `ms` milliseconds."""
@@ -799,18 +830,20 @@ class Toast(tk.Canvas):
         self._draw()
         self._in = in_ or self.master
         self._put(0, 6)
+        self._on_top()
         self._fade(0.0, 1.0, self.FADE_IN_MS)
-        self._job = self.after(ms, self.hide)
+        self._later(ms, self.hide)
 
     def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
               on_arrive=None):
         """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
-        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then fly to `target` = (x offset from
-        the centre of `in_`, y of the landing point), fading out completely, and call on_arrive(). y values are
-        inside `in_`. Every stage is <= 250 ms; a new message (or Animator.finish_all from a key press) cuts it
-        short, and a cut-short one never arrives. With Reduce motion it stays put, then goes.
-        `under(y_mid)` returns the colour behind the toast at that height (tk has no transparency, so the
-        toast takes that colour as its own background and blends toward it)."""
+        y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
+        flies to `target` = (x offset from the centre of `in_`, y of the landing point), fading out, and call
+        on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
+        replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
+        transparency, so a full-size pill would be an opaque box passing over the chart.
+        `under(y_mid)` returns the colour behind the toast at that height (the toast takes that colour as its
+        own background and blends toward it)."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -818,15 +851,15 @@ class Toast(tk.Canvas):
             self._wrap = wraplength
         self._draw()
         self._in = in_ or self.master
-        key = f"toast{id(self)}"
+        self._on_top()
+        key = self._key
         alive = lambda: gen == self._gen
+        w0, h0 = int(self.cget("width")), int(self.cget("height"))
+        from_y, to_y = start_mid - h0 / 2, rest_bottom - h0
 
-        h = int(self.cget("height"))
-        from_y, to_y = start_mid - h / 2, rest_bottom - h
-
-        def backdrop(y):
+        def backdrop(y_mid):
             if under is not None:
-                c = under(y + h / 2)
+                c = under(y_mid)
                 if c != self._page:
                     self._page = c
                     super(Toast, self).configure(bg=c)
@@ -834,7 +867,7 @@ class Toast(tk.Canvas):
         def rise(p):
             if alive():
                 y = from_y + (to_y - from_y) * p
-                backdrop(y)
+                backdrop(y + h0 / 2)
                 self._put(0, y)
                 self._paint(p)
 
@@ -844,25 +877,39 @@ class Toast(tk.Canvas):
 
         def fly(p):
             if alive():
-                y = to_y + (target[1] - h / 2 - to_y) * p
-                backdrop(y)
-                self._put(target[0] * p, y)
-                self._paint(0.7 * (1.0 - p))
+                scale = 1.0 - 0.85 * p                         # shrinks to a small drop
+                y_mid = to_y + h0 / 2 + (target[1] - to_y - h0 / 2) * p
+                backdrop(y_mid)
+                self._resize(max(4, w0 * scale), max(4, h0 * scale), text_alpha=max(0.0, 1.0 - p * 2.5))
+                self._put(target[0] * p, y_mid - h0 * scale / 2)
+                self._paint(0.7 * (1.0 - 0.6 * p), text=max(0.0, 0.7 - p * 2.5))
 
         def gone():
             if alive():
-                self._text = ""
-                self.place_forget()
-                self._page = self._home
-                super(Toast, self).configure(bg=self._home)
+                self._gone()
                 if on_arrive is not None:
                     on_arrive()
 
+        def to_fly():
+            if alive():
+                self._anim_run(key, HURRY_MS if self._hurried else self.FLY_MS, fly, gone)
+
         def after_rise():
             if alive():
-                self._job = self.after(hold_ms, lambda: alive() and self._anim_run(key, self.FLY_MS, fly, gone))
+                if self._hurried:
+                    to_fly()
+                    return
+                self._later(hold_ms, to_fly)
                 self._anim_run(key, self.SETTLE_MS, settle)
-        self._anim_run(key, self.RISE_MS, rise, after_rise)
+        self._anim_run(key, HURRY_MS if self._hurried else self.RISE_MS, rise, after_rise)
+
+    def _gone(self):
+        self._text = ""
+        self.place_forget()
+        self._page = self._home
+        super().configure(bg=self._home)
+        if self._on_gone is not None:
+            self._on_gone(self)
 
     def _anim_run(self, key, ms, frame, done=None):
         if self._anim is None:
@@ -875,31 +922,34 @@ class Toast(tk.Canvas):
     def _reset(self):
         """Stop whatever the previous message was doing (its pending stages see a new generation)."""
         self._gen += 1
+        self._hurried = False
         if self._page != self._home:
             self._page = self._home
             super().configure(bg=self._home)
         if self._job is not None:
             self.after_cancel(self._job)
-            self._job = None
+            self._job = self._next = None
         if self._anim is not None:
-            self._anim.finish(f"toast{id(self)}")
+            self._anim.finish(self._key)
 
     def _put(self, x, y):
         self.place(in_=self._in, relx=0.5, x=int(x), y=int(y), anchor="n")
+
+    def _on_top(self):
+        """Raise above everything once, when a message starts (not every frame: then a newer message,
+        started later, stays above an older one still flying out)."""
         self.tk.call("raise", self._w)          # (Canvas.lift raises canvas items, not the widget)
 
     def hide(self):
         """Fade out now (also what happens when the time is up)."""
         if self._job is not None:
             self.after_cancel(self._job)
-            self._job = None
+            self._job = self._next = None
         if not self._text:
             return
-
-        def gone():
-            self._text = ""
-            self.place_forget()
-        self._fade(1.0, 0.0, self.FADE_OUT_MS, gone)
+        gen = self._gen
+        self._fade(1.0, 0.0, HURRY_MS if self._hurried else self.FADE_OUT_MS,
+                   lambda: gen == self._gen and self._gone())
 
     def _draw(self):
         self.delete("all")
@@ -911,17 +961,26 @@ class Toast(tk.Canvas):
         x1, y1, x2, y2 = self.bbox(t)
         w = min(x2 - x1, self._wrap) + 2 * padx
         h = (y2 - y1) + 2 * pady
+        self._line, self._pady = line, pady
         super().configure(width=w + 2, height=h + 2)
         self.create_polygon(_rounded_points(1, 1, w, h, min(h // 2, line)), smooth=True, tags="pill")
         self.coords(t, 1 + w / 2, 1 + pady)
         self.tag_raise("text")
 
-    def _paint(self, a):
+    def _resize(self, w, h, text_alpha=1.0):
+        """Redraw the pill at another size (the flying drop); the text stays centred, then fades away."""
+        w, h = int(w), int(h)
+        super().configure(width=w + 2, height=h + 2)
+        self.coords("pill", *_rounded_points(1, 1, w, h, max(2, min(h // 2, self._line))))
+        self.coords("text", 1 + w / 2, 1 + max(0, (h - self._line) / 2))
+        self.itemconfigure("text", state="normal" if text_alpha > 0 else "hidden")
+
+    def _paint(self, a, text=None):
         bg, fg = self._tint
         try:
             self.itemconfigure("pill", fill=lerp_color(self._page, bg, a),
                                outline=lerp_color(self._page, lerp_color(bg, PALETTE["text"], 0.12), a))
-            self.itemconfigure("text", fill=lerp_color(self._page, fg, a))
+            self.itemconfigure("text", fill=lerp_color(self._page, fg, a if text is None else text))
         except tk.TclError:
             pass
 
@@ -931,7 +990,7 @@ class Toast(tk.Canvas):
             if done:
                 done()
             return
-        self._anim.run(f"toast{id(self)}", ms, lambda p: self._paint(a + (b - a) * p), done)
+        self._anim.run(self._key, ms, lambda p: self._paint(a + (b - a) * p), done)
 
 
 class DefinitionDrawer(tk.Frame):
@@ -1135,6 +1194,8 @@ class WordCard(tk.Canvas):
             self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
                              justify="center", anchor="n", tags=("old", "oldsub"))
         self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
+        # sorting fast (this interrupts a running transition): the new word shows at once instead of waiting
+        delay = 0.0 if animator.is_running(f"card{id(self)}") else 0.35
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
         ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
@@ -1143,7 +1204,7 @@ class WordCard(tk.Canvas):
             self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
             if osub:
                 self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
-            q = max(0.0, (p - 0.35) / 0.65)       # the new word starts once the old one is mostly gone
+            q = max(0.0, (p - delay) / (1 - delay))   # the new word starts once the old one is mostly gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
             wx, wy, sy = self._layout
             self.coords("word", wx, wy + back)

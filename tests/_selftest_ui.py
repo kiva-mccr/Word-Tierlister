@@ -230,12 +230,27 @@ y0 = app.tier_btns[0].coords("label")[1]; w = app.cur_word; key("1")
 assert s.get_word(w)["tier"] == 0 and app.tier_btns[0].coords("label")[1] == y0              # Reduce motion: no dip
 app.motion_var.set(False); app.toggle_motion()
 
+# ---- sorting fast: each message is its own pill; the older one speeds out underneath, the newest on top
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+root.after(1500, root.quit); root.mainloop()                                   # earlier messages have gone
+w1 = app.cur_word; key("2"); w2 = app.cur_word; key("3")
+assert len(app.toasts) <= 3                                                    # gone ones are cleaned up
+live = [t for t in app.toasts if t.cget("text")]
+assert len(live) == 2 and live[-1] is app.toast and app.toast.cget("text").startswith(w2)
+assert live[0]._hurried and live[0].cget("text").startswith(w1)
+t0 = time.perf_counter()
+while live[0].cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.005)
+assert not live[0].cget("text") and live[0] not in app.toasts                  # gone and cleaned up
+app.anim.finish_all(); root.after(800, root.quit); root.mainloop(); app.anim.finish_all(); pump(2)
+
 # ---- duel result (UI-19): answered at once, the next pair after the short resolve; no double answers
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 if app.pair:
     first = dict(app.pair); n0 = s.stats()["comparisons"]
     key("Left")
     assert s.stats()["comparisons"] == n0 + 1 and app.pair is None              # saved straight away
+    assert app.toast.cget("text") == f"{first['left']}  >  {first['right']}"    # refine shows its result too
     app.pair_answer("left"); app._on_duel("right")                             # clicks during the resolve
     assert s.stats()["comparisons"] == n0 + 1                                   # ...are ignored
     key("Right")                                                                 # a key finishes it and answers
