@@ -44,8 +44,11 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Colours come from `theme.PALETTE` / `TIER_COLORS`; fonts from `fonts.font(role)` (shared Font objects;
   after resizing them call `widgets.refresh_widgets(window)`).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
-  Main-window font scale = font_scale (screen fit) x zoom x grow (window bigger than normal, UI-25);
-  measure minimum sizes at grow 1.
+  Main window: what shows = min(zoom, biggest size that fits the screen, in 0.1 steps) x grow (window
+  bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
+  minimum sizes at grow 1. Main and Browse zooms are separate and saved.
+- Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
+  else may write the save meanwhile.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
   `deps.SIZE`, `PURPOSE` and `HOMEPAGE` entries.
 - Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
@@ -81,7 +84,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-31, UI-33, UI-34, UI-37..42, UI-48, UI-14, then UI-26 (final pass), then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-31, UI-33, UI-34, UI-37..42, UI-48, UI-14, then UI-26 (final pass), then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.

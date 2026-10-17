@@ -11,6 +11,7 @@ import math
 import os
 import random
 import sqlite3
+import threading
 import time
 
 import tkinter as tk
@@ -97,6 +98,8 @@ class App:
         self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
         self._ref_size = None     # the window size at which grow is 1 (set by _fit_window)
         self._grow_job = None
+        self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
+        self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
 
@@ -115,9 +118,9 @@ class App:
         root.bind("<KeyRelease>", self.on_key_release)
         self._held = {}                            # keysym -> held-key state (_repeat_allowed)
         for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
-            root.bind(seq, lambda e: self.set_zoom(self.zoom + self.ZOOM_STEP))
+            root.bind(seq, lambda e: self.zoom_step(1))
         for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
-            root.bind(seq, lambda e: self.set_zoom(self.zoom - self.ZOOM_STEP))
+            root.bind(seq, lambda e: self.zoom_step(-1))
         for seq in ("<Control-0>", "<Control-KP_0>"):
             root.bind(seq, lambda e: self.set_zoom(1.0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
@@ -154,8 +157,8 @@ class App:
             ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
             ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
                       ("separator",),
-                      ("command", "Zoom in", lambda: self.set_zoom(self.zoom + self.ZOOM_STEP), "Ctrl +"),
-                      ("command", "Zoom out", lambda: self.set_zoom(self.zoom - self.ZOOM_STEP), "Ctrl \u2212"),
+                      ("command", "Zoom in", lambda: self.zoom_step(1), "Ctrl +"),
+                      ("command", "Zoom out", lambda: self.zoom_step(-1), "Ctrl \u2212"),
                       ("command", "Actual size", lambda: self.set_zoom(1.0), "Ctrl 0"),
                       ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
@@ -307,21 +310,40 @@ class App:
 
     def set_zoom(self, z):
         """Make everything in the main window bigger or smaller (every shared font scales, so buttons, cards,
-        the chart and the menus follow). Saved. The window grows if it has to; it never goes past the screen
-        (the fitting step shrinks the fonts back if a zoom would not fit)."""
+        the chart and the menus follow). Saved. The window grows if it has to, never past the screen: what
+        shows is the zoom or the biggest size that fits, whichever is smaller (_fit_window). So zoom out is
+        always one step and never makes anything bigger; a zoom in that cannot make anything bigger says so
+        and leaves the zoom as it was."""
         z = round(min(self.ZOOM_MAX, max(self.ZOOM_MIN, z)), 2)
-        if z == self.zoom:
+        if z == self.zoom and self.grow == 1:
             return "break"
-        self.zoom = z
+        old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
+        self._apply_zoom(z)
+        now = self.font_scale * self.zoom
+        info = (PALETTE["info"][0], PALETTE["info"][1])
+        if z > old and now <= before + 1e-9:
+            self._apply_zoom(old)
+            self.flash("This is as big as fits on this screen", bg=info[0], fg=info[1], ms=1500)
+            return "break"
         self.store.set_meta("zoom", z)
-        self.font_scale = 1.0                  # re-fit from the full size at the new zoom
-        self.grow = 1.0                        # a zoom sets the size: the window as it is now becomes "normal"
-        self._fit_window(rebase=True)
-        self.flash(f"Zoom {round(z * 100)}%", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=900)
+        note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
+        self.flash(f"Zoom {round(z * 100)}%{note}", bg=info[0], fg=info[1], ms=900 if not note else 1600)
         return "break"
 
+    def zoom_step(self, d):
+        """Ctrl + / Ctrl - (and the View menu): one step bigger or smaller than what is on screen now, which in a
+        window enlarged by UI-25 is more than the saved zoom."""
+        return self.set_zoom(round(self.zoom * self.grow, 1) + d * self.ZOOM_STEP)
+
+    def _apply_zoom(self, z):
+        self.zoom = z
+        self.grow = 1.0                        # a zoom sets the size: the window as it is now becomes "normal"
+        self._fit_cache.clear()
+        self._fit_window(rebase=True)
+
     # ---- window size: fits the screen and the contents ------------------------------------------
-    FONT_STEPS = (1.0, 0.9, 0.8, 0.7, 0.6, 0.5)   # tried in order until the contents fit the screen
+    FIT_STEP, FIT_LOWEST = 0.1, 0.5         # sizes tried until the contents fit: the zoom, then 0.1 less each time,
+                                             # down to half the zoom
     BASE_SIZE = (1040, 760)                  # preferred window size at the classic 96 dpi
     MIN_SIZE = (780, 580)                    # never smaller than this (also at 96 dpi)
 
@@ -397,8 +419,9 @@ class App:
     def _fit_window(self, initial=False, rebase=False):
         """Size and place the main window for this screen and these contents.
 
-        First call: if the contents cannot fit the screen even at the right size, the fonts are
-        shrunk step by step (FONT_STEPS) until they do; then the window opens at the preferred size
+        The contents are shown at the zoom, or at the biggest size in 0.1 steps below it that fits the screen,
+        whichever is smaller (so a zoom bigger than the screen allows shows as big as fits, and a smaller zoom
+        is never shown bigger). First call: then the window opens at the preferred size
         (BASE_SIZE scaled for dpi), at least as big as the contents need, no bigger than the usable
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
         now need more room. The minimum size always follows the contents. It also sets the size at which
@@ -412,19 +435,22 @@ class App:
                 return       # still fits at the grown size: re-measuring at normal size would flash small text
         f = ui_factor(r)
         area = usable_area(r)
-        if initial:
-            self.font_scale = 1.0
         # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),
-        # then take the next font step down, and repeat. Later calls never grow the fonts back.
-        steps = [st for st in self.FONT_STEPS if st <= self.font_scale + 1e-9]
+        # then take the next font step down, and repeat. Every fit starts again from the full size (the
+        # zoom), so a step taken for a taller view (the definitions open, a duel tab) is undone when it
+        # closes; it starts from the step that fitted this layout last time, so it does not flicker.
+        key = (self.mode, self.show_defs, self.zoom, tuple(area))
+        start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
+        sizes = [round(self.zoom - k * self.FIT_STEP, 2)
+                 for k in range(int(self.zoom * (1 - self.FIT_LOWEST) / self.FIT_STEP + 1e-6) + 1)]
         rescaled = False
         self.grow = 1.0                          # measured at the normal size; _apply_grow re-grows after
-        for step in steps:
-            self.font_scale = step
-            if self._applied_scale != step * self.zoom:     # re-scaling and redrawing everything is the slow
-                self._applied_scale = step * self.zoom      # part: skip it when the size is already right
+        for size in [z for z in sizes if z <= start + 1e-9]:
+            self.font_scale = size / self.zoom
+            if self._applied_scale != size:      # re-scaling and redrawing everything is the slow part:
+                self._applied_scale = size       # skip it when the size is already right
                 rescaled = True
-                scale_fonts(step * self.zoom)
+                scale_fonts(size)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
@@ -435,6 +461,7 @@ class App:
             else:
                 continue
             break
+        self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
         if not self.show_defs and int(self.def_text.cget("height")) != 9:
             self.def_text.config(height=9)
         r.update_idletasks()
@@ -499,8 +526,9 @@ class App:
         self.root.after_idle(self._recenter)
 
     # ---- layout toggles -------------------------------------------------------------------------------
-    def _layout_defs(self, animate=False):
-        """Show or hide the definition drawer to match self.show_defs (easing open / shut when `animate`)."""
+    def _layout_defs(self, animate=False, on_closed=None):
+        """Show or hide the definition drawer to match self.show_defs (easing open / shut when `animate`);
+        on_closed() runs once a closing drawer is out of the layout."""
         d = self.def_frame
         d.settle()
         if animate and self.show_defs == d.is_open:      # no change: nothing to animate
@@ -516,11 +544,16 @@ class App:
                 self._make_room(d.natural_height())   # grow the window first only if it must, then ease open
                 d.open()
         elif d.winfo_manager():
+            def gone():
+                if not self.show_defs:
+                    d.pack_forget()
+                    if on_closed:
+                        on_closed()
             if animate:
-                d.close(on_closed=lambda: not self.show_defs and d.pack_forget())
+                d.close(on_closed=gone)
             else:
                 d.set_open(False)
-                d.pack_forget()
+                gone()
 
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
@@ -538,8 +571,8 @@ class App:
         self.defs_var.set(self.show_defs)
         self.store.set_meta("show_defs", int(self.show_defs))
         was_open = self.def_frame.is_open
-        self._layout_defs(animate=True)
-        if not self.show_defs or was_open:
+        self._layout_defs(animate=True, on_closed=self._fit_window)   # closing: re-fit once it is out of the way
+        if self.show_defs and was_open:
             self._fit_window()
 
     def toggle_motion(self):
@@ -1150,6 +1183,9 @@ class App:
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
+        if self.busy:                          # a reshuffle is writing the save: collect them afterwards
+            self.root.after(120, self._poll_defs)
+            return
         changed = False
         for word, text, found in self.defs.drain():
             if found:
@@ -1229,26 +1265,43 @@ class App:
         dlg.show()
         return dlg
 
-    def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
-        """Validate and apply the queue settings, then reshuffle. Returns an error message or None."""
+    @staticmethod
+    def parse_queue_settings(seed_text, spread_text, shape, compound_text):
+        """Check the Queue randomness fields. Returns (settings for Store.reshuffle, None) or (None, error)."""
         try:
             seed = int(seed_text.strip())
             spread = float(spread_text.strip().replace(",", ""))
             compound = float(compound_text.strip())
         except ValueError:
-            return "Seed must be a whole number; spread and compound strength must be numbers."
+            return None, "Seed must be a whole number; spread and compound strength must be numbers."
         if spread < 100:
-            return "Spread must be at least 100 (it is measured in frequency ranks)."
+            return None, "Spread must be at least 100 (it is measured in frequency ranks)."
         if not 0 <= compound <= 10:
-            return "Compound strength must be between 0 (off) and 10."
+            return None, "Compound strength must be between 0 (off) and 10."
         if shape not in ("exp", "gauss"):
-            return "Pick a shape."
-        self.store.reshuffle(seed=seed, spread=spread, shape=shape, compound=compound)
+            return None, "Pick a shape."
+        return {"seed": seed, "spread": spread, "shape": shape, "compound": compound}, None
+
+    def queue_unchanged(self, cfg):
+        """True if `cfg` (from parse_queue_settings) is what the save already uses."""
+        cur = self.store.queue_settings()
+        return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
+                and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
+
+    def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
+        """Validate and apply the queue settings, then reshuffle (here, not in the background). Returns an
+        error message or None."""
+        cfg, err = self.parse_queue_settings(seed_text, spread_text, shape, compound_text)
+        if err:
+            return err
+        self.store.reshuffle(**cfg)
         self.cmp = None
         return None
 
     def edit_queue(self):
-        """Dialog for the queue's seed, spread, shape and compound strength; Apply reshuffles the unplaced words."""
+        """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words
+        in the background (a moving bar while it runs: with ~1M words it takes a while), or says that
+        nothing changed."""
         cfg = self.store.queue_settings()
         dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
                            "New words are drawn at random, but the odds fall off with how rare a word is: a "
@@ -1261,9 +1314,11 @@ class App:
         comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
         ttk.Label(box, text="Seed:").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=seed_v, width=14).grid(row=0, column=1, sticky="w")
-        RoundButton(box, "New random seed", lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31))),
-                    bg=PALETTE["surface"], font=font("body"), padx=12, pady=3, radius=10,
-                    animator=self.anim).grid(row=0, column=2, sticky="w", padx=12)
+        new_seed = RoundButton(box, "New random seed",
+                               lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31))),
+                               bg=PALETTE["surface"], font=font("body"), padx=12, pady=3, radius=10,
+                               animator=self.anim)
+        new_seed.grid(row=0, column=2, sticky="w", padx=12)
         ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
         info = ttk.Label(box, text="", foreground=PALETTE["muted"])
@@ -1277,7 +1332,11 @@ class App:
         ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
         ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
                   foreground=PALETTE["muted"]).grid(row=3, column=2, sticky="w", padx=12)
-        status = ttk.Label(box, text="", foreground=PALETTE["bad"][1])           # shown while applying / with a problem
+        # shown only when there is something to say: a problem, "no settings changed", or the shuffle running
+        status = ttk.Label(box, text="", foreground=PALETTE["bad"][1])
+        bar = ttk.Progressbar(box, mode="indeterminate")
+        for v in (seed_v, spread_v, comp_v, shape_v):
+            v.trace_add("write", lambda *_: status.grid_remove())       # an edit clears the last note
 
         def update_info(*_):  # live hint next to "Spread": the median rank of early words
             try:
@@ -1292,22 +1351,63 @@ class App:
         shape_v.trace_add("write", update_info)
         update_info()
 
-        def apply():  # validate and reshuffle through apply_queue_settings()
-            status.config(text="Shuffling...", foreground=PALETTE["muted"])
-            status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        def say(text, colour):
+            status.config(text=text, foreground=colour)
+            status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
             dlg.refit()
-            err = self.apply_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
+
+        def apply():
+            new, err = self.parse_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
             if err:
-                status.config(text=err, foreground=PALETTE["bad"][1])
+                say(err, PALETTE["bad"][1])
                 return
-            dlg.close()
-            self.after_external_change()
-            self.flash("Queue reshuffled", ms=2000)
+            if self.queue_unchanged(new):
+                say("No settings changed, so there is nothing to reshuffle.", PALETTE["muted"])
+                return
+            for b in (*dlg.buttons.values(), new_seed):
+                b.set_enabled(False)
+            dlg.on_cancel = lambda: None             # it cannot be stopped halfway: wait for it
+            say("Shuffling the words you haven't placed yet...", PALETTE["muted"])
+            bar.grid(row=5, column=0, columnspan=3, sticky="we", pady=(6, 0))
+            if not self.reduce_motion:
+                bar.start(12)                        # the back-and-forth bar: no percentage to show
+            dlg.refit()
+            self.busy = True                         # nothing else writes to the save meanwhile (_poll_defs)
+            result = {}
+            worker = threading.Thread(target=lambda: result.update(error=self._reshuffle_quietly(new)), daemon=True)
+            worker.start()
+
+            def wait():
+                if worker.is_alive():
+                    dlg.win.after(50, wait)
+                    return
+                self.busy = False
+                bar.stop()
+                if result.get("error"):
+                    for b in (*dlg.buttons.values(), new_seed):
+                        b.set_enabled(True)
+                    dlg.on_cancel = dlg.close
+                    bar.grid_remove()
+                    say(f"Could not reshuffle: {result['error']}", PALETTE["bad"][1])
+                    return
+                self.cmp = None
+                dlg.close()
+                self.after_external_change()
+                self.flash("Queue reshuffled", ms=2000)
+            wait()
 
         dlg.button("Cancel", dlg.close)
         dlg.button("Apply & reshuffle", apply, default=True)
         dlg.show()
         return dlg
+
+    def _reshuffle_quietly(self, cfg):
+        """Worker thread: reshuffle, and return the error instead of raising (no tkinter here)."""
+        try:
+            self.store.reshuffle(**cfg)
+        except (sqlite3.Error, OSError, ValueError) as exc:
+            return str(exc)
+        return None
 
     # ---- earlier progress ------------------------------------------------------------------------
     def show_save_location(self):

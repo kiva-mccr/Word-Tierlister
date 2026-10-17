@@ -519,6 +519,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
 #           scale, so a zoom never pushes the window past the screen. (Browse keeps its own zoom.)
 #           Plain messages (zoom, skip, duel results) now appear just above the bottom bar, clear of the card.
+#           Fixed (reported): on a screen too small for the zoomed contents, switching tabs or closing the
+#           definitions lost the zoom (the screen fit shrank the fonts a step and never grew them back), and
+#           zoom out could then jump. Now what shows is the zoom or the biggest size that fits (0.1 steps),
+#           whichever is smaller, worked out again on every change (remembered per layout, so no flicker);
+#           closing the definitions re-fits once the drawer is out of the way. Zoom out is always one step
+#           and never makes anything bigger; a zoom in that cannot get bigger says "as big as fits" and
+#           changes nothing. In a window enlarged by UI-25, Ctrl + / - step from the size on screen.
+#           Main and Browse keep separate zooms, both saved (meta zoom / browse_zoom). _selftest_zoom.py.
 # [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
 #           while no tier holds two words yet (only at the very start), "Boundary check" while no two
 #           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon
@@ -528,6 +536,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           words if its tab is hidden at start-up. The check uses cheap counts (Store.tier_counts and
 #           the conflicts count, already read for the status line), never a scan per refresh.
 #           Built: TabBar.show_only(keys) folds tabs away / grows them in; App.modes_with_work(stats).
+# [x] UI-50 Queue randomness Apply (asked for): Apply & reshuffle with nothing changed says "No settings
+#           changed" (inline, cleared by the next edit) instead of reshuffling. Otherwise the reshuffle runs on
+#           a worker thread while the dialog shows a back-and-forth (indeterminate) bar, its buttons greyed
+#           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
+#           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
+#           Reduce motion the bar stands still.
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

@@ -60,7 +60,8 @@ earlier in that list. Only the UI files import `tkinter`.
 - Colours: `theme.py`. Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_key_target`, `next_tab` for Tab, `_show_place`, `_show_pair`).
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
-- Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom`, saved).
+- Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved;
+  what fits the screen: `App._fit_window`). Browse has its own (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 

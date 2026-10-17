@@ -94,6 +94,28 @@ spread.delete(0, "end"); spread.insert(0, "5")
 qd.win.event_generate("<Return>"); pump(2)
 assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
 qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
+labels = lambda d: " ".join(str(w.cget("text")) for w in d.body.winfo_children() if w.winfo_class() == "TLabel" and w.winfo_manager())
+qd = app.edit_queue(); pump(3)
+qd.buttons["Apply & reshuffle"].invoke(); pump(2)                               # nothing changed: says so, stays open
+assert qd.alive() and "No settings changed" in labels(qd)
+seed_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][0]
+seed_e.delete(0, "end"); seed_e.insert(0, "424242"); pump(1)
+assert "No settings changed" not in labels(qd)                                  # an edit clears the note
+real_reshuffle, gate = s.reshuffle, []
+s.reshuffle = lambda **k: (gate.append(1), time.sleep(0.6), real_reshuffle(**k))
+v0 = s.version
+qd.buttons["Apply & reshuffle"].invoke(); pump(2, 0.05)
+assert qd.alive() and app.busy and "Shuffling" in labels(qd)                    # runs in the background ...
+assert not qd.buttons["Apply & reshuffle"].enabled and not qd.buttons["Cancel"].enabled
+bars = [w for w in qd.body.winfo_children() if w.winfo_class() == "TProgressbar"]
+assert bars and bars[0].winfo_manager() and str(bars[0].cget("mode")) == "indeterminate"   # the back-and-forth bar
+qd.win.event_generate("<Escape>"); pump(1); assert qd.alive()                    # ... and cannot be cancelled halfway
+t_end = time.time() + 30
+while qd.alive() and time.time() < t_end:
+    pump(2, 0.05)
+assert not qd.alive() and not app.busy and s.queue_settings()["seed"] == 424242 and s.version > v0
+assert app.toast.cget("text") == "Queue reshuffled"
+s.reshuffle = real_reshuffle
 ad = app.edit_anchors(); pump(3)
 entries = [w for w in ad.body.winfo_children() if w.winfo_class() == "TEntry"]
 assert len(entries) == 6 and entries[0].get() == "serendipity"
