@@ -268,9 +268,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           toward its tier (S, A, B left; C, D, F right; further for the outer tiers) while fading out
 #           completely (240 ms). It borrows the white of the card as its backdrop while over it (no
 #           transparency in tk). A key press or a new message cuts it short; Reduce motion keeps it still.
-# [ ] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
+# [x] UI-12 DefinitionDrawer. adds DefinitionDrawer.toggle(): the panel eases open and closed
 #           instead of snapping; nicer text (bold word, italic part of speech, muted examples).
 #           Replaces def_frame / def_text.
+#           Built: DefinitionDrawer in widgets.py (App.def_frame; def_text is its Text) slides open and shut
+#           over 200 ms; definitions.parse_definition() splits the stored text into senses (no tkinter).
+#           Lesson: after a height animation, reset the frame's explicit height to 0 as well as turning
+#           propagation back on, or Tk flips between the two sizes forever (that hung _selftest_sizing).
 #
 # --- Phase 4: seeing your list take shape ------------------------------------------------------
 # [ ] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with

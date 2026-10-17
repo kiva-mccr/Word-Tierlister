@@ -97,4 +97,15 @@ assert s2.stats()["placed"] == placed
 assert s2.get_anchors()[2] == "table"
 assert s2.undo() is not None  # undo history persists across restarts
 s2.close()
+
+# ---- definition text split into senses for the drawer (UI-12)
+from definitions import parse_definition
+senses = parse_definition('1. (noun) a round fruit\n      e.g. "an apple a day"\n2. (verb) to do a thing\n'
+                          '3. (adj) red')
+assert [x["num"] for x in senses] == ["1", "2", "3"] and senses[0]["pos"] == "noun"
+assert senses[0]["text"] == "a round fruit" and senses[0]["example"] == "an apple a day"
+assert senses[1]["example"] is None and senses[2]["pos"] == "adj"
+assert parse_definition("(No definition found.)") == [{"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
+assert parse_definition("") == [] and parse_definition(None) == []
+assert parse_definition("1. no part of speech")[0] == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
 print("CORE OK")
