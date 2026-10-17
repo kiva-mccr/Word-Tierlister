@@ -42,8 +42,9 @@ How it works
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
 
-Code map (all files live in one folder; run tierlist.py)
----------------------------------------------------------
+Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
+live in src/, the self-tests in tests/, check_release.py in tools/, the Claude notes in .claude/)
+----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults.        (no dependencies)
@@ -155,20 +156,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           itself is downloaded the first time it is needed (definitions.py). --no-install turns
 #           the offer off; packaged builds skip it. Pillow is only for the tests' screenshots and is
 #           never offered. errors.py gained ask_yes_no. Covered by _selftest_deps.py.
-# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3). Started
-#           from a terminal, deps.terminal_setup() runs before any window and handles only what the
-#           program cannot start without: tkinter and the REQUIRED packages (wordfreq). It lists them
-#           with what each is for, asks once "Install them now? [Y/n]" (Enter = yes), installs tkinter
-#           through the system package manager (apt-get / dnf / pacman / zypper, Homebrew on macOS; sudo
-#           may ask for your password) and wordfreq with pip, with the output shown in the terminal,
-#           then says "Opening the window..." and the window opens (on Windows the console then closes,
-#           ST-1). Everything OPTIONAL (nltk) is offered later in the window by ensure_packages, which
-#           no longer asks about the required ones when the terminal already did. If this Python
-#           refuses pip installs (externally-managed), it offers to make a private .venv next to the
-#           program, installs there and restarts with it; later starts find .venv and use it without
-#           asking. Installing tkinter also restarts the program (it could not be imported at start).
-#           Without a terminal (pythonw, a double-clicked shortcut) the window asks as before.
-#           Covered by _selftest_install.py; tried for real in a fresh venv without wordfreq.
+# [x] ST-4  Install in two stages: the terminal first, then the window (asked for after ST-3; reworked).
+#           1. Terminal, before any window: only what the window itself needs, which is tkinter (the
+#              program starts and asks without wordfreq: that is only imported when the list is built).
+#              deps.terminal_setup() explains, asks "Install it now? [Y/n]" (Enter = yes), runs the
+#              system package manager (apt-get / dnf / pacman / zypper, Homebrew; sudo may ask for a
+#              password) and restarts the program so the window can open.
+#           2. Window: every Python package, required (wordfreq) and optional (nltk), in ONE dialog with
+#              a tick box each (errors.ask_choices: label "(needed)" / "(optional)" and a muted line on
+#              what it is for), "Install selected" / "Not now". An optional one left unticked is
+#              remembered (meta declined_packages) and not offered again. If this Python refuses pip
+#              installs (externally-managed), the window offers to make a private .venv next to the
+#              program, installs there and restarts in it; every later start uses .venv straight away
+#              (deps.use_private_env). Without a terminal (pythonw, a shortcut) stage 1 is skipped.
+#           Tick boxes are drawn as images now (ui_style._tick_boxes): the clam theme's tiny cross was
+#           unreadable. Covered by _selftest_install.py and _selftest_deps.py; tried for real in a fresh
+#           venv without wordfreq (the dialog appears; screenshot taken).
 # [ ] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
 #           start from a terminal keeps that terminal busy until the window closes, and closing the
 #           terminal ends the program. Plan: once the terminal stage (ST-4) has nothing left to ask, the
@@ -277,38 +280,63 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           propagation back on, or Tk flips between the two sizes forever (that hung _selftest_sizing).
 #
 # --- Phase 4: seeing your list take shape ------------------------------------------------------
-# [ ] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with
+# [x] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with
 #           counts, fed by Store.tier_counts(); bars grow with ease-out when a count changes.
 #           (Read the dataviz skill before building.)
+#           Built: src/ui_chart.py, at the right of the status line, in Place new words only (by
+#           request; see UI-31 for the other tabs). Bars <= 24 px, rounded data end on one hairline
+#           baseline, letter under and count on top in text colours, a hover note per bar
+#           (widgets.Tooltip), growth 220 ms, pulse(tier) and bar_top(tier) ready for UI-17. Bars are
+#           the tier pastels with the pills' faint same-hue edge. A colour-blind-tuned set (passed the
+#           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
+#           letter + count on every bar already tell the tiers apart without colour.
+#           Covered by tests/_selftest_chart.py.
 # [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
 #           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
 #           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for
 #           ages. Candidates: (a) plain placed/total; (b) "common-word coverage", the share of the
 #           top ~20k frequency ranks already placed or skipped; (c) the tier chart (UI-13) alone,
 #           with no bar at all. Whatever we pick must stay calm: no goals, no streaks.
-# [ ] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
+# [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
 #           only in a tooltip when you hover over "+N today" (adds Tooltip(widget, text_fn)).
 #           While UI-14 is on hold, the placed/total figure stays.
+#           Built: app.format_stats(): "Placed 6,506 of 9,006 (72.2%) · 2,500 left · 0 skipped" (duels
+#           dropped from the line; conflicts only when there are some). "+N today" counts the actions
+#           saved since local midnight (Store.actions_since over the undo history, so undo takes one
+#           back); the pace ("about 120 an hour" this session) shows only in a hover note.
+#           widgets.Tooltip is the shared hover note (also used by the chart).
 #
 # --- Phase 5: satisfying (but tasteful) motion -------------------------------------------------
-# [ ] UI-16 Word transition. adds App.animate_word_change(direction): the old word nudges ~12 px
+# [x] UI-16 Word transition. adds App.animate_word_change(direction): the old word nudges ~12 px
 #           toward the chosen tier and fades while the next word eases in (~180 ms in total).
 #           Input is never locked; the next keypress completes it instantly.
-# [ ] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
+#           Built: WordCard.transition_from(old_word, old_sub, dx, dy, animator): the old word (drawn under
+#           the new one) moves toward its tier (dx by tier, 12 px down) and is gone by 55% of the 180 ms;
+#           the new one rises a few px into place from 35%. "Don't know" drifts up instead. Positions are
+#           absolute, so a redraw mid-way still ends exactly in place. The placement toast now starts at
+#           the card's top edge (an opaque tk canvas over the word hid the letters).
+# [x] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
 #           tier's bar (~250 ms) and the bar ticks up with a soft pulse. The main "that felt
 #           good" moment.
-#           Idea (pending your OK): build this as the END of the placement toast's swipe (UI-11) instead
+#           Approved plan: build this as the END of the placement toast's swipe (UI-11) instead
 #           of a second chip: the toast already rises out of the word, so once the chart (UI-13) is on
 #           screen above the card it can swipe up and toward its tier's bar and land in it, the bar
 #           pulsing as it arrives. One motion instead of two, and it says where the word went.
-# [ ] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
+#           Built that way: Toast.fling(target=, on_arrive=) flies the resting message to its bar's top
+#           (DistributionChart.bar_top) over 240 ms, fading, and the bar pulses (chart.pulse) as it lands.
+#           A message replaced mid-way never "lands". Without the chart (other tabs) it swipes sideways.
+# [x] UI-18 Keyboard press feedback. adds one key -> button map used by App.on_key, so EVERY hotkey
 #           plays its button's pressed "dip" (RoundButton.flash, ~110 ms) as well as doing its job:
 #           1-6 (tier pills), Space (Compare to anchors), U (Don't know), Up/B, E, Down/W and
 #           Backspace (Better / Same tier / Worse / Back), and in the duel view Left/A, Right/L,
 #           Down/T and S (cards, Tie, Skip). Disabled buttons do not dip. Respects Reduce motion
 #           (no dip, the action still happens). Input is never delayed: the action runs first.
+#           Built: App._key_target(ks) is the one key -> (button, action) map for each view (place, comparing,
+#           duels); on_key runs the action, then button.flash(). A disabled button's key is off too (Space
+#           no longer starts a comparison while Compare is greyed out). RoundButton.flash skips the dip with
+#           Reduce motion. Covered in tests/_selftest_ui.py.
 # [ ] UI-19 Duel result. adds DuelCards.resolve(side): the winner lifts slightly and the loser
 #           dims (~120 ms) before the next pair; a boundary swap shows the two chips trading
 #           places.
@@ -336,6 +364,29 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
 #           first, then hand focus back to the window whenever the drop-down closes, picked or not.
 #           Related: with a header menu open, Left / Right should move to the neighbouring menu.
+# [ ] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
+#           each to be shown and approved first: Refine: how settled each tier's order is (the share of
+#           its words with enough duels), six bars in the same tier colours. Boundary: the five
+#           boundaries S|A .. D|F as a short strip, each with how many checks and swaps it has had.
+#           Conflicts: not a chart, a single number ("3 to look at" / "none - nicely consistent").
+# [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
+#           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
+#           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
+#           under the field instead of separate error boxes, RoundButton Save / Cancel. (UI-24 restyles
+#           the other dialogs; this one gets its own pass because it is the first thing a new user sees.)
+# [ ] UI-29 Tier letters as hotkeys (asked for): in Place new words and in Browse, pressing a tier's
+#           letter (S, A, B, C, D, F) puts the word there, as well as the 1-6 keys and the buttons. Two
+#           letters already have a job and need a new home first: D shows definitions (move it to a key
+#           that is not a tier letter, e.g. Tab or "?", and relabel the Definition button) and, while
+#           comparing to anchors, B means Better (letters stay off while a comparison is open; Up does
+#           Better). In the duel views A / S keep their duel meanings; tier letters only act where a
+#           single word is being placed. The pills' key hints show both: "1 / S".
+# [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
+#           says what each package is for). Each package's name in the dialog links to its own web page
+#           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the
+#           browser with webbrowser.open; styled as a quiet underlined link in the muted colour. In the
+#           terminal (tkinter), the page address is printed after the package's line. One table
+#           (deps.HOMEPAGE) feeds both.
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
@@ -385,6 +436,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           save (.db), tierlist.log, a .venv or anything else of yours is never removed. A summary
 #           ("3 updated, 1 added, 1 removed") is shown first, with Cancel; a file you edited in the
 #           folder since the last unpack is backed up (name.py.bak) rather than overwritten silently.
+#           "Source & Updates" (asked for: unpacking doubles as updating). T-6 and T-7 are one File menu
+#           item and one dialog, File > Source & Updates..., whose action fits the form you are running:
+#           in the built program "Unpack the source code", from source "Make a standalone program".
+#           Either way the dialog has a tick box, ticked to start with: [x] Update to the newest version
+#           first. Ticked, it fetches the newest release from GitHub (T-8 publishes them) and unpacks or
+#           builds from that, so unpacking is also how you update; unticked, it uses exactly the version
+#           you have. Offline or no newer version: it says so in a line and carries on with yours. The
+#           update keeps your save untouched and, like any unpack, only changes files the program owns.
 # [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
 #           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
 #           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
@@ -399,7 +458,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           "Unpack the source code next to it?" (T-7). Either way the save is committed first, the
 #           answer is remembered (meta), and both stay in the File menu afterwards. Never asked during
 #           a first-run download or while another question is open; --no-install also silences it.
-# [ ] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
+# [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
 #             Releases, not in a committed folder: a 30-60 MB binary per build would bloat every clone
@@ -410,9 +469,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - Claude assets in .claude/ (CLAUDE.md, CHECKLIST.md). Pushed back: CLAUDE.md must stay where
 #             Claude Code loads it automatically, the repo root or .claude/, so .claude/ is the folder,
 #             not a custom "claude/" one.
-#           - Moving the program into src/ moves its "next to the script" save location: saves.py must
-#             keep finding a save in the old place (one folder up) before anything moves, or someone
-#             updating would appear to lose their list. Do this together with T-7 (same split).
+#           - Decided: tierlist.py (the thing you run) and the save files / tierlist.txt export stay at the
+#             TOP of the folder, outside every sub-folder, both in the repo / downloaded source and in a
+#             folder the program unpacks (T-7). Only the modules move into src/; tierlist.py adds src/ to
+#             the import path. So "next to the script" stays where it was and no save appears to be lost.
+#           - Approved (both pushbacks accepted); built ahead of T-6..T-9 so later steps use the layout.
+#           Built: src/, tests/ (each test starts with `import _paths`), tools/, .claude/; tierlist.py adds
+#           src/ to the import path; check_release.py knows the folders (flags a module left at the top,
+#           ships the tree with its folders, ignores your save / log / export next to tierlist.py).
+#           Still to do with T-8: the README's "Download for Windows / Linux" links to the Releases.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
@@ -434,7 +499,10 @@ import json
 import os
 import sys
 
-import deps
+# The program's modules live in src/ (R-1); this file stays at the top of the folder, next to your save.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+
+import deps  # noqa: E402  (after the path line above)
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
@@ -495,11 +563,14 @@ def main():
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    # --- 1. in a terminal, before any window: install only what the program cannot start without
-    #        (tkinter, wordfreq), asking first; optional extras are offered later, in the window (ST-4)
-    asked_in_terminal = deps.wants_terminal_setup(args.no_install)
-    if asked_in_terminal:
-        deps.terminal_setup([os.path.abspath(__file__), *sys.argv[1:]], script_dir)
+    # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a
+    #        terminal, before any window, only tkinter is asked about (the window needs it to open);
+    #        every Python package is offered later, in the window, each as its own choice.
+    restart_argv = [os.path.abspath(__file__), *sys.argv[1:]]
+    if not args.no_install and not getattr(sys, "frozen", False):
+        deps.use_private_env(restart_argv, script_dir)
+    if tk is None and deps.wants_terminal_setup(args.no_install):
+        deps.terminal_setup(restart_argv)
     # tkinter is needed for the window (everything else works without it)
     if tk is None:
         sys.exit("tkinter is not installed. " + deps.tk_advice())
@@ -572,15 +643,19 @@ def main():
             apply_ttk_style(root)
             install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
             try:
-                # a missing package is offered for install (only asks when something is missing). The
-                # required ones were already asked about in the terminal when there is one (ST-4).
+                # packages, stage 2 (ST-4): anything missing is offered in one dialog, one tick box per
+                # package (required and optional each their own choice); only asks when something is missing
                 if not args.no_install:
                     wordnet_build = args.source == "wordnet" and existing == 0 and not args.wordlist
                     declined = set(json.loads(store.get_meta("declined_packages", "[]")))
-                    required = [] if asked_in_terminal else list(deps.REQUIRED)
+
+                    def restart(python):              # moved into a private environment: start again in it
+                        store.close()
+                        root.withdraw()               # (destroyed by the except below if this returns)
+                        deps.restart(python, restart_argv)
                     ensure_packages(
-                        root, required + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
-                        declined=declined,
+                        root, list(deps.REQUIRED) + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
+                        declined=declined, restart=restart, home=script_dir,
                         on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
                 run_with_progress(root, set_up,
                                   initial_stage="Initializing download..." if builds_wiktionary else "Initializing...")
