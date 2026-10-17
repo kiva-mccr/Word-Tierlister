@@ -381,13 +381,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           comparing to anchors, B means Better (letters stay off while a comparison is open; Up does
 #           Better). In the duel views A / S keep their duel meanings; tier letters only act where a
 #           single word is being placed. The pills' key hints show both: "1 / S".
-# [ ] UI-30 Why each package (asked for): wherever installing is offered, the reason is one hover away.
-#           In the window, hovering a package's tick box or "Install selected" shows a tooltip: why the
-#           program needs it and what it does there (wordfreq: ranks every word by how common it is, which
-#           sets the queue order and flags compounds; nltk: the offline WordNet dictionary behind the
-#           definitions pane and the smaller --source wordnet list; tkinter: draws every window). In the
-#           terminal, where nothing can be hovered, the same text is a muted indented subtext line under
-#           each package. One table (deps.WHY) feeds both. Uses the Tooltip from UI-15.
+# [ ] UI-30 A link per package (changed by request: hover notes dropped, since the install dialog already
+#           says what each package is for). Each package's name in the dialog links to its own web page
+#           (wordfreq: https://pypi.org/project/wordfreq/, nltk: https://www.nltk.org/), opened in the
+#           browser with webbrowser.open; styled as a quiet underlined link in the muted colour. In the
+#           terminal (tkinter), the page address is printed after the package's line. One table
+#           (deps.HOMEPAGE) feeds both.
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
