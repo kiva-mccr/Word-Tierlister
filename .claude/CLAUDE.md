@@ -23,7 +23,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-errors, ui_motion, widgets, startup -> browser -> app -> tierlist.
+errors, ui_motion, widgets, startup -> ui_chart, browser -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.

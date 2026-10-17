@@ -22,7 +22,7 @@ run() {  # run <label> <command...>: show the last line of output, abort if the 
 for t in _selftest _selftest_wikt _selftest_queue _selftest_resume _selftest_install; do
     run $t $PY $t.py
 done
-for t in _selftest_ui _selftest_ui2 _selftest_tidy _selftest_fonts _selftest_style _selftest_motion _selftest_startup _selftest_sizing _selftest_errors _selftest_widgets _selftest_widgets2 _selftest_deps _selftest_release; do
+for t in _selftest_ui _selftest_ui2 _selftest_tidy _selftest_fonts _selftest_style _selftest_motion _selftest_startup _selftest_sizing _selftest_errors _selftest_widgets _selftest_widgets2 _selftest_chart _selftest_deps _selftest_release; do
     if [ -z "$DISPLAY" ] && command -v xvfb-run >/dev/null 2>&1; then
         run $t xvfb-run -a -s "-screen 0 1920x1200x24" $TK_PYTHON $t.py
     else

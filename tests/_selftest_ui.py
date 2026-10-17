@@ -198,6 +198,16 @@ assert len(pages) == 1, pages                                       # the Tier /
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 assert app.opt_frame.winfo_ismapped() and app.opt_frame.winfo_rooty() < app.pair_title.winfo_rooty()
 
+# ---- the tier chart (UI-13): in Place new words only, and it follows placements
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+assert app.chart.shown
+before = list(app.chart.counts); key("2"); app.anim.finish_all(); pump(2)
+assert app.chart.counts[1] == before[1] + 1 and sum(app.chart.counts) == sum(before) + 1
+for m in ("refine", "boundary", "conflict"):
+    app.mode_var.set(m); app.on_mode_change(); pump(2)
+    assert not app.chart.shown and app.chart.itemcget("letter0", "state") == "hidden", m
+app.mode_var.set("place"); app.on_mode_change(); pump(2); assert app.chart.shown
+
 # ---- header (UI-10): no system menu bar; menus open from the header and the keyboard; the mode switch
 assert not root.cget("menu")
 assert list(app.header.buttons) == ["File", "Edit", "View", "Settings"]

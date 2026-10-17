@@ -32,6 +32,13 @@ PALETTE = {
 
 TIER_COLORS = ["#FFB3C1", "#FFCBA4", "#FFF0A8", "#BDEBC8", "#A9DDF5", "#D5C6F5"]  # S A B C D F
 TIER_TEXT = PALETTE["text"]     # dark ink reads on every tier colour
+# The six tier hues for the bars of the tier chart (UI-13), checked for colour-blind readers with the dataviz
+# palette validator (light mode, on the cream): lightness band, chroma floor, adjacent colour-blind separation
+# (worst 8.6, deuteranopia; target >= 8) and the normal-vision floor (worst 16.4; >= 15) all PASS. Each hue
+# stays within 8 degrees of its pastel (S pink, A orange, B yellow, C green, D blue, F purple); lightness and
+# chroma vary so neighbours stay apart. Contrast against the cream is 1.9-2.9:1, which the validator allows
+# because every bar carries visible labels (its letter under it, its count on top).
+TIER_BAR = ["#F48FA3", "#C17438", "#CFB00F", "#00D28D", "#28BDF1", "#A07CE7"]
 
 
 def _lum(h):

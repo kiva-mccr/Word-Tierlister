@@ -25,6 +25,7 @@ from sizing import center_geometry, fit_size, place_dialog, ui_factor, usable_ar
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
+from ui_chart import DistributionChart
 from widgets import (AnchorLadder, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
                      refresh_widgets)
 
@@ -73,6 +74,7 @@ class App:
         self.def_words = []
         self.browsers = []
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+        self._chart_ready = False
 
         init_fonts(root)
         apply_ttk_style(root)
@@ -160,10 +162,13 @@ class App:
         """Create every widget below the header once: stats, toast, bottom bar, definition pane, place view
         and pair view."""
         r = self.root
-        self.stats_lbl = ttk.Label(r, anchor="w", padding=(10, 0))
-        self.stats_lbl.pack(side="top", fill="x")
-        self.tier_lbl = ttk.Label(r, anchor="w", padding=(10, 0), foreground=PALETTE["muted"])
-        self.tier_lbl.pack(side="top", fill="x")
+        # the status band: the numbers on the left, the tier chart (UI-13) on the right
+        band = self.status_band = ttk.Frame(r, padding=(10, 2, 10, 0))
+        band.pack(side="top", fill="x")
+        self.stats_lbl = ttk.Label(band, anchor="w")
+        self.stats_lbl.pack(side="left", anchor="n", pady=(4, 0))
+        self.chart = DistributionChart(band, TIERS, font("body"), font("head"), animator=self.anim)
+        self.chart.pack(side="right")
 
 
         # bottom bar first so it keeps the bottom edge
@@ -455,7 +460,7 @@ class App:
         self.refresh()
 
     def _update_stats(self):
-        """Header lines: placed/total, skipped, duels, conflicts, session count, and per-tier counts."""
+        """Status band: placed/total, skipped, duels, conflicts, session count, and the tier chart."""
         s = self.store.stats()
         pct = 100.0 * s["placed"] / s["total"] if s["total"] else 0.0
         rate = ""
@@ -466,7 +471,15 @@ class App:
             text=(f"Placed {s['placed']:,} / {s['total']:,} ({pct:.1f}%)   Skipped {s['skipped']:,}   "
                   f"Duels {s['comparisons']:,}   Conflicts {s['conflicts']:,}   "
                   f"This session +{self.session_count}{rate}"))
-        self.tier_lbl.config(text="    ".join(f"{TIERS[t]}: {s['tiers'].get(t, 0):,}" for t in range(len(TIERS))))
+        # the tier chart belongs to Place new words; the other tabs get their own views later (UI-31)
+        # (it keeps its space in the other tabs, so the page does not move when switching)
+        if self.mode == "place":
+            self.chart.set([s["tiers"].get(t, 0) for t in range(len(TIERS))], animate=self._chart_ready)
+            self._chart_ready = True             # the first fill does not grow from zero
+            self.chart.show(True)
+        elif self.chart.shown:
+            self.chart.show(False)
+            self._chart_ready = False            # back in Place it shows the counts as they are, no growth
 
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,

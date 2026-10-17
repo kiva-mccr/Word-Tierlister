@@ -280,9 +280,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           propagation back on, or Tk flips between the two sizes forever (that hung _selftest_sizing).
 #
 # --- Phase 4: seeing your list take shape ------------------------------------------------------
-# [ ] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with
+# [x] UI-13 DistributionChart. adds DistributionChart.set(counts): six pastel bars (S..F) with
 #           counts, fed by Store.tier_counts(); bars grow with ease-out when a count changes.
 #           (Read the dataviz skill before building.)
+#           Built: src/ui_chart.py, at the right of the status line, in Place new words only (by
+#           request; see UI-31 for the other tabs). Bars <= 24 px, rounded data end on one hairline
+#           baseline, letter under and count on top in text colours, a hover note per bar
+#           (widgets.Tooltip), growth 220 ms, pulse(tier) and bar_top(tier) ready for UI-17. The bar
+#           colours (theme.TIER_BAR) were found by search and PASS the dataviz validator's colour-blind
+#           checks (adjacent CVD 8.6, normal vision 16.4) while staying within 8 degrees of each tier's
+#           hue; the pastels themselves failed every check. Covered by tests/_selftest_chart.py.
 # [-] UI-14 ProgressBar. ON HOLD by your call: you want to think about how to measure progress
 #           first. Nothing is built and the existing "Placed N / total (x%)" text stays as it is
 #           until then. Notes for when we come back: with ~1M words, placed/total sits near 0% for
@@ -339,6 +346,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
 #           first, then hand focus back to the window whenever the drop-down closes, picked or not.
 #           Related: with a header menu open, Left / Right should move to the neighbouring menu.
+# [ ] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
+#           each to be shown and approved first: Refine: how settled each tier's order is (the share of
+#           its words with enough duels), six bars in the same tier colours. Boundary: the five
+#           boundaries S|A .. D|F as a short strip, each with how many checks and swaps it has had.
+#           Conflicts: not a chart, a single number ("3 to look at" / "none - nicely consistent").
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes

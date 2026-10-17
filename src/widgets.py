@@ -1172,10 +1172,88 @@ class WordCard(tk.Canvas):
         self.tag_raise("sub")
 
 
+class Tooltip:
+    """A small hover note (UI-13 / UI-15): appears after DELAY_MS of hovering, follows the pointer, and goes
+    when the pointer leaves or a key or button is pressed.
+
+        Tooltip(widget, lambda e: "1,234 words")    # text_fn(event) -> text, or None for "nothing here"
+
+    text_fn gets the Motion event, so one tooltip can say different things over different parts of a
+    canvas (each bar of the chart). It is a borderless window in the surface colour with a hairline.
+    """
+    DELAY_MS = 350
+
+    def __init__(self, widget, text_fn, font=None):
+        self.widget, self.text_fn, self.font = widget, text_fn, font
+        self.win = self._label = None
+        self._job = None
+        self._last = None
+        widget.bind("<Motion>", self._on_motion, add="+")
+        widget.bind("<Leave>", lambda e: self.hide(), add="+")
+        widget.bind("<ButtonPress>", lambda e: self.hide(), add="+")
+
+    @property
+    def text(self):
+        """What is showing now ("" when hidden)."""
+        return self._label.cget("text") if self.win is not None else ""
+
+    def _on_motion(self, e):
+        self._last = e
+        text = self.text_fn(e)
+        if not text:
+            self.hide()
+            return
+        if self.win is not None:
+            self._label.configure(text=text)
+            self._place(e)
+            return
+        if self._job is None:
+            self._job = self.widget.after(self.DELAY_MS, self._show)
+
+    def _show(self):
+        self._job = None
+        e = self._last
+        text = self.text_fn(e) if e is not None else None
+        if not text:
+            return
+        win = self.win = tk.Toplevel(self.widget, bg=PALETTE["border"])
+        win.overrideredirect(True)
+        try:
+            win.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        self._label = tk.Label(win, text=text, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
+                               padx=8, pady=4, justify="left")
+        self._label.pack(padx=1, pady=1)
+        self._place(e)
+
+    def show_at(self, e):
+        """Show now for this event (tests, and keyboard focus later)."""
+        self._last = e
+        self._show()
+
+    def _place(self, e):
+        x = self.widget.winfo_rootx() + e.x + 14
+        y = self.widget.winfo_rooty() + e.y + 18
+        self.win.geometry(f"+{x}+{y}")
+
+    def hide(self):
+        if self._job is not None:
+            self.widget.after_cancel(self._job)
+            self._job = None
+        if self.win is not None:
+            try:
+                self.win.destroy()
+            except tk.TclError:
+                pass
+            self.win = self._label = None
+
+
 def refresh_widgets(widget):
-    """Re-measure every RoundButton, WordCard and AnchorLadder under `widget` (after fonts were resized)."""
+    """Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under
+    `widget` after shared fonts were resized."""
     for child in widget.winfo_children():
-        if isinstance(child, (RoundButton, WordCard, AnchorLadder, TabBar)):
-            child.refresh()
+        if isinstance(child, tk.Canvas) and callable(getattr(child, "refresh", None)):
+            child.refresh()                  # our canvas widgets (here and in ui_chart.py) all have refresh()
         else:
             refresh_widgets(child)
