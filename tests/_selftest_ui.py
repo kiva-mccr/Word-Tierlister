@@ -198,6 +198,24 @@ assert len(pages) == 1, pages                                       # the Tier /
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 assert app.opt_frame.winfo_ismapped() and app.opt_frame.winfo_rooty() < app.pair_title.winfo_rooty()
 
+# ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
+import app as A
+line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})
+assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   2,500 left   \u00b7   3 skipped", line
+assert "conflict" not in line                                       # only when there are some
+assert A.format_stats({"placed": 1, "total": 2, "skipped": 0, "conflicts": 1}).endswith("1 conflict to look at")
+assert "/hr" not in app.stats_lbl.cget("text") and "today" not in app.stats_lbl.cget("text")
+n0 = int(app.today_lbl.cget("text").split()[0].lstrip("+").replace(",", ""))
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+key("4"); app.anim.finish_all(); pump(2)
+assert app.today_lbl.cget("text") == f"+{n0 + 1:,} today" and str(app.today_lbl.cget("foreground")) == T.PALETTE["muted"]
+key("BackSpace"); pump(2); assert app.today_lbl.cget("text") == f"+{n0:,} today"   # undo takes it back
+app.session_count, app.session_start = 0, time.time() - 1800
+assert app._pace_text() == "Words and duels done today"            # too early to talk about pace
+app.session_count = 60
+assert app._pace_text().endswith("about 120 an hour") and app.today_tip.text_fn(None) == app._pace_text()
+assert abs(A.local_midnight() - time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))) < 1
+
 # ---- the tier chart (UI-13): in Place new words only, and it follows placements
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
 assert app.chart.shown

@@ -26,8 +26,26 @@ from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import Animator
 from ui_style import apply_ttk_style
 from ui_chart import DistributionChart
-from widgets import (AnchorLadder, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast, WordCard,
-                     refresh_widgets)
+from widgets import (AnchorLadder, DefinitionDrawer, DuelCards, HeaderMenus, RoundButton, TabBar, TierRow, Toast,
+                     Tooltip, WordCard, refresh_widgets)
+
+
+def format_stats(stats):
+    """The status line (UI-15): one quiet line. Placed / total stays while the progress bar is on hold
+    (UI-14); conflicts only appear when there are some."""
+    pct = 100.0 * stats["placed"] / stats["total"] if stats["total"] else 0.0
+    parts = [f"Placed {stats['placed']:,} of {stats['total']:,} ({pct:.1f}%)",
+             f"{stats['total'] - stats['placed']:,} left",
+             f"{stats['skipped']:,} skipped"]
+    if stats["conflicts"]:
+        parts.append(f"{stats['conflicts']:,} conflict{'s' if stats['conflicts'] != 1 else ''} to look at")
+    return "   \u00b7   ".join(parts)
+
+
+def local_midnight(now=None):
+    """The start of today, local time, as a timestamp."""
+    t = time.localtime(now if now is not None else time.time())
+    return time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
 
 
 class App:
@@ -167,6 +185,10 @@ class App:
         band.pack(side="top", fill="x")
         self.stats_lbl = ttk.Label(band, anchor="w")
         self.stats_lbl.pack(side="left", anchor="n", pady=(4, 0))
+        # "+N today", small and muted; the pace only in a hover note (UI-15: no pressure on screen)
+        self.today_lbl = ttk.Label(band, anchor="w", foreground=PALETTE["muted"])
+        self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
+        self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"))
         self.chart = DistributionChart(band, TIERS, font("body"), font("head"), animator=self.anim)
         self.chart.pack(side="right")
 
@@ -460,17 +482,10 @@ class App:
         self.refresh()
 
     def _update_stats(self):
-        """Status band: placed/total, skipped, duels, conflicts, session count, and the tier chart."""
+        """Status band: one quiet line (format_stats), "+N today", and the tier chart."""
         s = self.store.stats()
-        pct = 100.0 * s["placed"] / s["total"] if s["total"] else 0.0
-        rate = ""
-        hours = (time.time() - self.session_start) / 3600.0
-        if self.session_count >= 5 and hours > 0:
-            rate = f" ({self.session_count / hours:,.0f}/hr)"
-        self.stats_lbl.config(
-            text=(f"Placed {s['placed']:,} / {s['total']:,} ({pct:.1f}%)   Skipped {s['skipped']:,}   "
-                  f"Duels {s['comparisons']:,}   Conflicts {s['conflicts']:,}   "
-                  f"This session +{self.session_count}{rate}"))
+        self.stats_lbl.config(text=format_stats(s))
+        self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
         # the tier chart belongs to Place new words; the other tabs get their own views later (UI-31)
         # (it keeps its space in the other tabs, so the page does not move when switching)
         if self.mode == "place":
@@ -480,6 +495,14 @@ class App:
         elif self.chart.shown:
             self.chart.show(False)
             self._chart_ready = False            # back in Place it shows the counts as they are, no growth
+
+    def _pace_text(self):
+        """The hover note on "+N today": this session's pace, once there is enough to say anything."""
+        hours = (time.time() - self.session_start) / 3600.0
+        if self.session_count < 5 or hours <= 0:
+            return "Words and duels done today"
+        return (f"Words and duels done today. This session: {self.session_count:,}, "
+                f"about {self.session_count / hours:,.0f} an hour")
 
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,

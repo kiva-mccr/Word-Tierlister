@@ -297,11 +297,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ages. Candidates: (a) plain placed/total; (b) "common-word coverage", the share of the
 #           top ~20k frequency ranks already placed or skipped; (c) the tier chart (UI-13) alone,
 #           with no bar at all. Whatever we pick must stay calm: no goals, no streaks.
-# [ ] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
+# [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
 #           only in a tooltip when you hover over "+N today" (adds Tooltip(widget, text_fn)).
 #           While UI-14 is on hold, the placed/total figure stays.
+#           Built: app.format_stats(): "Placed 6,506 of 9,006 (72.2%) · 2,500 left · 0 skipped" (duels
+#           dropped from the line; conflicts only when there are some). "+N today" counts the actions
+#           saved since local midnight (Store.actions_since over the undo history, so undo takes one
+#           back); the pace ("about 120 an hour" this session) shows only in a hover note.
+#           widgets.Tooltip is the shared hover note (also used by the chart).
 #
 # --- Phase 5: satisfying (but tasteful) motion -------------------------------------------------
 # [ ] UI-16 Word transition. adds App.animate_word_change(direction): the old word nudges ~12 px

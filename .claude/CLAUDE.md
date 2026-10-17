@@ -67,7 +67,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-12, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-13 (chart), UI-15, UI-16..21, UI-23..27, then
+Done: UI-0..UI-13, UI-15, ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-16..21, UI-23..27, then
 ST-5, T-1..T-3, T-6..T-9, W-1 (the very last). Also UI-28..30 (anchor dialog, tier-letter keys, why-each-package hovers). UI-14 stays on hold.
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
@@ -77,3 +77,5 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   open) the centre area can still clip.
 - Dialog buttons are still square until UI-24 (the bottom bar keeps its square look on purpose).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
+- "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
+  undercounts.

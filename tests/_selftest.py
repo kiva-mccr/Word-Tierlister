@@ -99,6 +99,15 @@ assert s2.get_anchors()[2] == "table"
 assert s2.undo() is not None  # undo history persists across restarts
 s2.close()
 
+# ---- "+N today" counts saved actions since a time; undone ones drop out (UI-15)
+import time as _t
+st = T.Store(os.path.join(tempfile.mkdtemp(), "today.db")); st.insert_words(["a1", "a2", "a3"])
+t0 = _t.time() - 1
+assert st.actions_since(t0) == 0
+st.place("a1", 0); st.place("a2", 3); assert st.actions_since(t0) == 2 and st.actions_since(_t.time() + 60) == 0
+st.undo(); assert st.actions_since(t0) == 1
+st.close()
+
 # ---- definition text split into senses for the drawer (UI-12)
 from definitions import parse_definition
 senses = parse_definition('1. (noun) a round fruit\n      e.g. "an apple a day"\n2. (verb) to do a thing\n'

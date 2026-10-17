@@ -241,6 +241,11 @@ class Store:
             "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
         }
 
+    def actions_since(self, ts):
+        """How many actions (placements, skips, duels, edits) were saved since time `ts`; undone ones do not
+        count (undo removes them). For the quiet "+N today" in the status line (UI-15)."""
+        return self.db.execute("SELECT COUNT(*) FROM history WHERE ts >= ?", (ts,)).fetchone()[0]
+
     # ---- anchors ------------------------------------------------------------
     def get_anchors(self):
         """The six anchor words as a list indexed by tier; an entry is None until it is set."""
