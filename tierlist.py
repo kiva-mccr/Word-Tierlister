@@ -301,7 +301,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] UI-17 Drop-to-bar. adds fly_chip(word, tier): a small chip travels from the card to that
 #           tier's bar (~250 ms) and the bar ticks up with a soft pulse. The main "that felt
 #           good" moment.
-#           Idea (pending your OK): build this as the END of the placement toast's swipe (UI-11) instead
+#           Approved plan: build this as the END of the placement toast's swipe (UI-11) instead
 #           of a second chip: the toast already rises out of the word, so once the chart (UI-13) is on
 #           screen above the card it can swipe up and toward its tier's bar and land in it, the bar
 #           pulsing as it arrives. One motion instead of two, and it says where the word went.
@@ -338,6 +338,25 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
 #           first, then hand focus back to the window whenever the drop-down closes, picked or not.
 #           Related: with a header menu open, Left / Right should move to the neighbouring menu.
+# [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
+#           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
+#           intro instead of the three-line block, inline "not in the word list" / "used twice" notes
+#           under the field instead of separate error boxes, RoundButton Save / Cancel. (UI-24 restyles
+#           the other dialogs; this one gets its own pass because it is the first thing a new user sees.)
+# [ ] UI-29 Tier letters as hotkeys (asked for): in Place new words and in Browse, pressing a tier's
+#           letter (S, A, B, C, D, F) puts the word there, as well as the 1-6 keys and the buttons. Two
+#           letters already have a job and need a new home first: D shows definitions (move it to a key
+#           that is not a tier letter, e.g. Tab or "?", and relabel the Definition button) and, while
+#           comparing to anchors, B means Better (letters stay off while a comparison is open; Up does
+#           Better). In the duel views A / S keep their duel meanings; tier letters only act where a
+#           single word is being placed. The pills' key hints show both: "1 / S".
+# [ ] UI-30 Why each package (asked for): wherever installing is offered, the reason is one hover away.
+#           In the window, hovering a package's tick box or "Install selected" shows a tooltip: why the
+#           program needs it and what it does there (wordfreq: ranks every word by how common it is, which
+#           sets the queue order and flags compounds; nltk: the offline WordNet dictionary behind the
+#           definitions pane and the smaller --source wordnet list; tkinter: draws every window). In the
+#           terminal, where nothing can be hovered, the same text is a muted indented subtext line under
+#           each package. One table (deps.WHY) feeds both. Uses the Tooltip from UI-15.
 # [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
@@ -412,9 +431,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - Claude assets in .claude/ (CLAUDE.md, CHECKLIST.md). Pushed back: CLAUDE.md must stay where
 #             Claude Code loads it automatically, the repo root or .claude/, so .claude/ is the folder,
 #             not a custom "claude/" one.
-#           - Moving the program into src/ moves its "next to the script" save location: saves.py must
-#             keep finding a save in the old place (one folder up) before anything moves, or someone
-#             updating would appear to lose their list. Do this together with T-7 (same split).
+#           - Decided: tierlist.py (the thing you run) and the save files / tierlist.txt export stay at the
+#             TOP of the folder, outside every sub-folder, both in the repo / downloaded source and in a
+#             folder the program unpacks (T-7). Only the modules move into src/; tierlist.py adds src/ to
+#             the import path. So "next to the script" stays where it was and no save appears to be lost.
+#           - Approved (both pushbacks accepted); built ahead of T-6..T-9 so later steps use the layout.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
