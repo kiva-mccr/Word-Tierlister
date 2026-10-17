@@ -42,6 +42,10 @@ Run through `CHECKLIST.md` and `python check_release.py --tests`; build the zip 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
 - Finish a step with: tests passing, roadmap ticked, README updated, a short summary.
+- Last thing on every prompt, after the work itself: update this CLAUDE.md if anything important
+  changed (Status, Known gaps, new files, commands, conventions or user preferences), then commit and
+  push it with the rest. Keep it short; skip it when nothing worth recording changed.
+- The repo on GitHub is the source of truth for this file; a copy inside an uploaded zip may be older.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
   "+N today" with the "/hr" rate only on hover, progress bar (UI-14) on hold, packaging (T-1..T-5) tentative.
 
