@@ -28,8 +28,9 @@ def pump(n=6, d=0.05):
         time.sleep(d)
 
 
-def key(ks):
-    app.on_key(types.SimpleNamespace(keysym=ks))
+def key(ks):                                       # a press and its release (a tap, not a held key)
+    app.on_key(types.SimpleNamespace(keysym=ks, time=None))
+    app.on_key_release(types.SimpleNamespace(keysym=ks, time=None))
 
 
 pump()
@@ -275,6 +276,34 @@ root.event_generate("<Control-0>"); pump(3)
 assert app.zoom == 1.0 and abs(_font("body").cget("size") - body0) <= 1
 app.set_zoom(1.1); zoom_saved = s.get_meta("zoom"); app.set_zoom(1.0)
 assert zoom_saved == "1.1"
+
+# ---- a held key repeats like a keyboard: 500 ms before the first repeat, then at most every 250 ms;
+#      faster auto-repeats are dropped (holding a tier key used to queue placements that went on after release)
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+real_now = time.monotonic
+clock = [1000.0]
+time.monotonic = lambda: clock[0]
+placed0 = s.stats()["placed"]
+ev = lambda t=None: types.SimpleNamespace(keysym="2", time=t)
+app.on_key(ev(1))                                                     # first press: places at once
+assert s.stats()["placed"] == placed0 + 1
+for i in range(14):                                                   # Windows-style repeats, every 33 ms
+    clock[0] += 0.033; app.on_key(ev())
+assert s.stats()["placed"] == placed0 + 1                             # (14 x 33 ms < 500 ms) none of them place
+clock[0] += 0.05; app.on_key(ev())                                    # past the 500 ms delay: one repeat
+assert s.stats()["placed"] == placed0 + 2
+for i in range(7):
+    clock[0] += 0.033; app.on_key(ev())                               # within 250 ms: dropped
+assert s.stats()["placed"] == placed0 + 2
+clock[0] += 0.03; app.on_key(ev()); assert s.stats()["placed"] == placed0 + 3   # 250 ms later: the next one
+app.on_key_release(types.SimpleNamespace(keysym="2", time=9))
+clock[0] += 0.01; app.on_key(ev(10)); assert s.stats()["placed"] == placed0 + 4  # released and pressed again: at once
+# X11-style auto-repeat: a release and a press with the same timestamp (still held)
+app.on_key_release(types.SimpleNamespace(keysym="2", time=20)); clock[0] += 0.033; app.on_key(ev(20))
+assert s.stats()["placed"] == placed0 + 4                             # recognised as held: dropped
+app.on_key_release(types.SimpleNamespace(keysym="2", time=30))
+time.monotonic = real_now
+app.anim.finish_all(); root.after(900, root.quit); root.mainloop(); app.anim.finish_all(); pump(2)
 
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A

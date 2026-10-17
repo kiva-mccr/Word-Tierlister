@@ -201,8 +201,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           before this have no such data: they are filled from WordNet (parts of speech; nltk) where
 #           possible and from the kept Wiktionary file if there is one, else the page offers a one-time
 #           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
-#           Browse: the same kinds appear in its drop-downs (Show: "Nouns", "Verbs", "Obscene words"...,
-#           and a "Kind" sort), see the question in the notes.
+#           Browse (decided): the kinds appear in its Show drop-down only ("Nouns", "Verbs", "Obscene
+#           words"...), so Browse lists just those words; no extra sort.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -508,6 +508,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           U, Up / B...), the bottom-right hint and the menus' shortcut column. Builds on UI-18's single
 #           key map (App._key_target), which becomes a table the dialog edits. Reserved keys that cannot be
 #           rebound: Escape (cancel / close) and the Alt+letter menu keys.
+# [x] UI-49 Bug (reported): holding a tier key kept placing words, and lagged on after the key was released
+#           (auto-repeat sends ~30 presses a second, faster than placing, so they queued). Fixed: a held key
+#           repeats like a keyboard's own defaults: nothing for 500 ms after the first press, then at most
+#           one action per 250 ms; faster repeats are dropped, so nothing queues. Held keys are recognised on
+#           Windows (presses without releases) and X11 (release + press with the same timestamp). Applies to
+#           every action key. Measured with a real held key (xdotool): 1.5 s held placed 23 words before, 5
+#           now, and none after release.
 # [ ] UI-28 Anchor words dialog clean-up (asked for): tidy and prettify the Anchor words pop-up: the tier
 #           letters as the same pastel pills as the tier row, roomy aligned entry fields, a short friendly
 #           intro instead of the three-line block, inline "not in the word list" / "used twice" notes

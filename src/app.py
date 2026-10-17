@@ -109,6 +109,8 @@ class App:
         self._build_header()
         self._build_ui()
         root.bind("<Key>", self.on_key)
+        root.bind("<KeyRelease>", self.on_key_release)
+        self._held = {}                            # keysym -> held-key state (_repeat_allowed)
         for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
             root.bind(seq, lambda e: self.set_zoom(self.zoom + self.ZOOM_STEP))
         for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
@@ -935,10 +937,37 @@ class App:
         self.refresh()
 
     # ---- keys --------------------------------------------------------------------------------------------------------------
+    # A held key repeats like a keyboard does (the usual defaults): nothing for REPEAT_DELAY_MS after the first
+    # press, then at most one action per REPEAT_INTERVAL_MS. Faster auto-repeats are dropped, so holding a
+    # tier key can no longer queue up placements that carry on after it is released.
+    REPEAT_DELAY_MS, REPEAT_INTERVAL_MS = 500, 250
+
+    def _repeat_allowed(self, e):
+        """False for an auto-repeat of a held key that comes too soon. A held key is recognised on Windows
+        (presses with no release between) and on X11 (a release and press with the same timestamp)."""
+        ks, now = e.keysym, time.monotonic() * 1000
+        h = self._held.get(ks)
+        held = h is not None and (h["down"] or (h["release"] is not None and h["release"] == getattr(e, "time", None)))
+        if not held:
+            self._held[ks] = {"down": True, "release": None, "first": now, "last": now}
+            return True
+        h["down"] = True
+        if now - h["first"] < self.REPEAT_DELAY_MS or now - h["last"] < self.REPEAT_INTERVAL_MS:
+            return False
+        h["last"] = now
+        return True
+
+    def on_key_release(self, e):
+        h = self._held.get(e.keysym)
+        if h is not None:
+            h["down"], h["release"] = False, getattr(e, "time", None)
+
     def on_key(self, e):
         """Every key press. D and Backspace work everywhere; the rest depends on mode and comparison state
         (see _hint for the full list of keys).
         """
+        if not self._repeat_allowed(e):
+            return
         # a key press never waits for an animation: running ones speed out of the way (the new one starts on
         # top), except the duel result, which the next pair waits for
         self.anim.hurry_all(HURRY_MS, finish=(self.duel.anim_key,))
