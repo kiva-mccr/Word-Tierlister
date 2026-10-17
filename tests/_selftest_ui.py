@@ -141,6 +141,19 @@ bw.win.geometry(f"{bw.base_w}x{bw.base_h}+20+20"); pump(10, 0.05)
 assert bw.fsize == f0 and s.get_meta("browse_zoom") == "0"
 assert bw.f_body.cget("size") == f0 and bw.def_text.cget("font")
 
+# restyle (UI-23): soft tier rows, the full colour on the selected row, rounded buttons only
+assert T.tint("#FF0000", 0) == "#FF0000" and T.tint("#FF0000", 1) == "#FFFFFF" and T.tint("#000000", 0.5) == "#808080"
+assert str(bw.tree.tag_configure("t0", "background")).upper() == T.TIER_ROW[0] != T.TIER_COLORS[0]
+first = bw.tree.get_children()[0]; tier0 = int(bw.tree.item(first, "tags")[0][1:])
+bw.tree.selection_set(first); pump(2)
+assert T.TIER_COLORS[tier0] in str(bw.style.map(bw.tstyle, "background"))
+def all_kids(w):
+    for c in w.winfo_children():
+        yield c; yield from all_kids(c)
+assert not [c for c in all_kids(bw.win) if c.winfo_class() in ("TButton", "TLabelframe")]
+assert bw.top_bar.cget("bg") == T.PALETTE["surface"]
+bw.tree.selection_remove(first)
+
 # filters, search, sort
 bw.filter_var.set("Unplaced"); bw.reload(); pump(2)
 assert bw.total == s.count_words() - placed

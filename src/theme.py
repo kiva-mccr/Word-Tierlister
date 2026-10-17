@@ -40,6 +40,17 @@ TIER_TEXT = PALETTE["text"]     # dark ink reads on every tier colour
 TIER_BAR = TIER_COLORS
 
 
+def tint(h, amount):
+    """`h` (#RRGGBB) mixed towards white by `amount` (0 = unchanged, 1 = white)."""
+    h = h.lstrip("#")
+    return "#" + "".join(f"{round(int(h[i:i + 2], 16) + (255 - int(h[i:i + 2], 16)) * amount):02X}" for i in (0, 2, 4))
+
+
+# Browse rows (UI-23): a lighter wash of each tier colour, so a long list reads soft; the selected row
+# shows the full tier colour.
+TIER_ROW = [tint(c, 0.55) for c in TIER_COLORS]
+
+
 def _lum(h):
     """Relative luminance of a #RRGGBB colour (WCAG definition)."""
     h = h.lstrip("#")

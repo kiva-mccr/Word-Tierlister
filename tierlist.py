@@ -384,13 +384,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 #           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
 #           holds the Refine / Boundary / Conflicts messages, and Place shows "Every word is placed".
-# [ ] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
+# [?] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
 #           words under the card, so the eye can pre-read and the flow stays quick.
+#           Shelved (asked for): on the "In consideration" list under Decisions; not built for now.
 #
 # --- Phase 6: polish ---------------------------------------------------------------------------
 # (UI-22, the dark theme toggle, was dropped from the plan by request; IDs are not renumbered.)
-# [ ] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
+# [x] UI-23 Browse window restyle. The Browser uses the shared theme and fonts, pastel tier rows,
 #           and RoundButton "Move to" chips. Keeps its scale-with-window behaviour.
+#           Built: the toolbar on a white band with a hairline (like the main header); rows in a soft wash
+#           of their tier colour (theme.TIER_ROW, theme.tint), the selected row in the full colour with its
+#           outline; every button a RoundButton (A- / A+ and Refresh quiet flat ones); the definition a
+#           white pane under a muted heading instead of a grooved frame.
 # [ ] UI-24 Dialog restyle. adds styled_dialog(title): a shared frame so the Anchors, Queue and
 #           Merge dialogs match the rest. The bottom bar (Undo, Browse / edit, Definition, key
 #           hints) keeps its current look by request; only dialogs change here.
@@ -657,7 +662,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
 #             added later: theme.py is built so a second palette with the same keys drops in); the
 #             session count stays as a muted "+N today", with the pace only in a hover note.
-#   Open:     1. Next-up peek (UI-21) [try it; easy to remove]
+#   In consideration (shelved, not planned; ask before building):
+#             - Next-up peek (UI-21).
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
 #             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
 #             stay notes. After the UI steps.
@@ -682,7 +688,7 @@ from definitions import Definitions
 from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, save_progress, write_export)
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_TEXT  # noqa: F401
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
 from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
                         prepare_queue)
 

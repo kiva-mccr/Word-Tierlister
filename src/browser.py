@@ -18,7 +18,7 @@ from constants import TIERS
 from fonts import family
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_TEXT
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
 from widgets import ChoiceButton, RoundButton, refresh_widgets
 
 
@@ -61,33 +61,35 @@ class Browser:
         self.style.configure(self.tstyle, font=self.f_body)
         self.style.configure(self.tstyle + ".Heading", font=self.f_bold)
         self.style.configure(f"{self.sid}.TLabel", font=self.f_body)
-        self.style.configure(f"{self.sid}.TButton", font=self.f_body)
-        self.style.configure(f"{self.sid}.TLabelframe.Label", font=self.f_bold)
+        self.style.configure(f"{self.sid}.Bar.TLabel", font=self.f_body, background=PALETTE["surface"])
+        self.style.configure(f"{self.sid}.Muted.TLabel", font=self.f_body, foreground=PALETTE["muted"])
+        anim, surf = self.app.anim, PALETTE["surface"]
 
-        top = self.top_bar = ttk.Frame(self.win, padding=8)
+        # the toolbar sits on a white band with a hairline under it, like the main window's header (UI-23)
+        top = self.top_bar = tk.Frame(self.win, bg=surf, padx=10, pady=8)
         top.pack(fill="x")
-        ttk.Label(top, text="Search:", style=f"{self.sid}.TLabel").pack(side="left")
+        tk.Frame(self.win, height=1, bg=PALETTE["border"]).pack(fill="x")
+        ttk.Label(top, text="Search:", style=f"{self.sid}.Bar.TLabel").pack(side="left")
         self.search_var = tk.StringVar()
         entry = ttk.Entry(top, textvariable=self.search_var, width=18, font=self.f_body)
         entry.pack(side="left", padx=6)
         self.search_var.trace_add("write", lambda *_: self._debounce())
-        ttk.Label(top, text="Show:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
+        ttk.Label(top, text="Show:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.filter_var = tk.StringVar(value="All placed")
         ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
-                     on_change=self.reload, font=self.f_body).pack(side="left", padx=6)
-        ttk.Label(top, text="Sort:", style=f"{self.sid}.TLabel").pack(side="left", padx=(10, 0))
+                     on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
+        ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.sort_var = tk.StringVar(value="Default")
-        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=self.reload,
-                     font=self.f_body).pack(side="left", padx=6)
-        ttk.Button(top, text="A+", width=3, style=f"{self.sid}.TButton",
-                   command=lambda: self.zoom_by(1)).pack(side="right")
-        ttk.Button(top, text="A-", width=3, style=f"{self.sid}.TButton",
-                   command=lambda: self.zoom_by(-1)).pack(side="right", padx=(0, 4))
-        self.count_lbl = ttk.Label(top, text="", style=f"{self.sid}.TLabel")
+        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=self.reload, font=self.f_body,
+                     animator=anim, canvas_bg=surf).pack(side="left", padx=6)
+        for text, delta in (("A+", 1), ("A-", -1)):
+            RoundButton(top, text, lambda d=delta: self.zoom_by(d), font=self.f_body, padx=8, pady=4, radius=10,
+                        flat=True, animator=anim, canvas_bg=surf).pack(side="right", padx=(2, 0))
+        self.count_lbl = ttk.Label(top, text="", style=f"{self.sid}.Bar.TLabel", foreground=PALETTE["muted"])
         self.count_lbl.pack(side="right", padx=10)
 
         mid = ttk.Frame(self.win)
-        mid.pack(fill="both", expand=True, padx=8)
+        mid.pack(fill="both", expand=True, padx=10, pady=(10, 0))
         self.vsb = ttk.Scrollbar(mid, orient="vertical")
         self.tree = ttk.Treeview(mid, columns=("tier", "word", "rating", "games", "freq"),
                                  show="headings", selectmode="browse", style=self.tstyle,
@@ -99,7 +101,7 @@ class Browser:
             self.tree.heading(col, text=text)
             self.tree.column(col, anchor=anchor)
         for t in range(len(TIERS)):
-            self.tree.tag_configure(f"t{t}", background=TIER_COLORS[t], foreground=TIER_TEXT)
+            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
         self.tree.pack(side="left", fill="both", expand=True)
         self.vsb.pack(side="right", fill="y")
         # Selection is shown as an outline round the row (the row keeps its tier colour). Treeview
@@ -109,24 +111,25 @@ class Browser:
         self.tree.bind("<Configure>", lambda e: self._draw_outline(), add="+")
         self.tree.bind("<Double-1>", lambda e: self.refine())
 
-        btns = self.btn_bar = ttk.Frame(self.win, padding=8)
+        btns = self.btn_bar = ttk.Frame(self.win, padding=(10, 8))
         btns.pack(fill="x")
         ttk.Label(btns, text="Move to:", style=f"{self.sid}.TLabel").pack(side="left")
         for t in range(len(TIERS)):
             RoundButton(btns, TIERS[t], lambda t=t: self.move(t), bg=TIER_COLORS[t], font=self.f_bold,
-                        padx=10, pady=3, radius=10, animator=self.app.anim).pack(side="left", padx=2)
-        ttk.Button(btns, text="Unplace (back to queue)", style=f"{self.sid}.TButton",
-                   command=self.unplace).pack(side="left", padx=10)
-        ttk.Button(btns, text="Refine this word", style=f"{self.sid}.TButton",
-                   command=self.refine).pack(side="left")
-        ttk.Button(btns, text="Refresh", style=f"{self.sid}.TButton",
-                   command=lambda: self.reload(keep_view=True)).pack(side="right")
+                        padx=10, pady=3, radius=10, animator=anim).pack(side="left", padx=2)
+        for text, command, padx in (("Unplace (back to queue)", self.unplace, (12, 4)),
+                                    ("Refine this word", self.refine, (4, 0))):
+            RoundButton(btns, text, command, bg=surf, font=self.f_body, padx=12, pady=3, radius=10,
+                        animator=anim).pack(side="left", padx=padx)
+        RoundButton(btns, "Refresh", lambda: self.reload(keep_view=True), font=self.f_body, padx=12, pady=3,
+                    radius=10, flat=True, animator=anim).pack(side="right")
 
-        dfr = ttk.LabelFrame(self.win, text="Definition", style=f"{self.sid}.TLabelframe")
-        dfr.pack(fill="x", padx=8, pady=(0, 8))
-        self.def_text = tk.Text(dfr, height=7, wrap="word", state="disabled", font=self.f_body)
+        # the definition: a muted heading over a white pane with a hairline (no grooved frame)
+        ttk.Label(self.win, text="Definition", style=f"{self.sid}.Muted.TLabel").pack(anchor="w", padx=12)
+        self.def_text = tk.Text(self.win, height=7, wrap="word", state="disabled", font=self.f_body,
+                                padx=10, pady=8)
         self.def_text.tag_configure("head", font=self.f_bold)
-        self.def_text.pack(fill="x", padx=4, pady=4)
+        self.def_text.pack(fill="x", padx=10, pady=(2, 10))
 
         # Ctrl + / Ctrl - / Ctrl 0 and Ctrl+mouse wheel zoom the text.
         for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1), ("<Control-KP_Add>", 1),
