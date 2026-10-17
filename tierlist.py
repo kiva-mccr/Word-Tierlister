@@ -419,11 +419,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           after resizing pauses (~0.1 s per step). Grow only: the minimum size stays the one measured at
 #           the normal size, so the window always shrinks back. A zoom makes the window's current size the
 #           new "normal". Switching tabs while grown does not flash back to the normal size.
-# [ ] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
+# [x] UI-27 Keyboard fix (asked for; only if still needed): pressing Down must never open the drop-down
 #           of the current tab (the Tier / Boundary choice in Refine and Boundary) instead of doing its
 #           job (Tie). A click leaves keyboard focus in that drop-down, so the next Down opens it. Check
 #           first, then hand focus back to the window whenever the drop-down closes, picked or not.
 #           Related: with a header menu open, Left / Right should move to the neighbouring menu.
+#           Checked (openbox + xdotool): Down no longer opens a drop-down (ChoiceButton has no keys of its
+#           own since UI-43), but closing any drop-down with Escape or by clicking its button again left
+#           the program with no keyboard focus at all, so Down (and every key) did nothing until a click.
+#           Fixed: DropMenu gives the focus back to where it was when it opened, only if it still had it
+#           (switching to another program still closes it and leaves that program in front). Left / Right
+#           in an open header menu open the neighbouring one, wrapping round.
 # [ ] UI-31 A view of its own for each tab (asked for: the tier chart is only for Place new words). Ideas,
 #           each to be shown and approved first: Refine: how settled each tier's order is (the share of
 #           its words with enough duels), six bars in the same tier colours. Boundary: the five

@@ -218,6 +218,17 @@ seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      #
 assert hm.open_name is None and not hm.drops["File"].is_open()
 hm.open_menu("Edit"); update(); hm.drops["Edit"].invoke(0); update()
 assert ran[-1] == "undo" and hm.open_name is None
+# UI-27: Left / Right move to the neighbouring menu (wrapping); closing hands the keyboard focus back
+hm.open_menu("File"); update()
+hm.drops["File"].win.event_generate("<Right>"); update(); assert hm.open_name == "Edit"
+hm.drops["Edit"].win.event_generate("<Right>"); update(); assert hm.open_name == "File"     # wraps round
+hm.drops["File"].win.event_generate("<Left>"); update(); assert hm.open_name == "Edit"
+hm.close(); update()
+ent = tk.Entry(root); ent.pack(); ent.focus_force(); update()
+hm.open_menu("File"); update(); assert str(root.tk.call("focus")).startswith(str(hm.drops["File"].win))
+hm.drops["File"].win.event_generate("<Escape>"); update()
+assert not hm.drops["File"].is_open() and str(root.tk.call("focus")) == str(ent)       # keys work again
+ent.destroy()
 
 # ---- ChoiceButton (UI-43): a drop-down choice made of a button and a DropMenu (no input grab)
 cwin = tk.Toplevel(root)

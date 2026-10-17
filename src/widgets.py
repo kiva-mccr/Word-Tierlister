@@ -631,6 +631,8 @@ class DropMenu:
         self.root, self.items, self.font = root, list(items), font
         self.win = None
         self._rows, self._active, self._on_close = [], None, None
+        self._prev_focus = ""
+        self.on_side = None              # called with -1 / +1 for Left / Right (HeaderMenus: the next menu)
 
     @staticmethod
     def labels(items):
@@ -644,6 +646,7 @@ class DropMenu:
         """Show the menu with its top-left corner at screen position (x, y)."""
         self.close()
         self._on_close = on_close
+        self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
         win = self.win = tk.Toplevel(self.root, bg=PALETTE["border"])
         win.withdraw()
         win.overrideredirect(True)
@@ -685,6 +688,8 @@ class DropMenu:
         win.bind("<Up>", lambda e: self._step(-1))
         win.bind("<Down>", lambda e: self._step(1))
         win.bind("<Return>", lambda e: self._active is not None and self.invoke(self._active))
+        win.bind("<Left>", lambda e: self.on_side and self.on_side(-1))
+        win.bind("<Right>", lambda e: self.on_side and self.on_side(1))
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -731,11 +736,17 @@ class DropMenu:
             it[2]()
 
     def close(self):
+        """Close it. If it had the keyboard focus, the focus goes back to where it was before it opened, so
+        keys keep working (closing with Escape used to leave no focus at all); not when the program has
+        lost the focus to another one."""
         DropMenu.open_menus.discard(self)
         if self.win is not None:
             try:
+                had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
                 self.win.destroy()
-            except tk.TclError:
+                if had_focus:                # forced: the window manager does not hand focus back from a
+                    self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
+            except (tk.TclError, KeyError):
                 pass
             self.win = None
             self._rows, self._active = [], None
@@ -793,8 +804,8 @@ class HeaderMenus(tk.Frame):
         HeaderMenus(parent, [("File", items), ("Edit", items), ...], font("body"), animator=app.anim)
 
     Clicking a button opens its menu under it (clicking again closes it); while one menu is open,
-    hovering another button switches to that menu, like a desktop menu bar. open_menu(name) opens one
-    from the keyboard (Alt+F and friends, F10).
+    hovering another button switches to that menu, like a desktop menu bar, and so do Left / Right.
+    open_menu(name) opens one from the keyboard (Alt+F and friends, F10).
     """
 
     def __init__(self, parent, menus, font=None, animator=None, bg=None):
@@ -809,6 +820,7 @@ class HeaderMenus(tk.Frame):
             b.bind("<Enter>", lambda e, n=name: self._hover_switch(n), add="+")
             self.buttons[name] = b
             self.drops[name] = DropMenu(self.winfo_toplevel(), items, font)
+            self.drops[name].on_side = lambda d, n=name: self._side(n, d)
         top = self.winfo_toplevel()
         top.bind("<ButtonPress-1>", self._click_outside, add="+")
         top.bind("<Configure>", lambda e: e.widget is top and self.close(), add="+")
@@ -844,6 +856,11 @@ class HeaderMenus(tk.Frame):
             self.buttons[name].set_selected(False)
         except tk.TclError:
             pass
+
+    def _side(self, name, d):
+        """Left / Right in an open menu: open the neighbouring one (wrapping round, like a menu bar)."""
+        names = list(self.buttons)
+        self.open_menu(names[(names.index(name) + d) % len(names)])
 
     def _hover_switch(self, name):
         if self._open is not None and self._open != name:
