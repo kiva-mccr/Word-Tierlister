@@ -306,7 +306,7 @@ class App:
         self.store.set_meta("zoom", z)
         self.font_scale = 1.0                  # re-fit from the full size at the new zoom
         self._fit_window()
-        self.flash(f"Zoom {round(z * 100)}%", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=900)
+        self.flash(f"Zoom {round(z * 100)}%", bg=PALETTE["surface"], fg=PALETTE["text"], ms=900)
         return "break"
 
     # ---- window size: fits the screen and the contents ------------------------------------------
