@@ -95,6 +95,18 @@ assert os.path.getsize(os.path.join(tmp, "out.csv")) > 100
 app.open_browser(); pump(6)
 bw = app.browsers[0]
 assert bw.total == store.stats()["placed"]
+# UI-39: Delete unplaces the selected word (like the Unplace button); Ctrl+Z in Browse puts it back
+victim = next(i for i in bw.tree.get_children() if i not in store.get_anchors())
+tier_before = store.get_word(victim)["tier"]
+bw.tree.selection_set(victim); bw.tree.focus_set(); pump(2)
+bw.tree.event_generate("<Delete>"); pump(2)
+assert store.get_word(victim)["tier"] is None and victim not in bw.tree.get_children()
+bw.win.event_generate("<Control-z>"); pump(2)
+assert store.get_word(victim)["tier"] == tier_before and victim in bw.tree.get_children()
+bw.entry.focus_set(); bw.entry.insert(0, "x"); pump(1)                   # typing in the search box: Delete edits it
+n_placed = store.stats()["placed"]
+bw.entry.icursor(0); bw.entry.event_generate("<Delete>"); pump(2)
+assert store.stats()["placed"] == n_placed
 bw.close()
 app.on_close()
 

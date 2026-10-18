@@ -72,7 +72,7 @@ class Browser:
         tk.Frame(self.win, height=1, bg=PALETTE["border"]).pack(fill="x")
         ttk.Label(top, text="Search:", style=f"{self.sid}.Bar.TLabel").pack(side="left")
         self.search_var = tk.StringVar()
-        entry = ttk.Entry(top, textvariable=self.search_var, width=18, font=self.f_body)
+        entry = self.entry = ttk.Entry(top, textvariable=self.search_var, width=18, font=self.f_body)
         entry.pack(side="left", padx=6)
         self.search_var.trace_add("write", lambda *_: self._debounce())
         ttk.Label(top, text="Show:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
@@ -140,6 +140,14 @@ class Browser:
             widget.bind("<Control-MouseWheel>", self._wheel_zoom)
             widget.bind("<Control-Button-4>", lambda e: self._wheel_zoom(e, 1))
             widget.bind("<Control-Button-5>", lambda e: self._wheel_zoom(e, -1))
+        # Delete unplaces the selected word, like the Unplace button (UI-39; Backspace too on macOS, where the
+        # key marked delete sends it); Ctrl+Z undoes it from here. Not while typing in the search box.
+        keys = ["<Delete>", "<KP_Delete>"] + (["<BackSpace>"] if self.win.tk.call("tk", "windowingsystem") == "aqua"
+                                                 else [])
+        for seq in keys:
+            self.tree.bind(seq, lambda e: (self.unplace(), "break")[1])
+        for seq in ("<Control-z>", "<Command-z>"):
+            self.win.bind(seq, lambda e: self.undo())
         self.win.bind("<Configure>", self._on_configure)
         self.win.bind("<FocusIn>", lambda e: self._maybe_refresh() if e.widget is self.win else None)
         self.win.protocol("WM_DELETE_WINDOW", self.close)
@@ -424,6 +432,11 @@ class Browser:
             return
         self.store.unplace(w)
         self.app.after_external_change()
+        self.reload(keep_view=True)
+
+    def undo(self):
+        """Ctrl+Z in Browse: undo the last saved action (an unplace, a move) and show the result here."""
+        self.app.undo(saved_only=True)
         self.reload(keep_view=True)
 
     def refine(self):

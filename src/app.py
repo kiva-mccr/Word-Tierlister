@@ -1131,9 +1131,10 @@ class App:
         self._fit_window()
 
     # ---- undo ------------------------------------------------------------------------------------------------------------
-    def undo(self):
-        """Undo: step back inside an anchor comparison, otherwise revert the last saved action (survives restarts)."""
-        if self.mode == "place" and self.cmp:
+    def undo(self, saved_only=False):
+        """Undo: step back inside an anchor comparison, otherwise revert the last saved action (survives restarts).
+        `saved_only` (Ctrl+Z in Browse): always the saved action, never a step inside a comparison."""
+        if self.mode == "place" and self.cmp and not saved_only:
             self.cmp_back()
             return
         word = self.store.undo()

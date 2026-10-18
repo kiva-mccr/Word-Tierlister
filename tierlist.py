@@ -548,8 +548,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           background closes it (not a click on a pill, card or button, so a quick click never loses your
 #           place). Its unsaved state (search, filter, scroll) is
 #           remembered for the next open, so closing by accident costs nothing.
-# [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
+# [x] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
 #           the Unplace button, with undo.
+#           Built: Delete (keypad too; Backspace on macOS) in the list unplaces the selected word, anchors
+#           still protected; Ctrl+Z (Cmd+Z) in Browse undoes the last saved action and shows it there. Typing in
+#           the search box is unaffected. (Browse selects one word at a time.)
 # [x] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
 #           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
 #           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
