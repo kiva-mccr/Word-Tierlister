@@ -597,6 +597,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           changes no widget's size and no shared font. Before, the card hugged the word: the centred block
 #           shifted a pixel either way and, for a frame, went wide before the font was shrunk. Found and
 #           checked with tools/layout_trace.py (frame-by-frame widget geometry: moves, spikes, overlaps).
+#           (9) Then (reported: a "white text" copy of the word showing): mid-transition the paler word was drawn
+#           over the darker one and cut white gaps through its letters (tk cannot blend); the darker of the
+#           two is now always on top, swapping halfway.
 # [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
 #           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit

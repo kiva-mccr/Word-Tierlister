@@ -432,6 +432,10 @@ for p in (0.0, 0.25, 0.5, 0.75, 1.0):
     card._frame(p)
     ink = sum(1 - sum(int(card.itemcget(t, "fill")[i:i + 2], 16) for i in (1, 3, 5)) / 765 for t in ("oldword", "word"))
     assert ink > 0.6 * (1 - sum(int(PALETTE["text"][i:i + 2], 16) for i in (1, 3, 5)) / 765), p
+# the darker word is always on top (a pale one over a dark one cut white gaps through it: reported)
+above = lambda a, b: card.find_all().index(card.find_withtag(a)[0]) > card.find_all().index(card.find_withtag(b)[0])
+card._frame(0.1); assert above("oldword", "word") and above("oldsub", "sub")
+card._frame(0.9); assert above("word", "oldword") and above("sub", "oldsub")
 anim.finish_all(); update(1); assert not card.find_withtag("old")
 anim.reduce_motion = True                                                   # Reduce motion: no transition at all
 card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)

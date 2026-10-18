@@ -1438,7 +1438,7 @@ class WordCard(tk.Canvas):
             osub = [cx, sub_y]
             self.create_text(*osub, text=old_sub, font=self._fit_sub, fill=PALETTE["muted"], justify="center",
                              anchor="n", tags=("old", "oldsub"))
-        self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
+        self.tag_raise("old", "word")              # on top while it is the darker one (frame swaps them halfway)
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
 
@@ -1456,6 +1456,14 @@ class WordCard(tk.Canvas):
             self.coords("word", wx, wy + back)
             if sy is not None:
                 self.coords("sub", wx, sy + back)
+            # tk cannot blend two texts: a pale one drawn over a dark one cuts white gaps through its letters
+            # (reported: a "white text version" of the word), so the darker of the two is always on top
+            for old_tag, new_tag in (("oldword", "word"), ("oldsub", "sub")):
+                if self.find_withtag(old_tag) and self.find_withtag(new_tag):
+                    if gone < 0.5:
+                        self.tag_raise(old_tag, new_tag)
+                    else:
+                        self.tag_raise(new_tag, old_tag)
             self.itemconfigure("oldword", fill=lerp_color(PALETTE["text"], card, gone))
             self.itemconfigure("oldsub", fill=lerp_color(PALETTE["muted"], card, gone))
             self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
