@@ -714,11 +714,15 @@ class Store:
         return (r["a"], r["b"]) if r else None
 
     # ---- listing / export ------------------------------------------------------------------
-    SORTS = ("Default", "A-Z", "Frequency")
+    SORTS = ("Default", "A-Z", "Frequency", "Rating", "Duels")
+    # each sort's natural order (reverse=True flips every part of it); Default is per filter, below
+    _ORDERS = {"A-Z": "word ASC", "Frequency": "rank ASC", "Rating": "rating DESC, rank ASC",
+               "Duels": "games DESC, rank ASC"}
 
     def list_words(self, text="", tier_filter="All placed", sort="Default", limit=3000, offset=0,
-                   with_total=True):
-        """One page of words. Default order = tier/rating for placed words, queue order for unplaced."""
+                   with_total=True, reverse=False):
+        """One page of words. Default order = tier/rating for placed words, queue order for unplaced; A-Z,
+        Frequency (commonest first), Rating and Duels (highest first); `reverse` turns the order round (M-7)."""
         where, args = [], []
         if tier_filter == "Unplaced":
             where.append("tier IS NULL")
@@ -729,7 +733,10 @@ class Store:
             if tier_filter.startswith("Tier "):
                 where.append("tier=?")
                 args.append(TIERS.index(tier_filter[5:]))
-        order = {"A-Z": "word ASC", "Frequency": "rank ASC"}.get(sort, default_order)
+        order = self._ORDERS.get(sort, default_order)
+        if reverse:
+            order = ", ".join(part.replace(" ASC", " DESC") if part.endswith(" ASC") else part.replace(" DESC", " ASC")
+                              for part in order.split(", "))
         if text:
             where.append("word LIKE ?")
             args.append("%" + text.replace("%", "").replace("_", "") + "%")

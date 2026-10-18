@@ -28,6 +28,12 @@ class Browser:
 
     CHUNK = 3000                 # rows fetched per page; the next page loads when you scroll near the end
     BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
+    # the columns: heading, the Sort it stands for (M-7: a click on the heading sorts by it), alignment
+    COLUMNS = (("tier", "Tier", "Default", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
+               ("games", "Duels", "Duels", "e"), ("freq", "Freq #", "Frequency", "e"))
+    RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
+                                                 # first: rank 1, 2...); Rating and Duels start with the highest
+    ARROWS = ("\u25b4", "\u25be")                # up, down: which way the values go down the list
     OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
     # ...except on Linux (X11), where each step of the ease re-lays out the whole window under a window manager
     # that redraws its frame a beat later, and the rows popped in afterwards: it read as a bounce (M-5). There
@@ -88,8 +94,9 @@ class Browser:
                      on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
         ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.sort_var = tk.StringVar(value="Default")
-        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=self.reload, font=self.f_body,
-                     animator=anim, canvas_bg=surf).pack(side="left", padx=6)
+        self.reverse = False                       # the sort turned round (a second click on its heading)
+        ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=lambda: self.sort_by(self.sort_var.get()),
+                     font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
         for text, delta in (("A+", 1), ("A-", -1)):
             RoundButton(top, text, lambda d=delta: self.zoom_by(d), font=self.f_body, padx=8, pady=4, radius=10,
                         flat=True, animator=anim, canvas_bg=surf).pack(side="right", padx=(2, 0))
@@ -103,11 +110,10 @@ class Browser:
                                  show="headings", selectmode="browse", style=self.tstyle,
                                  yscrollcommand=self._yscroll)
         self.vsb.configure(command=self.tree.yview)
-        for col, text, anchor in (("tier", "Tier", "center"), ("word", "Word", "w"),
-                                  ("rating", "Rating", "e"), ("games", "Duels", "e"),
-                                  ("freq", "Freq #", "e")):
-            self.tree.heading(col, text=text)
+        for col, _text, sort, anchor in self.COLUMNS:
+            self.tree.heading(col, command=lambda c=col, srt=sort: self.sort_by(srt, toggle=True))
             self.tree.column(col, anchor=anchor)
+        self._show_sort()
         for t in range(len(TIERS)):
             self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
         self.tree.pack(side="left", fill="both", expand=True)
@@ -188,7 +194,7 @@ class Browser:
             self.app.browsers.remove(self)
         try:
             self.app.browse_state = {"search": self.search_var.get(), "filter": self.filter_var.get(),
-                                     "sort": self.sort_var.get(), "selected": self.current,
+                                     "sort": self.sort_var.get(), "reverse": self.reverse, "selected": self.current,
                                      "loaded": self.loaded, "view": self.tree.yview()[0]}
         except tk.TclError:
             pass
@@ -202,6 +208,8 @@ class Browser:
             self._job = None
         self.filter_var.set(state["filter"])
         self.sort_var.set(state["sort"])
+        self.reverse = state.get("reverse", False)
+        self._show_sort()
         self.current, self.loaded = state["selected"], state["loaded"]
         self.reload(keep_view=True, view=state["view"])
         if self.current and self.tree.exists(self.current):
@@ -284,12 +292,13 @@ class Browser:
         """Column widths in pixels, measured from the current fonts so headings and numbers never clip."""
         m, b = self.f_body.measure, self.f_bold.measure
         pad = m("0") * 2
+        arrow = b("  " + self.ARROWS[1])                # (room for the sort arrow on any heading)
         return {
-            "tier": max(b("Tier"), m("S")) + pad * 2,
+            "tier": max(b("Tier") + arrow, m("S")) + pad * 2,
             "word": m("0") * 22,
-            "rating": max(b("Rating"), m("0000")) + pad,
-            "games": max(b("Duels"), m("0000")) + pad,
-            "freq": max(b("Freq #"), m("000,000,000")) + pad,
+            "rating": max(b("Rating") + arrow, m("0000")) + pad,
+            "games": max(b("Duels") + arrow, m("0000")) + pad,
+            "freq": max(b("Freq #") + arrow, m("000,000,000")) + pad,
         }
 
     def _set_columns(self):
@@ -372,7 +381,25 @@ class Browser:
     def _query(self, **kw):
         """Ask the Store for a page of words using the current search text, tier filter and sort."""
         return self.store.list_words(self.search_var.get().strip().lower(), self.filter_var.get(),
-                                     self.sort_var.get(), **kw)
+                                     self.sort_var.get(), reverse=self.reverse, **kw)
+
+    def sort_by(self, sort, toggle=False):
+        """Sort the list by `sort` (a Store.SORTS name), in its usual order. toggle (a click on a column heading):
+        the same sort again turns the order round. The Sort drop-down and the heading's arrow follow (M-7)."""
+        self.reverse = (not self.reverse) if toggle and sort == self.sort_var.get() else False
+        if self.sort_var.get() != sort:
+            self.sort_var.set(sort)
+        self._show_sort()
+        self.reload()
+
+    def _show_sort(self):
+        """The headings, with a small arrow on the one the list is sorted by: up when its values rise down the
+        list (a..z, S..F, commonest first), down when they fall."""
+        sort = self.sort_var.get()
+        for col, text, srt, _anchor in self.COLUMNS:
+            if srt == sort:
+                text += "  " + self.ARROWS[(sort in self.RISING) == self.reverse]
+            self.tree.heading(col, text=text)
 
     def _add_rows(self, rows):
         """Append rows to the table, colouring placed words by tier. The word itself is the row id."""

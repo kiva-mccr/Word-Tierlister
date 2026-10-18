@@ -151,9 +151,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows
 #           "Zoom N%" (its own zoom against the 12 pt text) at the bottom of the definition pane (Browser._say_zoom),
 #           and gained Ctrl + keypad 0.
-# [ ] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
+# [x] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
 #           click the same heading again to flip between top-to-bottom and bottom-to-top (a small arrow
 #           on the heading shows which).
+#           Built: Tier = Default (S..F, by rating), Word = A-Z, Rating, Duels (new Sorts: highest first),
+#           Freq # = Frequency (Browser.COLUMNS, sort_by); Store.list_words(reverse=) turns the whole order round;
+#           the arrow points up when the values rise down the list; the direction is kept with the view (UI-38).
+#           300k words: Rating / Duels ~50 ms a page (Default is ~85 ms).
 # [ ] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
 #           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.
 # [ ] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.

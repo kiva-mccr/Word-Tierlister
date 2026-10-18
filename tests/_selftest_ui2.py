@@ -148,6 +148,32 @@ assert not bw._opening and bw.tree.get_children()
 pump(4); assert abs(bw.win.winfo_width() - w_full) <= 2
 bw.close()
 app.anim.reduce_motion = False
+# M-7: a click on a column heading sorts by it (the Sort drop-down follows); again, the other way round
+app.browse_state = None
+app.open_browser(); pump(4); bw = app.browsers[0]
+ws = [r["word"] for r in app.store.list_words("", "All placed", limit=6)[0]]
+for i in range(2, len(ws)):                                                          # (some words with more duels)
+    for _ in range(i):
+        app.store.record_comparison(ws[i], ws[1], "a", "within")
+bw.reload(); pump(2)
+rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
+assert bw.tree.heading("tier", "text").endswith(_B.Browser.ARROWS[0])                # Default: S..F, arrow up
+bw.tree.tk.call(bw.tree.heading("games", "command")); pump(2)                       # (what a click runs)
+duels = [int(v) for v in rows("games")]
+assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0
+assert bw.tree.heading("games", "text").endswith(_B.Browser.ARROWS[1]) and bw.tree.heading("tier", "text") == "Tier"
+bw.tree.tk.call(bw.tree.heading("games", "command")); pump(2)                       # same heading: turned round
+duels = [int(v) for v in rows("games")]
+assert bw.reverse and duels == sorted(duels) and bw.tree.heading("games", "text").endswith(_B.Browser.ARROWS[0])
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
+assert bw.sort_var.get() == "A-Z" and not bw.reverse and rows("word") == sorted(rows("word"))
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
+assert rows("word") == sorted(rows("word"), reverse=True)
+bw.close(); app.open_browser(); pump(4); bw = app.browsers[0]                       # remembered, either way round
+assert bw.sort_var.get() == "A-Z" and bw.reverse and rows("word") == sorted(rows("word"), reverse=True)
+bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(2)                            # the drop-down: its usual order
+assert not bw.reverse and bw.tree.heading("rating", "text").endswith(_B.Browser.ARROWS[1])
+bw.close(); app.browse_state = None
 app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons

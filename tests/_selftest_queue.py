@@ -163,6 +163,17 @@ az, _ = p.list_words("", "All placed", "A-Z", limit=5)
 assert [r["word"] for r in az] == sorted(r["word"] for r in az) and az[0]["word"] == "w0000000"
 fq, _ = p.list_words("", "Unplaced", "Frequency", limit=3)
 assert [r["rank"] for r in fq] == [7000, 7001, 7002]
+# M-7: every column can sort, either way round
+za, _ = p.list_words("", "All placed", "A-Z", limit=5, reverse=True)
+assert [r["word"] for r in za] == sorted((r["word"] for r in za), reverse=True) and za[0]["word"] > az[-1]["word"]
+assert [r["rank"] for r in p.list_words("", "Unplaced", "Frequency", limit=3, reverse=True)[0]] == [8999, 8998, 8997]
+for name, key in (("Rating", "rating"), ("Duels", "games")):
+    hi, _ = p.list_words("", "All placed", name, limit=50)
+    lo, _ = p.list_words("", "All placed", name, limit=50, reverse=True)
+    assert [r[key] for r in hi] == sorted((r[key] for r in hi), reverse=True) and [r[key] for r in lo] == sorted(r[key] for r in lo)
+    assert hi[0][key] >= lo[0][key]
+back, _ = p.list_words("", "All placed", "Default", limit=5, reverse=True)
+assert back[0]["tier"] == max(r["tier"] for r in p.list_words("", "All placed", limit=7000)[0])   # F first
 dq, utotal = p.list_words("", "Unplaced", "Default", limit=2000)
 assert utotal == 2000 and [r["word"] for r in dq] == [r[0] for r in p.db.execute(
     "SELECT word FROM words WHERE tier IS NULL ORDER BY skips, qkey, rank")]
