@@ -115,7 +115,28 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
 # Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
-# T-1..T-3 -> T-6, T-7, T-8.
+# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-10 below. Last of all: IC-1 (the icon).
+#
+# --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
+# [ ] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
+#           Windows). Likely the smooth image's edge rows (smooth.py) at large sizes; find and fix.
+# [ ] M-2  The word flying into the chart leaves what looks like a little white square on top of its bar
+#           (Linux and Windows); it did not before UI-53. Likely the bar's see-through edge over the toast.
+# [ ] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It
+#           should move only a hair (or not at all), never past the band (any zoom, Linux and Windows).
+# [ ] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale
+#           background). Two words in one spine with different tiers: one triangle, split in two halves.
+# [ ] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
+#           not change the window's size or position during or after the ease.
+# [ ] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
+# [ ] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
+#           click the same heading again to flip between top-to-bottom and bottom-to-top (a small arrow
+#           on the heading shows which).
+# [ ] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
+#           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.
+# [ ] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.
+# [ ] M-10 Import dialog (UI-42): check the spacing of the first two lines of text (the intro and "Found on
+#           this computer"); change it only if it is off.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -774,11 +795,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37,
 #                        UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
 #                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
-#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
+#   Browse / edit ...... restyle (UI-23), open / close (UI-38, M-5), Delete unplaces (UI-39), sort by
+#                        clicking a column (M-7)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
 #   Keyboard shortcuts . new dialog (UI-48)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
-#   Import / Export .... file dialog (UI-42)
+#   Import / Export .... file dialog (UI-42), spacing and icons (M-8..M-10)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)
 #   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
 #   First-run progress . shared dialog look (UI-24)
@@ -876,6 +898,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
+#
+# --- The very end (asked for: after everything else, W-1 and packaging included) -------------------------
+# [ ] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
+#           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;
