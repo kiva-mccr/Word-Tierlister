@@ -310,6 +310,19 @@ xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
 assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
+# M-2: with clear= (the top of the tallest bar) it goes over the bars and comes down onto its own from above,
+# stopping just above the landing point: the drop is opaque, and it used to brush the bars' tops (a pale square)
+toast.fling("over", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
+            hold_ms=10, in_=page, clear=-70)
+anim.finish_all(); anim.finish_all()
+seen, t0 = [], time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.004)
+    if toast.winfo_ismapped():
+        x, y = toast_xy(); seen.append((x, y + toast.winfo_height()))
+assert len(seen) > 6
+assert all(bottom <= -70 for x, bottom in seen if 100 < x < 195), seen          # over the chart: above every bar
+assert abs(seen[-1][0] - 200) <= 2 and -40 < seen[-1][1] <= -31, seen[-1]       # ends resting on its bar
 toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()

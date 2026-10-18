@@ -124,8 +124,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           past where the corners' curves leave it: no fill, but its hairline showed, longer the bigger the
 #           zoom. Fixed: smooth._straighten cuts each straight stretch of the outline down to its two ends
 #           (the fill is unchanged, so the rounded-square look stays).
-# [ ] M-2  The word flying into the chart leaves what looks like a little white square on top of its bar
-#           (Linux and Windows); it did not before UI-53. Likely the bar's see-through edge over the toast.
+# [x] M-2  The word flying into the chart leaves what looks like a little white square on top of its bar
+#           (Linux and Windows). Cause: the flying drop is a tiny opaque window (tk has no transparency), and it
+#           landed centred on the bar's top edge, crossing bars on its way in a straight line, so its page-
+#           coloured corners covered them. Also its landing point was measured while the bar was still
+#           growing, so a bar grew up into it. Fixed: the drop rises just above the tallest bar
+#           (DistributionChart.bars_top), crosses, and drops onto its own bar from above, stopping just above
+#           it; the landing point is the bar's final height. Checked frame by frame: no overlap with any bar
+#           for every tier at 100% and 200% in two window sizes.
 # [ ] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It
 #           should move only a hair (or not at all), never past the band (any zoom, Linux and Windows).
 # [ ] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale

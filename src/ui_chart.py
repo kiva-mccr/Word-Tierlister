@@ -46,6 +46,7 @@ class DistributionChart(SmoothCanvas):
         self._font, self._lfont, self._anim = font, letter_font or font, animator
         self.counts = [0] * len(self.tiers)
         self._shown = [0.0] * len(self.tiers)        # drawn heights as a share of the tallest (animated)
+        self._goal = [0.0] * len(self.tiers)         # ...and where they are heading
         self._glow = [0.0] * len(self.tiers)
         self._visible = True
         self._draw()
@@ -112,7 +113,7 @@ class DistributionChart(SmoothCanvas):
         """Show these per-tier counts; changed bars grow or shrink with ease-out (GROW_MS)."""
         counts = [int(c or 0) for c in counts]
         peak = max(counts) or 1
-        goal = [c / peak for c in counts]
+        goal = self._goal = [c / peak for c in counts]
         start = list(self._shown)
         self.counts = counts
         if not animate or self._anim is None or start == goal:
@@ -139,10 +140,17 @@ class DistributionChart(SmoothCanvas):
         self._anim.run(f"pulse{id(self)}{tier}", PULSE_MS, frame, done, ease=lambda t: t)
 
     def bar_top(self, tier):
-        """Screen position of the top centre of a tier's bar (where a flying word lands)."""
+        """Screen position of the top centre of a tier's bar (where a flying word lands), at the height it is
+        growing to: measured mid-growth, the bar rose into the word that had landed on it."""
         _bw, _slot, plot_h, _top, _ll = self._metrics()
-        h = max(self._shown[tier] * plot_h, 3 if self.counts[tier] else 0)
+        h = max(self._goal[tier] * plot_h, 3 if self.counts[tier] else 0)
         return self.winfo_rootx() + int(self._x(tier)), self.winfo_rooty() + int(self._base - h)
+
+    def bars_top(self):
+        """Screen y of the top of the tallest bar (a flying word passes above it)."""
+        _bw, _slot, plot_h, _top, _ll = self._metrics()
+        h = max([max(a, b) * plot_h for a, b in zip(self._shown, self._goal)] + [3 if any(self.counts) else 0])
+        return self.winfo_rooty() + int(self._base - h)
 
     @property
     def shown(self):

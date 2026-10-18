@@ -984,16 +984,19 @@ class Toast(SmoothCanvas):
         return True
 
     def fling(self, text, tint, start_bottom, rest_bottom, target, hold_ms=550, in_=None, wraplength=None,
-              under=None, on_arrive=None):
+              under=None, on_arrive=None, clear=None):
         """The placement message (UI-11, UI-17): rise from its bottom edge at y=start_bottom until it is at
         y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
-        flies to `target` = (x offset from the centre of `in_`, y of the landing point), fading out, and call
-        on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
+        flies to `target` = (x offset from the centre of `in_`, y of the landing point: it stops just above
+        it), fading out, and call on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
         replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
         transparency, so a full-size pill would be an opaque box passing over the chart.
         `under(x0, y0, x1, y1)` returns the colour behind the toast's rectangle (inside `in_`); the toast takes
         that colour as its own background and blends toward it. It is asked every frame, with the whole
-        rectangle: a backdrop picked by height alone painted a white box over the page beside the card."""
+        rectangle: a backdrop picked by height alone painted a white box over the page beside the card.
+        `clear` (a y inside `in_`, the top of the tallest bar): the drop flies in an arc over that height and
+        drops onto its landing point from above, so it never crosses a bar (being opaque, its corners showed
+        as a pale square on the bars it brushed)."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -1026,6 +1029,25 @@ class Toast(SmoothCanvas):
             if alive():
                 self._paint(1.0 - 0.3 * p)
 
+        y0 = to_y + h0 / 2
+
+        def path(p, h):
+            """Where the drop's middle is, for its size h. The drop is a little opaque window 2 px bigger than
+            itself, so its bottom stays a pixel clear of a bar's top (and the bar's soft edge above that): it
+            ends resting just above its bar. With `clear` it first rises just above the tallest bar (by its own
+            size: it is shrinking), crosses to straight above its bar, then drops onto it."""
+            land = target[1] - h / 2 - 4
+            if clear is None:
+                return target[0] * p, y0 + (land - y0) * p
+            a = min(1.0, p / 0.7)
+            x = target[0] * a * a * (3 - 2 * a)                      # across (eased in and out)
+            top = min(y0, clear - h / 2 - 4)
+            if p < 0.7:
+                b = min(1.0, p / 0.45)
+                return x, y0 + (top - y0) * (1 - (1 - b) ** 2)      # up first (eased out), ahead of across
+            c = (p - 0.7) / 0.3
+            return x, top + (land - top) * c * c                     # then it drops (eased in)
+
         def fly(p):
             if alive():
                 scale = 1.0 - 0.85 * p                         # shrinks to a small drop
@@ -1033,10 +1055,10 @@ class Toast(SmoothCanvas):
                 # stayed wide all the way and covered the chart bars as an opaque box
                 h = max(4, h0 * scale)
                 w = max(4, h + (w0 * scale - h) * max(0.0, 1.0 - p * 2.5))
-                y_mid = to_y + h0 / 2 + (target[1] - to_y - h0 / 2) * p
-                backdrop(target[0] * p, y_mid - h / 2, w, h)
+                x, y_mid = path(p, h)
+                backdrop(x, y_mid - h / 2, w, h)
                 self._resize(w, h, text_alpha=max(0.0, 1.0 - p * 2.5))
-                self._put(target[0] * p, y_mid - h / 2)
+                self._put(x, y_mid - h / 2)
                 self._paint(0.7 * (1.0 - 0.6 * p), text=max(0.0, 0.7 - p * 2.5))
 
         def gone():

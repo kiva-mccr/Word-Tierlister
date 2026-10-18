@@ -930,7 +930,7 @@ class App:
                           rest_bottom=card_top - int(8 * f),
                           target=(bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty()),
                           in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
-                          on_arrive=lambda: ch.pulse(tier))
+                          on_arrive=lambda: ch.pulse(tier), clear=ch.bars_top() - c.winfo_rooty())
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
