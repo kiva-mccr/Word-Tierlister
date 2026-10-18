@@ -85,7 +85,7 @@ def fake_make(venv, log):
     os.makedirs(os.path.dirname(deps.venv_python(venv)), exist_ok=True); open(deps.venv_python(venv), "w").close()
     return 0
 deps._make_venv = fake_make
-deps.install = lambda names, log, python=None: (calls.append((names, python)), (True, "ok"))[1]
+deps.install = lambda names, log, python=None, plan=True: (calls.append((names, python)), (True, "ok"))[1]
 ok, tail, py = deps.make_private_env(home, ["wordfreq"], lambda l: None)
 assert ok and py == vpy and calls == [(["wordfreq"], vpy)]
 shutil.rmtree(os.path.join(home, ".venv"))
@@ -108,5 +108,36 @@ assert deps.tk_available() in (True, False)
 # ---- when stage 1 runs at all
 assert deps.wants_terminal_setup(no_install=True) is False
 assert deps.wants_terminal_setup(no_install=False) in (True, False)    # depends on how the test is run
+
+# ---- install() measures the download (pip prints no progress into a pipe): a fake pip that "downloads" a
+#      3 MB file in steps into the TMPDIR it was given, then installs
+if os.name == "posix":
+    fake = os.path.join(home, "fakepy")
+    with open(fake, "w") as f:
+        f.write("""#!/bin/sh
+echo "Collecting big"
+echo "  Downloading big-1.0-py3-none-any.whl.metadata (2 kB)"
+echo "Downloading big-1.0-py3-none-any.whl (3.0 MB)"
+mkdir -p "$TMPDIR/pip-unpack-x"
+for i in 1 2 3 4 5 6; do head -c 500000 /dev/zero >> "$TMPDIR/pip-unpack-x/big-1.0-py3-none-any.whl"; sleep 0.4; done
+echo "Installing collected packages: big"
+echo "Successfully installed big-1.0"
+""")
+    os.chmod(fake, 0o755)
+    got = []
+    deps.DOWNLOAD["big"] = 3
+    ok, tail = deps.install(["big"], got.append, python=fake)
+    deps.DOWNLOAD.pop("big")
+    assert ok and "Successfully installed" in tail
+    from constants import parse_plan
+    assert parse_plan(got[0]) == deps.INSTALL_STEPS and got[1].startswith("Downloading big (about 3 MB)")
+    progress = [l for l in got if l.startswith("  ") and " of 3 MB" in l]
+    pcts = [int(l.rsplit("(", 1)[1].rstrip("%)")) for l in progress]
+    assert len(progress) >= 3 and pcts == sorted(pcts) and pcts[-1] >= 80, progress    # it climbs to near the end
+    assert any("MB/s" in l for l in progress)                                       # and says how fast
+    assert "Installing..." in got and got.index("Installing...") > got.index(progress[-1])
+    assert not any("Downloading big-1.0" in l or "Collecting" in l for l in got)   # pip's own noise left out
+    assert not [d for d in os.listdir(tempfile.gettempdir()) if d.startswith("wordtier-pip-")]  # tidied away
+
 shutil.rmtree(home)
 print("INSTALL OK")

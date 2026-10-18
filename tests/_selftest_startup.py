@@ -21,8 +21,10 @@ init_fonts(root); apply_ttk_style(root)                         # exactly what m
 shown, created = [], []
 orig_init, orig_show = S.StartupWindow.__init__, S.StartupWindow.show
 def spy_init(self, *a, **k): created.append(1); orig_init(self, *a, **k)
-def spy_show(self, stage, detail, percent, elapsed, eta=None):
-    shown.append((stage, detail, percent)); orig_show(self, stage, detail, percent, elapsed, eta)
+steps_shown = []
+def spy_show(self, stage, detail, percent, elapsed, eta=None, step=None):
+    shown.append((stage, detail, percent)); steps_shown.append(step)
+    orig_show(self, stage, detail, percent, elapsed, eta, step)
 S.StartupWindow.__init__, S.StartupWindow.show = spy_init, spy_show
 
 # ---- ETA text and tracker
@@ -88,6 +90,29 @@ reading = [x for x in shown if x[0].startswith("Reading")]
 assert reading and all(p is None for _, _, p in reading)       # a new stage drops the old percent
 assert any("parsed 200,000" in d for _, d, _ in reading)       # detail line shown under the stage
 
+# ---- "Step i of n" (the main steps a job announces up front): retries and notes do not move it
+from constants import plan_line, parse_plan
+assert parse_plan(plan_line(["Downloading", "Reading"])) == ["Downloading", "Reading"] and parse_plan("Reading") is None
+plan = ["Downloading English Wiktionary", "Reading entries", "Ranking words"]
+assert S.step_of(plan, "Reading entries...", None) == (2, 3)
+assert S.step_of(plan, "Download interrupted; retry 1/5...", (1, 3)) == (1, 3)      # not a main step
+assert S.step_of(["Only one"], "Only one...", None) is None                          # one step: nothing to count
+shown.clear(); steps_shown.clear()
+import io, contextlib
+printed = io.StringIO()
+def planned(log):
+    log(plan_line(plan)); time.sleep(0.25)
+    log("Downloading English Wiktionary (about 3 GB)..."); time.sleep(0.25)
+    log("Download interrupted (timed out); retry 1/5..."); time.sleep(0.25)
+    log("Reading entries..."); time.sleep(0.25)
+    return 1
+with contextlib.redirect_stdout(printed):
+    S.run_with_progress(root, planned, delay_ms=0)
+assert "plan:" not in printed.getvalue() and "Reading entries" in printed.getvalue()   # the plan is never printed
+by_stage = {st: step for (st, _, _), step in zip(shown, steps_shown)}
+assert by_stage["Downloading English Wiktionary (about 3 GB)..."] == (1, 3)
+assert by_stage["Download interrupted (timed out); retry 1/5..."] == (1, 3) and by_stage["Reading entries..."] == (2, 3)
+
 # ---- a window that cannot be drawn must not hang or stop the work
 def broken_init(self, *a, **k): raise RuntimeError("cannot draw")
 S.StartupWindow.__init__ = broken_init
@@ -108,8 +133,9 @@ class Spy:   # capture the real window for a moment to inspect the widgets
     pass
 seen = {}
 orig_show2 = S.StartupWindow.show
-def peek(self, stage, detail, percent, elapsed, eta=None):
-    orig_show2(self, stage, detail, percent, elapsed, eta)
+def peek(self, stage, detail, percent, elapsed, eta=None, step=None):
+    orig_show2(self, stage, detail, percent, elapsed, eta, step)
+    seen["step"] = self.step.cget("text")
     self.win.update_idletasks()
     seen.setdefault("first", (self.bar.winfo_ismapped(), str(self.bar.cget("mode")), float(self.bar["value"]),
                               self.detail.cget("text")))
@@ -125,14 +151,15 @@ S.run_with_progress(root, stages, delay_ms=0)
 S.StartupWindow.show = orig_show2
 vis, mode, val, det = seen["first"]
 assert vis and mode == "determinate" and val == S.BAR_FLOOR and det == "Getting started...", seen["first"]
+assert seen["step"] == ""                                          # no plan: no step line
 vis, mode, val, det = seen["last"]
 assert vis and mode == "indeterminate" and det == "Getting started...", seen["last"]   # bar still there, sweeping
 
 # ---- the window shows "estimating" then a real ETA for a bar with a percentage, none for a sweep
 etas = []
 orig_show3 = S.StartupWindow.show
-def peek_eta(self, stage, detail, percent, elapsed, eta=None):
-    orig_show3(self, stage, detail, percent, elapsed, eta)
+def peek_eta(self, stage, detail, percent, elapsed, eta=None, step=None):
+    orig_show3(self, stage, detail, percent, elapsed, eta, step)
     etas.append((percent, self.elapsed.cget("text")))
 S.StartupWindow.show = peek_eta
 def downloading(log):
@@ -258,6 +285,19 @@ st3.set_meta("pen_done", "0"); lines = []
 W.prepare_queue(st3, log=lines.append)
 text = "\n".join(lines)
 assert "checking every word for compounds" in text and "giving every unplaced word" in text, text
+
+# ---- the main steps planned up front ("Step i of n") are exactly the stages a build then reports, in order
+st4 = T.Store(os.path.join(tmp, "plan.db"))
+plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True)
+assert plan == ["Reading entries", "Ranking words", "Detecting compound words", "Looking up how common",
+                "Shuffling the queue"], plan                    # (src given: nothing to download)
+lines = []
+W.build_wiktionary(st4, src, log=lines.append); W.prepare_queue(st4, log=lines.append)
+stages = [l for l in lines if l and not l.startswith(" ")]
+hits = [next(i for i, st in enumerate(stages) if st.startswith(name)) for name in plan]
+assert hits == sorted(hits), (plan, stages)
+assert W.queue_steps(st4) == []                                 # all done: a later start has no steps
+assert W.wiktionary_steps(T.Store(os.path.join(tmp, "plan2.db")))[0] == "Downloading English Wiktionary"
 
 # ---- main() end to end in a subprocess: first run builds, then the main window opens
 words = os.path.join(tmp, "words.txt")

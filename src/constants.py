@@ -47,3 +47,19 @@ def queue_weight(shape, z):
 # half of the early words come from above rank median x spread (exponential: ln 2; gaussian: the half-normal's)
 QUEUE_MEDIAN = {"exp": math.log(2), "gauss": 0.6745}
 QUEUE_AXIS = 100_000             # the queue dialog's diagrams (UI-41) always run from rank #1 to this
+
+
+# A long job can tell its progress window the main steps it will go through, up front: log(plan_line([...]))
+# with the start of each step's stage line ("Downloading English Wiktionary", "Reading entries"). The window
+# then shows "Step 2 of 4" in its corner as each of those stages starts (startup.run_with_progress). The plan
+# line itself is never shown or printed; stage lines that match no step (a retry note) leave the count alone.
+PLAN_MARK = "\x1eplan:"
+
+
+def plan_line(steps):
+    return PLAN_MARK + "\x1f".join(steps)
+
+
+def parse_plan(line):
+    """The steps in a plan line, or None if `line` is not one."""
+    return line[len(PLAN_MARK):].split("\x1f") if line.startswith(PLAN_MARK) else None

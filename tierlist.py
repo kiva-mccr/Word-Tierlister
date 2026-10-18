@@ -216,6 +216,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
 #           Browse (decided): the kinds appear in its Show drop-down only ("Nouns", "Verbs", "Obscene
 #           words"...), so Browse lists just those words; no extra sort.
+# [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
+#           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
+#           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
+#           file being downloaded, adding up the finished ones (pip names each and its size as it starts):
+#           "18.6 of 62 MB at 6.2 MB/s (30%)", which drives the bar and the time left (deps.DOWNLOAD holds the
+#           measured download sizes). Any pip version. Then "Installing..." with the sweep.
+#           "Step 2 of 5" sits in the window's bottom right corner: a job names its main steps up front
+#           (constants.plan_line; never printed) and each matching stage line moves it on (retry notes do
+#           not). Packages: downloading, installing (plus "making a private environment" when needed);
+#           first run: downloading English Wiktionary, reading entries, ranking words, detecting compound
+#           words, looking up how common, shuffling the queue (only the ones that will run:
+#           wordsource.wiktionary_steps / queue_steps). Nothing shows for a one-step job.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -858,14 +870,14 @@ import deps  # noqa: E402  (after the path line above)
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, save_progress, write_export)
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
 from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
-                        prepare_queue)
+                        prepare_queue, queue_steps, wiktionary_steps)
 
 # The window code needs tkinter, which is optional (e.g. Debian needs `apt install python3-tk`).
 # Without it everything above still works; main() explains what is missing.
@@ -958,6 +970,20 @@ def main():
                              and args.source == "wiktionary" and current != "wiktionary")
 
         def set_up(log):
+            # the main steps, up front, for the progress window's "Step 2 of 5" (the same branches as below)
+            steps, adds = [], False
+            if args.wordlist:
+                adds = existing == 0
+            elif current == "custom":
+                pass
+            elif builds_wiktionary:
+                steps, adds = wiktionary_steps(store, args.wiktionary_file), True
+            elif args.source == "wordnet" and existing == 0:
+                steps, adds = ["First run: building the word list"], True
+            steps += queue_steps(store, adds_words=adds)
+            if args.seed is not None and args.seed != store.queue_settings()["seed"]:
+                steps.append("Reshuffling the queue")
+            log(plan_line(steps))
             if args.wordlist:
                 if existing == 0:
                     store.insert_words(build_word_list(args.wordlist))

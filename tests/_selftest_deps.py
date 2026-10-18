@@ -29,7 +29,10 @@ def fake_popen(script, code):
 lines = []
 deps.subprocess.Popen = fake_popen("print('Collecting wordfreq'); print(); print('Successfully installed wordfreq-3.1')", 0)
 ok, tail = deps.install(["wordfreq"], lines.append)
-assert ok and "Successfully installed" in tail and lines[0] == "  Collecting wordfreq" and len(lines) == 2   # blank lines dropped
+from constants import parse_plan
+assert ok and "Successfully installed" in tail and parse_plan(lines[0]) == deps.INSTALL_STEPS
+assert lines[1] == "Downloading wordfreq (about 59 MB)..."                   # the first main step, with its size
+assert lines[2:] == ["  Successfully installed wordfreq-3.1"]                # blank lines and "Collecting" dropped
 deps.subprocess.Popen = fake_popen("print('error: externally-managed-environment')", 1)
 ok, tail = deps.install(["wordfreq"], lambda l: None)
 assert not ok and "externally-managed-environment" in tail

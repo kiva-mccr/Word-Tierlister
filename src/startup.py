@@ -17,6 +17,9 @@ Behaviour worth knowing
       no percentage show a sweeping bar and the elapsed time. Bars with a percentage also show an
       estimated time left (EtaTracker): "estimating time left..." at first, then e.g. "about 6 min left".
       Any future progress bar should use EtaTracker and format_eta the same way.
+    * A job can name its main steps up front (log(constants.plan_line([...]))): then "Step 2 of 5" shows in
+      the bottom right corner as each stage line starting with one of them comes in (step_of). The plan line
+      is never shown or printed.
     * Closing the window is safe: downloads resume from their .part file and parsing restarts from
       the saved stage. It raises SystemExit; run the program again to continue.
     * Exceptions (including SystemExit with a message) raised by the work are re-raised in the
@@ -36,6 +39,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import deps
+from constants import parse_plan
 from errors import ask_choices, ask_yes_no
 from fonts import font
 from problems import STOPPED_MESSAGE, SetupError, ensure_streams, open_log
@@ -123,6 +127,17 @@ class EtaTracker:
         return max(0.0, (100.0 - p1) / rate - (now - t1))
 
 
+def step_of(plan, stage, current):
+    """(i, n) for the plan step `stage` starts (a plan line's names are the starts of stage lines), else
+    `current` unchanged (a stage line that is not a main step, like a retry note). None for a one-step plan."""
+    if len(plan) < 2:
+        return None
+    for i, name in enumerate(plan, 1):
+        if stage.startswith(name):
+            return (i, len(plan))
+    return current
+
+
 def format_elapsed(seconds):
     """'0:07' or '12:03' style elapsed time."""
     s = int(seconds)
@@ -156,17 +171,21 @@ class StartupWindow:
         self.elapsed.pack(anchor="w", pady=(10, 0))
         ttk.Label(box, text=intro, foreground=PALETTE["muted"], wraplength=wrap, justify="left"
                   ).pack(anchor="w", pady=(14, 0))
+        # "Step 2 of 4" in the bottom right corner, when the job said what its main steps are (plan_line)
+        self.step = ttk.Label(box, text="", foreground=PALETTE["muted"])
+        self.step.pack(anchor="e", pady=(8, 0))
         self.win.update_idletasks()
         w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
         ax, ay, aw, ah = usable_area(root)        # the monitor the pointer is on
         self.win.geometry(f"+{max(ax + (aw - w) // 2, 0)}+{max(ay + (ah - h) // 3, 0)}")
 
-    def show(self, stage, detail, percent, elapsed, eta=None):
+    def show(self, stage, detail, percent, elapsed, eta=None, step=None):
         """Update the labels and bar. `percent` None means unknown: the bar sweeps instead of filling.
 
         `eta` is the time-left text (format_eta); with a known percentage but no `eta` yet the line
-        says it is estimating.
+        says it is estimating. `step` = (i, n) shows "Step i of n" in the corner (nothing for None).
         """
+        self.step.config(text=f"Step {step[0]} of {step[1]}" if step else "")
         self.stage.config(text=stage or "Starting...")
         self.detail.config(text=detail or "Getting started...")   # never blank
         if percent is None:
@@ -207,7 +226,7 @@ def run_with_progress(root, work, title="Setting up your word list", delay_ms=DE
 
     def log(text):
         text = str(text)
-        if sys.stdout is not None:          # no console when started without one
+        if sys.stdout is not None and parse_plan(text) is None:   # no console when started without one
             print(text)
         messages.put(text)
 
@@ -221,7 +240,7 @@ def run_with_progress(root, work, title="Setting up your word list", delay_ms=DE
 
     eta = EtaTracker()
     state = {"stage": initial_stage, "detail": "", "percent": 1, "win": None, "closed": False, "ui_failed": False,
-             "stop": False}
+             "stop": False, "plan": [], "step": None}
     t0 = time.time()
 
     def on_close():
@@ -236,6 +255,10 @@ def run_with_progress(root, work, title="Setting up your word list", delay_ms=DE
                 line = messages.get_nowait()
             except queue.Empty:
                 break
+            plan = parse_plan(line)
+            if plan is not None:
+                state["plan"], state["step"] = plan, None
+                continue
             if line.startswith((" ", "\t")):
                 state["detail"] = line.strip()
                 pct = parse_progress(line)
@@ -245,6 +268,7 @@ def run_with_progress(root, work, title="Setting up your word list", delay_ms=DE
             elif line.strip():
                 state["stage"], state["detail"], state["percent"] = line.strip(), "", None
                 eta.reset()
+                state["step"] = step_of(state["plan"], line.strip(), state["step"])
         if outcome.get("done") and messages.empty():
             root.quit()
             return
@@ -258,7 +282,7 @@ def run_with_progress(root, work, title="Setting up your word list", delay_ms=DE
                 if state["win"] is not None:
                     left = eta.remaining(time.time())
                     state["win"].show(state["stage"], state["detail"], state["percent"], elapsed,
-                                      format_eta(left) if left is not None else None)
+                                      format_eta(left) if left is not None else None, state["step"])
             except Exception as exc:
                 state["ui_failed"] = True
                 if state["win"] is not None:

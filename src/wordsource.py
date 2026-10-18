@@ -349,6 +349,30 @@ def fill_frequencies(store, log=print):
     store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
 
 
+def wiktionary_steps(store, path=None):
+    """The main steps build_wiktionary will report, for the progress window's "Step 2 of 5" (plan_line)."""
+    steps = []
+    if store.get_meta("wk_done") != "1":
+        default = os.path.join(os.path.dirname(os.path.abspath(store.path)), WIKT_FILENAME)
+        if path is None and not os.path.exists(default):
+            steps.append("Downloading English Wiktionary")
+        steps.append("Reading entries")
+    return steps + ["Ranking words"]
+
+
+def queue_steps(store, adds_words=False):
+    """The main steps prepare_queue will report (see wiktionary_steps). `adds_words`: words are about to be
+    added first, which makes it redo all three (adding words resets pen_done and freq_done)."""
+    if not adds_words and not store.count_words():
+        return []
+    pen = adds_words or store.get_meta("pen_done") != "1"
+    freq = adds_words or store.get_meta("freq_done") != store.FREQ_VERSION
+    shuffle = pen or store.db.execute(
+        "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
+    return ((["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
+            + (["Shuffling the queue"] if shuffle else []))
+
+
 def prepare_queue(store, log=print):
     """Make sure every unplaced word has a queue position. Runs at startup; cheap when up to date."""
     if not store.count_words():
