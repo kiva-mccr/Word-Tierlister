@@ -283,15 +283,48 @@ class Store:
         self.db.commit()
         self.version += 1
 
+    def _follow_anchors(self, before):
+        """After a move (UI-40): an anchor word that left its tier hands the job to its neighbour there, the
+        word ranked just below it if it moved down (or out of the tiers), just above if it moved up (the other
+        side if there is none). A tier left with no other words keeps an empty slot. `before` are the moved
+        words' rows from before the move. Returns (changes, anchors before) with changes as
+        [(word, old tier, new tier, new anchor or None)], or ([], None) when no anchor moved."""
+        anchors = self.get_anchors()
+        changes = []
+        for r in before:
+            t = r["tier"]
+            if t is None or anchors[t] != r["word"]:
+                continue
+            now = self.db.execute("SELECT tier FROM words WHERE word=?", (r["word"],)).fetchone()[0]
+            if now == t:
+                continue
+            below = ("rating<=? ORDER BY rating DESC", "rating>? ORDER BY rating ASC")
+            for cond in (below if now is None or now > t else below[::-1]):
+                row = self.db.execute(f"SELECT word FROM words WHERE tier=? AND word!=? AND {cond} LIMIT 1",
+                                      (t, r["word"], r["rating"])).fetchone()
+                if row:
+                    break
+            new = row[0] if row else None
+            changes.append((r["word"], t, now, new))
+        if not changes:
+            return [], None
+        for _w, t, _now, new in changes:
+            self.db.execute("DELETE FROM anchors WHERE tier=?", (t,))
+            if new is not None:
+                self.db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, new))
+        return changes, anchors
+
     # ---- history / undo -------------------------------------------------------
     def _snap(self, words):
         """Copy the current rows of `words` (dicts) so an action can be undone later."""
         q = ",".join("?" * len(words))
         return [dict(r) for r in self.db.execute(f"SELECT * FROM words WHERE word IN ({q})", list(words))]
 
-    def _push(self, before, comp_ids=(), conf_added=(), comps_deleted=(), conf_deleted=()):
-        """Record one undoable action: the rows as they were, plus which comparisons/conflicts it added or removed."""
+    def _push(self, before, comp_ids=(), conf_added=(), comps_deleted=(), conf_deleted=(), anchors=None):
+        """Record one undoable action: the rows as they were, plus which comparisons/conflicts it added or removed
+        and, when it changed them (UI-40), the anchors as they were."""
         payload = {
+            "anchors": anchors,
             "before": before,
             "comp_ids": list(comp_ids),
             "conf_added": [list(p) for p in conf_added],
@@ -330,6 +363,11 @@ class Store:
             )
         for a, b in p["conf_deleted"]:
             self.db.execute("INSERT OR IGNORE INTO conflicts(a, b) VALUES(?, ?)", (a, b))
+        if p.get("anchors") is not None:                 # an anchor had followed its tier: put them back
+            self.db.execute("DELETE FROM anchors")
+            for t, w in enumerate(p["anchors"]):
+                if w is not None:
+                    self.db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, w))
         self.db.execute("DELETE FROM history WHERE id=?", (row["id"],))
         self.db.commit()
         self.version += 1
@@ -337,7 +375,8 @@ class Store:
 
     # ---- placement ----------------------------------------------------------------
     def place(self, word, tier, comps=()):
-        """Put `word` in `tier`. comps = [(anchor_word, 'a'|'b'|'tie')] where 'a' means word won."""
+        """Put `word` in `tier`. comps = [(anchor_word, 'a'|'b'|'tie')] where 'a' means word won. Moving an anchor
+        word hands its old tier's anchor on (UI-40); returns those changes (see _follow_anchors)."""
         before = self._snap([word])
         ids = []
         now = time.time()
@@ -356,8 +395,10 @@ class Store:
         self.db.execute(
             "UPDATE words SET tier=?, rating=?, games=0 WHERE word=?", (tier, tier_base(tier), word)
         )
-        self._push(before, comp_ids=ids)
+        changes, anchors = self._follow_anchors(before)
+        self._push(before, comp_ids=ids, anchors=anchors)
         self.db.commit()
+        return changes
 
     def unplace(self, word):
         """Send a placed word back to the front of the queue so it is judged again next."""
@@ -467,12 +508,14 @@ class Store:
             else:
                 self.db.execute("UPDATE words SET games=games+1 WHERE word IN (?, ?)", (a, b))
 
+        info["anchors"], anchors = self._follow_anchors(before)
         self._push(
             before,
             comp_ids=[comp_id],
             conf_added=conf_added,
             comps_deleted=comps_deleted,
             conf_deleted=conf_deleted,
+            anchors=anchors,
         )
         self.db.commit()
         return info

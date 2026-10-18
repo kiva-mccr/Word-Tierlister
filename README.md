@@ -31,7 +31,7 @@ replacing the other folders never loses your list.
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults. No dependencies. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, boundary swaps, merging. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, conflicts, boundary swaps, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, queue prep. |
 | `src/saves.py` | Finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |

@@ -82,7 +82,6 @@ class App:
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
-        self.anchors = store.get_anchors()
         self.cur_word = None
         self.cmp = None
         self.pair = None
@@ -1007,6 +1006,7 @@ class App:
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
             self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.note_anchor_changes(info["anchors"])
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
                        "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
@@ -1237,6 +1237,20 @@ class App:
                     bw.render_def()
         self.root.after(120, self._poll_defs)
 
+    # ---- anchors ----------------------------------------------------------------------------------------------
+    @property
+    def anchors(self):
+        """The six anchor words (None for an empty slot), read from the save: they can change under us (UI-40)."""
+        return self.store.get_anchors()
+
+    def note_anchor_changes(self, changes):
+        """A short message for each anchor that moved and handed its tier's anchor on (UI-40)."""
+        for word, old, new_tier, new in changes:
+            where = f"moved to {TIERS[new_tier]}" if new_tier is not None else "left its tier"
+            then = (f"the {TIERS[old]} anchor is now {new}" if new else
+                    f"tier {TIERS[old]} has no anchor until you pick one (Settings)")
+            self.flash(f"{word} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
+
     # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
     def open_browser(self):
         """Open the Browse window, or raise it if one is already open."""
@@ -1294,7 +1308,6 @@ class App:
                 dlg.refit()
                 return
             self.store.set_anchors(words)
-            self.anchors = self.store.get_anchors()
             dlg.close()
             self.after_external_change()
 

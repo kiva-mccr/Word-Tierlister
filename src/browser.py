@@ -401,15 +401,17 @@ class Browser:
         self.def_text.config(state="disabled")
 
     def move(self, tier):
-        """Move the selected word to `tier` (anchor words are protected) and refresh every window."""
+        """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's
+        anchor passes to its neighbour there, and a message says so (UI-40)."""
         w = self._selected()
         if not w:
             return
-        if w in self.store.get_anchors():
-            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
-            return
-        self.store.place(w, tier)
+        row = self.store.get_word(w)
+        if row is not None and row["tier"] == tier:
+            return                                   # already there (placing again would reset its duels)
+        changes = self.store.place(w, tier)
         self.app.after_external_change()
+        self.app.note_anchor_changes(changes)
         self.reload(keep_view=True)
 
     def unplace(self):

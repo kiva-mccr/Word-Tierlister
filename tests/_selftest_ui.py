@@ -209,8 +209,14 @@ bw.filter_var.set("All placed"); bw.search_var.set("serend"); bw.reload(); pump(
 assert "serendipity" in bw.tree.get_children()
 bw.tree.selection_set("serendipity"); pump(2)
 assert "serendipity" in bw.def_text.get("1.0", "end")
-bw.move(2)                                                         # anchors are protected
-assert shown and s.get_word("serendipity")["tier"] == 0
+# an anchor may move (UI-40): its old tier's anchor passes on, a message says so, undo puts it all back
+anchors0 = s.get_anchors()
+bw.move(2); pump(2)
+assert s.get_word("serendipity")["tier"] == 2 and s.get_anchors()[0] not in (None, "serendipity")
+assert app.anchors == s.get_anchors() and app.toast.cget("text").startswith("serendipity moved to B; the S anchor is now")
+app.undo(); pump(2)
+assert s.get_word("serendipity")["tier"] == 0 and s.get_anchors() == anchors0
+bw.reload(keep_view=True); bw.tree.selection_set("serendipity"); pump(1)
 bw.search_var.set("w00010"); bw.reload(); pump(2)
 bw.tree.selection_set("w00010"); pump(2)
 bw.move(0)

@@ -495,12 +495,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           remembered for the next open, so closing by accident costs nothing.
 # [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
 #           the Unplace button, with undo.
-# [ ] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
+# [x] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
 #           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
 #           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
 #           toast says so ("table moved to C; the B anchor is now gristle"). If the old tier has no other
 #           words, its anchor slot stays empty until one is picked (confirmed). Today the moved word stays
 #           registered as the old tier's anchor, which is quietly wrong.
+#           Built: Store._follow_anchors runs after every tier change (place: Browse's Move to; a boundary
+#           swap) and returns what changed; ties in rating are fine (any of the equals). Undo puts the
+#           anchors back (the history keeps them). Browse's Move to no longer refuses anchor words; moving a
+#           word to the tier it is already in does nothing (it used to reset its duels). App.anchors now
+#           reads the save each time. A merge never moves placed words, so it cannot move an anchor.
+#           Unplace (back to queue) still refuses anchor words.
 # [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
 #           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
 #           highlighted and redrawn live as spread changes. The intro text shrinks to one line.

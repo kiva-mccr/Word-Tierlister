@@ -99,6 +99,42 @@ s.db.set_trace_callback(seen_sql.append)
 s.pick_boundary(); s.db.set_trace_callback(None)
 assert all(int(q.rsplit("LIMIT", 1)[1]) <= s.BOUNDARY_POOL for q in seen_sql if "ORDER BY rating" in q), seen_sql
 
+# anchors follow their tier (UI-40): an anchor that moves hands its old tier's anchor to its neighbour there
+an = s.get_anchors()
+b_words = [r[0] for r in s.db.execute("SELECT word FROM words WHERE tier=2 ORDER BY rating, word")]
+s.db.execute("UPDATE words SET rating=? WHERE word=?", (1500.0, an[2]))           # B's anchor sits mid-tier
+others = [w for w in b_words if w != an[2]]
+for i, w in enumerate(others):                                                       # neighbours above and below
+    s.db.execute("UPDATE words SET rating=? WHERE word=?", (1490.0 - i if i % 2 else 1510.0 + i, w))
+s.db.commit()
+below = s.db.execute("SELECT word FROM words WHERE tier=2 AND word!=? AND rating<=1500 ORDER BY rating DESC", (an[2],)).fetchone()[0]
+above = s.db.execute("SELECT word FROM words WHERE tier=2 AND word!=? AND rating>1500 ORDER BY rating ASC", (an[2],)).fetchone()[0]
+changes = s.place(an[2], 4)                                                          # moved down: the one just below
+assert changes == [(an[2], 2, 4, below)] and s.get_anchors()[2] == below and s.get_anchors()[4] == an[4]
+s.undo(); assert s.get_anchors() == an and s.get_word(an[2])["tier"] == 2         # undo restores the anchors too
+s.db.execute("UPDATE words SET rating=1500 WHERE word=?", (an[2],)); s.db.commit()
+changes = s.place(an[2], 0)                                                          # moved up: the one just above
+assert changes == [(an[2], 2, 0, above)] and s.get_anchors()[2] == above
+s.undo()
+assert s.place(an[2], 2) == [] and s.get_anchors() == an                            # same tier: nothing changes
+assert s.place(b_words[0] if b_words[0] != an[2] else b_words[1], 3) == []           # not an anchor: nothing to do
+s.undo(); s.undo()
+# a tier with no other words keeps an empty slot
+lone = T.Store(os.path.join(tempfile.mkdtemp(), "lone.db"))
+lone.insert_words(["s1", "a1", "b1", "c1", "d1", "f1", "x"])
+lone.set_anchors(["s1", "a1", "b1", "c1", "d1", "f1"])
+assert lone.place("a1", 3) == [("a1", 1, 3, None)] and lone.get_anchors()[1] is None
+lone.undo(); assert lone.get_anchors()[1] == "a1"
+# a boundary swap moves an anchor too: the swap's info says so, and undo restores
+lone.place("x", 2)
+lone.db.execute("UPDATE words SET rating=? WHERE word='b1'", (1000.0,)); lone.db.commit()
+info = lone.record_comparison("a1", "b1", "b", "boundary")                          # b1 (B) beats a1 (A): swap
+assert info["swapped"] and lone.get_anchors()[1] == "b1", (info, lone.get_anchors())   # A passes to the word that came up
+assert {c[0] for c in info["anchors"]} == {"a1", "b1"}                               # both were anchors
+assert lone.get_anchors()[2] == "x"                                                  # B passes to its other word
+lone.undo(); assert lone.get_anchors() == ["s1", "a1", "b1", "c1", "d1", "f1"] and lone.get_word("a1")["tier"] == 1
+lone.close()
+
 # unplace puts word back at the front of the queue
 s.unplace("w050")
 assert s.next_unplaced()["word"] == "w050"
