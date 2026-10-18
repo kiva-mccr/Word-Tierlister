@@ -420,6 +420,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
 #           Fixed (reported): the cards sat left of centre when the line under them (the conflict note) was
 #           wider than they are; DuelCards centres its grid (grid_anchor "n").
+#           Fixed (reported: sorting very fast, the buttons moved as the card changed): a long word shown in a
+#           smaller font made the card shorter (its padding follows the font) or, a pixel over the wrap limit,
+#           wrapped onto two lines and made it taller, so everything below re-centred; and an odd card width
+#           shifted the centring by a pixel. The card now keeps its full-size height (min_line,
+#           full_linespace), stays on one line when only a few pixels over (WRAP_SLACK), and has an even width.
+#           The key hint in the bottom bar no longer has a fixed wrap width (it broke onto two lines when zoomed).
 # [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 #           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
@@ -617,6 +623,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
 #           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
 #           Reduce motion the bar stands still.
+# [ ] UI-51 Look up a word to sort it (asked for): a little search icon opens a search over the whole unsorted
+#           list (as you type, like Browse's search, but over words not placed yet); picking one makes it the
+#           word on the card in Place new words, to sort now, without changing the queue order for the rest.
+#           Where the icon goes is to be talked over first (beside the word card, in the header, or the tab
+#           row). (Browse can already find placed words; W-1 looks words up from inside a definition.)
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

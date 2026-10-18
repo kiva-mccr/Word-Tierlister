@@ -243,7 +243,7 @@ class App:
         ttk.Button(bottom, text="Undo", command=self.undo, takefocus=0).pack(side="left")
         ttk.Button(bottom, text="Browse / edit...", command=self.open_browser, takefocus=0).pack(side="left", padx=6)
         ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0).pack(side="left")
-        self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right", wraplength=560)
+        self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
         self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim)
@@ -443,6 +443,15 @@ class App:
             base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom * self.grow)))
             fnt = font(role)
             fnt.configure(size=base)
+            if role == "word":                 # the card keeps one full-size line's height for long words
+                probe = self.word_card.create_text(0, 0, text=self.word_card.word or "Ag", font=fnt, anchor="nw")
+                box = self.word_card.bbox(probe)
+                self.word_card.delete(probe)
+                self.word_card.min_line = box[3] - box[1] if box else fnt.metrics("linespace")
+                self.word_card.full_linespace = fnt.metrics("linespace")
+                # aim inside the card's own wrap limit: its padding shrinks with the font, and a word that comes
+                # out a pixel wider than the limit wraps onto two lines (and the card grows)
+                avail = min(avail, self.word_card.cget("wraplength") - 4)
             need = max((fnt.measure(t) for t in texts if t), default=0)
             if need > avail > 0:
                 fnt.configure(size=max(7, int(base * 0.35), int(base * avail / need)))

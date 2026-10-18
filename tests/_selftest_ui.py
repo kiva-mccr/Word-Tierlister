@@ -443,6 +443,23 @@ assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   3 skipped", line       
 assert "conflict" not in line                                       # only when there are some
 assert A.format_stats({"placed": 1, "total": 2, "skipped": 0, "conflicts": 1}).endswith("1 conflict to look at")
 assert "/hr" not in app.stats_lbl.cget("text") and "today" not in app.stats_lbl.cget("text")
+# sorting fast through long and short words: the buttons never move (reported); the key hint stays on one line
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+long_short = ["incomprehensibilities", "ox", "electroencephalograph", "cat"]
+s.insert_words(long_short)
+s.db.executemany("UPDATE words SET qkey=? WHERE word=?", [(-100 + i, w) for i, w in enumerate(long_short)]); s.db.commit()
+app.refresh(); pump(2)
+spots = set()
+for _ in range(4):
+    key("2"); root.update()
+    for _ in range(3):
+        root.update(); time.sleep(0.01)
+        spots.add(tuple((b.winfo_rootx(), b.winfo_rooty()) for b in (app.tier_btns[0], app.tier_btns[5], app.compare_btn, app.later_btn)))
+app.anim.finish_all(); pump(2)
+assert len(spots) == 1, spots
+assert int(app.hint_lbl.cget("wraplength") or 0) == 0                            # no fixed wrap width
+for _ in range(4):
+    app.undo(); pump(1)
 # the progress shelf (UI-14) follows placements
 placed_before = sum(sp["placed"] for sp in app.progress_bar.data["spines"])
 app.mode_var.set("place"); app.on_mode_change(); pump(2)

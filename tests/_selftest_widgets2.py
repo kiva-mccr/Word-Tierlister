@@ -446,6 +446,20 @@ dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
 
+# ---- WordCard keeps a steady size for long words (reported: the buttons moved when sorting fast)
+wc_font = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
+wc = WordCard(root, wc_font, small, wraplength=600); wc.pack(); wc.set("ox", "rank #1"); update()
+h_short = wc.winfo_reqheight()
+probe = wc.create_text(0, 0, text="ox", font=wc_font, anchor="nw"); b = wc.bbox(probe); wc.delete(probe)
+wc.min_line, wc.full_linespace = b[3] - b[1], wc_font.metrics("linespace")
+wc_font.configure(size=24); wc.set("incomprehensibilities", "rank #2"); update()            # shown smaller
+assert wc.winfo_reqheight() == h_short, (wc.winfo_reqheight(), h_short)                     # not shorter
+assert wc.winfo_reqwidth() % 2 == 0                                                       # even: centring never wobbles
+over = wc_font.measure("incomprehensibilities") - 6                                       # a few pixels too wide
+wc.configure(wraplength=over); update()
+assert len(wc.find_withtag("word")) == 1 and wc.winfo_reqheight() == h_short             # still one line
+wc.destroy()
+
 # ---- DuelCards stays centred in a frame wider than the cards (reported: the conflict line widened it)
 wide = tk.Toplevel(root); wide.geometry("1400x500+0+0"); wide.columnconfigure(0, weight=1)
 dc = DuelCards(wide, lambda side: None, small, small); dc.grid(row=0, column=0, sticky="ew")

@@ -1328,16 +1328,22 @@ class WordCard(tk.Canvas):
     * The card is at least as wide as `min_chars` letters of the word font, so it does not jump in
       width from word to word; longer words widen it (up to `wraplength`, then they wrap).
     * `word` / `sub` read the current text. configure(wraplength=) sets where text wraps.
+    * `min_line`: the card is never shorter than one line of the word at this height, so a long word shown in a
+      smaller font does not make it shorter (the buttons under it would jump up and down when sorting fast).
+      Its width is always even, so centring it never moves anything by half a pixel either way.
     * refresh() re-measures after the shared fonts were resized.
     """
     SHADOW = 4
     MIN_CHARS = 6
+    WRAP_SLACK = 12        # a word at most this many pixels wider than the wrap limit stays on one line
 
     def __init__(self, parent, word_font, sub_font, wraplength=0, radius=26, canvas_bg=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
         self._wfont, self._sfont = word_font, sub_font
         self._word, self._sub, self._wrap = "", "", wraplength
         self._radius = radius
+        self.min_line = 0            # the word's drawn height at full size, and the font's line spacing at full size
+        self.full_linespace = 0      # (both set by the app before it shrinks a long word; 0 = no minimum)
         self.bind("<Configure>", lambda e: self._draw())
         self._draw()
 
@@ -1348,7 +1354,8 @@ class WordCard(tk.Canvas):
 
     @property
     def _pady(self):
-        return int(self._wfont.metrics("linespace") * 0.28)
+        # (at least the full-size padding: a long word shown smaller must not make the card shorter)
+        return max(int(self._wfont.metrics("linespace") * 0.28), int(self.full_linespace * 0.28))
 
     @property
     def word(self):
@@ -1443,6 +1450,9 @@ class WordCard(tk.Canvas):
     def _draw(self):
         self.delete("all")
         wrap = self._wrap if self._wrap > 0 else 0
+        if wrap and self._wfont.measure(self._word) <= wrap + self.WRAP_SLACK:
+            wrap = 0                          # a few pixels over: one line (wrapping would strand a letter or two
+                                              # on a second line, and the taller card would move the buttons)
         word = self.create_text(0, 0, text=self._word, font=self._wfont, fill=PALETTE["text"], width=wrap,
                                 justify="center", anchor="n", tags="word")
         wb = self.bbox(word)
@@ -1458,7 +1468,9 @@ class WordCard(tk.Canvas):
         gap = int(self._sfont.metrics("linespace") * 0.4) if self._sub else 0
         min_w = self._wfont.measure("n" * self.MIN_CHARS)
         need_w = max(tw, sw, min_w) + 2 * self.padx + self.SHADOW
-        need_h = th + gap + sh + 2 * self._pady + self.SHADOW
+        need_w += need_w % 2
+        word_h = max(th, self.min_line)
+        need_h = word_h + gap + sh + 2 * self._pady + self.SHADOW
         super().configure(width=need_w, height=need_h)
         w, h = max(self.winfo_width(), need_w), max(self.winfo_height(), need_h)
         bw, bh = w - self.SHADOW, h - self.SHADOW
@@ -1467,11 +1479,11 @@ class WordCard(tk.Canvas):
                             smooth=True, fill=PALETTE["shadow"], outline="", tags="shadow")
         self.create_polygon(_rounded_points(1, 1, bw - 1, bh - 1, r), smooth=True, fill=PALETTE["surface"],
                             outline=PALETTE["border"], tags="card")
-        top = (bh - (th + gap + sh)) / 2
-        self.coords(word, bw / 2, top)
+        top = (bh - (word_h + gap + sh)) / 2
+        self.coords(word, bw / 2, top + (word_h - th) / 2)
         if self._sub:
-            self.coords("sub", bw / 2, top + th + gap)
-        self._layout = (bw / 2, top, top + th + gap if self._sub else None)   # resting places (transition_from)
+            self.coords("sub", bw / 2, top + word_h + gap)
+        self._layout = (bw / 2, top + (word_h - th) / 2, top + word_h + gap if self._sub else None)   # (transition_from)
         self.tag_raise("word")
         self.tag_raise("sub")
 
