@@ -543,11 +543,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           hint follow.
 #           Built: Space (or Escape) leaves; Back is greyed out until there is an answer to step back from, so
 #           a held Backspace stops at the first question; the bottom-right hint reads "Space stop comparing".
-# [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
+# [x] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
 #           in from slightly smaller; preferred over a fade), and a click on the main window's empty
 #           background closes it (not a click on a pill, card or button, so a quick click never loses your
 #           place). Its unsaved state (search, filter, scroll) is
 #           remembered for the next open, so closing by accident costs nothing.
+#           Built: it eases out from 94% of its size round its centre once it is on screen, and the list
+#           fills when the ease ends (loading rows mid-ease made each frame 40-60 ms; now ~6 ms). A click on a
+#           bare frame of the main window closes it (App._click_background; not the pills' row, cards,
+#           buttons, labels or the shelf). Search, Show, Sort, the selected word and the scroll position come
+#           back on the next open (for this run of the program). Reduce motion: no ease.
 # [x] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
 #           the Unplace button, with undo.
 #           Built: Delete (keypad too; Backspace on macOS) in the list unplaces the selected word, anchors

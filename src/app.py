@@ -93,6 +93,7 @@ class App:
         self.mem_defs = {}
         self.def_words = []
         self.browsers = []
+        self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
@@ -128,6 +129,7 @@ class App:
             root.bind(seq, lambda e: self.set_zoom(1.0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
+        root.bind("<ButtonPress-1>", self._click_background, add="+")
         root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._update_options()
@@ -1313,6 +1315,15 @@ class App:
             self.flash(f"{word} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
 
     # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
+    def _click_background(self, e):
+        """A click on the main window's empty background (a bare frame, not a pill, card, button, label or the
+        shelf) closes the Browse window (UI-38), so a quick click on something never loses your place."""
+        if not self.browsers or type(e.widget) not in (tk.Tk, tk.Frame, ttk.Frame):
+            return                     # (exactly a frame: the tier pills' row and other widgets are frames too)
+        for bw in list(self.browsers):
+            if bw.alive():
+                bw.close()
+
     def open_browser(self):
         """Open the Browse window, or raise it if one is already open."""
         for bw in self.browsers:

@@ -28,6 +28,7 @@ class Browser:
 
     CHUNK = 3000                 # rows fetched per page; the next page loads when you scroll near the end
     BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
+    OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
 
     def __init__(self, app):
         """Build the window and load the first page of rows. `app` is the main App (store, fonts, definitions)."""
@@ -47,6 +48,7 @@ class Browser:
         self._count_digits = None                 # digits in the total the minimum size was last set for
         self._seen_version = -1
         self._loading = False
+        self._opening = True                       # easing open; the list fills when it ends (_open_animation)
         self.fsize = 0
         try:
             self.zoom = max(-4, min(30, int(app.store.get_meta("browse_zoom", "0"))))
@@ -154,7 +156,10 @@ class Browser:
         self._fit_to_contents()
         self._apply_scale()
         entry.focus_set()
-        self.reload()
+        state = getattr(app, "browse_state", None)
+        # the rows load once the window has eased open: re-laying out a full list on every frame of the ease
+        # made it stutter (40-60 ms a frame)
+        self._open_animation(lambda: self._restore(state) if state else self.reload())
 
     # ---- window lifecycle ---------------------------------------------------------------------
     @property
@@ -170,10 +175,71 @@ class Browser:
             return False
 
     def close(self):
-        """Unregister from the App and destroy the window."""
+        """Unregister from the App and destroy the window. What you were looking at (search, Show, Sort, the
+        selected word, how far you had scrolled) is kept for the next open, so closing by accident costs
+        nothing (UI-38; for this run of the program only)."""
         if self in self.app.browsers:
             self.app.browsers.remove(self)
+        try:
+            self.app.browse_state = {"search": self.search_var.get(), "filter": self.filter_var.get(),
+                                     "sort": self.sort_var.get(), "selected": self.current,
+                                     "loaded": self.loaded, "view": self.tree.yview()[0]}
+        except tk.TclError:
+            pass
         self.win.destroy()
+
+    def _restore(self, state):
+        """Open where the last Browse window was closed (see close)."""
+        self.search_var.set(state["search"])
+        if self._job:                                # (setting the search text started the typing timer)
+            self.win.after_cancel(self._job)
+            self._job = None
+        self.filter_var.set(state["filter"])
+        self.sort_var.set(state["sort"])
+        self.current, self.loaded = state["selected"], state["loaded"]
+        self.reload(keep_view=True, view=state["view"])
+        if self.current and self.tree.exists(self.current):
+            self.render_def()
+
+    def _open_animation(self, then):
+        """Ease the window out from slightly smaller round its centre (about 150 ms; none with Reduce motion),
+        then call then() (which fills the list). The text is not re-scaled meanwhile: that waits for the size
+        to settle (_on_configure)."""
+        anim = self.app.anim
+        try:
+            w, h, x, y = (int(v) for v in self.win.geometry().replace("x", "+").split("+"))
+        except ValueError:
+            w = 0
+        if anim.reduce_motion or not w:
+            self._opening = False
+            then()
+            return
+        cx, cy = x + w / 2, y + h / 2
+
+        def frame(p):
+            k = self.OPEN_FROM + (1 - self.OPEN_FROM) * p
+            ww, hh = int(round(w * k)), int(round(h * k))
+            try:
+                self.win.geometry(f"{ww}x{hh}+{int(round(cx - ww / 2))}+{int(round(cy - hh / 2))}")
+            except tk.TclError:
+                pass                                 # closed while opening
+        frame(0.0)                                   # it first appears at the small size...
+
+        def start(e=None):
+            self.win.unbind("<Map>")
+            # ...and the clock starts once it is on screen and drawn: the first draw of a full list takes a
+            # while, and an ease timed from before it was over before anyone saw it
+            self.win.after_idle(lambda: self.win.after(0, lambda: anim.run(f"browse-open{id(self)}",
+                                                                          self.OPEN_MS, frame, done)))
+
+        def done():
+            self._opening = False
+            if self.alive():
+                then()
+        if self.win.winfo_ismapped():
+            start()
+        else:
+            self.win.bind("<Map>", start)
 
     # ---- scaling ------------------------------------------------------------------------------------
     def _on_configure(self, e):
@@ -278,7 +344,10 @@ class Browser:
         self._job = self.win.after(200, self.reload)
 
     def _maybe_refresh(self):
-        """Reload (keeping the scroll position) if anything changed in the save since the last load."""
+        """Reload (keeping the scroll position) if anything changed in the save since the last load. Not while
+        the window is still opening: the list fills when the ease ends (a load mid-ease made it stutter)."""
+        if self._opening:
+            return
         if self.store.version != self._seen_version:
             self.reload(keep_view=True)
 
@@ -321,12 +390,14 @@ class Browser:
         else:
             self.count_lbl.config(text=f"{self.total:,} words")
 
-    def reload(self, keep_view=False):
-        """Reload the list from the top, or (keep_view) as many rows as were showing, at the same scroll spot."""
+    def reload(self, keep_view=False, view=None):
+        """Reload the list from the top, or (keep_view) as many rows as were showing, at the same scroll spot
+        (or at `view`, a fraction of the list, when reopening)."""
         self._job = None
         keep = self.current
         want = max(self.CHUNK, self.loaded) if keep_view else self.CHUNK
-        view = self.tree.yview()[0] if keep_view else 0.0
+        if view is None:
+            view = self.tree.yview()[0] if keep_view else 0.0
         rows, total = self._query(limit=want)
         self._clear_tree()
         self._add_rows(rows)

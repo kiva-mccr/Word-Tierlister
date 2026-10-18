@@ -107,7 +107,33 @@ bw.entry.focus_set(); bw.entry.insert(0, "x"); pump(1)                   # typin
 n_placed = store.stats()["placed"]
 bw.entry.icursor(0); bw.entry.event_generate("<Delete>"); pump(2)
 assert store.stats()["placed"] == n_placed
+# UI-38: closing remembers what you were looking at; the next open starts there
+bw.search_var.set(victim[:3]); bw.filter_var.set("All placed"); pump(8)
+bw.reload(); pump(2); bw.tree.selection_set(victim); pump(2)
+bw.close(); pump(2)
+app.open_browser(); pump(8)
+bw = app.browsers[0]
+assert bw.search_var.get() == victim[:3] and bw.tree.selection() == (victim,) and bw.current == victim
+# a click on a pill or the card does not close it; a click on the bare background does
+app.tier_btns[0].event_generate("<ButtonPress-1>", x=1, y=1); app.tier_btns[0].event_generate("<ButtonRelease-1>",
+                                                                                              x=-50, y=-50)
+app.tier_row.event_generate("<ButtonPress-1>", x=1, y=1); pump(2)
+assert bw.alive() and app.browsers == [bw]
+app.center.event_generate("<ButtonPress-1>", x=2, y=2); pump(2)
+assert not bw.alive() and not app.browsers
+app.browse_state = None
+app.open_browser(); bw = app.browsers[0]
+assert bw._opening and not bw.tree.get_children()                # it eases open first; the rows come after
+pump(8)
+assert not bw._opening and bw.tree.get_children() and bw.search_var.get() == ""
+w_full = bw.win.winfo_width()
 bw.close()
+app.anim.reduce_motion = True                                    # Reduce motion: no ease, rows at once
+app.open_browser(); bw = app.browsers[0]
+assert not bw._opening and bw.tree.get_children()
+pump(4); assert abs(bw.win.winfo_width() - w_full) <= 2
+bw.close()
+app.anim.reduce_motion = False
 app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons

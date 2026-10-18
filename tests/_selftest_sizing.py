@@ -68,6 +68,7 @@ for sw, sh, sc in cases:
     # Browse window: toolbars and columns must fit its width, on this screen too
     import browser as B
     B.usable_area = A.usable_area
+    app.anim.reduce_motion = True                  # (sizes, not motion: no opening ease)
     app.open_browser(); root.update(); bw = app.browsers[-1]; root.update()
     W = bw.win.winfo_width()
     assert W <= int(sw * 0.96) and bw.win.winfo_height() <= int(sh * 0.90), f"browse bigger than screen {sw}x{sh}"
