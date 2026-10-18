@@ -34,6 +34,11 @@ sq = SM._stretched_mask(1.0, 1.0, 21.0, 21.0, (0, 0, 0, 0), 0, 1)
 assert at(sq, 1, 1) == 255
 pill = SM._stretched_mask(1.0, 1.0, 61.0, 71.0, (35, 35, 35, 35), 0, 1)
 assert at(pill, 8, 12) == 255                                                      # (a circle would leave it clear)
+# M-1: with the pills' radius (more than half the width) the outline used to run back and forth along the top
+# past the corners' curves (22..61 here, the real flat top being 31.5..51.5): a stray hairline, longer zoomed in
+outline = SM._straighten(SM.smooth_outline(SM.control_points(2.0, 2.0, 81.0, 120.0, (59, 59, 59, 59)), 10))
+top = [x for x, y in outline if abs(y - 2.0) < 1e-9]
+assert min(top) == 31.5 and max(top) == 51.5, top
 # painted: a known backdrop means solid-or-clear pixels only (cheap for Tk); without one, a soft alpha edge
 rows = SM.paint_mask(mask, (255, 179, 193), None, backdrop=(251, 247, 244))
 assert all(px in (0, 255) for row in rows for px in row[3::4])

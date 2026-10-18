@@ -118,8 +118,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-10 below. Last of all: IC-1 (the icon).
 #
 # --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
-# [ ] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
-#           Windows). Likely the smooth image's edge rows (smooth.py) at large sizes; find and fix.
+# [x] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
+#           Windows). Cause: the pills' corner radius is more than half their width, so in Tk's outline recipe
+#           the top's two tangent points pass each other and the outline ran back and forth along the top,
+#           past where the corners' curves leave it: no fill, but its hairline showed, longer the bigger the
+#           zoom. Fixed: smooth._straighten cuts each straight stretch of the outline down to its two ends
+#           (the fill is unchanged, so the rounded-square look stays).
 # [ ] M-2  The word flying into the chart leaves what looks like a little white square on top of its bar
 #           (Linux and Windows); it did not before UI-53. Likely the bar's see-through edge over the toast.
 # [ ] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It

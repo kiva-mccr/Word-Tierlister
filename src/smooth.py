@@ -106,6 +106,40 @@ def smooth_outline(points, steps=10):
     return clean
 
 
+def _straighten(poly):
+    """Each straight stretch along a side (points with the same y, or the same x) down to its two ends. With a
+    corner radius bigger than half the shape (the tier pills) the side's tangent points pass each other, so
+    the outline runs back and forth along the top past the corners' curves: no fill, but its hairline
+    showed as a stray line along the top and bottom, longer the bigger the zoom."""
+    n = len(poly)
+    if n < 4:
+        return poly
+    def same(p, q):
+        return abs(p[1] - q[1]) < 1e-9 or abs(p[0] - q[0]) < 1e-9
+    start = next((i for i in range(n) if not same(poly[i - 1], poly[i])), None)
+    if start is None:
+        return poly
+    pts = poly[start:] + poly[:start]               # (begin where a straight stretch cannot wrap round)
+    out, i = [], 0
+    while i < n:
+        j = i
+        horiz = None
+        while j + 1 < n:
+            p, q = pts[j], pts[j + 1]
+            h = abs(p[1] - q[1]) < 1e-9
+            v = abs(p[0] - q[0]) < 1e-9
+            kind = "h" if h else ("v" if v else None)
+            if kind is None or (horiz is not None and kind != horiz):
+                break
+            horiz = kind
+            j += 1
+        out.append(pts[i])
+        if j > i:
+            out.append(pts[j])
+        i = j + 1
+    return out
+
+
 SUB = 4      # sub-rows per pixel row for the fill's soft top / bottom edges
 
 
@@ -196,7 +230,7 @@ def _stretched_mask(x1, y1, x2, y2, radii, width, pad):
     h = math.ceil(y2 - ky) + pad
     pts = control_points(x1, y1, x2 - kx, y2 - ky, radii)
     steps = max(3, min(10, int(min(max(radii), (x2 - x1) / 2, (y2 - y1) / 2) / 2)))   # small corners: fewer pieces
-    rows = coverage_mask(smooth_outline(pts, steps), w, h, width)
+    rows = coverage_mask(_straighten(smooth_outline(pts, steps)), w, h, width)
     if kx:
         col = int(x1 + left + 3)                   # a column in the straight part of the top and bottom
         out = []
