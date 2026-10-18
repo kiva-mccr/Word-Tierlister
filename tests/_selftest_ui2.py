@@ -125,11 +125,22 @@ assert bw.alive() and app.browsers == [bw]
 app.center.event_generate("<ButtonPress-1>", x=2, y=2); pump(2)
 assert not bw.alive() and not app.browsers
 app.browse_state = None
+import browser as _B
+_B.Browser.EASE_OPEN = True                                      # (Windows / macOS)
 app.open_browser(); bw = app.browsers[0]
 assert bw._opening and not bw.tree.get_children()                # it eases open first; the rows come after
 pump(8)
 assert not bw._opening and bw.tree.get_children() and bw.search_var.get() == ""
 w_full = bw.win.winfo_width()
+bw.close()
+_B.Browser.EASE_OPEN = None                                      # automatic: on X11 (M-5) it opens complete, still
+app.open_browser(); bw = app.browsers[0]
+if bw.win.tk.call("tk", "windowingsystem") == "x11":
+    assert not bw._opening and bw.tree.get_children()
+    sizes = set()
+    for _ in range(8):
+        pump(1); sizes.add((bw.win.winfo_width(), bw.win.winfo_height()))
+    assert len(sizes) == 1 and abs(bw.win.winfo_width() - w_full) <= 2, sizes   # no size change at all
 bw.close()
 app.anim.reduce_motion = True                                    # Reduce motion: no ease, rows at once
 app.open_browser(); bw = app.browsers[0]

@@ -140,8 +140,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           background). Two words in one spine with different tiers: one triangle, split in two halves.
 #           Built: Bookshelf.mark(spines, tiers); ui_chart.mark_color (the tier pastel 30% toward the text
 #           colour); SmoothCanvas.triangle_image(w, h, fill, right) draws the split one (left word on the left).
-# [ ] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
+# [x] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
 #           not change the window's size or position during or after the ease.
+#           Cause: on X11 every step of the size ease re-lays out the whole window while the window manager
+#           redraws its frame a beat behind, and the rows popped in after it. Fixed: on X11 Browse loads its
+#           rows before it is first drawn and opens complete and still (Browser.EASE_OPEN, automatic); Windows
+#           and macOS keep the ease. Checked under openbox: the first frame is the full window, ~100 ms.
 # [ ] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
 # [ ] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
 #           click the same heading again to flip between top-to-bottom and bottom-to-top (a small arrow

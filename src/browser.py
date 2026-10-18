@@ -29,6 +29,10 @@ class Browser:
     CHUNK = 3000                 # rows fetched per page; the next page loads when you scroll near the end
     BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
     OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
+    # ...except on Linux (X11), where each step of the ease re-lays out the whole window under a window manager
+    # that redraws its frame a beat later, and the rows popped in afterwards: it read as a bounce (M-5). There
+    # it opens complete and still. None = automatic; True / False force it (tests).
+    EASE_OPEN = None
 
     def __init__(self, app):
         """Build the window and load the first page of rows. `app` is the main App (store, fonts, definitions)."""
@@ -210,9 +214,12 @@ class Browser:
             w, h, x, y = (int(v) for v in self.win.geometry().replace("x", "+").split("+"))
         except ValueError:
             w = 0
-        if anim.reduce_motion or not w:
+        ease = self.EASE_OPEN
+        if ease is None:
+            ease = self.win.tk.call("tk", "windowingsystem") != "x11"
+        if anim.reduce_motion or not w or not ease:
             self._opening = False
-            then()
+            then()                                   # (before the window is first drawn: it appears full)
             return
         cx, cy = x + w / 2, y + h / 2
 
