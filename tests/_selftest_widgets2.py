@@ -416,11 +416,11 @@ root.after(90, root.quit); root.mainloop()
 mid = card.coords("oldword"); assert mid[0] > rest[0] and mid[1] > rest[1]   # old word on its way (right, down)
 anim.finish_all(); update(1)                                                # a key press: straight to the end
 assert not card.find_withtag("old") and card.coords("word") == card.coords("word")
-assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
+assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
 # a redraw in the middle (window resized) still ends with the word exactly in place
 card.set("plum", "rank #3"); card.transition_from("pear", "rank #2", dx=-10, dy=12, animator=anim); update(1)
 card.set("plum", "rank #3"); anim.finish_all(); update(1)
-assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and not card.find_withtag("old")
+assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and not card.find_withtag("old")
 # reported: a white flash when placing fast. A redraw mid-transition (the card resizing for the next word) keeps
 # the outgoing word, above the card's face, and the two words always have about one word's worth of ink between them
 card.set("kiwi", "rank #4"); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim); update(1)
@@ -475,18 +475,22 @@ dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
 
-# ---- WordCard keeps a steady size for long words (reported: the buttons moved when sorting fast)
+# ---- WordCard's size never depends on the word (reported: the buttons moved / flashed when sorting fast)
 wc_font = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
 wc = WordCard(root, wc_font, small, wraplength=600); wc.pack(); wc.set("ox", "rank #1"); update()
-h_short = wc.winfo_reqheight()
-probe = wc.create_text(0, 0, text="ox", font=wc_font, anchor="nw"); b = wc.bbox(probe); wc.delete(probe)
-wc.min_line, wc.full_linespace = b[3] - b[1], wc_font.metrics("linespace")
-wc_font.configure(size=24); wc.set("incomprehensibilities", "rank #2"); update()            # shown smaller
-assert wc.winfo_reqheight() == h_short, (wc.winfo_reqheight(), h_short)                     # not shorter
-assert wc.winfo_reqwidth() % 2 == 0                                                       # even: centring never wobbles
-over = wc_font.measure("incomprehensibilities") - 6                                       # a few pixels too wide
-wc.configure(wraplength=over); update()
-assert len(wc.find_withtag("word")) == 1 and wc.winfo_reqheight() == h_short             # still one line
+size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
+assert size[0] % 2 == 0                                                                   # even: centring never wobbles
+for word, sub in (("incomprehensibilities", "rank #2"), ("a", ""), ("well-to-do", "rank #3 - compound word"),
+                  ("antidisestablishmentarianism " * 5, "rank #4 - revisiting a word you skipped - compound word")):
+    wc.set(word, sub); update()
+    assert (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size, word
+    cb = wc.bbox("card")
+    for tag in ("word", "sub"):
+        b = wc.bbox(tag)
+        assert not b or (cb[0] <= b[0] and b[2] <= cb[2] and cb[1] <= b[1] and b[3] <= cb[3]), (word, tag, b, cb)
+wc.set("ox", "rank #5 - " + "a very long note " * 8); update()
+assert wc.itemcget("sub", "text").endswith("\u2026") and wc.bbox("sub")[2] <= wc.bbox("card")[2]   # cut short
+assert wc_font.cget("size") == 40                                                         # the shared font untouched
 wc.destroy()
 
 # ---- DuelCards stays centred in a frame wider than the cards (reported: the conflict line widened it)

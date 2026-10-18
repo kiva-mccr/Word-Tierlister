@@ -1331,26 +1331,31 @@ class WordCard(tk.Canvas):
         card = WordCard(parent, font("word"), font("body"))
         card.set("serendipity", "frequency rank #4,321")
 
-    * The card is at least as wide as `min_chars` letters of the word font, so it does not jump in
-      width from word to word; longer words widen it (up to `wraplength`, then they wrap).
-    * `word` / `sub` read the current text. configure(wraplength=) sets where text wraps.
-    * `min_line`: the card is never shorter than one line of the word at this height, so a long word shown in a
-      smaller font does not make it shorter (the buttons under it would jump up and down when sorting fast).
-      Its width is always even, so centring it never moves anything by half a pixel either way.
-    * refresh() re-measures after the shared fonts were resized.
+    * The card's size never depends on the word: only on the two fonts and the room it is given
+      (configure(wraplength=) = the widest the text may be). So nothing around it moves from word to word
+      (reported more than once: the tier buttons shifting or flashing while sorting fast, even with Reduce
+      motion). It is CARD_CHARS letters of the word font wide (less if the room is smaller), always even,
+      and tall enough for one line of the word and one of the sub-line.
+    * A word too wide for it is drawn in a smaller copy of the font (the shared font is never touched); below
+      MIN_SCALE of the size it wraps, still inside the one line's height. A sub-line too wide shrinks the same
+      way, then is cut short with "...".
+    * `word` / `sub` read the current text; refresh() re-measures after the shared fonts were resized.
     """
     SHADOW = 4
-    MIN_CHARS = 6
-    WRAP_SLACK = 12        # a word at most this many pixels wider than the wrap limit stays on one line
+    CARD_CHARS = 12
+    MIN_SCALE = 0.35
+    MIN_SUB_SCALE = 0.75
 
     def __init__(self, parent, word_font, sub_font, wraplength=0, radius=26, canvas_bg=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
         self._wfont, self._sfont = word_font, sub_font
+        # the fonts the text is actually drawn in (sized to fit this word), and the outgoing word's
+        self._fit, self._fit_sub, self._old_font = word_font.copy(), sub_font.copy(), word_font.copy()
+        self._fit_wrap = 0             # 0, or the width the current word wraps at
         self._word, self._sub, self._wrap = "", "", wraplength
         self._radius = radius
         self._frame, self._p = None, 0.0   # the running transition's frame (re-applied after a redraw) and its stage
-        self.min_line = 0            # the word's drawn height at full size, and the font's line spacing at full size
-        self.full_linespace = 0      # (both set by the app before it shrinks a long word; 0 = no minimum)
+        self._box = None                   # (width, height) last given to the canvas
         self.bind("<Configure>", lambda e: self._draw())
         self._draw()
 
@@ -1361,8 +1366,18 @@ class WordCard(tk.Canvas):
 
     @property
     def _pady(self):
-        # (at least the full-size padding: a long word shown smaller must not make the card shorter)
-        return max(int(self._wfont.metrics("linespace") * 0.28), int(self.full_linespace * 0.28))
+        return int(self._wfont.metrics("linespace") * 0.28)
+
+    def box(self):
+        """(width, height) of the card for the current fonts and room; the same for every word."""
+        line, sline = self._wfont.metrics("linespace"), self._sfont.metrics("linespace")
+        inner = self._wfont.measure("n" * self.CARD_CHARS)
+        if self._wrap > 0:
+            inner = min(inner, self._wrap)
+        w = inner + 2 * self.padx + self.SHADOW
+        w += w % 2                                 # even: centring it never lands on half a pixel
+        h = line + int(sline * 0.4) + sline + 2 * self._pady + self.SHADOW
+        return w, h
 
     @property
     def word(self):
@@ -1374,6 +1389,8 @@ class WordCard(tk.Canvas):
 
     def set(self, word, sub=""):
         """Show `word` with the muted line `sub` under it."""
+        self._old_font.configure(**self._fit.actual())      # (transition_from draws the outgoing word as it was)
+        self._old_wrap = self._fit_wrap
         self._word, self._sub = word, sub
         self._draw()
 
@@ -1406,35 +1423,36 @@ class WordCard(tk.Canvas):
         if animator is None or animator.reduce_motion or not old_word:
             return
         self.delete("old")
-        wrap = self._wrap if self._wrap > 0 else 0
-        word_xy, sub_xy = self.coords("word"), self.coords("sub")
-        if not word_xy:
+        if not self.coords("word"):
             return
-        # the old text, at the place the word was drawn (the card may have resized: centre on it)
-        self.create_text(*word_xy, text=old_word, font=self._wfont, fill=PALETTE["text"], width=wrap,
-                         justify="center", anchor="n", tags=("old", "oldword"))
-        if old_sub:
-            y = sub_xy[1] if sub_xy else word_xy[1] + self._wfont.metrics("linespace")
-            self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
-                             justify="center", anchor="n", tags=("old", "oldsub"))
+        # the old text, as it was drawn: its own size, centred in the word's line (the card itself does not move)
+        cx, top, sub_y = self._layout
+        old = self.create_text(cx, 0, text=old_word, font=self._old_font, fill=PALETTE["text"],
+                               width=getattr(self, "_old_wrap", 0), justify="center", anchor="n",
+                               tags=("old", "oldword"))
+        ob = self.bbox(old)
+        ow = [cx, top + (self._wfont.metrics("linespace") - (ob[3] - ob[1] if ob else 0)) / 2]
+        self.coords(old, *ow)
+        osub = None
+        if old_sub and sub_y is not None:
+            osub = [cx, sub_y]
+            self.create_text(*osub, text=old_sub, font=self._fit_sub, fill=PALETTE["muted"], justify="center",
+                             anchor="n", tags=("old", "oldsub"))
         self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
-        ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
-        cx0 = self._layout[0]                     # the card's centre when it started (it may resize meanwhile)
 
         def frame(p):
             self._p = p
-            shift = self._layout[0] - cx0              # keep the old word centred on the card as it resizes
-            self.coords("oldword", ow[0] + shift + dx * p, ow[1] + dy * p)
+            self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
             if osub:
-                self.coords("oldsub", osub[0] + shift + dx * p, osub[1] + dy * p)
+                self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
             # a crossfade: the new word comes in exactly as the old one goes, so between them there is always one
             # word's worth of ink (it used to start late, and for a few frames the card flashed empty white)
             gone = min(1.0, p / 0.55)
             q = gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
-            wx, wy, sy = self._layout
+            wx, wy, sy = self._word_xy[0], self._word_xy[1], self._layout[2]
             self.coords("word", wx, wy + back)
             if sy is not None:
                 self.coords("sub", wx, sy + back)
@@ -1453,52 +1471,87 @@ class WordCard(tk.Canvas):
         except tk.TclError:
             pass
 
-    @staticmethod
-    def _text_width(text, fnt, wrap):
-        """Width of `text` on one line, capped at the wrap width (a wrapped canvas text reports the
-        full wrap width as its box, which would make every card as wide as the window)."""
-        natural = fnt.measure(text)
-        return min(natural, wrap) if wrap else natural
+    def _fit_word(self, avail, line):
+        """Size the drawing font for the current word: the full size if it fits on one line in `avail` pixels,
+        else smaller (down to MIN_SCALE), else wrapped at `avail` and as big as still fits in `line` pixels of
+        height. Sets self._fit and self._fit_wrap."""
+        base = self._wfont
+        full = base.cget("size")
+        sign = -1 if full < 0 else 1               # (a negative size is in pixels)
+        full = abs(full)
+        a = base.actual()
+        self._fit.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * full)
+        self._fit_wrap = 0
+        need = base.measure(self._word)
+        if need <= avail or not self._word:
+            return
+        floor = max(6, int(full * self.MIN_SCALE))
+        size = max(floor, int(full * avail / need))
+        self._fit.configure(size=sign * size)
+        while size > floor and self._fit.measure(self._word) > avail:
+            size -= 1
+            self._fit.configure(size=sign * size)
+        if self._fit.measure(self._word) <= avail:
+            return
+        self._fit_wrap = avail                       # still too long: wrap, as big as fits the line's height
+        probe = self.create_text(0, 0, text=self._word, font=self._fit, width=avail, anchor="nw")
+        while size > 6:
+            b = self.bbox(probe)
+            if b and b[3] - b[1] <= line:
+                break
+            size -= 1
+            self._fit.configure(size=sign * size)
+        self.delete(probe)
+
+    def _fit_subline(self, avail):
+        """Size the sub-line's font (down to MIN_SUB_SCALE), then cut it short with "..." if it still does not fit."""
+        base = self._sfont
+        full = base.cget("size")
+        sign, full = (-1 if full < 0 else 1), abs(full)
+        a = base.actual()
+        self._fit_sub.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * full)
+        text = self._sub
+        need = base.measure(text)
+        if need <= avail:
+            return text
+        size = max(6, int(full * self.MIN_SUB_SCALE), int(full * avail / need))
+        self._fit_sub.configure(size=sign * size)
+        while self._fit_sub.measure(text) > avail and len(text) > 1:
+            text = text[:-2].rstrip() + "\u2026"
+        return text
 
     def _draw(self):
         for item in self.find_all():          # everything but a transition's outgoing word (a resize must not
             if "old" not in self.gettags(item):   # wipe it: the card flashed blank white, reported)
                 self.delete(item)
-        wrap = self._wrap if self._wrap > 0 else 0
-        if wrap and self._wfont.measure(self._word) <= wrap + self.WRAP_SLACK:
-            wrap = 0                          # a few pixels over: one line (wrapping would strand a letter or two
-                                              # on a second line, and the taller card would move the buttons)
-        word = self.create_text(0, 0, text=self._word, font=self._wfont, fill=PALETTE["text"], width=wrap,
-                                justify="center", anchor="n", tags="word")
-        wb = self.bbox(word)
-        th = wb[3] - wb[1] if wb else 0
-        tw = self._text_width(self._word, self._wfont, wrap)
-        sw = sh = 0
-        if self._sub:
-            sub = self.create_text(0, 0, text=self._sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
-                                   justify="center", anchor="n", tags="sub")
-            sb = self.bbox(sub)
-            sh = sb[3] - sb[1]
-            sw = self._text_width(self._sub, self._sfont, wrap)
-        gap = int(self._sfont.metrics("linespace") * 0.4) if self._sub else 0
-        min_w = self._wfont.measure("n" * self.MIN_CHARS)
-        need_w = max(tw, sw, min_w) + 2 * self.padx + self.SHADOW
-        need_w += need_w % 2
-        word_h = max(th, self.min_line)
-        need_h = word_h + gap + sh + 2 * self._pady + self.SHADOW
-        super().configure(width=need_w, height=need_h)
-        w, h = max(self.winfo_width(), need_w), max(self.winfo_height(), need_h)
+        w, h = self.box()
+        if self._box != (w, h):               # only when the fonts or the room changed, never for a new word
+            self._box = (w, h)
+            super().configure(width=w, height=h)
         bw, bh = w - self.SHADOW, h - self.SHADOW
+        line, sline = self._wfont.metrics("linespace"), self._sfont.metrics("linespace")
+        avail = bw - 2 * self.padx
+        self._fit_word(avail, line)
         r = max(6, min(self._radius, bh // 2))
         self.create_polygon(_rounded_points(1 + self.SHADOW, 1 + self.SHADOW, bw + self.SHADOW - 1, bh + self.SHADOW - 1, r),
                             smooth=True, fill=PALETTE["shadow"], outline="", tags="shadow")
         self.create_polygon(_rounded_points(1, 1, bw - 1, bh - 1, r), smooth=True, fill=PALETTE["surface"],
                             outline=PALETTE["border"], tags="card")
-        top = (bh - (word_h + gap + sh)) / 2
-        self.coords(word, bw / 2, top + (word_h - th) / 2)
+        # fixed rows: the word's line, a gap, the sub-line's line, the whole block centred in the card
+        gap = int(sline * 0.4)
+        top = (bh - (line + gap + sline)) / 2
+        word = self.create_text(bw / 2, 0, text=self._word, font=self._fit, fill=PALETTE["text"],
+                                width=self._fit_wrap, justify="center", anchor="n", tags="word")
+        wb = self.bbox(word)
+        th = wb[3] - wb[1] if wb else 0
+        self._word_xy = (bw / 2, top + (line - th) / 2)
+        self.coords(word, *self._word_xy)
+        sub_y = None
         if self._sub:
-            self.coords("sub", bw / 2, top + word_h + gap)
-        self._layout = (bw / 2, top + (word_h - th) / 2, top + word_h + gap if self._sub else None)   # (transition_from)
+            sub_y = top + line + gap + (sline - self._fit_sub.metrics("linespace")) / 2
+            self.create_text(bw / 2, sub_y, text=self._fit_subline(avail), font=self._fit_sub,
+                             fill=PALETTE["muted"], justify="center", anchor="n", tags="sub")
+        self._layout = (bw / 2, top, sub_y)          # (transition_from: the word's line and the sub-line)
         if self.find_withtag("old"):
             self.tag_raise("old", "card")        # on the card (not under it), below the new word
         self.tag_raise("word")

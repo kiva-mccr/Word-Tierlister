@@ -426,42 +426,32 @@ class App:
             free = (ch - inner.winfo_reqheight()) / 2
             inner.place_configure(y=-int(max(0, min(band / 2, free))))
 
-    def _card_minimum(self):
-        """The word card keeps one full-size line's height for long words shown smaller (its buttons must not
-        move when sorting fast). Call while the word font is at its full size."""
-        fnt = font("word")
-        probe = self.word_card.create_text(0, 0, text=self.word_card.word or "Ag", font=fnt, anchor="nw")
-        box = self.word_card.bbox(probe)
-        self.word_card.delete(probe)
-        self.word_card.min_line = box[3] - box[1] if box else fnt.metrics("linespace")
-        self.word_card.full_linespace = fnt.metrics("linespace")
-
     def _fit_big_text(self):
-        """Shrink the big word(s) so a long one still fits on a line (down to about a third, then it wraps).
-
-        Short words keep the normal size. The shared role fonts are used only by these labels, so
-        resizing them here affects nothing else.
-        """
+        """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
+        (down to about a third, then it wraps). The word card fits its own word in a private copy of its font
+        (WordCard), so placing a word never resizes a shared font. A font is only configured when its size
+        really changes: every change makes Tk re-measure each widget that uses it."""
         width = self.center.winfo_width()
         if width < 50:                         # not laid out yet
             return
         f = ui_factor(self.root)
-        for role, texts, avail in (
-                ("word", [self.word_card.word], width - int(80 * f) - 2 * self.word_card.padx),
-                ("pair", [self.left_btn.cget("text"), self.right_btn.cget("text")],
-                 (width - int(220 * f)) // 2 - int(80 * f))):
+        changed = False
+        for role in ("word", "pair"):
             base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom * self.grow)))
-            fnt = font(role)
-            fnt.configure(size=base)
-            if role == "word":
-                self._card_minimum()
-                # aim inside the card's own wrap limit: its padding shrinks with the font, and a word that comes
-                # out a pixel wider than the limit wraps onto two lines (and the card grows)
-                avail = min(avail, self.word_card.cget("wraplength") - 4)
-            need = max((fnt.measure(t) for t in texts if t), default=0)
-            if need > avail > 0:
-                fnt.configure(size=max(7, int(base * 0.35), int(base * avail / need)))
-        refresh_widgets(self.center)           # the word card and duel cards follow the (possibly shrunk) fonts
+            fnt, size = font(role), base
+            if role == "pair":
+                probe = fnt.copy()                 # measured at the full size without touching the shared font
+                probe.configure(size=base)
+                avail = (width - int(220 * f)) // 2 - int(80 * f)
+                need = max((probe.measure(t) for t in (self.left_btn.cget("text"), self.right_btn.cget("text"))
+                            if t), default=0)
+                if need > avail > 0:
+                    size = max(7, int(base * 0.35), int(base * avail / need))
+            if fnt.cget("size") != size:
+                fnt.configure(size=size)
+                changed = True
+        if changed:
+            refresh_widgets(self.center)       # the word card and duel cards follow the resized fonts
 
     def _content_size(self):
         """(width, height) the window needs to show everything without clipping, in pixels.
@@ -517,7 +507,6 @@ class App:
                 self._applied_scale = size       # skip it when the size is already right
                 rescaled = True
                 scale_fonts(size)
-                self._card_minimum()             # (measured at this size, not the one tried before)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
@@ -837,8 +826,7 @@ class App:
         self.word_card.grid()
         notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
-        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")
-        self._fit_big_text()
+        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")   # (it fits the word itself)
         anchors_ok = all(self.anchors)
         self.compare_btn.set_enabled(anchors_ok)
         if self.cmp is None and self.auto_compare and anchors_ok:

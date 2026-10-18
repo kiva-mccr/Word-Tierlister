@@ -423,8 +423,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Fixed (reported: sorting very fast, the buttons moved as the card changed): a long word shown in a
 #           smaller font made the card shorter (its padding follows the font) or, a pixel over the wrap limit,
 #           wrapped onto two lines and made it taller, so everything below re-centred; and an odd card width
-#           shifted the centring by a pixel. The card now keeps its full-size height (min_line,
-#           full_linespace), stays on one line when only a few pixels over (WRAP_SLACK), and has an even width.
+#           shifted the centring by a pixel. (First patched with a minimum height; since replaced by a card of
+#           one fixed size, UI-44 (8).)
 #           The key hint in the bottom bar no longer has a fixed wrap width (it broke onto two lines when zoomed).
 # [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
@@ -591,6 +591,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           from its whole rectangle against where the card is now, not from its height alone, which painted a
 #           white box beside the card (over the tier buttons); it comes out at the card's top edge instead
 #           of over it, and a long one narrows to a round drop before it reaches the chart bars.
+#           Then (reported again: buttons moving or covered while sorting fast, even with Reduce motion):
+#           (8) the word card has one fixed size, from the fonts and the room only, never from the word; a long
+#           word is fitted inside it in a private copy of the font (smaller, then wrapped), so placing a word
+#           changes no widget's size and no shared font. Before, the card hugged the word: the centred block
+#           shifted a pixel either way and, for a frame, went wide before the font was shrunk. Found and
+#           checked with tools/layout_trace.py (frame-by-frame widget geometry: moves, spikes, overlaps).
 # [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
 #           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit

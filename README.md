@@ -18,7 +18,7 @@ tierlist.py        run this. Your save (tierlist.db), its log and exports stay n
 requirements.txt   the Python packages (the program offers to install them itself)
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
-tools/             check_release.py (pre-hand-off checks, builds the zip)
+tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -49,6 +49,7 @@ replacing the other folders never loses your list.
 | `src/browser.py` | The Browse / edit window: search, Show / Sort, rows in soft tier colours, Move to, definition. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
+| `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `problems`, `deps` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
 `fonts`, `sizing`, `ui_style`, `ui_motion`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser` -> `app` -> `tierlist`. A file only imports from files

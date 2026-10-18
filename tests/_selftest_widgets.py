@@ -108,15 +108,18 @@ assert len(card.find_withtag("card")) == 1 and len(card.find_withtag("shadow")) 
 assert str(card.itemcget("card", "smooth")) in ("1", "true")                       # rounded
 sx1, sy1, sx2, sy2 = card.bbox("shadow"); cx1, cy1, cx2, cy2 = card.bbox("card")
 assert sx2 > cx2 and sy2 > cy2, "the shadow peeks out below and to the right"
-w_short = card.winfo_reqwidth()
+size = (card.winfo_reqwidth(), card.winfo_reqheight())
 card.set("be", ""); root.update()
-assert card.winfo_reqwidth() == w_short, "short words do not change the card width (minimum width)"
 assert not card.find_withtag("sub")                                                 # no sub-line when empty
 card.set("pneumonoultramicroscopicsilicovolcanoconiosis", "x"); root.update()
-assert card.winfo_reqwidth() > w_short                                              # long words widen it
+assert (card.winfo_reqwidth(), card.winfo_reqheight()) == size, "the card's size never depends on the word"
+cb, wb = card.bbox("card"), card.bbox("word")
+assert cb[0] < wb[0] and wb[2] < cb[2] and cb[1] < wb[1] and wb[3] < cb[3]          # a long word shrinks inside it
+assert card.cget("font").cget("size") == 40                                          # (the shared font is untouched)
 card.config(wraplength=200); root.update()
-wb = card.bbox("word"); assert wb[2] - wb[0] <= 205 and card.cget("wraplength") == 200   # ... until they wrap
-assert card.winfo_reqheight() > 120
+assert card.winfo_reqwidth() < size[0] and card.cget("wraplength") == 200          # less room: a narrower card
+wb = card.bbox("word"); assert wb[2] - wb[0] <= 205
+assert card.winfo_reqheight() == size[1] > 120
 assert card.cget("font") is wf
 h_before, p_before = card.winfo_reqheight(), card.padx
 wf.configure(size=20); refresh_widgets(root); root.update()                          # nested search finds cards too

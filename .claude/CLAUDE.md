@@ -34,6 +34,8 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
   is its own Toast with the newest on top.
 - Keep the pastel look over colour-blind colour tuning wherever labels (letters, counts) already carry the
   meaning; the user chose this for the tier chart.
+- The word card has a fixed size (fonts + room, never the word) and fits each word in its own font copy; keep
+  per-word work free of geometry changes. Check layout jitter with `tools/layout_trace.py` (under xvfb-run).
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
