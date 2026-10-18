@@ -584,10 +584,55 @@ class SmoothCanvas(tk.Canvas):
             return _photo(self, w, h, rows)
         return _cached(self, key, make)
 
+    def icon_image(self, name, size, fill):
+        """A small soft-edged icon (ICONS: home, desktop, documents, downloads, folder, file, book), size x size
+        pixels, in `fill`, see-through around it so it sits on any row colour (a selected row too)."""
+        key = ("photo", "icon", name, size, fill)
+
+        def make():
+            k = size / 16.0
+            grids = [coverage_mask([(x * k, y * k) for x, y in poly], size, size, 0) for poly in ICONS[name]]
+            rows = []
+            for j in range(size):                       # the shapes' coverage together (they never overlap)
+                cov = [0] * size
+                for g in grids:
+                    i = 0
+                    for n, qa, _qo in g[j]:
+                        if qa:
+                            for x in range(i, i + n):
+                                cov[x] = max(cov[x], qa)
+                        i += n
+                runs = []
+                for v in cov:
+                    if runs and runs[-1][1] == v:
+                        runs[-1][0] += 1
+                    else:
+                        runs.append([1, v, 0])
+                rows.append(runs)
+            return _photo(self, size, size, paint_mask(rows, _rgb(fill), None))
+        return _cached(self, key, make)
+
     def smooth_image(self, tag_or_id):
         """The image item drawn for a round_rect (tests), or None."""
         rr = self._rr_items(tag_or_id)
         return self._rr[rr[0]]["img"] if rr else None
+
+
+# little filled icons on a 16 x 16 grid, one style (UI-42's file picker, M-8); each is a list of polygons that
+# do not overlap
+ICONS = {
+    "home": [[(8, 1.5), (15, 8), (13, 8), (13, 14.5), (9.6, 14.5), (9.6, 10.2), (6.4, 10.2), (6.4, 14.5),
+              (3, 14.5), (3, 8), (1, 8)]],
+    "desktop": [[(1, 2.5), (15, 2.5), (15, 11), (9.5, 11), (9.5, 12.8), (11.8, 12.8), (11.8, 14.5), (4.2, 14.5),
+                 (4.2, 12.8), (6.5, 12.8), (6.5, 11), (1, 11)]],
+    "documents": [[(3, 1.5), (9.5, 1.5), (13.5, 5.5), (13.5, 14.5), (3, 14.5)]],
+    "file": [[(3.5, 2), (9.5, 2), (12.5, 5), (12.5, 14), (3.5, 14)]],
+    "downloads": [[(6.6, 1.5), (9.4, 1.5), (9.4, 6.5), (12.5, 6.5), (8, 11), (3.5, 6.5), (6.6, 6.5)],
+                  [(1.5, 10.5), (3.3, 10.5), (3.3, 12.8), (12.7, 12.8), (12.7, 10.5), (14.5, 10.5), (14.5, 14.5),
+                   (1.5, 14.5)]],
+    "folder": [[(1, 3), (6.2, 3), (7.8, 4.8), (15, 4.8), (15, 13.5), (1, 13.5)]],
+    "book": [[(2.5, 1.5), (4.6, 1.5), (4.6, 14.5), (2.5, 14.5)], [(5.6, 1.5), (13.5, 1.5), (13.5, 14.5), (5.6, 14.5)]],
+}
 
 
 def _outline_points(x1, y1, x2, y2):

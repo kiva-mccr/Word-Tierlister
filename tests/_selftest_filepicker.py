@@ -26,7 +26,7 @@ now = time.mktime((2026, 10, 18, 15, 0, 0, 0, 0, -1))
 assert FP.short_date(now - 60, now).startswith("today") and FP.short_date(now - 40 * 86400, now) == "8 Sep"
 assert FP.short_date(now - 400 * 86400, now).endswith("2025")
 steps = FP.path_steps(os.path.join(HOME, "Documents", "old"))
-assert [s[0] for s in steps] == ["⌂ home", "Documents", "old"] and steps[-1][1] == os.path.join(HOME, "Documents", "old")
+assert [s[0] for s in steps] == ["Home", "Documents", "old"] and steps[-1][1] == os.path.join(HOME, "Documents", "old")
 deep = FP.path_steps("/a/b/c/d/e/f/g")
 assert len(deep) == 5 and deep[1][0] == "…" and deep[-1][0] == "g"                  # a long path keeps both ends
 rows = FP.list_folder(os.path.join(HOME, "Documents"), FP.IMPORT_EXTS)
@@ -40,6 +40,8 @@ assert os.path.join("Downloads", "tierlist-old.db") in names and os.path.join("D
 assert "mine.db" not in names and not any("notes" in n for n in names)                   # not this save; not a note
 assert next(r for r in found if r["name"].endswith(".db"))["info"] == "2 placed"
 assert [p[1] for p in FP.places(HOME)] == ["Home", "Documents", "Downloads", "Next to your save"]
+from smooth import ICONS
+assert all(p[0] in ICONS for p in FP.places(HOME)) and all(r["icon"] in ICONS for r in rows + found)  # M-8: drawn
 
 root = tk.Tk(); root.geometry("400x300+0+0"); init_fonts(root); apply_ttk_style(root)
 def pump(n=5):

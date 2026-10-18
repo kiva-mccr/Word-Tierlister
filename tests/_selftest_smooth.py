@@ -83,4 +83,14 @@ ys = [10 + i * 0.5 for i in range(41)]
 rows = SM.curve_rows(40, 40, ys, "#FFCBA4", "#806050", 2)
 assert rows[39][4 * 20 + 3] == 255 and rows[0][4 * 20 + 3] == 0
 assert any(0 < rows[j][4 * 20 + 3] < 255 for j in range(15, 25))
+# M-8: small icons, all one style: every one draws, solid in the middle of its shape, see-through around it
+root = tk.Tk()
+ic = SmoothCanvas(root, width=40, height=40)
+for name in SM.ICONS:
+    img = ic.icon_image(name, 16, "#8A8499")
+    assert (img.width(), img.height()) == (16, 16)
+    alpha = [img.transparency_get(x, y) for y in range(16) for x in range(16)]
+    assert alpha.count(True) > 40 and alpha.count(False) > 40, name                 # some shape, some clear
+    assert img.transparency_get(0, 0) and img is ic.icon_image(name, 16, "#8A8499")  # clear corner; cached
+root.destroy()
 print("SMOOTH OK")

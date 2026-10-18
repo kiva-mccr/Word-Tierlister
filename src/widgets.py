@@ -11,7 +11,7 @@ import tkinter.font as tkfont
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
 from sizing import clamp_to_monitor, monitor_at, place_dialog
-from smooth import SmoothCanvas, curve_image
+from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
@@ -988,8 +988,8 @@ class Toast(SmoothCanvas):
         """The placement message (UI-11, UI-17): rise from its bottom edge at y=start_bottom until it is at
         y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
         flies to `target` = (x offset from the centre of `in_`, y of the landing point: it stops just above
-        it), fading out, and call on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
-        replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
+        it), fading out, and call on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry()
+        speeds it all up, a replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
         transparency, so a full-size pill would be an opaque box passing over the chart.
         `under(x0, y0, x1, y1)` returns the colour behind the toast's rectangle (inside `in_`); the toast takes
         that colour as its own background and blends toward it. It is asked every frame, with the whole
@@ -1378,12 +1378,13 @@ class FileList(SmoothCanvas):
     thousands of files stays quick.
 
         fl = FileList(parent, on_open=open_it, on_select=show_it)
-        fl.set_rows([{"icon": "\u25b8", "name": "Documents/", "info": "", "date": "", "value": path}, ...])
+        fl.set_rows([{"icon": "folder", "name": "Documents/", "info": "", "date": "", "value": path}, ...])
         fl.selected            # the selected row's dict, or None
 
     Keys (it takes focus on a click): Up / Down / Home / End / Page Up / Down move the selection, Enter opens
     (on_open(row)), the mouse wheel scrolls; a click selects, a double click opens. A row with "dim": True is
-    shown greyed (a file you cannot pick here) and cannot be selected.
+    shown greyed (a file you cannot pick here) and cannot be selected. "icon" names one of smooth.ICONS (drawn,
+    all in one style, M-8); any other text is shown as it is.
     """
     def __init__(self, parent, on_open=None, on_select=None, rows_visible=9, width_chars=52, font_=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=PALETTE["bg"], takefocus=1)
@@ -1479,6 +1480,9 @@ class FileList(SmoothCanvas):
         self.round_rect(1, 1, w - 1, h - 1, 10, fill=PALETTE["surface"], outline=PALETTE["border"], tags="frame")
         date_w = f.measure("today 00:00")
         info_x = w - 16 - date_w - f.measure("n") * 2
+        ls = f.metrics("linespace")
+        icon = max(10, round(ls * 0.9))                   # the icon and the room after it grow with the text
+        name_x = 14 + icon + max(12, round(ls * 0.8))
         for k in range(self.rows_visible):
             i = self.top + k
             if i >= len(self.rows):
@@ -1487,19 +1491,25 @@ class FileList(SmoothCanvas):
             if i == self.index:
                 self.round_rect(6, y + 1, w - 6, y + line - 1, 8, fill=PALETTE["select_bg"], tags="sel")
             ink = PALETTE["disabled"] if row.get("dim") else PALETTE["text"]
-            self.create_text(16, y + line / 2, text=row.get("icon", ""), font=f, fill=PALETTE["muted"], anchor="w")
+            mark = row.get("icon", "")
+            if mark in ICONS:
+                tint = PALETTE["disabled"] if row.get("dim") else PALETTE["muted"]
+                self.create_image(14, int(y + (line - icon) / 2), image=self.icon_image(mark, icon, tint),
+                                  anchor="nw", tags="icon")
+            elif mark:
+                self.create_text(14, y + line / 2, text=mark, font=f, fill=PALETTE["muted"], anchor="w", tags="icon")
             name = row["name"]
             if row.get("info"):                           # the room the name has, up to the next column
-                room = info_x - f.measure(row["info"]) - 20 - 40
+                room = info_x - f.measure(row["info"]) - 20 - name_x
             elif row.get("date"):
-                room = w - 16 - date_w - 16 - 40
+                room = w - 16 - date_w - 16 - name_x
             else:
-                room = w - 16 - 40
+                room = w - 16 - name_x
             while f.measure(name) > room and len(name) > 4:       # long names are cut in the middle
                 name = name[: len(name) // 2 - 1] + "\u2026" + name[len(name) // 2 + 1:]
                 if f.measure(name) <= room:
                     break
-            self.create_text(40, y + line / 2, text=name, font=f, fill=ink, anchor="w", tags=("name", f"name{i}"))
+            self.create_text(name_x, y + line / 2, text=name, font=f, fill=ink, anchor="w", tags=("name", f"name{i}"))
             if row.get("info"):
                 self.create_text(info_x, y + line / 2, text=row["info"], font=f, fill=PALETTE["muted"], anchor="e")
             if row.get("date"):

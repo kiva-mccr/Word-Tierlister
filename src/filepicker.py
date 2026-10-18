@@ -30,7 +30,7 @@ from widgets import FileList, RoundButton, StyledDialog
 
 EXPORT_KINDS = [("txt", "Text", "easy to read"), ("csv", "CSV", "for spreadsheets"), ("md", "Markdown", "for notes")]
 IMPORT_EXTS = (".db", ".csv", ".txt", ".md")
-FOLDER_ICON, FILE_ICON, SAVE_ICON = "▸", "•", "★"
+FOLDER_ICON, FILE_ICON, SAVE_ICON = "folder", "file", "book"     # (smooth.ICONS: drawn, one style)
 
 
 def use_themed(root):
@@ -64,13 +64,13 @@ def short_date(t, now=None):
 def places(save_dir=None):
     """[(icon, label, folder)] that exist: Home, Desktop, Documents, Downloads, and the save's own folder."""
     home = os.path.expanduser("~")
-    out = [("⌂", "Home", home)]
+    out = [("home", "Home", home)]
     for name in ("Desktop", "Documents", "Downloads"):
         p = os.path.join(home, name)
         if os.path.isdir(p):
-            out.append(("▢", name, p))
+            out.append((name.lower(), name, p))
     if save_dir and os.path.isdir(save_dir):
-        out.append(("★", "Next to your save", save_dir))
+        out.append(("book", "Next to your save", save_dir))
     return out
 
 
@@ -115,7 +115,7 @@ def path_steps(folder):
     home = os.path.expanduser("~")
     for i, (_label, p) in enumerate(parts):          # start from "home" when inside it
         if p == home:
-            parts = [("⌂ home", home)] + parts[i + 1:]
+            parts = [("Home", home)] + parts[i + 1:]
             break
     if len(parts) > 5:
         parts = parts[:1] + [("…", parts[-4][1])] + parts[-3:]
@@ -318,15 +318,16 @@ class ExportDialog:
                                       animator=animator, wrap_chars=56)
         g = tk.Frame(dlg.body, bg=PALETTE["bg"])
         g.pack(anchor="w")
+        gap = max(5, round(font("body").metrics("linespace") * 0.4))   # room between the rows (M-9), with the text
         lab = lambda text, row: tk.Label(g, text=text, bg=PALETTE["bg"], fg=PALETTE["text"], font=font("body")).grid(
-            row=row, column=0, sticky="e", padx=(0, 8), pady=4)
+            row=row, column=0, sticky="e", padx=(0, 10), pady=gap)
         lab("Name:", 0)
         self.name_var = tk.StringVar(value=name)
         self.entry = ttk.Entry(g, textvariable=self.name_var, width=26)
-        self.entry.grid(row=0, column=1, sticky="w")
+        self.entry.grid(row=0, column=1, sticky="w", pady=gap)
         lab("As:", 1)
         pills = tk.Frame(g, bg=PALETTE["bg"])
-        pills.grid(row=1, column=1, sticky="w")
+        pills.grid(row=1, column=1, sticky="w", pady=gap)
         self.kind_btns = {}
         for k, label, what in EXPORT_KINDS:
             btn = RoundButton(pills, label, lambda k=k: self.set_kind(k), font=font("body"), padx=12, pady=2,
@@ -335,7 +336,7 @@ class ExportDialog:
             self.kind_btns[k] = btn
         lab("In:", 2)
         self.where = tk.Frame(g, bg=PALETTE["bg"])
-        self.where.grid(row=2, column=1, sticky="w")
+        self.where.grid(row=2, column=1, sticky="w", pady=gap)
         self.problem = tk.Label(dlg.body, text="", bg=PALETTE["bg"], fg=PALETTE["bad"][1], font=font("body"))
         dlg.button("Cancel", dlg.close)
         dlg.button("Export", self.export, default=True)

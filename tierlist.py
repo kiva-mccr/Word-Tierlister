@@ -158,11 +158,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Freq # = Frequency (Browser.COLUMNS, sort_by); Store.list_words(reverse=) turns the whole order round;
 #           the arrow points up when the values rise down the list; the direction is kept with the view (UI-38).
 #           300k words: Rating / Duels ~50 ms a page (Default is ~85 ms).
-# [ ] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
+# [x] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
 #           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.
-# [ ] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.
-# [ ] M-10 Import dialog (UI-42): check the spacing of the first two lines of text (the intro and "Found on
+#           Cause: they were text characters, each from whichever font had it. Now smooth.ICONS (house, monitor,
+#           page, arrow into a tray, folder, book), drawn soft-edged and see-through by SmoothCanvas.icon_image;
+#           in FileList the icon and the room after it grow with the text. The path's first step reads "Home".
+# [x] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.
+#           Done: ~0.4 of a line above and below each row (it grows with the text).
+# [x] M-10 Import dialog (UI-42): check the spacing of the first two lines of text (the intro and "Found on
 #           this computer"); change it only if it is off.
+#           Checked: the two lines are one intro paragraph wrapped at the dialogs' usual width, normal line
+#           spacing, the break between its two sentences; the gap under the title matches every dialog. Left.
 # [ ] M-11 Check and verify (asked for, last of the mini-roadmap): look through the whole program for orphaned
 #           code (functions, methods, constants, tags, options and test helpers nothing uses any more, stale
 #           comments) and substantial inefficiencies (per-frame or per-duel work that grows with the save, repeated
