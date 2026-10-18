@@ -8,6 +8,7 @@ import math
 import tkinter as tk
 import tkinter.font as tkfont
 
+from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
 from sizing import place_dialog
 from theme import PALETTE, TIER_COLORS
@@ -1277,6 +1278,79 @@ class DefinitionDrawer(tk.Frame):
                 done()
         else:
             self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
+
+
+class ShapeCard(tk.Canvas):
+    """One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve
+    (how likely a word is to come up early, from rank #1 to QUEUE_AXIS), its name under it, and for the
+    chosen card a dotted line at the rank above which half the early words come from. The chosen card is
+    white with a lilac hairline and a filled curve; the other is faint. A click calls on_pick(shape).
+
+        card = ShapeCard(parent, "exp", "Exponential", TIER_COLORS[1], on_pick=choose)
+        card.set(spread=20000, chosen=True)       # redraw (live, as the spread is typed)
+    """
+    def __init__(self, parent, shape, name, color, on_pick, font_=None, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"], cursor="hand2")
+        self.shape, self.name, self.color = shape, name, color
+        self._font = font_ or font("body")
+        self.spread, self.chosen = 20000.0, False
+        self.bind("<Button-1>", lambda e: on_pick(shape))
+        self._draw()
+
+    def set(self, spread=None, chosen=None):
+        if spread is not None:
+            self.spread = max(1.0, float(spread))
+        if chosen is not None:
+            self.chosen = bool(chosen)
+        self._draw()
+
+    def refresh(self):
+        self._draw()
+
+    def median_rank(self):
+        return QUEUE_MEDIAN[self.shape] * self.spread
+
+    def _draw(self):
+        self.delete("all")
+        f, chosen = self._font, self.chosen
+        line = f.metrics("linespace")
+        pad, w, h = int(line * 0.75), line * 12, line * 5
+        W, H = w + 2 * pad, h + 2 * pad + 2 * line + line // 2
+        self.configure(width=W, height=H)
+        self.create_rectangle(1, 1, W - 2, H - 2, fill=PALETTE["surface"] if chosen else PALETTE["surface2"],
+                              outline=PALETTE["accent"] if chosen else PALETTE["border"], width=2 if chosen else 1,
+                              tags="face")
+        x0, y0 = pad, pad
+        pts = []
+        for i in range(0, w + 1, 2):
+            pts += [x0 + i, y0 + h - queue_weight(self.shape, (i / w) * QUEUE_AXIS / self.spread) * (h - 4)]
+        ink = lerp_color(self.color, PALETTE["text"], 0.45) if chosen else PALETTE["disabled"]
+        self.create_polygon([x0, y0 + h] + pts + [x0 + w, y0 + h], outline="", tags="area",
+                            fill=self.color if chosen else lerp_color(PALETTE["disabled"], "#FFFFFF", 0.75))
+        self.create_line(pts, fill=ink, width=2 if chosen else 1.5, smooth=True, tags="curve")
+        self.create_line(x0, y0 + h, x0 + w, y0 + h, fill=PALETTE["border"], tags="axis")
+        if chosen:
+            med = self.median_rank()
+            mx = x0 + w * min(1.0, med / QUEUE_AXIS)
+            self.create_line(mx, y0 + 6, mx, y0 + h, fill=PALETTE["muted"], dash=(2, 3), tags="median")
+            right = mx > x0 + w * 0.6                       # near the right edge: the label goes on its left
+            self.create_text(mx - 4 if right else mx + 4, y0 + 4, text=f"half by #{short_rank(med)}", font=f,
+                             fill=PALETTE["muted"], anchor="ne" if right else "nw", tags="median_text")
+        yl = y0 + h + 4
+        self.create_text(x0, yl, text="common", anchor="nw", font=f, fill=PALETTE["muted"])
+        self.create_text(x0 + w, yl, text=f"#{short_rank(QUEUE_AXIS)}", anchor="ne", font=f, fill=PALETTE["muted"])
+        self.create_text(W / 2, H - pad + 2, text=("\u25cf  " if chosen else "\u25cb  ") + self.name, anchor="s",
+                         font=f, fill=PALETTE["text"] if chosen else PALETTE["muted"], tags="name")
+
+
+def short_rank(n):
+    """13,863 -> '13.9k', 250,000 -> '250k', 1,200,000 -> '1.2M', 840 -> '840'."""
+    if n >= 999_500:
+        return f"{n / 1e6:.1f}".rstrip("0").rstrip(".") + "M"
+    if n >= 1000:
+        k = n / 1000
+        return (f"{k:.1f}".rstrip("0").rstrip(".") if k < 100 else f"{k:.0f}") + "k"
+    return f"{n:.0f}"
 
 
 class EmptyCard(tk.Canvas):

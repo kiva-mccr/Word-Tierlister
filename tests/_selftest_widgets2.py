@@ -497,6 +497,28 @@ assert wc.itemcget("sub", "text").endswith("\u2026") and wc.bbox("sub")[2] <= wc
 assert wc_font.cget("size") == 40                                                         # the shared font untouched
 wc.destroy()
 
+# ---- ShapeCard (UI-41): a queue shape's curve; chosen = white with a lilac edge and a "half by" line
+from widgets import ShapeCard, short_rank
+from constants import QUEUE_AXIS, queue_weight
+picked = []
+scw = tk.Toplevel(root)
+sc = ShapeCard(scw, "exp", "Exponential", TIER_COLORS[1], on_pick=picked.append, font_=small); sc.pack()
+sc.set(spread=20000, chosen=True); update()
+assert sc.itemcget("face", "fill") == PALETTE["surface"] and sc.itemcget("face", "outline") == PALETTE["accent"]
+assert sc.itemcget("area", "fill") == TIER_COLORS[1] and sc.itemcget("median_text", "text") == "half by #13.9k"
+y20 = sc.coords("curve")[1::2]
+sc.set(spread=5000); y5 = sc.coords("curve")[1::2]
+assert sum(y5) > sum(y20) and len(y5) == len(y20)                    # a smaller spread: the curve drops sooner
+assert abs(y5[0] - y20[0]) < 0.01                                   # (both start at the top: rank #1)
+sc.set(chosen=False)
+assert sc.itemcget("face", "fill") == PALETTE["surface2"] and not sc.find_withtag("median")
+sc.set(spread=400000, chosen=True)                                  # median past the axis: pinned to the edge
+assert sc.coords("median")[0] <= int(sc.cget("width")) and sc.itemcget("median_text", "anchor") == "ne"
+update(); sc.event_generate("<Button-1>", x=5, y=5); update(); assert picked == ["exp"]
+assert [short_rank(n) for n in (840, 13863, 100000, 250000, 1_200_000)] == ["840", "13.9k", "100k", "250k", "1.2M"]
+assert queue_weight("gauss", 1) > queue_weight("exp", 1) and queue_weight("gauss", 3) < queue_weight("exp", 3)
+scw.destroy()
+
 # ---- DuelCards stays centred in a frame wider than the cards (reported: the conflict line widened it)
 wide = tk.Toplevel(root); wide.geometry("1400x500+0+0"); wide.columnconfigure(0, weight=1)
 dc = DuelCards(wide, lambda side: None, small, small); dc.grid(row=0, column=0, sticky="ew")

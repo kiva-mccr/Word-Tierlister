@@ -18,6 +18,7 @@ for i in range(6500):
 root = tk.Tk()
 shown = []
 import app as A, browser as B
+from widgets import ShapeCard
 A.show_message = B.show_message = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
 A.show_error = lambda *a, **k: shown.append(a)
 app = T.App(root, s, T.Definitions(s))
@@ -100,6 +101,19 @@ qd.win.event_generate("<Return>"); pump(2)
 assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
 qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
 labels = lambda d: " ".join(str(w.cget("text")) for w in d.body.winfo_children() if w.winfo_class() == "TLabel" and w.winfo_manager())
+qd = app.edit_queue(); pump(3)
+# UI-41: a card per shape instead of radio buttons; a click picks it, the curves follow the spread as it is typed
+cards = {c.shape: c for f in qd.body.winfo_children() for c in f.winfo_children() if isinstance(c, ShapeCard)}
+assert set(cards) == {"exp", "gauss"} and cards[s.queue_settings()["shape"]].chosen
+other = "gauss" if cards["exp"].chosen else "exp"
+cards[other].event_generate("<Button-1>", x=5, y=5); pump(1)
+assert cards[other].chosen and not cards["gauss" if other == "exp" else "exp"].chosen
+spread_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
+before = cards["exp"].coords("curve")
+spread_e.delete(0, "end"); spread_e.insert(0, "5000"); pump(1)
+assert cards["exp"].coords("curve") != before and cards["exp"].spread == 5000
+spread_e.delete(0, "end"); spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+qd.close(); pump(2)
 qd = app.edit_queue(); pump(3)
 qd.buttons["Apply & reshuffle"].invoke(); pump(2)                               # nothing changed: says so, stays open
 assert qd.alive() and "No settings changed" in labels(qd)

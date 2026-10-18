@@ -570,9 +570,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           word to the tier it is already in does nothing (it used to reset its duels). App.anchors now
 #           reads the save each time. A merge never moves placed words, so it cannot move an anchor.
 #           Unplace (back to queue) still refuses anchor words.
-# [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
+# [x] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
 #           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
 #           highlighted and redrawn live as spread changes. The intro text shrinks to one line.
+#           Built (mock-up A, chosen): a card per shape (widgets.ShapeCard) replaces the radio buttons; a click
+#           picks it. The chosen card is white with a lilac edge, its curve filled (peach / sky) and a dotted
+#           "half by #13.9k" line; the axis is fixed (#1 to #100k, constants.QUEUE_AXIS) so typing a spread
+#           visibly reshapes the curves. The old "half of early words rank below" note is gone (the card says
+#           it). The intro no longer says gaussian "drops off faster": it is flatter at first and only falls
+#           faster past about 2 spreads, which the curves now show.
 # [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
 #           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
 #           browser in general. Seen on Linux, where tk draws this dialog itself: fix it there, or replace

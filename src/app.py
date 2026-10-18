@@ -28,7 +28,7 @@ from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, ShapeCard, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -1427,11 +1427,8 @@ class App:
         nothing changed."""
         cfg = self.store.queue_settings()
         dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
-                           "New words are drawn at random, but the odds fall off with how rare a word is: a "
-                           "word 'spread' ranks further down the frequency list is about 2.7x less likely to "
-                           "come up early (exponential), or drops off faster still (gaussian). The same seed "
-                           "always gives the same order. Applying reshuffles the words you haven't placed yet.",
-                           animator=self.anim, wrap_chars=60)
+                           "New words come up at random, commoner ones sooner. The same seed, the same order.",
+                           animator=self.anim, wrap_chars=84)                     # one line
         box = dlg.body
         seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
         comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
@@ -1444,13 +1441,14 @@ class App:
         new_seed.grid(row=0, column=2, sticky="w", padx=12)
         ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
-        info = ttk.Label(box, text="", foreground=PALETTE["muted"])
-        info.grid(row=1, column=2, sticky="w", padx=12)
-        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=4)
+        # the shape: a card per choice with its curve (UI-41); clicking a card picks it
+        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="ne", padx=(0, 8), pady=(10, 4))
         sh = ttk.Frame(box)
-        sh.grid(row=2, column=1, columnspan=2, sticky="w")
-        ttk.Radiobutton(sh, text="Exponential (e^-x)", value="exp", variable=shape_v).pack(side="left")
-        ttk.Radiobutton(sh, text="Gaussian", value="gauss", variable=shape_v).pack(side="left", padx=12)
+        sh.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 4))
+        cards = {}
+        for shape, name, colour in (("exp", "Exponential", TIER_COLORS[1]), ("gauss", "Gaussian", TIER_COLORS[4])):
+            cards[shape] = ShapeCard(sh, shape, name, colour, on_pick=shape_v.set)
+            cards[shape].pack(side="left", padx=(0, 10))
         ttk.Label(box, text="Compound strength:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
         ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
@@ -1461,18 +1459,19 @@ class App:
         for v in (seed_v, spread_v, comp_v, shape_v):
             v.trace_add("write", lambda *_: status.grid_remove())       # an edit clears the last note
 
-        def update_info(*_):  # live hint next to "Spread": the median rank of early words
+        def redraw(*_):  # live: the curves follow the spread as it is typed (an unreadable one keeps the last)
             try:
-                s = float(spread_v.get().replace(",", ""))
+                spread = float(spread_v.get().replace(",", ""))
             except ValueError:
-                info.config(text="")
-                return
-            med = s * math.log(2) if shape_v.get() == "exp" else s * 0.6745
-            info.config(text=f"half of early words rank below ~{med:,.0f}")
+                spread = None
+            if spread is not None and spread <= 0:
+                spread = None
+            for shape, card in cards.items():
+                card.set(spread=spread, chosen=shape == shape_v.get())
 
-        spread_v.trace_add("write", update_info)
-        shape_v.trace_add("write", update_info)
-        update_info()
+        spread_v.trace_add("write", redraw)
+        shape_v.trace_add("write", redraw)
+        redraw()
 
         def say(text, colour):
             status.config(text=text, foreground=colour)
