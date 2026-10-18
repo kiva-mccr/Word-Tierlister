@@ -1350,6 +1350,147 @@ def short_rank(n):
     return f"{n:.0f}"
 
 
+class FileList(SmoothCanvas):
+    """A white rounded list of files and folders (UI-42): a muted icon, the name, a quiet detail (size, words
+    placed) and a date per row; the selected row in lilac. Only the rows on screen are drawn, so a folder with
+    thousands of files stays quick.
+
+        fl = FileList(parent, on_open=open_it, on_select=show_it)
+        fl.set_rows([{"icon": "\u25b8", "name": "Documents/", "info": "", "date": "", "value": path}, ...])
+        fl.selected            # the selected row's dict, or None
+
+    Keys (it takes focus on a click): Up / Down / Home / End / Page Up / Down move the selection, Enter opens
+    (on_open(row)), the mouse wheel scrolls; a click selects, a double click opens. A row with "dim": True is
+    shown greyed (a file you cannot pick here) and cannot be selected.
+    """
+    def __init__(self, parent, on_open=None, on_select=None, rows_visible=9, width_chars=52, font_=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=PALETTE["bg"], takefocus=1)
+        self._font = font_ or font("body")
+        self.on_open, self.on_select = on_open, on_select
+        self.rows, self.index, self.top = [], None, 0
+        self.rows_visible, self.width_chars = rows_visible, width_chars
+        for seq, d in (("<Up>", -1), ("<Down>", 1), ("<Prior>", -rows_visible), ("<Next>", rows_visible)):
+            self.bind(seq, lambda e, d=d: (self.move_selection(d), "break")[1])
+        self.bind("<Home>", lambda e: (self.select(self._first(1)), "break")[1])
+        self.bind("<End>", lambda e: (self.select(self._first(-1)), "break")[1])
+        self.bind("<Return>", lambda e: (self.open_selected(), "break")[1])
+        self.bind("<KP_Enter>", lambda e: (self.open_selected(), "break")[1])
+        self.bind("<Button-1>", self._click)
+        self.bind("<Double-Button-1>", lambda e: self.open_selected())
+        self.bind("<MouseWheel>", lambda e: self.scroll(-1 if e.delta > 0 else 1))
+        self.bind("<Button-4>", lambda e: self.scroll(-1))
+        self.bind("<Button-5>", lambda e: self.scroll(1))
+        self._draw()
+
+    @property
+    def line(self):
+        return self._font.metrics("linespace") + 10
+
+    @property
+    def selected(self):
+        return self.rows[self.index] if self.index is not None and self.index < len(self.rows) else None
+
+    def set_rows(self, rows, select=None):
+        """Show these rows (dicts, see the class note), scrolled to the top; `select` = index to select."""
+        self.rows, self.top = list(rows), 0
+        self.index = None
+        if select is not None and 0 <= select < len(self.rows) and not self.rows[select].get("dim"):
+            self.index = select
+        self._draw()
+
+    def _first(self, step):
+        order = range(len(self.rows)) if step > 0 else range(len(self.rows) - 1, -1, -1)
+        return next((i for i in order if not self.rows[i].get("dim")), None)
+
+    def select(self, i):
+        if i is None or not (0 <= i < len(self.rows)) or self.rows[i].get("dim"):
+            return
+        self.index = i
+        if i < self.top:
+            self.top = i
+        elif i >= self.top + self.rows_visible:
+            self.top = i - self.rows_visible + 1
+        self._draw()
+        if self.on_select:
+            self.on_select(self.rows[i])
+
+    def move_selection(self, d):
+        if not self.rows:
+            return
+        if self.index is None:
+            self.select(self._first(1 if d > 0 else -1))
+            return
+        i = self.index
+        step = 1 if d > 0 else -1
+        target = max(0, min(len(self.rows) - 1, i + d))
+        while 0 <= target < len(self.rows) and self.rows[target].get("dim"):
+            target += step
+        if 0 <= target < len(self.rows):
+            self.select(target)
+
+    def open_selected(self):
+        if self.selected is not None and self.on_open:
+            self.on_open(self.selected)
+
+    def scroll(self, d):
+        most = max(0, len(self.rows) - self.rows_visible)
+        top = max(0, min(most, self.top + d * 3))
+        if top != self.top:
+            self.top = top
+            self._draw()
+
+    def _click(self, e):
+        self.focus_set()
+        i = self.top + int((e.y - 3) // self.line)
+        if 0 <= i < len(self.rows):
+            self.select(i)
+
+    def refresh(self):
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        f, line = self._font, self.line
+        w = f.measure("n") * self.width_chars
+        h = line * self.rows_visible + 6
+        super().configure(width=w, height=h)
+        self.round_rect(1, 1, w - 1, h - 1, 10, fill=PALETTE["surface"], outline=PALETTE["border"], tags="frame")
+        date_w = f.measure("today 00:00")
+        info_x = w - 16 - date_w - f.measure("n") * 2
+        for k in range(self.rows_visible):
+            i = self.top + k
+            if i >= len(self.rows):
+                break
+            row, y = self.rows[i], 3 + k * line
+            if i == self.index:
+                self.round_rect(6, y + 1, w - 6, y + line - 1, 8, fill=PALETTE["select_bg"], tags="sel")
+            ink = PALETTE["disabled"] if row.get("dim") else PALETTE["text"]
+            self.create_text(16, y + line / 2, text=row.get("icon", ""), font=f, fill=PALETTE["muted"], anchor="w")
+            name = row["name"]
+            if row.get("info"):                           # the room the name has, up to the next column
+                room = info_x - f.measure(row["info"]) - 20 - 40
+            elif row.get("date"):
+                room = w - 16 - date_w - 16 - 40
+            else:
+                room = w - 16 - 40
+            while f.measure(name) > room and len(name) > 4:       # long names are cut in the middle
+                name = name[: len(name) // 2 - 1] + "\u2026" + name[len(name) // 2 + 1:]
+                if f.measure(name) <= room:
+                    break
+            self.create_text(40, y + line / 2, text=name, font=f, fill=ink, anchor="w", tags=("name", f"name{i}"))
+            if row.get("info"):
+                self.create_text(info_x, y + line / 2, text=row["info"], font=f, fill=PALETTE["muted"], anchor="e")
+            if row.get("date"):
+                self.create_text(w - 16, y + line / 2, text=row["date"], font=f, fill=PALETTE["muted"], anchor="e")
+        if len(self.rows) > self.rows_visible:            # a quiet scroll mark down the right edge
+            frac, size = self.top / max(1, len(self.rows) - self.rows_visible), self.rows_visible / len(self.rows)
+            bar_h = max(16, (h - 12) * size)
+            y0 = 6 + (h - 12 - bar_h) * frac
+            self.round_rect(w - 7, y0, w - 4, y0 + bar_h, 1.5, fill=PALETTE["border"], tags="scrollmark")
+        if not self.rows:
+            self.create_text(w / 2, h / 2, text="Nothing here", font=f, fill=PALETTE["muted"], tags="empty")
+
+
 class EmptyCard(SmoothCanvas):
     """A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of
     help, shown instead of greyed-out controls.
@@ -1848,6 +1989,7 @@ class StyledDialog:
             self.win.grab_set()
         except tk.TclError:
             pass
+        self.win.lift()                  # in front, even of a window that was raised a moment before
         self.win.focus_force()
         if wait:
             self.win.wait_window()

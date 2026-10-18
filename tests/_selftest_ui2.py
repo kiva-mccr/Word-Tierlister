@@ -63,7 +63,10 @@ pump(3)
 assert store.stats()["placed"] == 26 + 280 and "Brought over 280 words placed" in shown[-1][1], shown[-1]
 assert "were in a different tier here" in shown[-1][1] and "backup" in shown[-1][1].lower()
 assert app.cur_word and store.get_word(app.cur_word)["tier"] is None   # the screen moved on to an unplaced word
-# --- File > Import earlier progress with an exported list
+# --- File > Import earlier progress with an exported list (the system dialog's path: Windows and macOS; the
+#     app's own picker, used on Linux, has its own test in _selftest_filepicker.py)
+import app as A
+A.use_themed = lambda root: False
 exp = os.path.join(tmp, "mine.txt")
 other_store = T.Store(os.path.join(tmp, "elsewhere.db"))
 other_store.insert_words(WORDS); other_store.place("w01000", 1); other_store.place("w01001", 0)

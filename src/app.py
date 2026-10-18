@@ -27,9 +27,13 @@ from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
+from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, ShapeCard, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
+
+
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # (where tierlist.py is)
 
 
 def format_stats(stats):
@@ -1577,10 +1581,14 @@ class App:
         return True, f"{name}\n{self.describe_merge(res)}"
 
     def import_progress(self):
-        """File > Import earlier progress: pick a save file or export and merge it in."""
-        path = filedialog.askopenfilename(
-            parent=self.root, title="Import earlier progress",
-            filetypes=[("Tier list save or export", "*.db *.csv *.txt *.md"), ("All files", "*.*")])
+        """File > Import earlier progress: pick a save file or export and merge it in. On Linux the app's own
+        picker (filepicker.py, UI-42: what it found first, a browser behind it); elsewhere the system's."""
+        if use_themed(self.root):
+            path = ask_import(self.root, self.store.path, SCRIPT_DIR, animator=self.anim)
+        else:
+            path = filedialog.askopenfilename(
+                parent=self.root, title="Import earlier progress",
+                filetypes=[("Tier list save or export", "*.db *.csv *.txt *.md"), ("All files", "*.*")])
         if not path:
             return
         ok, text = self.merge_file(path)
@@ -1613,10 +1621,23 @@ class App:
         show_message("Merged", "Your earlier progress is merged in", "\n\n".join(msgs), parent=self.root)
 
     def export(self):
-        """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md."""
-        path = filedialog.asksaveasfilename(
-            parent=self.root, title="Export tier list", defaultextension=".txt", initialfile="tierlist.txt",
-            filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
+        """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md. On Linux the
+        app's own dialog (UI-42: name, format, folder; the folder and format are remembered)."""
+        if use_themed(self.root):
+            folder = self.store.get_meta("export_dir") or ""
+            if not os.path.isdir(folder):
+                docs = os.path.join(os.path.expanduser("~"), "Documents")
+                folder = docs if os.path.isdir(docs) else os.path.expanduser("~")
+            path, kind, folder = ask_export(self.root, folder, kind=self.store.get_meta("export_kind", "txt"),
+                                            save_dir=os.path.dirname(os.path.abspath(self.store.path)),
+                                            animator=self.anim)
+            if path:
+                self.store.set_meta("export_dir", folder)
+                self.store.set_meta("export_kind", kind)
+        else:
+            path = filedialog.asksaveasfilename(
+                parent=self.root, title="Export tier list", defaultextension=".txt", initialfile="tierlist.txt",
+                filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
         if not path:
             return
         rows = self.store.export_rows()

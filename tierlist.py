@@ -591,11 +591,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           visibly reshapes the curves. The old "half of early words rank below" note is gone (the card says
 #           it). The intro no longer says gaussian "drops off faster": it is flatter at first and only falls
 #           faster past about 2 spreads, which the curves now show.
-# [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
+# [x] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
 #           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
 #           browser in general. Seen on Linux, where tk draws this dialog itself: fix it there, or replace
 #           it with a small themed file picker that matches the app (Windows and macOS keep the system's
 #           own dialog).
+#           Built (mock-up C with A behind it, chosen): filepicker.py, on Linux only. Import lists what it
+#           finds first (other saves with how many words they have placed, and exports named like a tier
+#           list, newest first); "Look somewhere else..." opens the browser. Export asks for a name, a format
+#           (Text / CSV / Markdown pills) and shows the folder as steps; "Change folder..." opens the browser
+#           to pick a folder; the folder and format are remembered (meta export_dir / export_kind); replacing a
+#           file asks first. The browser: places (Home, Desktop, Documents, Downloads, next to your save), the
+#           path as clickable steps, a list (widgets.FileList) of folders and the files that fit; Enter /
+#           double-click opens, Backspace goes up. No tk menus anywhere, so nothing grabs input or floats over
+#           other programs. _selftest_filepicker.py.
 # [x] UI-43 Bug (reported, Linux): open a drop-down, switch to another program (Chrome, say), and the drop-down
 #           stayed in front of that program. First fix (closing menus when focus left) did not work: tried
 #           again with a real window manager (openbox + xdotool), the Tier list (a ttk.Combobox) grabs all
