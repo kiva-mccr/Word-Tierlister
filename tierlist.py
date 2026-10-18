@@ -471,7 +471,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             sit on a plain cream box. To look right, the pieces on the page need their canvases to
 #             paint the pattern under themselves, or the page becomes one canvas. Try it on a small
 #             mock-up first and show screenshots before committing to it.
-# [ ] UI-33 Pace and hover-note polish (asked for, four parts):
+# [x] UI-33 Pace and hover-note polish (asked for, four parts):
 #           1. Pace with a timeout: the rate counts only active time. The time between two actions counts
 #              up to a cap (about 2 minutes); a longer gap is a break and adds nothing, so stepping away
 #              does not drag the number down. (Today it is actions / time since the window opened.)
@@ -481,6 +481,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
+#           Built: App._count_action adds the time since the last action, capped at PACE_GAP_S (120 s);
+#           Tooltip opens just below its widget (or beside it, side="right", for "+N today", which has the
+#           progress bar under it) and keeps its place while its text changes; drawn as a rounded faint-lilac
+#           card with a hairline (corners painted in the page colour: tk windows cannot be see-through).
 # [x] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
 #           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
 # [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window

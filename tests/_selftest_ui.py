@@ -432,10 +432,22 @@ app.anim.finish_all(); pump(2)
 assert not app.word_card.find_withtag("old")
 assert app.today_lbl.cget("text") == f"+{n0 + 1:,} today" and str(app.today_lbl.cget("foreground")) == T.PALETTE["muted"]
 key("BackSpace"); pump(2); assert app.today_lbl.cget("text") == f"+{n0:,} today"   # undo takes it back
-app.session_count, app.session_start = 0, time.time() - 1800
+# the pace counts only active time (UI-33): a pause longer than PACE_GAP_S is a break and adds only that much
+real_time = time.time
+clock = {"t": 5000.0}
+time.time = lambda: clock["t"]
+app.session_count, app._active_s, app._last_action = 0, 0.0, clock["t"]
+for _ in range(3):
+    clock["t"] += 30; app._count_action()
 assert app._pace_text() == "Words and duels done today"            # too early to talk about pace
-app.session_count = 60
-assert app._pace_text().endswith("about 120 an hour") and app.today_tip.text_fn(None) == app._pace_text()
+for _ in range(57):
+    clock["t"] += 30; app._count_action()                            # 60 actions, 30 s apart: 120 per hour
+assert app._pace_text().endswith("about 120 per hour"), app._pace_text()
+clock["t"] += 3 * 3600; app._count_action()                          # back after 3 hours away
+assert abs(app._active_s - (60 * 30 + app.PACE_GAP_S)) < 1e-6
+assert app._pace_text().endswith(f"about {round(61 / ((60 * 30 + app.PACE_GAP_S) / 3600)):,} per hour")
+assert app.today_tip.text_fn(None) == app._pace_text()
+time.time = real_time
 assert abs(A.local_midnight() - time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))) < 1
 
 # ---- the tier chart (UI-13): in Place new words only, and it follows placements

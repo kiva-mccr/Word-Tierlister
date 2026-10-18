@@ -1457,19 +1457,24 @@ class WordCard(tk.Canvas):
 
 
 class Tooltip:
-    """A small hover note (UI-13 / UI-15): appears after DELAY_MS of hovering, follows the pointer, and goes
-    when the pointer leaves or a key or button is pressed.
+    """A small hover note (UI-13 / UI-15 / UI-33): appears after DELAY_MS of hovering, just below what it
+    describes, and stays there (only its text changes over another part of the same widget); it goes when the
+    pointer leaves or a key or button is pressed.
 
         Tooltip(widget, lambda e: "1,234 words")    # text_fn(event) -> text, or None for "nothing here"
+        Tooltip(label, text_fn, side="right")        # beside it instead (when something sits below it)
 
-    text_fn gets the Motion event, so one tooltip can say different things over different parts of a
-    canvas (each bar of the chart). It is a borderless window in the surface colour with a hairline.
+    text_fn gets the Motion event, so one tooltip can say different things over different parts of a canvas
+    (each segment of the progress bar). It looks like the rest of the theme: a rounded card in the faint lilac
+    with a hairline, in the shared font. (tk windows cannot be see-through, so the corners are painted in the
+    page colour.)
     """
     DELAY_MS = 350
 
-    def __init__(self, widget, text_fn, font=None):
-        self.widget, self.text_fn, self.font = widget, text_fn, font
-        self.win = self._label = None
+    def __init__(self, widget, text_fn, font=None, side="below"):
+        self.widget, self.text_fn, self.font, self.side = widget, text_fn, font, side
+        self.win = self._canvas = None
+        self._text = ""
         self._job = None
         self._last = None
         widget.bind("<Motion>", self._on_motion, add="+")
@@ -1479,7 +1484,7 @@ class Tooltip:
     @property
     def text(self):
         """What is showing now ("" when hidden)."""
-        return self._label.cget("text") if self.win is not None else ""
+        return self._text if self.win is not None else ""
 
     def _on_motion(self, e):
         self._last = e
@@ -1488,8 +1493,8 @@ class Tooltip:
             self.hide()
             return
         if self.win is not None:
-            self._label.configure(text=text)
-            self._place(e)
+            if text != self._text:
+                self._draw(text)                  # same place, new words (UI-33: it does not chase the pointer)
             return
         if self._job is None:
             self._job = self.widget.after(self.DELAY_MS, self._show)
@@ -1500,13 +1505,28 @@ class Tooltip:
         text = self.text_fn(e) if e is not None else None
         if not text:
             return
-        win = self.win = tk.Toplevel(self.widget, bg=PALETTE["border"])
+        win = self.win = tk.Toplevel(self.widget, bg=PALETTE["bg"])
         win.overrideredirect(True)
         # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
-        self._label = tk.Label(win, text=text, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
-                               padx=8, pady=4, justify="left")
-        self._label.pack(padx=1, pady=1)
+        self._canvas = tk.Canvas(win, bd=0, highlightthickness=0, bg=PALETTE["bg"])
+        self._canvas.pack()
+        self._draw(text)
         self._place(e)
+
+    def _draw(self, text):
+        self._text = text
+        c, f = self._canvas, self.font
+        c.delete("all")
+        line = f.metrics("linespace") if f else 16
+        pad_x, pad_y = max(8, line // 2), max(4, line // 4)
+        t = c.create_text(pad_x + 1, pad_y + 1, text=text, font=f, fill=PALETTE["text"], anchor="nw",
+                          justify="left", tags="text")
+        x1, y1, x2, y2 = c.bbox(t)
+        w, h = x2 + pad_x + 1, y2 + pad_y + 1
+        c.configure(width=w + 1, height=h + 1)
+        c.create_polygon(_rounded_points(1, 1, w, h, min(10, h // 2)), smooth=True, fill=PALETTE["surface2"],
+                         outline=PALETTE["border"], tags="card")
+        c.tag_raise("text")
 
     def show_at(self, e):
         """Show now for this event (tests, and keyboard focus later)."""
@@ -1514,8 +1534,18 @@ class Tooltip:
         self._show()
 
     def _place(self, e):
-        x = self.widget.winfo_rootx() + e.x + 14
-        y = self.widget.winfo_rooty() + e.y + 18
+        """Just below the widget, starting near the pointer (or just right of it, centred), kept on the screen."""
+        self.win.update_idletasks()
+        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        if self.side == "right":
+            x = self.widget.winfo_rootx() + self.widget.winfo_width() + 8
+            y = self.widget.winfo_rooty() + (self.widget.winfo_height() - h) // 2
+        else:
+            x = self.widget.winfo_rootx() + e.x - 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        x = max(0, min(x, self.widget.winfo_screenwidth() - w))
+        if y + h > self.widget.winfo_screenheight():
+            y = self.widget.winfo_rooty() - h - 6           # no room below: above it instead
         self.win.geometry(f"+{x}+{y}")
 
     def hide(self):
@@ -1527,7 +1557,7 @@ class Tooltip:
                 self.win.destroy()
             except tk.TclError:
                 pass
-            self.win = self._label = None
+            self.win = self._canvas = None
 
 
 def close_popups():

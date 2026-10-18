@@ -2,7 +2,7 @@
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
 DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import time
+import time, types
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
@@ -438,6 +438,25 @@ cancelled = []
 dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
+
+# ---- Tooltip (UI-33): below what it describes, stays put, rounded lilac card in the shared font
+from widgets import Tooltip
+area = tk.Canvas(root, width=300, height=40, bg=PALETTE["bg"]); area.pack(); update()
+tip = Tooltip(area, lambda e: "left half" if e.x < 150 else "right half", font=small)
+tip.show_at(types.SimpleNamespace(x=40, y=10)); update()
+tx, ty = tip.win.winfo_rootx(), tip.win.winfo_rooty()
+assert tip.text == "left half" and ty >= area.winfo_rooty() + area.winfo_height()   # below it, never over it
+tip._on_motion(types.SimpleNamespace(x=200, y=20)); update()
+assert tip.text == "right half" and (tip.win.winfo_rootx(), tip.win.winfo_rooty()) == (tx, ty)   # same place
+card = tip._canvas.find_withtag("card")[0]
+assert tip._canvas.itemcget(card, "fill") == PALETTE["surface2"] and tip._canvas.itemcget(card, "outline") == PALETTE["border"]
+assert tip._canvas.itemcget(card, "smooth") in ("1", "true", "bezier") and tip._canvas.itemcget("text", "font") == str(small)
+tip.hide(); assert tip.text == "" and tip.win is None
+side = Tooltip(area, lambda e: "beside", font=small, side="right")
+side.show_at(types.SimpleNamespace(x=40, y=10)); update()
+assert side.win.winfo_rootx() >= area.winfo_rootx() + area.winfo_width()            # to its right
+side.hide()
+area.destroy()
 
 # ---- TierChip (UI-28): a rounded pastel tier label, sized from its font
 from widgets import TierChip

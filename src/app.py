@@ -88,6 +88,8 @@ class App:
         self.focus_left = 0
         self.session_count = 0
         self.session_start = time.time()
+        self._active_s = 0.0             # active time this session (UI-33: breaks over PACE_GAP_S do not count)
+        self._last_action = self.session_start
         self.mem_defs = {}
         self.def_words = []
         self.browsers = []
@@ -220,7 +222,8 @@ class App:
         self.progress_bar = SegmentBar(left, SEGMENT_NAMES, font("body"))
         self.progress_bar.pack(side="top", anchor="w", pady=(8, 0))
         self.progress_tip = Tooltip(self.progress_bar, lambda e: self.progress_bar.note(e.x), font=font("body"))
-        self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"))
+        self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"),
+                                 side="right")                     # (the progress bar is below it)
         # each tab's own view in one spot (UI-31): they share its space, so switching tabs never moves the page
         views = tk.Frame(band, bg=PALETTE["bg"])
         views.pack(side="right", anchor="n")
@@ -729,13 +732,23 @@ class App:
             modes.add("conflict")
         return modes
 
+    PACE_GAP_S = 120     # a longer pause between two actions is a break: it adds only this much to the pace
+
+    def _count_action(self):
+        """One more word or duel this session: the time since the last one counts towards the pace, up to
+        PACE_GAP_S (UI-33), so stepping away does not drag the number down."""
+        now = time.time()
+        self._active_s += min(max(0.0, now - self._last_action), self.PACE_GAP_S)
+        self._last_action = now
+        self.session_count += 1
+
     def _pace_text(self):
         """The hover note on "+N today": this session's pace, once there is enough to say anything."""
-        hours = (time.time() - self.session_start) / 3600.0
+        hours = self._active_s / 3600.0
         if self.session_count < 5 or hours <= 0:
             return "Words and duels done today"
         return (f"Words and duels done today. This session: {self.session_count:,}, "
-                f"about {self.session_count / hours:,.0f} an hour")
+                f"about {self.session_count / hours:,.0f} per hour")
 
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
@@ -827,7 +840,7 @@ class App:
             return
         word = self.cur_word
         self.store.skip(word)
-        self.session_count += 1
+        self._count_action()
         old_sub = self.word_card.sub
         self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
         self.refresh()
@@ -837,7 +850,7 @@ class App:
     def _after_place(self, word, tier):
         """Shared tail of every placement: count it, show the next word (the old one nudges toward its tier
         and fades, UI-16), confirm in the toast."""
-        self.session_count += 1
+        self._count_action()
         self.cmp = None
         old_sub = self.word_card.sub
         self.refresh()
@@ -1011,7 +1024,7 @@ class App:
         kind = {"refine": "within", "boundary": "boundary", "conflict": "conflict"}[self.mode]
         res = {"left": "a", "right": "b", "tie": "tie"}[ans]
         info = self.store.record_comparison(a, b, res, kind)
-        self.session_count += 1
+        self._count_action()
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
             self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
