@@ -485,6 +485,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Tooltip opens just below its widget (or beside it, side="right", for "+N today", which has the
 #           progress bar under it) and keeps its place while its text changes; drawn as a rounded faint-lilac
 #           card with a hairline (corners painted in the page colour: tk windows cannot be see-through).
+#           Then (asked for): the notes say just "22,574 of 90,000 placed" and "about +120/hr" (nothing
+#           until there is enough to say); a note is drawn and placed before it shows (no blank white box
+#           flashing first); "covers 92%" is quiet grey text after the bar, like the segment labels.
 # [x] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
 #           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
 # [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window
@@ -560,6 +563,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and never makes anything bigger; a zoom in that cannot get bigger says "as big as fits" and
 #           changes nothing. In a window enlarged by UI-25, Ctrl + / - step from the size on screen.
 #           Main and Browse keep separate zooms, both saved (meta zoom / browse_zoom). _selftest_zoom.py.
+#           Then (reported: holding Ctrl + caused trouble): the zoom keys are paced like every held key; a
+#           zoom in that did not fit is remembered per layout (tab, definitions pane, screen) and refused on
+#           the spot afterwards, so a held key tries it on screen once at most; a repeated refusal wiggles
+#           the one "as big as fits" message side to side (Toast.wiggle) instead of stacking new ones.
 # [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
 #           while no tier holds two words yet (only at the very start), "Boundary check" while no two
 #           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon

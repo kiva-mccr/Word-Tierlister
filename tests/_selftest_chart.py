@@ -118,8 +118,9 @@ assert max(widths) - min(widths) < 1                                            
 assert abs((max(sb.coords("fill0")[0::2]) - min(sb.coords("fill0")[0::2])) - widths[0]) < 2   # full
 assert not sb.find_withtag("fill2") and sb.find_withtag("fill3")                  # none placed: no fill; a few: a sliver
 assert sb.itemcget("label1", "text") == "common 97%" and sb.itemcget("tag", "text") == "covers 99.4%"
-assert min(sb.coords("tagbox")[0::2]) > max(xs[3][0::2])                          # the tag sits to the right
-assert sb.note(sb._x(2) + 3) == "uncommon words: 0 of 90,000 placed" and sb.note(-50) is None
+assert sb.coords("tag")[0] > max(xs[3][0::2]) and sb.itemcget("tag", "fill") == PALETTE["muted"]   # quiet, at the end
+assert not sb.find_withtag("tagbox")
+assert sb.note(sb._x(2) + 3) == "0 of 90,000 placed" and sb.note(-50) is None
 sb.set([(0, 1)] * 4, coverage=None); assert not sb.find_withtag("tag")             # no frequencies yet: no tag
 root.destroy()
 print("CHART OK")

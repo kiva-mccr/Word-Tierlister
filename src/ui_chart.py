@@ -359,8 +359,8 @@ def format_coverage(frac):
 class SegmentBar(tk.Canvas):
     """The progress bar (UI-14): four equal segments by how common words are (everyday, common, uncommon, rare;
     each about ten times the words of the one before), each filling by the share of its own words placed, so it
-    is a log scale over commonness. Under each segment its name and share; to the right a small tag with the
-    share of everyday English the placed words cover. Calm: no goals, no animation.
+    is a log scale over commonness. Under each segment its name and share; after the bar, in the same quiet grey,
+    the share of everyday English the placed words cover. Calm: no goals, no animation.
 
         bar = SegmentBar(parent, ["everyday", "common", "uncommon", "rare"], font("body"))
         bar.set([(1000, 1000), (9700, 10000), (37000, 90000), (2000, 640000)], coverage=0.994)
@@ -389,7 +389,7 @@ class SegmentBar(tk.Canvas):
         line, seg_w, bar_h, gap = self._metrics()
         n = len(self.names)
         bars_w = n * seg_w + (n - 1) * gap
-        top = max(1, (line + 6 - bar_h) // 2)          # room for the coverage tag, which is taller than the bar
+        top = max(1, (line - bar_h) // 2)              # room for the coverage text beside the bar
         r = bar_h / 2
         for i, (name, (placed, total)) in enumerate(zip(self.names, self.segments)):
             x1 = self._x(i)
@@ -405,17 +405,13 @@ class SegmentBar(tk.Canvas):
             self.create_text(x1, top + bar_h + 4, text=f"{name} {format_share(placed, total)}", font=self._font,
                              fill=PALETTE["muted"], anchor="nw", tags=("label", f"label{i}"))
         width = bars_w + 2
-        if self.coverage is not None:
+        if self.coverage is not None:              # quiet text at the end, like the segment labels
             text = format_coverage(self.coverage)
             tw = self._font.measure(text) if self._font else 8 * len(text)
-            x1 = bars_w + 2 + line
-            h = line + 4
-            y1 = top + bar_h / 2 - h / 2
-            self.create_polygon(_rounded_points(x1, y1, x1 + tw + line, y1 + h, h / 2), smooth=True,
-                                fill=PALETTE["surface"], outline=PALETTE["border"], tags="tagbox")
-            self.create_text(x1 + (tw + line) / 2, y1 + h / 2, text=text, font=self._font, fill=PALETTE["text"],
+            x1 = bars_w + 2 + line // 2
+            self.create_text(x1, top + bar_h / 2, text=text, font=self._font, fill=PALETTE["muted"], anchor="w",
                              tags="tag")
-            width = x1 + tw + line + 2
+            width = x1 + tw + 2
         super().configure(width=width, height=top + bar_h + 4 + line + 2)
 
     def set(self, segments, coverage=None):
@@ -433,12 +429,12 @@ class SegmentBar(tk.Canvas):
         return None
 
     def note(self, x):
-        """The hover note for the segment under x: 'uncommon: 37,204 of 90,000 placed'."""
+        """The hover note for the segment under x: '37,204 of 90,000 placed'."""
         i = self.segment_at(x)
         if i is None:
             return None
         placed, total = self.segments[i]
-        return f"{self.names[i]} words: {placed:,} of {total:,} placed"
+        return f"{placed:,} of {total:,} placed"
 
     def refresh(self):
         self._draw()

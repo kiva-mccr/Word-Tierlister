@@ -32,6 +32,7 @@ for _ in range(8):
 top, z_top = body(), app.zoom
 assert top > b0 and z_top < 1.8                                     # it grew, but stopped where the screen is full
 assert app.toast.cget("text") == "This is as big as fits on this screen"
+assert app._zoom_cap.get(app._layout_key()) == round(z_top + app.ZOOM_STEP, 2)       # remembered: not tried again
 assert s.get_meta("zoom") == str(z_top)
 # switching tabs and back keeps the zoom (it used to shrink a step in a taller tab and never grow back)
 for m in ("refine", "boundary", "place"):

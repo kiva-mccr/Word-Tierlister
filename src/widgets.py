@@ -4,6 +4,7 @@ Both are canvases drawn with smoothed rounded corners. Canvas (not tk.Button or 
 colours then look the same on macOS, Windows and Linux, and corners can be round everywhere.
 After a shared Font object is resized, call refresh_widgets(window) so they re-measure.
 """
+import math
 import tkinter as tk
 import tkinter.font as tkfont
 
@@ -970,6 +971,24 @@ class Toast(tk.Canvas):
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._later(ms, self.hide)
 
+    WIGGLE_MS = 320
+
+    def wiggle(self, ms=1500):
+        """A little side-to-side "no" shake of the message on screen (a repeated refusal, like a zoom that cannot
+        go further), and it stays `ms` longer. Nothing moves with Reduce motion; it only stays longer."""
+        if not self._text or self._next is None:
+            return False
+        if self._job is not None:
+            self.after_cancel(self._job)
+        self._later(ms, self.hide)
+
+        def frame(p):
+            self.place_configure(x=int(round(7 * math.sin(p * 3 * 2 * math.pi) * (1 - p))))
+        if self._anim is not None and not self._anim.reduce_motion:
+            self._anim.run(f"wiggle{id(self)}", self.WIGGLE_MS, frame, lambda: self.place_configure(x=0),
+                           ease=lambda t: t)
+        return True
+
     def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
               on_arrive=None):
         """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
@@ -1506,12 +1525,14 @@ class Tooltip:
         if not text:
             return
         win = self.win = tk.Toplevel(self.widget, bg=PALETTE["bg"])
+        win.withdraw()                    # drawn and placed first: no blank box flashing at the corner
         win.overrideredirect(True)
         # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
         self._canvas = tk.Canvas(win, bd=0, highlightthickness=0, bg=PALETTE["bg"])
         self._canvas.pack()
         self._draw(text)
         self._place(e)
+        win.deiconify()
 
     def _draw(self, text):
         self._text = text

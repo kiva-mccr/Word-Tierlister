@@ -101,6 +101,7 @@ class App:
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
+        self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
         self._settled_ready = False
@@ -120,9 +121,9 @@ class App:
         root.bind("<KeyRelease>", self.on_key_release)
         self._held = {}                            # keysym -> held-key state (_repeat_allowed)
         for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
-            root.bind(seq, lambda e: self.zoom_step(1))
+            root.bind(seq, lambda e: self._zoom_key(e, 1))
         for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
-            root.bind(seq, lambda e: self.zoom_step(-1))
+            root.bind(seq, lambda e: self._zoom_key(e, -1))
         for seq in ("<Control-0>", "<Control-KP_0>"):
             root.bind(seq, lambda e: self.set_zoom(1.0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
@@ -338,22 +339,51 @@ class App:
         if z == self.zoom and self.grow == 1:
             return "break"
         old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
+        cap = self._zoom_cap.get(self._layout_key())
+        if z > old and cap is not None and z >= cap:
+            z = round(cap - self.ZOOM_STEP, 2)    # known not to fit here: refuse on the spot, nothing tried on screen
+            if z <= old and self.grow == 1:
+                self._refuse_zoom()
+                return "break"
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
         info = (PALETTE["info"][0], PALETTE["info"][1])
         if z > old and now <= before + 1e-9:
+            self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
             self._apply_zoom(old)
-            self.flash("This is as big as fits on this screen", bg=info[0], fg=info[1], ms=1500)
+            self._refuse_zoom()
             return "break"
         self.store.set_meta("zoom", z)
         note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
         self.flash(f"Zoom {round(z * 100)}%{note}", bg=info[0], fg=info[1], ms=900 if not note else 1600)
         return "break"
 
+    def _zoom_key(self, e, d):
+        """Ctrl + / Ctrl - pressed: paced like every other held key (500 ms, then every 250 ms after the last
+        step finished), so holding it never queues up refits."""
+        if self._repeat_allowed(e):
+            self.zoom_step(d)
+            self._action_done(e)
+        return "break"
+
     def zoom_step(self, d):
         """Ctrl + / Ctrl - (and the View menu): one step bigger or smaller than what is on screen now, which in a
         window enlarged by UI-25 is more than the saved zoom."""
         return self.set_zoom(round(self.zoom * self.grow, 1) + d * self.ZOOM_STEP)
+
+    def _layout_key(self):
+        """What decides how big things can get: the tab, the definitions pane and the screen."""
+        return (self.mode, self.show_defs, tuple(usable_area(self.root)))
+
+    def _refuse_zoom(self):
+        """Zoom in cannot go further: say so once; while that message shows, a repeat just wiggles it."""
+        t = getattr(self, "_zoom_note", None)
+        if t is not None and t.cget("text") == self.ZOOM_FULL and t.wiggle():
+            return
+        self.flash(self.ZOOM_FULL, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+        self._zoom_note = self.toast
+
+    ZOOM_FULL = "This is as big as fits on this screen"
 
     def _apply_zoom(self, z):
         self.zoom = z
@@ -746,9 +776,8 @@ class App:
         """The hover note on "+N today": this session's pace, once there is enough to say anything."""
         hours = self._active_s / 3600.0
         if self.session_count < 5 or hours <= 0:
-            return "Words and duels done today"
-        return (f"Words and duels done today. This session: {self.session_count:,}, "
-                f"about {self.session_count / hours:,.0f} per hour")
+            return None                                 # too early to say anything: no note
+        return f"about +{self.session_count / hours:,.0f}/hr"
 
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,

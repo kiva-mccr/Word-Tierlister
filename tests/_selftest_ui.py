@@ -338,8 +338,10 @@ assert app.zoom == 1.3 and s.get_meta("zoom") == "1.3"
 assert app.toast.cget("text") == "Zoom 130%" and app.toast._tint[0] == T.PALETTE["info"][0] == "#FFFFFF"   # a white card
 assert _font("body").cget("size") > body0 and _font("word").cget("size") > word0
 assert root.winfo_width() <= app.root.winfo_screenwidth()                          # never past the screen
-root.event_generate("<Control-minus>"); pump(3); assert app.zoom == 1.2
-app.set_zoom(9); assert app.zoom == app.ZOOM_MAX; app.set_zoom(0); assert app.zoom == app.ZOOM_MIN   # limits
+root.event_generate("<Control-minus>"); root.event_generate("<KeyRelease-minus>"); pump(3); assert app.zoom == 1.2
+z_before = app.zoom
+app.set_zoom(9); assert z_before < app.zoom <= app.ZOOM_MAX            # as big as fits, at most the maximum
+app.set_zoom(0); assert app.zoom == app.ZOOM_MIN                         # limits
 root.event_generate("<Control-0>"); pump(3)
 assert app.zoom == 1.0 and abs(_font("body").cget("size") - body0) <= 1
 app.set_zoom(1.1); zoom_saved = s.get_meta("zoom"); app.set_zoom(1.0)
@@ -362,6 +364,31 @@ hidden = [k for k, _ in T.MODES if k not in app.mode_switch.visible]
 for _ in range(len(T.MODES)):
     key("Tab"); pump(1); assert app.mode not in hidden                          # hidden tabs are skipped
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
+
+# holding Ctrl + is paced like any held key, and once the screen is full a repeat only wiggles the one message
+app.set_zoom(1.0); pump(2)
+real_mono = time.monotonic
+clock = {"t": 9000.0}
+time.monotonic = lambda: clock["t"]
+calls = []
+real_apply = app._apply_zoom
+app._apply_zoom = lambda z: (calls.append(z), real_apply(z))
+ev = lambda t: types.SimpleNamespace(keysym="plus", time=t)
+app._zoom_key(ev(1), 1)                                                         # first press: one step
+for i in range(40):                                                            # held: 30 repeats a second
+    clock["t"] += 0.033
+    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app._zoom_key(ev(100 + i), 1)
+assert len(calls) <= 1 + (40 * 33 - 500) // 250 + 1, calls                     # paced, not 40 refits
+app._zoom_cap[app._layout_key()] = round(app.zoom * app.grow + app.ZOOM_STEP, 2)   # the next step is known not to fit
+n_calls = len(calls)
+app.zoom_step(1); first = app.toast
+assert first.cget("text") == app.ZOOM_FULL and len(calls) == n_calls          # refused without trying on screen
+app.zoom_step(1); app.zoom_step(1)
+assert app.toast is first and app.anim.is_running(f"wiggle{id(first)}")       # the same message wiggles
+app._zoom_cap.clear()
+app._apply_zoom, time.monotonic = real_apply, real_mono
+app.on_key_release(types.SimpleNamespace(keysym="plus", time=999))
+app.anim.finish_all(); app.set_zoom(1.0); pump(2)
 
 # ---- a bigger window, bigger contents (UI-25): the fonts grow with the window, then shrink back with it
 assert app._grow_for(*app._ref_size) == 1.0 and app._grow_for(app._ref_size[0] * 9, app._ref_size[1] * 9) == app.GROW_MAX
@@ -422,7 +449,7 @@ before = app.progress_bar.segments[seg][0]
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
 key("3"); app.anim.finish_all(); pump(2)
 assert app.progress_bar.segments[seg][0] == before + 1 and app.progress_bar.segments == s.progress()["segments"]
-assert app.progress_bar.note(app.progress_bar._x(seg) + 5).endswith(f"{before + 1:,} of {s.progress()['segments'][seg][1]:,} placed")
+assert app.progress_bar.note(app.progress_bar._x(seg) + 5) == f"{before + 1:,} of {s.progress()['segments'][seg][1]:,} placed"
 app.undo(); pump(2); assert app.progress_bar.segments[seg][0] == before
 n0 = int(app.today_lbl.cget("text").split()[0].lstrip("+").replace(",", ""))
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
@@ -439,13 +466,13 @@ time.time = lambda: clock["t"]
 app.session_count, app._active_s, app._last_action = 0, 0.0, clock["t"]
 for _ in range(3):
     clock["t"] += 30; app._count_action()
-assert app._pace_text() == "Words and duels done today"            # too early to talk about pace
+assert app._pace_text() is None                                     # too early to talk about pace: no note
 for _ in range(57):
     clock["t"] += 30; app._count_action()                            # 60 actions, 30 s apart: 120 per hour
-assert app._pace_text().endswith("about 120 per hour"), app._pace_text()
+assert app._pace_text() == "about +120/hr", app._pace_text()
 clock["t"] += 3 * 3600; app._count_action()                          # back after 3 hours away
 assert abs(app._active_s - (60 * 30 + app.PACE_GAP_S)) < 1e-6
-assert app._pace_text().endswith(f"about {round(61 / ((60 * 30 + app.PACE_GAP_S) / 3600)):,} per hour")
+assert app._pace_text() == f"about +{round(61 / ((60 * 30 + app.PACE_GAP_S) / 3600)):,}/hr"
 assert app.today_tip.text_fn(None) == app._pace_text()
 time.time = real_time
 assert abs(A.local_midnight() - time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))) < 1

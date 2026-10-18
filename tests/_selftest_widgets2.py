@@ -418,6 +418,13 @@ assert tb[3] <= bb[1] and bb[2] - bb[0] <= small.measure("n" * 34) + 2          
 assert ec.winfo_reqwidth() > bb[2] - bb[0] and ec.winfo_reqheight() > bb[3]           # the panel holds both
 ew.destroy()
 
+# ---- Toast.wiggle: a little "no" shake of the message on screen, which then stays longer
+wt = Toast(root, small, animator=anim); wt.show("No further", ms=400); update()
+assert wt.wiggle() and anim.is_running(f"wiggle{id(wt)}")
+anim.finish_all(); assert int(wt.place_info()["x"]) == 0
+wt._fire(); anim.finish_all(); update(); assert not wt.wiggle()                 # gone: nothing to wiggle
+wt.destroy()
+
 # ---- StyledDialog (UI-24): headline, intro, body, rounded buttons; Enter = default, Escape = on_cancel
 from fonts import init_fonts
 from widgets import StyledDialog
@@ -443,7 +450,12 @@ dlg.close(); update(); assert not dlg.alive()
 from widgets import Tooltip
 area = tk.Canvas(root, width=300, height=40, bg=PALETTE["bg"]); area.pack(); update()
 tip = Tooltip(area, lambda e: "left half" if e.x < 150 else "right half", font=small)
+shown_states = []
+real_place = Tooltip._place
+Tooltip._place = lambda self, e: (shown_states.append(self.win.state()), real_place(self, e))
 tip.show_at(types.SimpleNamespace(x=40, y=10)); update()
+Tooltip._place = real_place
+assert shown_states == ["withdrawn"] and tip.win.state() == "normal"            # placed before it is ever shown
 tx, ty = tip.win.winfo_rootx(), tip.win.winfo_rooty()
 assert tip.text == "left half" and ty >= area.winfo_rooty() + area.winfo_height()   # below it, never over it
 tip._on_motion(types.SimpleNamespace(x=200, y=20)); update()
