@@ -359,7 +359,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           log(rank + 30), so a spine near the start holds a few words and one near the end thousands (the
 #           note says how many). Tallies per spine (words, placed, per tier) counted once by SQLite on a new
 #           covering index (~0.5 s with a million words), then kept current by every tier change (place, a
-#           Browse move, unplace, a boundary swap, undo): ~2 ms per action. Rejected: separate segments, a plain coverage bar,
+#           Browse move, unplace, a boundary swap, undo): ~2 ms per action.
+#           Fixed (reported: a real save showed only "page", cut off, and "library"): the frequency fill left
+#           hyphenated / spaced forms at 0, though the ranking had estimated them near the top, so the first
+#           zone boundary landed at rank ~3. The fill now estimates them the same way (Store.FREQ_VERSION 2:
+#           older fills redo once at start-up), the zone boundaries ignore words with no frequency, and the
+#           zone names are kept whole and apart on the shelf. Rejected: separate segments, a plain coverage bar,
 #           a tier-coloured bar, milestone steps, bookends, a bookmark ribbon, a hill profile, average-tier
 #           colour mixing.
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;

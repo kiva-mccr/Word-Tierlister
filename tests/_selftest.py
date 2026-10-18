@@ -145,7 +145,7 @@ def recount():
     s._prog = None
     return Same(s.shelf())
 s.set_frequencies([(w, 1.0 / (i + 1)) for i, w in enumerate(words)])
-assert s.get_meta("freq_done") == "1"
+assert s.get_meta("freq_done") == T.Store.FREQ_VERSION
 p0 = Same(s.shelf())
 assert [z for z, _n in p0["zones"]] == [z for z in ("page", "chapter", "book", "shelf", "library") if z in dict(p0["zones"])]
 assert sum(n for _z, n in p0["zones"]) == len(p0["spines"]) and all(sp["words"] > 0 for sp in p0["spines"])
@@ -164,6 +164,31 @@ lo_w = s.db.execute("SELECT word FROM words WHERE tier=1 AND word NOT IN (SELECT
 assert s.record_comparison(hi_w, lo_w, "b", "boundary")["swapped"]
 assert Same(s.shelf()) == recount() != p0                                                  # a swap moves tier counts
 s.undo(); assert Same(s.shelf()) == recount() == p0
+# a word with no known frequency near the top (a version-1 fill left hyphenated forms at 0) must not collapse
+# the zones (reported: the shelf showed only "page" and "library")
+z = T.Store(os.path.join(tempfile.mkdtemp(), "zones.db"))
+zw = [f"z{i:06d}" for i in range(50000)]
+z.insert_words(zw)
+z.set_frequencies([(w, 10 ** (7.7 - 9 - 5.0 * i / 50000)) for i, w in enumerate(zw)])   # Zipf 7.7 down to 2.7
+z.db.execute("UPDATE words SET freq=0 WHERE rank=3"); z.db.commit(); z._prog = None
+names = [n for n, _e in z.shelf_layout()]
+assert names == ["page", "chapter", "book", "shelf", "library"], names
+assert all(len(e) - 1 >= 2 for _n, e in z.shelf_layout())
+z.close()
+# the fill estimates hyphenated / spaced forms like the ranking does, and an older fill is redone once
+try:
+    import wordfreq  # noqa: F401
+    from wordsource import fill_frequencies, prepare_queue
+    h = T.Store(os.path.join(tempfile.mkdtemp(), "hyph.db"))
+    h.insert_words(["the", "well-known", "ice cream", "qzxv-wvqz"])
+    h.set_meta("pen_done", "1"); h.set_meta("freq_done", "1")              # filled by version 1
+    prepare_queue(h, log=lambda m: None)
+    fq = {r[0]: r[1] for r in h.db.execute("SELECT word, freq FROM words")}
+    assert h.get_meta("freq_done") == T.Store.FREQ_VERSION and fq["well-known"] > 0 and fq["ice cream"] > 0, fq
+    assert fq["the"] > fq["well-known"] and fq["qzxv-wvqz"] == 0
+    h.close()
+except ImportError:
+    print("(wordfreq not installed: frequency fill not tested)")
 # the layout: zones end where the Zipf value drops below 6, 5, 4, 3; spines are equal steps of log(rank + 30)
 lay = s.shelf_layout()
 for name, edges in lay:

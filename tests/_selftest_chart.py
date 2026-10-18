@@ -128,6 +128,16 @@ gap = sh.coords("spine2")[0] - sh.coords("spine1")[2]
 assert gap > 2 * (sh.coords("spine1")[0] - sh.coords("spine0")[2])                # a gap between zones
 assert [sh.itemcget(f"zone{i}", "text") for i in (0, 1)] == ["page", "chapter"] and sh.itemcget("tag", "text") == "95% of text"
 x = lambda i: (sh.coords(f"spine{i}")[0] + sh.coords(f"spine{i}")[2]) / 2
+# zone names stay whole: never cut off at the left edge, never overlapping, even for a one-spine zone
+narrow = {"zones": [("page", 1), ("chapter", 1), ("book", 30)], "coverage": None,
+          "spines": [{"zone": "page", "words": 3, "placed": 0, "tiers": [0] * 6},
+                     {"zone": "chapter", "words": 9, "placed": 0, "tiers": [0] * 6}]
+          + [{"zone": "book", "words": 50, "placed": 0, "tiers": [0] * 6}] * 30}
+sh2 = Bookshelf(root, body); sh2.pack(); sh2.set(narrow); root.update()
+boxes = [sh2.bbox(f"zone{i}") for i in range(3)]
+assert boxes[0][0] >= 0 and all(b[2] <= int(sh2.cget("width")) for b in boxes), boxes
+assert boxes[0][2] <= boxes[1][0] and boxes[1][2] <= boxes[2][0], boxes            # no overlaps
+sh2.destroy()
 assert sh.note(x(0)) == "page \u00b7 10 words \u00b7 100% placed \u00b7 mostly S, leans S".replace(", leans S", "")
 assert sh.note(x(2)) == "chapter \u00b7 40 words \u00b7 none placed yet"
 assert sh.note(x(3)).startswith("chapter \u00b7 50 words \u00b7 10% placed \u00b7 mostly A") and sh.note(-5) is None

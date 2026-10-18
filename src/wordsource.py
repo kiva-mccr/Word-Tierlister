@@ -334,13 +334,19 @@ def fill_frequencies(store, log=print):
     """Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14). Words wordfreq has never
     seen keep 0: they add nothing to how much of everyday English is covered."""
     try:
-        from wordfreq import get_frequency_dict
+        from wordfreq import get_frequency_dict, word_frequency
     except ImportError:
         log("wordfreq is not installed, so the coverage figure is not available (pip install wordfreq).")
         return
     fd = get_frequency_dict("en")
+
+    def freq(w):        # the same as the ranking (build_wiktionary's zipf): hyphenated / spaced forms are estimated
+        f = fd.get(w)
+        if f:
+            return f
+        return word_frequency(w, "en") if ("-" in w or " " in w) else 0.0
     words = [r[0] for r in store.db.execute("SELECT word FROM words")]
-    store.set_frequencies((w, fd[w]) for w in words if w in fd)
+    store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
 
 
 def prepare_queue(store, log=print):
@@ -353,7 +359,7 @@ def prepare_queue(store, log=print):
         if compute_penalties(store, log):
             store.set_meta("pen_done", "1")
             changed = True
-    if store.get_meta("freq_done") != "1":
+    if store.get_meta("freq_done") != store.FREQ_VERSION:
         log("Looking up how common each word is (one time, a few seconds)...")
         fill_frequencies(store, log)
     stale = store.db.execute(

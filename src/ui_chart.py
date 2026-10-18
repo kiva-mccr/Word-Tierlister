@@ -350,6 +350,7 @@ class Bookshelf(tk.Canvas):
         sw = (width - self.GAP * max(0, len(zones) - 1)) / n
         self._x = []
         x, i = 1.0, 0
+        labels = []
         edge = lerp_color(PALETTE["border"], PALETTE["text"], 0.25)
         for zi, (name, count) in enumerate(zones):
             x0 = x
@@ -369,10 +370,19 @@ class Bookshelf(tk.Canvas):
                 x += sw
                 i += 1
             self.create_line(x0 - 1, base + 1, x - 1, base + 1, fill=edge, width=2, tags="board")
-            self.create_text((x0 + x) / 2, base + 4, text=name, font=self._font, fill=PALETTE["muted"], anchor="n",
-                             tags=("zone", f"zone{zi}"))
+            labels.append((name, x0, x, zi))
             x += self.GAP
         right = x - self.GAP
+        # zone names under their zones, kept whole: inside the shelf, and pushed along rather than overlapping
+        # when a zone is narrower than its name
+        last_end = 0.0
+        for name, x0, x1, zi in labels:
+            tw = self._font.measure(name) if self._font else 8 * len(name)
+            left = max((x0 + x1) / 2 - tw / 2, 0.0, last_end + line / 2)
+            left = min(left, max(0.0, right - tw))
+            self.create_text(left, base + 4, text=name, font=self._font, fill=PALETTE["muted"], anchor="nw",
+                             tags=("zone", f"zone{zi}"))
+            last_end = left + tw
         if self.data["coverage"] is not None:      # quiet text at the end, like the zone names
             self.create_text(right + line // 2, top + hmax / 2, text=format_coverage(self.data["coverage"]),
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")

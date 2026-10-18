@@ -260,9 +260,12 @@ class Store:
         with no words in this list is left out."""
         n = self.count_words()
         ends = list(SHELF_ZONE_RANKS)
-        if self.get_meta("freq_done") == "1":
+        if self.get_meta("freq_done") in ("1", self.FREQ_VERSION):
             for i, z in enumerate(SHELF_ZIPF):
-                r = self.db.execute("SELECT MIN(rank) FROM words WHERE freq < ?", (10 ** (z - 9),)).fetchone()[0]
+                # the first known word below the threshold (a word with no frequency at all says nothing here:
+                # one near the top, which a version-1 fill could leave, used to collapse every zone)
+                r = self.db.execute("SELECT MIN(rank) FROM words WHERE freq > 0 AND freq < ?",
+                                    (10 ** (z - 9),)).fetchone()[0]
                 ends[i] = r if r is not None else n
         lg = lambda r: math.log10(r + SHELF_SOFT)
         bounds = [0] + [min(e, n) for e in ends] + [n]
@@ -321,10 +324,13 @@ class Store:
                 sp["tiers"][t] += sign
                 p["fp"] += sign * (row["freq"] or 0.0)
 
+    FREQ_VERSION = "2"     # bumped when fill_frequencies changes, so saves filled by an older one refill once
+                           # (2: hyphenated / spaced forms estimated like the ranking; 1 left them at 0)
+
     def set_frequencies(self, pairs):
         """Store each word's frequency [(word, freq)] (for the coverage tag; filled once by wordsource)."""
         self.db.executemany("UPDATE words SET freq=? WHERE word=?", ((f, w) for w, f in pairs))
-        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '1')")
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', ?)", (self.FREQ_VERSION,))
         self.db.commit()
         self._prog = None
         self.version += 1
