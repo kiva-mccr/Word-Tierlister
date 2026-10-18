@@ -590,6 +590,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           zoom in that did not fit is remembered per layout (tab, definitions pane, screen) and refused on
 #           the spot afterwards, so a held key tries it on screen once at most; a repeated refusal wiggles
 #           the one "as big as fits" message side to side (Toast.wiggle) instead of stacking new ones.
+#           Then (reported again: the zoom "reset" on opening / closing the definitions or switching tabs, and
+#           went closer than 100% and closer than zoom in allows): the UI-25 growth, not the zoom. Each fit
+#           re-measured the size that counts as "normal" smaller than the window, so the contents grew to fill
+#           it, past the zoom and past the screen-fit limit. Now that size is set when the window opens and by
+#           a zoom, and later fits may only raise it, so the contents grow only when you enlarge the window.
+#           Checked under a real window manager at 1366x768, 1920x1080 and 2560x1440, with the window normal,
+#           enlarged and maximised, zoomed in and out (18 cases, all keep their size); _selftest_zoom covers it.
 # [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
 #           while no tier holds two words yet (only at the very start), "Boundary check" while no two
 #           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon

@@ -387,6 +387,7 @@ class App:
     def _apply_zoom(self, z):
         self.zoom = z
         self.grow = 1.0                        # a zoom sets the size: the window as it is now becomes "normal"
+        self._ref_size = None                  # (measured afresh at the new zoom, then the window's size at least)
         self._fit_cache.clear()
         self._fit_window(rebase=True)
 
@@ -521,7 +522,14 @@ class App:
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
         r.minsize(min_w, min_h)
         pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
-        self._ref_size = (max(pref[0], cw), max(pref[1], ch))
+        need = (max(pref[0], cw), max(pref[1], ch))
+        # The size at which nothing grows (UI-25) is set when the window opens and by a zoom (rebase, below);
+        # a later fit (a tab, the definitions pane) may only raise it. Re-measuring it smaller made the contents
+        # grow past the zoom, and past what a zoom may reach, after every tab switch or pane close (reported).
+        if initial or self._ref_size is None:
+            self._ref_size = need
+        else:
+            self._ref_size = (max(self._ref_size[0], need[0]), max(self._ref_size[1], need[1]))
         if initial:
             w, h = fit_size((min_w, min_h), pref, (area[2], area[3]))
             r.geometry(center_geometry(w, h, area))

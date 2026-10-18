@@ -54,6 +54,32 @@ for _ in range(3):
 app.toggle_defs(False); pump(4); app.anim.finish_all(); pump(4)
 assert abs(body() - round(12 * app.zoom)) <= 1                                  # closed: the zoom itself shows
 z_main = app.zoom
+# reported twice: after a zoom (out, or in a window bigger than normal) the contents grew past the zoom, and past
+# what zoom in allows, whenever the definitions closed or the tab changed. The size that counts as "normal" is set
+# by opening and by a zoom, and never re-measured smaller.
+def cycle():
+    sizes = set()
+    for step in ("defs", "nodefs", "refine", "place", "defs", "boundary", "place", "nodefs"):
+        if step in ("defs", "nodefs"):
+            app.toggle_defs(step == "defs")
+        else:
+            app.mode_var.set(step); app.on_mode_change()
+        pump(4); app.anim.finish_all(); pump(6)
+        if not app.show_defs and app.mode == "place":
+            sizes.add((body(), font("word").cget("size"), app.grow))
+    return sizes
+for steps in (-2, 1):
+    for _ in range(abs(steps)):
+        app.zoom_step(1 if steps > 0 else -1); pump(4)
+    before = (body(), font("word").cget("size"), app.grow)
+    assert cycle() == {before}, (steps, before)
+w, h = root.winfo_width(), root.winfo_height()
+root.geometry(f"{w + 200}x{h + 60}"); pump(10, 0.03)                           # a bigger window, by hand
+app.zoom_step(-1); pump(4)
+before = (body(), font("word").cget("size"), app.grow)
+assert before[2] == 1.0 and cycle() == {before}, before
+root.geometry(f"{w}x{h}"); pump(10, 0.03)
+app.set_zoom(1.0); pump(4)
 # Browse has its own zoom: changing it leaves the main window alone, and the other way round
 main_body = body()
 app.open_browser(); pump(6); bw = app.browsers[0]
