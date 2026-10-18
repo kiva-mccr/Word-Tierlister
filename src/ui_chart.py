@@ -9,7 +9,6 @@ the tier pastels with the pills' faint edge (theme.TIER_BAR): identity comes fro
 S..F order, not from colour, so the colours can stay pastel (the user's choice over a colour-blind-tuned set).
 """
 import math
-import tkinter as tk
 
 from constants import TIERS as TIERS_LETTERS
 from theme import PALETTE, TIER_BAR, tier_blend
