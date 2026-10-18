@@ -25,7 +25,7 @@ def release(b, x=5, y=5):
 b = make(bg=PALETTE["better"])
 assert b.winfo_reqwidth() > 40 and b.winfo_reqheight() > 20 and b.cget("text") == "Hello"
 assert len(b.find_withtag("shape")) == 1 and len(b.find_withtag("label")) == 1 and not b.find_withtag("hint")
-assert str(b.itemcget("shape", "smooth")) in ("1", "true"), "rounded corners need smooth=True"
+assert b.smooth_image("shape") is not None, "rounded corners are drawn as a smooth image (smooth.py)"
 assert b.itemcget("shape", "fill") == PALETTE["better"]
 h = make(hint="Space")
 assert h.find_withtag("hint") and h.winfo_reqheight() > b.winfo_reqheight()       # the caption adds a line
@@ -105,7 +105,7 @@ card.set("cat", "frequency rank #1,234"); root.update()
 assert card.word == "cat" and card.sub.startswith("frequency")
 assert card.itemcget("word", "text") == "cat" and card.itemcget("sub", "text") == card.sub
 assert len(card.find_withtag("card")) == 1 and len(card.find_withtag("shadow")) == 1
-assert str(card.itemcget("card", "smooth")) in ("1", "true")                       # rounded
+assert card.smooth_image("card") is not None                                         # rounded, smooth
 sx1, sy1, sx2, sy2 = card.bbox("shadow"); cx1, cy1, cx2, cy2 = card.bbox("card")
 assert sx2 > cx2 and sy2 > cy2, "the shadow peeks out below and to the right"
 size = (card.winfo_reqwidth(), card.winfo_reqheight())

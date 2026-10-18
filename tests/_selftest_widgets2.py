@@ -58,7 +58,7 @@ p.event_generate("<Enter>"); p.event_generate("<ButtonPress-1>", x=6, y=8); upda
 p.event_generate("<ButtonRelease-1>", x=6, y=8); update()
 assert picked == [5]
 # pill shape: radius clamps to half the height (a true pill)
-assert str(p.itemcget("shape", "smooth")) in ("1", "true")
+assert p.smooth_image("shape") is not None
 
 # ---- flat RoundButton (UI-8): no fill or outline at rest, a soft fill on hover
 f = RoundButton(root, "Skip pair", lambda: None, font=fnt, flat=True); f.pack(); update()
@@ -544,7 +544,7 @@ tip._on_motion(types.SimpleNamespace(x=200, y=20)); update()
 assert tip.text == "right half" and (tip.win.winfo_rootx(), tip.win.winfo_rooty()) == (tx, ty)   # same place
 card = tip._canvas.find_withtag("card")[0]
 assert tip._canvas.itemcget(card, "fill") == PALETTE["surface2"] and tip._canvas.itemcget(card, "outline") == PALETTE["border"]
-assert tip._canvas.itemcget(card, "smooth") in ("1", "true", "bezier") and tip._canvas.itemcget("text", "font") == str(small)
+assert tip._canvas.smooth_image(card) is not None and tip._canvas.itemcget("text", "font") == str(small)
 tip.hide(); assert tip.text == "" and tip.win is None
 side = Tooltip(area, lambda e: "beside", font=small, side="right")
 side.show_at(types.SimpleNamespace(x=40, y=10)); update()
@@ -556,7 +556,7 @@ area.destroy()
 from widgets import TierChip
 chip = TierChip(root, "S", TIER_COLORS[0], small); chip.pack(); update()
 poly = chip.find_withtag("all")[0]
-assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.itemcget(poly, "smooth") in ("1", "true", "bezier")
+assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.smooth_image(poly) is not None
 w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
 small.configure(size=11); chip.destroy()
 root.destroy()

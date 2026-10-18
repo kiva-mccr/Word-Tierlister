@@ -14,7 +14,7 @@ import tkinter as tk
 from constants import TIERS as TIERS_LETTERS
 from theme import PALETTE, TIER_BAR, tier_blend
 from ui_motion import lerp_color
-from widgets import _rounded_points
+from smooth import SmoothCanvas
 
 GROW_MS = 220
 PULSE_MS = 240
@@ -29,7 +29,7 @@ def compact(n):
     return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
 
 
-class DistributionChart(tk.Canvas):
+class DistributionChart(SmoothCanvas):
     """Six bars, one per tier, with the letter under each and the count on top.
 
         chart = DistributionChart(parent, ["S", "A", "B", "C", "D", "F"], font("body"), font("head"),
@@ -75,7 +75,7 @@ class DistributionChart(tk.Canvas):
         self.create_line(4, base, width - 4, base, fill=PALETTE["border"], tags="axis")
         for i, name in enumerate(self.tiers):
             x = self._x(i)
-            self.create_polygon(0, 0, 0, 0, smooth=True, tags=("bar", f"bar{i}"))
+            self.round_rect(0, 0, 0, 0, 0, tags=("bar", f"bar{i}"))
             self.create_text(x, 0, text="", font=self._font, fill=PALETTE["muted"], anchor="s",
                              tags=("count", f"count{i}"))
             self.create_text(x, base + 3, text=name, font=self._lfont, fill=PALETTE["text"], anchor="n",
@@ -96,9 +96,7 @@ class DistributionChart(tk.Canvas):
                 r = min(4, h / 2, bar_w / 2)
                 # rounded data end, square baseline: corners doubled at the bottom keep it square
                 x1, x2, y1 = x - bar_w / 2, x + bar_w / 2, base - h
-                pts = [x1, base, x1, base, x1, y1 + r, x1, y1, x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
-                       x2, base, x2, base]
-                self.coords(f"bar{i}", *pts)
+                self.round_rect_coords(f"bar{i}", x1, y1, x2, base, radii=(r, r, 0, 0))
                 # the same faint same-hue edge as the tier pills (RoundButton), so pale bars still read
                 self.itemconfigure(f"bar{i}", fill=fill, outline=lerp_color(self.colors[i], PALETTE["text"], 0.18),
                                    width=1, state="normal")
@@ -189,8 +187,8 @@ class SettledChart(DistributionChart):
         self.coords("axis", self._caption_w() + 4, self._base, int(self.cget("width")) - 4, self._base)
         for i in range(len(self.tiers)):
             x = self._x(i)
-            self.create_polygon(_rounded_points(x - bar_w / 2, top, x + bar_w / 2, self._base, 4), smooth=True,
-                                fill=PALETTE["surface2"], outline="", tags=("track", f"track{i}"))
+            self.round_rect(x - bar_w / 2, top, x + bar_w / 2, self._base, 4, fill=PALETTE["surface2"],
+                            tags=("track", f"track{i}"))
         self.tag_lower("track")
         self.create_text(self._caption_w() - 8, top + plot_h / 2, text=self.CAPTION, font=self._font,
                          fill=PALETTE["muted"], anchor="e", justify="right", tags="caption")
@@ -221,7 +219,7 @@ class SettledChart(DistributionChart):
         self._anim.run(f"chart{id(self)}", GROW_MS, frame)
 
 
-class ConflictCard(tk.Canvas):
+class ConflictCard(SmoothCanvas):
     """Resolve conflicts (UI-31): not a chart, one number on a soft card, "3 / to look at", or "None / nicely
     consistent" once the last one is resolved."""
 
@@ -241,8 +239,7 @@ class ConflictCard(tk.Canvas):
         w = max(tf.measure(big), bf.measure(small), bf.measure("nicely consistent")) + 4 * pad
         h = tf.metrics("linespace") + bf.metrics("linespace") + 2 * pad
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, min(14, h // 3)), smooth=True, fill=PALETTE["surface2"],
-                            outline=PALETTE["border"], tags="panel")
+        self.round_rect(1, 1, w, h, min(14, h // 3), fill=PALETTE["surface2"], outline=PALETTE["border"], tags="panel")
         self.create_text(1 + w / 2, 1 + pad, text=big, font=tf, fill=PALETTE["text"], anchor="n", tags="big")
         self.create_text(1 + w / 2, 1 + pad + tf.metrics("linespace"), text=small, font=bf, fill=PALETTE["muted"],
                          anchor="n", tags="small")
@@ -314,7 +311,7 @@ def leaning(tiers, overall):
     return max((k for k in range(len(tiers)) if overall[k]), key=lambda k: (tiers[k] / total) / (overall[k] / whole))
 
 
-class Bookshelf(tk.Canvas):
+class Bookshelf(SmoothCanvas):
     """The progress shelf (UI-14): a shelf of book spines on a log scale of commonness, split into zones named
     for how often you would meet such a word (page, chapter, book, shelf, library), with "95% of text" after it.
 

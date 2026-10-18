@@ -23,7 +23,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -36,6 +36,10 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
   meaning; the user chose this for the tier chart.
 - The word card has a fixed size (fonts + room, never the word) and fits each word in its own font copy; keep
   per-word work free of geometry changes. Check layout jitter with `tools/layout_trace.py` (under xvfb-run).
+- Rounded shapes are drawn with `SmoothCanvas.round_rect` (smooth.py: soft-edged images over an invisible
+  polygon; Tk's own canvas shapes are jagged, worst on Windows). Never `create_polygon(..., smooth=True)` for
+  them. Use `round_rect_coords` to resize; a shape on the plain canvas colour is pre-blended (cheap), over
+  other shapes its edge stays see-through. Pop-ups are kept on their monitor with `sizing.clamp_to_monitor`.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
@@ -92,7 +96,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, remembers its view), UI-41 (queue shape cards), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), SZ-1, R-1 (folders). Next: UI-42, UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), SZ-1, R-1 (folders). Next: UI-42, UI-55 (shelf markers for the words on screen), UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.
@@ -102,6 +106,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.
+- UI-54 (dpi awareness, monitor work areas) was only simulated here; confirm on real Windows 11. Tk 8.6 keeps
+  its size when moved to a monitor with a different scaling.
 - Tk's own file dialog (Import / Export) still uses tk menus that grab input (can float over other
   programs on Linux); UI-42's themed file picker replaces it.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane

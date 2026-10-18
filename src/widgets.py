@@ -10,7 +10,8 @@ import tkinter.font as tkfont
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
-from sizing import place_dialog
+from sizing import clamp_to_monitor, monitor_at, place_dialog
+from smooth import SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
@@ -19,14 +20,7 @@ DIP = 2                 # pixels the button sinks while pressed
 _CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg")
 
 
-def _rounded_points(x1, y1, x2, y2, r):
-    """Polygon outline of a rounded rectangle; drawn with smooth=True it gives round corners."""
-    return [x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y1 + r,
-            x2, y2 - r, x2, y2 - r, x2, y2, x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2,
-            x1, y2, x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1]
-
-
-class RoundButton(tk.Canvas):
+class RoundButton(SmoothCanvas):
     """A rounded, pastel button with a hover tint, a pressed 'dip', a disabled look and a key hint.
 
         RoundButton(parent, "Better", command, bg=PALETTE["better"], hint="Up / B", animator=app.anim)
@@ -202,9 +196,8 @@ class RoundButton(tk.Canvas):
         body_h = h - DIP - 1 - lift
         r = max(4, min(self._radius, body_h // 2))
         if lift:     # the shadow stays put; the body sits on it and rises off it on hover
-            self.create_polygon(_rounded_points(2, 1 + lift + 1, w - 2, 1 + lift + body_h, r), smooth=True,
-                                fill=super().cget("bg"), outline="", tags="shadow")
-        self.create_polygon(_rounded_points(1, 1 + lift, w - 1, 1 + lift + body_h, r), smooth=True, tags=("shape", "body"))
+            self.round_rect(2, 1 + lift + 1, w - 2, 1 + lift + body_h, r, fill=super().cget("bg"), tags="shadow")
+        self.round_rect(1, 1 + lift, w - 1, 1 + lift + body_h, r, tags=("shape", "body"))
         top = 1 + lift + (body_h - (th + gap + hh)) / 2
         self.coords(label, w / 2, top)
         if self._hint:
@@ -298,7 +291,7 @@ class TierRow(tk.Frame):
             self.buttons.append(b)
 
 
-class TierChip(tk.Canvas):
+class TierChip(SmoothCanvas):
     """A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for
     places that name a tier without being a button: the Anchor words dialog (UI-28).
 
@@ -316,8 +309,7 @@ class TierChip(tk.Canvas):
         h = int(line * 1.5)
         w = max(h, self._font.measure(self._text) + line)
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, h // 2 - 1), smooth=True, fill=self._color,
-                            outline=lerp_color(self._color, PALETTE["text"], 0.14))
+        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, PALETTE["text"], 0.14))
         self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=PALETTE["text"])
 
     def refresh(self):
@@ -390,7 +382,7 @@ class DuelCards(tk.Frame):
             b.set_enabled(enabled)
 
 
-class AnchorLadder(tk.Canvas):
+class AnchorLadder(SmoothCanvas):
     """The S..F strip shown while a word is placed by comparing it to anchors (UI-9).
 
         ladder = AnchorLadder(parent, ["S", "A", "B", "C", "D", "F"], font("head"), animator=app.anim)
@@ -422,8 +414,7 @@ class AnchorLadder(tk.Canvas):
         super().configure(width=total + 6, height=h + caret + 8)
         for i, name in enumerate(self._tiers):
             x = 3 + i * (w + gap)
-            self.create_polygon(_rounded_points(x, 3, x + w, 3 + h, h // 2), smooth=True,
-                                tags=("pill", f"pill{i}"), width=1)
+            self.round_rect(x, 3, x + w, 3 + h, h // 2, tags=("pill", f"pill{i}"), width=1)
             self.create_text(x + w / 2, 3 + h / 2, text=name, font=self._font, tags=("txt", f"txt{i}"))
         self._caret_size = (w, h, gap, caret)
         self._paint()
@@ -467,7 +458,7 @@ class AnchorLadder(tk.Canvas):
         self._draw()
 
 
-class TabBar(tk.Canvas):
+class TabBar(SmoothCanvas):
     """Folder-style tabs over a page (UI-10): a hairline runs the full width under the tabs, and the
     chosen tab is drawn in the page colour with its sides and rounded top outlined, open at the bottom,
     so it looks joined to the page below.
@@ -522,9 +513,11 @@ class TabBar(tk.Canvas):
         tab_w, h, x0, width = self._metrics()
         super().configure(height=h + 1, cursor="hand2")
         super().configure(width=len(self.options) * tab_w + 20)
-        self.create_polygon(0, 0, 0, 0, fill=PALETTE["surface2"], outline="", tags="hoverfill")
-        self.create_polygon(0, 0, 0, 0, fill=self._page, outline="", tags="tabfill")
-        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], smooth=True, tags="tabedge")
+        self.round_rect(0, 0, 0, 0, 0, fill=PALETTE["surface2"], tags="hoverfill")
+        # the open tab: page coloured with a hairline, round on top; its bottom edge sits just below the canvas,
+        # so it is open at the bottom (it runs into the page)
+        self.round_rect(0, 0, 0, 0, 0, fill=self._page, outline=PALETTE["border"], tags="tabfill")
+        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], state="hidden", tags="tabedge")   # (its outline, for tests)
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_left")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_right")
         for key, label in self.options:
@@ -546,14 +539,14 @@ class TabBar(tk.Canvas):
         x1 = x0 + self._x * tab_w + 2
         x2 = x1 + self._open[self.value] * tab_w - 4
         shape = self._tab_shape(x1, max(x2, x1 + 2 * r), top, base + 1, r)
-        self.coords("tabfill", *shape)
+        self.round_rect_coords("tabfill", x1, top, max(x2, x1 + 2 * r), base + 3, radii=(r, r, 0, 0))
         self.coords("tabedge", *shape[2:-2])       # sides and top only: open at the bottom
         self.coords("baseline_left", 0, base, x1, base)
         self.coords("baseline_right", x2, base, width, base)
         hov = self._hover if self._hover != self.value else None
         if hov is not None:
             hx1 = x0 + self._slot(hov) * tab_w + 6
-            self.coords("hoverfill", *self._tab_shape(hx1, hx1 + tab_w - 12, top + 4, base - 1, r))
+            self.round_rect_coords("hoverfill", hx1, top + 4, hx1 + tab_w - 12, base - 1, radii=(r, r, 0, 0))
             self.itemconfigure("hoverfill", state="normal")
         else:
             self.itemconfigure("hoverfill", state="hidden")
@@ -722,8 +715,7 @@ class DropMenu:
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
-        x = max(0, min(x, win.winfo_screenwidth() - w))
-        y = max(0, min(y, win.winfo_screenheight() - h))
+        x, y = clamp_to_monitor(win, x, y, w, h)     # on the monitor it opens from, not the main one
         win.geometry(f"+{x}+{y}")
         win.deiconify()
         win.lift()
@@ -900,7 +892,7 @@ class HeaderMenus(tk.Frame):
             self.drops[self._open].close()
 
 
-class Toast(tk.Canvas):
+class Toast(SmoothCanvas):
     """A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
 
         toast = Toast(root, font("label"), animator=app.anim, on_gone=forget)
@@ -1126,7 +1118,7 @@ class Toast(tk.Canvas):
         h = (y2 - y1) + 2 * pady
         self._line, self._pady = line, pady
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, min(h // 2, line)), smooth=True, tags="pill")
+        self.round_rect(1, 1, w, h, min(h // 2, line), tags="pill")
         self.coords(t, 1 + w / 2, 1 + pady)
         self.tag_raise("text")
 
@@ -1134,7 +1126,7 @@ class Toast(tk.Canvas):
         """Redraw the pill at another size (the flying drop); the text stays centred, then fades away."""
         w, h = int(w), int(h)
         super().configure(width=w + 2, height=h + 2)
-        self.coords("pill", *_rounded_points(1, 1, w, h, max(2, min(h // 2, self._line))))
+        self.round_rect_coords("pill", 1, 1, w, h, r=max(2, min(h // 2, self._line)))
         self.coords("text", 1 + w / 2, 1 + max(0, (h - self._line) / 2))
         self.itemconfigure("text", state="normal" if text_alpha > 0 else "hidden")
 
@@ -1280,7 +1272,7 @@ class DefinitionDrawer(tk.Frame):
             self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
 
 
-class ShapeCard(tk.Canvas):
+class ShapeCard(SmoothCanvas):
     """One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve
     (how likely a word is to come up early, from rank #1 to QUEUE_AXIS), its name under it, and for the
     chosen card a dotted line at the rank above which half the early words come from. The chosen card is
@@ -1325,9 +1317,14 @@ class ShapeCard(tk.Canvas):
         for i in range(0, w + 1, 2):
             pts += [x0 + i, y0 + h - queue_weight(self.shape, (i / w) * QUEUE_AXIS / self.spread) * (h - 4)]
         ink = lerp_color(self.color, PALETTE["text"], 0.45) if chosen else PALETTE["disabled"]
-        self.create_polygon([x0, y0 + h] + pts + [x0 + w, y0 + h], outline="", tags="area",
-                            fill=self.color if chosen else lerp_color(PALETTE["disabled"], "#FFFFFF", 0.75))
-        self.create_line(pts, fill=ink, width=2 if chosen else 1.5, smooth=True, tags="curve")
+        area = self.color if chosen else lerp_color(PALETTE["disabled"], "#FFFFFF", 0.75)
+        # drawn as one smooth image (canvas lines and polygons have jagged edges, worst on Windows); the plain
+        # items stay, hidden, as the record of what is drawn
+        self.create_polygon([x0, y0 + h] + pts + [x0 + w, y0 + h], outline="", tags="area", fill=area, state="hidden")
+        self.create_line(pts, fill=ink, width=2 if chosen else 1.5, tags="curve", state="hidden")
+        ys = [h - queue_weight(self.shape, (i / w) * QUEUE_AXIS / self.spread) * (h - 4) for i in range(w + 1)]
+        self._curve_img = curve_image(self, w, h, ys, area, ink, 2 if chosen else 1.5)
+        self.create_image(x0, y0, image=self._curve_img, anchor="nw", tags="curve_image")
         self.create_line(x0, y0 + h, x0 + w, y0 + h, fill=PALETTE["border"], tags="axis")
         if chosen:
             med = self.median_rank()
@@ -1353,7 +1350,7 @@ def short_rank(n):
     return f"{n:.0f}"
 
 
-class EmptyCard(tk.Canvas):
+class EmptyCard(SmoothCanvas):
     """A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of
     help, shown instead of greyed-out controls.
 
@@ -1386,8 +1383,7 @@ class EmptyCard(tk.Canvas):
         w = max(tw, bw, wrap * 0.6) + 2 * pad
         h = th + gap + bh + 2 * int(pad * 0.8)
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, min(22, h // 3)), smooth=True, fill=PALETTE["surface2"],
-                            outline=PALETTE["border"], tags="panel")
+        self.round_rect(1, 1, w, h, min(22, h // 3), fill=PALETTE["surface2"], outline=PALETTE["border"], tags="panel")
         top = 1 + int(pad * 0.8)
         self.coords(t, 1 + w / 2, top)
         self.coords(b, 1 + w / 2, top + th + gap)
@@ -1398,7 +1394,7 @@ class EmptyCard(tk.Canvas):
         self._draw()
 
 
-class WordCard(tk.Canvas):
+class WordCard(SmoothCanvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").
 
@@ -1615,10 +1611,13 @@ class WordCard(tk.Canvas):
         avail = bw - 2 * self.padx
         self._fit_word(avail, line)
         r = max(6, min(self._radius, bh // 2))
-        self.create_polygon(_rounded_points(1 + self.SHADOW, 1 + self.SHADOW, bw + self.SHADOW - 1, bh + self.SHADOW - 1, r),
-                            smooth=True, fill=PALETTE["shadow"], outline="", tags="shadow")
-        self.create_polygon(_rounded_points(1, 1, bw - 1, bh - 1, r), smooth=True, fill=PALETTE["surface"],
-                            outline=PALETTE["border"], tags="card")
+        # the shadow is drawn in the card's own image (one solid image: much cheaper to draw); this invisible
+        # item only marks where it is
+        self.create_polygon(1 + self.SHADOW, 1 + self.SHADOW, bw + self.SHADOW - 1, 1 + self.SHADOW,
+                            bw + self.SHADOW - 1, bh + self.SHADOW - 1, 1 + self.SHADOW, bh + self.SHADOW - 1,
+                            fill="", outline="", tags="shadow")
+        self.round_rect(1, 1, bw - 1, bh - 1, r, fill=PALETTE["surface"], outline=PALETTE["border"], tags="card",
+                        shadow=(PALETTE["shadow"], self.SHADOW, self.SHADOW))
         # fixed rows: the word's line, a gap, the sub-line's line, the whole block centred in the card
         gap = int(sline * 0.4)
         top = (bh - (line + gap + sline)) / 2
@@ -1695,7 +1694,7 @@ class Tooltip:
         win.withdraw()                    # drawn and placed first: no blank box flashing at the corner
         win.overrideredirect(True)
         # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
-        self._canvas = tk.Canvas(win, bd=0, highlightthickness=0, bg=PALETTE["bg"])
+        self._canvas = SmoothCanvas(win, bd=0, highlightthickness=0, bg=PALETTE["bg"])
         self._canvas.pack()
         self._draw(text)
         self._place(e)
@@ -1712,8 +1711,7 @@ class Tooltip:
         x1, y1, x2, y2 = c.bbox(t)
         w, h = x2 + pad_x + 1, y2 + pad_y + 1
         c.configure(width=w + 1, height=h + 1)
-        c.create_polygon(_rounded_points(1, 1, w, h, min(10, h // 2)), smooth=True, fill=PALETTE["surface2"],
-                         outline=PALETTE["border"], tags="card")
+        c.round_rect(1, 1, w, h, min(10, h // 2), fill=PALETTE["surface2"], outline=PALETTE["border"], tags="card")
         c.tag_raise("text")
 
     def show_at(self, e):
@@ -1731,9 +1729,11 @@ class Tooltip:
         else:
             x = self.widget.winfo_rootx() + e.x - 12
             y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
-        x = max(0, min(x, self.widget.winfo_screenwidth() - w))
-        if y + h > self.widget.winfo_screenheight():
+        at = (self.widget.winfo_rootx(), self.widget.winfo_rooty())
+        mx, my, mw, mh = monitor_at(self.widget, *at)
+        if y + h > my + mh:
             y = self.widget.winfo_rooty() - h - 6           # no room below: above it instead
+        x, y = clamp_to_monitor(self.widget, x, y, w, h, at=at)
         self.win.geometry(f"+{x}+{y}")
 
     def hide(self):

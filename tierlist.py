@@ -677,6 +677,31 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] UI-52 Shelf hover (asked for): hovering a spine darkens its outline and lifts it a little off the
 #           shelf, its left and right neighbours less (Bookshelf.hover; eased 140 ms, at once with Reduce
 #           motion; moving along the shelf never snaps). The shelf has that much room above it.
+# [x] UI-53 Smooth shapes (reported on Windows 11: the queue dialog's curve, the tier pills, buttons and chart
+#           bars looked pixelated, and the bars had little bumps on their corners). Tk draws canvas shapes
+#           with no anti-aliasing, and the old rounded-corner trick (a smoothed polygon) left bumps. Tk 8.6
+#           cannot draw SVG, so smooth.py draws each rounded shape into a small image with soft edges
+#           (SmoothCanvas.round_rect): the very outline Tk drew before (so the pills keep their rounded-square
+#           look), filled with exact left / right edges and 4 sub-rows per row, and a soft 1 px hairline.
+#           The shape is still an (invisible) canvas polygon, so tags, coords, move, delete, stacking and
+#           itemcget("fill") work as before; its image follows it. Fast enough to animate: a shape's
+#           coverage is worked out once (its straight middle is stretched, not recomputed, so growing bars
+#           and shrinking messages cost almost nothing), colours snap to steps of 4 so fades reuse images,
+#           and a shape on the plain canvas colour is blended in advance into a solid image (Tk on Linux
+#           blends see-through pixels slowly); the word card carries its shadow in its own image. The queue
+#           dialog's curve is one smooth image too. _selftest_smooth.py.
+# [x] UI-54 Windows: sharp at display scaling, and pop-ups on the right monitor (reported: a drop-down on a
+#           second monitor opened at the far side of the main screen). Pop-ups were kept inside Tk's screen
+#           size, which on Windows is the main monitor only; now sizing.monitor_at / clamp_to_monitor keep
+#           drop-downs, hover notes and dialogs on the monitor they open from (the monitors' work areas come
+#           from Windows, as they already did from xrandr on Linux). set_dpi_awareness() runs before the first
+#           window: per-monitor display scaling, so at 125% / 150% Windows no longer stretches the window
+#           like a picture (soft, pixelated text and edges) and positions are real pixels. Not yet tried on a
+#           real Windows machine (the calls are covered by tests with stand-ins). Tk 8.6 does not re-scale
+#           when the window moves to a monitor with a different scaling: it keeps the size it opened at.
+# [ ] UI-55 Where the words are, on the shelf (asked for): in Refine within tier, Boundary check and Resolve
+#           conflicts, a little triangle pointing down at the spine (book) each word on screen comes from;
+#           when both words are in the same spine, one triangle only.
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by
@@ -874,6 +899,7 @@ from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, plan_line  # 
 from definitions import Definitions
 from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, save_progress, write_export)
+from sizing import set_dpi_awareness
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
 from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
@@ -926,6 +952,7 @@ def main():
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
+    set_dpi_awareness()          # Windows: sharp at 125% / 150% display scaling (before any window opens)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a
     #        terminal, before any window, only tkinter is asked about (the window needs it to open);
