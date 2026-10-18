@@ -91,7 +91,8 @@ ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3,
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.
 Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
-commit 9b78889; swaps are still counted). Progress bar: the user is weighing other designs (mock-ups shown).
+commit 9b78889; swaps are still counted). Progress bar: being redesigned as a bookshelf of spines (see UI-14's notes in the roadmap: zones page / chapter /
+book / shelf / library with gaps, "95% of text"; colour = wheel-blended median tier or leaning tier, user choosing).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
