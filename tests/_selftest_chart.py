@@ -4,7 +4,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import (ConflictCard, DistributionChart, SegmentBar, SettledChart, SwapStrip, compact, format_coverage,
+from ui_chart import (ConflictCard, DistributionChart, SegmentBar, SettledChart, compact, format_coverage,
                       format_share)
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
@@ -84,19 +84,6 @@ assert sc.itemcget("count2", "text") == "0%" and sc.itemcget("bar2", "state") ==
 assert "settled" in sc.itemcget("caption", "text") and max(sc.bbox("caption")[0::2]) < min(sc.coords("track0")[0::2])
 sc.set([0.2] * 6); assert anim.is_running(f"chart{id(sc)}"); anim.finish_all()           # grows like the tier chart
 sc.show(False); assert sc.itemcget("track0", "state") == "hidden"; sc.show(True)
-# Boundary: six pills, one swap count per join under it, one "swaps" caption, the current join bold
-st = SwapStrip(root, list("SABCDF"), body, head); st.pack(); root.update()
-st.set([3, 2, 4, 1, 0], current=2)
-assert [st.itemcget(f"num{j}", "text") for j in range(5)] == ["3", "2", "4", "1", "0"]
-assert st.itemcget("caption", "text") == "swaps" and len(st.find_withtag("chip")) == 6
-for j in range(5):                                                               # each number under its join
-    nx = st.coords(f"num{j}")[0]
-    assert max(st.coords(f"chip{j}")[0::2]) < nx < min(st.coords(f"chip{j + 1}")[0::2])
-assert st.itemcget("num2", "font") != st.itemcget("num1", "font") and st.itemcget("join2", "fill") == PALETTE["accent"]
-st.set([3, 2, 4, 1, 0], current=None); assert st.itemcget("join2", "fill") == PALETTE["border"]
-st.show(False); st.set([5, 2, 4, 1, 0]); assert st.itemcget("num0", "state") == "hidden"   # stays hidden on redraw
-w0 = st.winfo_reqwidth(); body.configure(size=20); head.configure(size=22); st.refresh()
-assert st.winfo_reqwidth() > w0; body.configure(size=12); head.configure(size=14)
 # Conflicts: one number on a soft card
 title = tkfont.Font(root=root, family="TkDefaultFont", size=20)
 cc = ConflictCard(root, title, body); cc.pack(); root.update()

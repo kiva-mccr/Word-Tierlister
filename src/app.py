@@ -27,7 +27,7 @@ from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from ui_chart import ConflictCard, DistributionChart, SegmentBar, SettledChart, SwapStrip
+from ui_chart import ConflictCard, DistributionChart, SegmentBar, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
@@ -230,10 +230,9 @@ class App:
         views.pack(side="right", anchor="n")
         self.chart = DistributionChart(views, TIERS, font("body"), font("head"), animator=self.anim)
         self.settled_chart = SettledChart(views, TIERS, font("body"), font("head"), animator=self.anim)
-        self.swap_strip = SwapStrip(views, TIERS, font("body"), font("head"))
         self.conflict_card = ConflictCard(views, font("title"), font("body"))
-        self.tab_views = {"place": self.chart, "refine": self.settled_chart, "boundary": self.swap_strip,
-                          "conflict": self.conflict_card}
+        # (Boundary check has none: its swap strip was archived by request; see "In consideration")
+        self.tab_views = {"place": self.chart, "refine": self.settled_chart, "conflict": self.conflict_card}
         for v in self.tab_views.values():
             v.grid(row=0, column=0, sticky="ne")
 
@@ -717,7 +716,7 @@ class App:
 
     def _update_stats(self):
         """Status band: one quiet line (format_stats), "+N today", which tabs show (UI-46), and the current
-        tab's own view: the tier chart, how settled each tier is, the swaps per boundary, or the conflicts."""
+        tab's own view: the tier chart, how settled each tier is, or the conflicts (Boundary check has none)."""
         s = self.store.stats()
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
@@ -729,7 +728,8 @@ class App:
             if view.shown != (mode == self.mode):
                 view.show(mode == self.mode)
         # on top of the others (a hidden canvas still paints its background); Canvas.lift would raise its items
-        self.root.tk.call("raise", str(self.tab_views[self.mode]))
+        if self.mode in self.tab_views:
+            self.root.tk.call("raise", str(self.tab_views[self.mode]))
         if self.mode == "place":
             self.chart.set([s["tiers"].get(t, 0) for t in range(len(TIERS))], animate=self._chart_ready)
             self._chart_ready = True             # the first fill does not grow from zero
@@ -741,8 +741,6 @@ class App:
             self._settled_ready = True
         else:
             self._settled_ready = False
-        if self.mode == "boundary":
-            self.swap_strip.set(self.store.swap_counts(), self.swap_strip.current)
         if self.mode == "conflict":
             self.conflict_card.set(s["conflicts"])
 
@@ -990,7 +988,6 @@ class App:
             if not res:
                 return None
             a, b, t = res
-            join = t
             ctx = (f"Boundary {TIERS[t]} | {TIERS[t + 1]}: if you prefer the {TIERS[t + 1]}-tier word, "
                    f"the two swap tiers")
         else:
@@ -1001,7 +998,7 @@ class App:
             ctx = "Conflict: your answers about this pair contradict each other. Decide again."
         pair = [a, b]
         random.shuffle(pair)  # avoid left/right position bias
-        return {"left": pair[0], "right": pair[1], "ctx": ctx, "join": join if self.mode == "boundary" else None}
+        return {"left": pair[0], "right": pair[1], "ctx": ctx}
 
     EMPTY = {   # UI-20: what an empty duel tab says instead of greyed-out cards
         "refine": ("Nothing to refine yet", "Duels start as soon as a tier holds two words. Keep placing!"),
@@ -1015,8 +1012,6 @@ class App:
         self.place_frame.pack_forget()
         self.pair_frame.pack(fill="both", expand=True)
         self.pair = self._pick_pair()
-        if self.mode == "boundary":                # the join being checked is the bold one in the strip (UI-31)
-            self.swap_strip.set(self.swap_strip.counts, self.pair["join"] if self.pair else None)
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:

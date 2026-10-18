@@ -1,5 +1,5 @@
 """The tier chart (UI-13): six small bars, S..F, showing how many words sit in each tier; and each other tab's
-own view in the same spot (UI-31): SettledChart (Refine), SwapStrip (Boundary), ConflictCard (Conflicts); and
+own view in the same spot (UI-31): SettledChart (Refine), ConflictCard (Conflicts); and
 the progress bar under the status line (UI-14): SegmentBar.
 
 Built to the dataviz rules where they apply: bars at most 24 px wide with a rounded data end and a square
@@ -218,74 +218,6 @@ class SettledChart(DistributionChart):
             self._shown = [a + (b - a) * p for a, b in zip(start, goal)]
             self._paint()
         self._anim.run(f"chart{id(self)}", GROW_MS, frame)
-
-
-class SwapStrip(tk.Canvas):
-    """Boundary check (UI-31): the six tiers as small pills in a row and, under each join (S|A .. D|F), how
-    many boundary checks there swapped the two words; one muted "swaps" caption to the left says what the
-    numbers are. The join being checked now is drawn bold with an accent line.
-
-        strip = SwapStrip(parent, TIERS, font("body"), font("head"))
-        strip.set([3, 2, 4, 1, 0], current=2)
-    """
-
-    CAPTION = "swaps"
-
-    def __init__(self, parent, tiers, font=None, letter_font=None, canvas_bg=None, colors=TIER_BAR):
-        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
-        self.tiers, self.colors = list(tiers), list(colors)
-        self._font, self._lfont = font, letter_font or font
-        self.counts, self.current = [0] * (len(self.tiers) - 1), None
-        self.shown = True
-        self._draw()
-
-    def _draw(self):
-        self.delete("all")
-        f, lf = self._font, self._lfont
-        chip_h = int(lf.metrics("linespace") * 1.4)
-        chip_w = chip_h + 4
-        gap = max(f.measure("000") + 10, chip_w)
-        cap_w = f.measure(self.CAPTION) + 14
-        top = 6
-        num_y = top + chip_h + 6
-        width = cap_w + 4 + len(self.tiers) * chip_w + (len(self.tiers) - 1) * gap + 4
-        super().configure(width=width, height=num_y + lf.metrics("linespace") + 4)
-        self.create_text(cap_w - 8, num_y, text=self.CAPTION, font=f, fill=PALETTE["muted"], anchor="ne",
-                         tags="caption")
-        xs = []
-        for i, name in enumerate(self.tiers):
-            x1 = cap_w + 4 + i * (chip_w + gap)
-            xs.append(x1)
-            c = self.colors[i]
-            self.create_polygon(_rounded_points(x1, top, x1 + chip_w, top + chip_h, chip_h // 2 - 1), smooth=True,
-                                fill=c, outline=lerp_color(c, PALETTE["text"], 0.14), tags=("chip", f"chip{i}"))
-            self.create_text(x1 + chip_w / 2, top + chip_h / 2, text=name, font=lf, fill=PALETTE["text"],
-                             tags=("letter", f"letter{i}"))
-        for j in range(len(self.tiers) - 1):
-            a, b = xs[j] + chip_w, xs[j + 1]
-            on = j == self.current
-            y = top + chip_h / 2
-            self.create_line(a + 4, y, b - 4, y, fill=PALETTE["accent"] if on else PALETTE["border"],
-                             width=2 if on else 1, tags=("join", f"join{j}"))
-            self.create_text((a + b) / 2, num_y, text=f"{self.counts[j]:,}", font=lf if on else f,
-                             fill=PALETTE["text"] if on else PALETTE["muted"], anchor="n", tags=("num", f"num{j}"))
-
-    def set(self, counts, current=None):
-        """Swaps per join (S|A first) and the join being checked now (None: no pair up)."""
-        counts = [int(c) for c in counts]
-        if counts != self.counts or current != self.current:
-            self.counts, self.current = counts, current
-            self._draw()
-            self.show(self.shown)
-
-    def show(self, on):
-        """Show or hide it while keeping its space (the views of all tabs share one spot)."""
-        self.shown = bool(on)
-        self.itemconfigure("all", state="normal" if on else "hidden")
-
-    def refresh(self):
-        self._draw()
-        self.show(self.shown)
 
 
 class ConflictCard(tk.Canvas):

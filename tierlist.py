@@ -45,9 +45,8 @@ How it works
 * Under the status line, a progress bar in four equal parts by how common words
   are (everyday, common, uncommon, rare), each filling by the share of its own
   words placed, and a tag with how much of everyday English the placed words cover.
-* Each tab has its own little view at the top right: the tier chart (Place), how
-  settled each tier's order is (Refine), swaps per boundary (Boundary), and the
-  number of conflicts (Conflicts).
+* Tabs have their own little view at the top right: the tier chart (Place), how
+  settled each tier's order is (Refine), and the number of conflicts (Conflicts).
 * A mode's tab only shows once it has work (Refine: a tier with two words;
   Boundary: two neighbouring tiers with words; Resolve conflicts: a conflict).
 * Every action is committed to SQLite immediately: close the window or lose
@@ -459,6 +458,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           one raised and the others hidden, so switching tabs never moves the page.
 #           Fixed (reported): switching from Place new words while the chart was still growing (or a bar
 #           glowing) left the chart drawn under the next tab's view; a hidden chart now stays hidden mid-animation.
+#           Then (asked for): Boundary check's swap strip archived (see "In consideration"); that tab shows no
+#           view in the spot. The save still counts swaps per boundary (swaps table, Store.swap_counts).
 # [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
 #           drifting and jiggling slowly. Two things to settle before building:
 #           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
@@ -753,6 +754,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             session count stays as a muted "+N today", with the pace only in a hover note.
 #   In consideration (shelved, not planned; ask before building):
 #             - Next-up peek (UI-21).
+#             - Boundary check's swap strip (UI-31, archived by request): the six tiers as pills with the swaps
+#               per join under them, the join being checked in bold. Last version: ui_chart.SwapStrip in commit
+#               9b78889. The swap counts are still recorded, so it would show the full history if it came back.
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
 #             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
 #             stay notes. After the UI steps.

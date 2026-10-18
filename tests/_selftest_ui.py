@@ -512,22 +512,21 @@ app.on_key_release(types.SimpleNamespace(keysym="Left", time=99)); pump(2)
 sizes = set()
 for m in ("place", "refine", "boundary", "conflict"):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
-    view = app.tab_views[m]
-    assert view.shown and all(not v.shown for k, v in app.tab_views.items() if k != m), m
-    assert str(root.tk.splitlist(root.tk.call("winfo", "children", str(view.master)))[-1]) == str(view)   # raised
+    assert all(v.shown == (k == m) for k, v in app.tab_views.items()), m        # Boundary: none (archived)
+    if m in app.tab_views:
+        view = app.tab_views[m]
+        assert str(root.tk.splitlist(root.tk.call("winfo", "children", str(view.master)))[-1]) == str(view)   # raised
     sizes.add((app.status_band.winfo_height(), app.center.winfo_rooty()))
 assert len(sizes) == 1, sizes                                                   # the page never moves
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 assert app.settled_chart.shares == s.settled_shares(app.SETTLED_DUELS)
 app.mode_var.set("boundary"); app.on_mode_change(); pump(2)
-assert app.swap_strip.counts == s.swap_counts()
-if app.pair:
-    assert app.swap_strip.current == app.pair["join"]                           # the join being checked is bold
+if app.pair:                                                                    # swaps are still counted in the save
     n0 = s.swap_counts()
     side = "left" if s.get_word(app.pair["left"])["tier"] > s.get_word(app.pair["right"])["tier"] else "right"
     app._on_duel(side); app.anim.finish_all(); pump(3)                          # the lower-tier word wins: a swap
-    assert sum(s.swap_counts()) == sum(n0) + 1 and app.swap_strip.counts == s.swap_counts()
-    app.undo(); pump(2); assert app.swap_strip.counts == n0
+    assert sum(s.swap_counts()) == sum(n0) + 1
+    app.undo(); pump(2); assert s.swap_counts() == n0
 app.mode_var.set("conflict"); app.on_mode_change(); pump(2)
 assert app.conflict_card.count == s.stats()["conflicts"]
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
