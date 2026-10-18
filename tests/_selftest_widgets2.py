@@ -296,7 +296,7 @@ assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40            
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
 landed = []
-toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
 update(); x0, y0 = toast_xy()
 assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
@@ -310,14 +310,14 @@ xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
 assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
-toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
 assert landed == [1]                                                           # a replaced fling never "lands"
 toast.hide(); anim.finish_all()
 
 # hurry(): a newer message has started; the old one speeds through its stages and still lands
-toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(100, -30),
+toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(100, -30),
             hold_ms=5000, in_=page, on_arrive=lambda: landed.append(3))
 update(); toast.hurry()
 t0 = time.perf_counter()
@@ -335,19 +335,36 @@ t2.hurry()                                                                     #
 t2.destroy()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
-toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(50, 0),
-            hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
+toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(50, 0),
+            hold_ms=10, in_=page, under=lambda x0, y0, x1, y1: PALETTE["surface"] if y0 > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
+# under() is asked with the toast's whole rectangle (reported: a white box beside the card, over the buttons,
+# when the backdrop went by height alone), and a long message narrows to a round drop before it reaches the bars
+rects = []
+def under_rect(x0, y0, x1, y1):
+    rects.append((x0, y0, x1, y1)); return PALETTE["surface"] if x1 < 150 else PALETTE["bg"]
+toast.fling("a rather long message for a drop", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60,
+            target=(200, 0), hold_ms=10, in_=page, under=under_rect)
+update(); x0r, y0r, x1r, y1r = rects[-1]
+assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1
+assert toast.cget("bg") == PALETTE["bg"]                                    # beside the "card": cream, never white
+wide = int(toast.cget("width"))
+anim.finish_all(); anim.finish_all()                                        # risen and rested: now it flies
+sizes, t0 = [], time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+late = sizes[len(sizes) // 2:]                                              # the second half of the flight
+assert len(sizes) > 6 and all(w <= h + 4 < wide / 3 for w, h in late), sizes  # a drop, not a bar, over the chart
 # a new message cuts a fling short, and the old one's pending stages do nothing
-toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
+toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
 toast.show("new", ms=5000, in_=page); anim.finish_all()
 root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
 assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
 root.after(80, root.quit); root.mainloop(); update()
 assert toast.cget("text") == ""                                                # then simply gone
@@ -404,6 +421,18 @@ assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and card.itemcget("wo
 card.set("plum", "rank #3"); card.transition_from("pear", "rank #2", dx=-10, dy=12, animator=anim); update(1)
 card.set("plum", "rank #3"); anim.finish_all(); update(1)
 assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and not card.find_withtag("old")
+# reported: a white flash when placing fast. A redraw mid-transition (the card resizing for the next word) keeps
+# the outgoing word, above the card's face, and the two words always have about one word's worth of ink between them
+card.set("kiwi", "rank #4"); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim); update(1)
+card.set("kiwi", "rank #4")                                                 # what a resize does
+items = card.find_all()
+assert card.find_withtag("oldword") and items.index(card.find_withtag("oldword")[0]) > items.index(card.find_withtag("card")[0])
+assert card.itemcget("oldword", "text") == "plum"
+for p in (0.0, 0.25, 0.5, 0.75, 1.0):
+    card._frame(p)
+    ink = sum(1 - sum(int(card.itemcget(t, "fill")[i:i + 2], 16) for i in (1, 3, 5)) / 765 for t in ("oldword", "word"))
+    assert ink > 0.6 * (1 - sum(int(PALETTE["text"][i:i + 2], 16) for i in (1, 3, 5)) / 765), p
+anim.finish_all(); update(1); assert not card.find_withtag("old")
 anim.reduce_motion = True                                                   # Reduce motion: no transition at all
 card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)
 assert not card.find_withtag("old") and card.itemcget("word", "fill") == PALETTE["text"]

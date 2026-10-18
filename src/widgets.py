@@ -990,16 +990,17 @@ class Toast(tk.Canvas):
                            ease=lambda t: t)
         return True
 
-    def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
-              on_arrive=None):
-        """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
+    def fling(self, text, tint, start_bottom, rest_bottom, target, hold_ms=550, in_=None, wraplength=None,
+              under=None, on_arrive=None):
+        """The placement message (UI-11, UI-17): rise from its bottom edge at y=start_bottom until it is at
         y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
         flies to `target` = (x offset from the centre of `in_`, y of the landing point), fading out, and call
         on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
         replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
         transparency, so a full-size pill would be an opaque box passing over the chart.
-        `under(y_mid)` returns the colour behind the toast at that height (the toast takes that colour as its
-        own background and blends toward it)."""
+        `under(x0, y0, x1, y1)` returns the colour behind the toast's rectangle (inside `in_`); the toast takes
+        that colour as its own background and blends toward it. It is asked every frame, with the whole
+        rectangle: a backdrop picked by height alone painted a white box over the page beside the card."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -1011,11 +1012,12 @@ class Toast(tk.Canvas):
         key = self._key
         alive = lambda: gen == self._gen
         w0, h0 = int(self.cget("width")), int(self.cget("height"))
-        from_y, to_y = start_mid - h0 / 2, rest_bottom - h0
+        from_y, to_y = start_bottom - h0, rest_bottom - h0
 
-        def backdrop(y_mid):
+        def backdrop(x, y, w, h):
             if under is not None:
-                c = under(y_mid)
+                cx = self._in.winfo_width() / 2 + x
+                c = under(cx - w / 2, y, cx + w / 2, y + h)
                 if c != self._page:
                     self._page = c
                     super(Toast, self).configure(bg=c)
@@ -1023,7 +1025,7 @@ class Toast(tk.Canvas):
         def rise(p):
             if alive():
                 y = from_y + (to_y - from_y) * p
-                backdrop(y + h0 / 2)
+                backdrop(0, y, w0, h0)
                 self._put(0, y)
                 self._paint(p)
 
@@ -1034,10 +1036,14 @@ class Toast(tk.Canvas):
         def fly(p):
             if alive():
                 scale = 1.0 - 0.85 * p                         # shrinks to a small drop
+                # ...and narrows to a round drop by the time its text has gone (p = 0.4): a long word's pill
+                # stayed wide all the way and covered the chart bars as an opaque box
+                h = max(4, h0 * scale)
+                w = max(4, h + (w0 * scale - h) * max(0.0, 1.0 - p * 2.5))
                 y_mid = to_y + h0 / 2 + (target[1] - to_y - h0 / 2) * p
-                backdrop(y_mid)
-                self._resize(max(4, w0 * scale), max(4, h0 * scale), text_alpha=max(0.0, 1.0 - p * 2.5))
-                self._put(target[0] * p, y_mid - h0 * scale / 2)
+                backdrop(target[0] * p, y_mid - h / 2, w, h)
+                self._resize(w, h, text_alpha=max(0.0, 1.0 - p * 2.5))
+                self._put(target[0] * p, y_mid - h / 2)
                 self._paint(0.7 * (1.0 - 0.6 * p), text=max(0.0, 0.7 - p * 2.5))
 
         def gone():
@@ -1342,6 +1348,7 @@ class WordCard(tk.Canvas):
         self._wfont, self._sfont = word_font, sub_font
         self._word, self._sub, self._wrap = "", "", wraplength
         self._radius = radius
+        self._frame, self._p = None, 0.0   # the running transition's frame (re-applied after a redraw) and its stage
         self.min_line = 0            # the word's drawn height at full size, and the font's line spacing at full size
         self.full_linespace = 0      # (both set by the app before it shrinks a long word; 0 = no minimum)
         self.bind("<Configure>", lambda e: self._draw())
@@ -1411,30 +1418,36 @@ class WordCard(tk.Canvas):
             self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
                              justify="center", anchor="n", tags=("old", "oldsub"))
         self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
-        # sorting fast (this interrupts a running transition): the new word shows at once instead of waiting
-        delay = 0.0 if animator.is_running(f"card{id(self)}") else 0.35
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
         ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
+        cx0 = self._layout[0]                     # the card's centre when it started (it may resize meanwhile)
 
         def frame(p):
-            self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
+            self._p = p
+            shift = self._layout[0] - cx0              # keep the old word centred on the card as it resizes
+            self.coords("oldword", ow[0] + shift + dx * p, ow[1] + dy * p)
             if osub:
-                self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
-            q = max(0.0, (p - delay) / (1 - delay))   # the new word starts once the old one is mostly gone
+                self.coords("oldsub", osub[0] + shift + dx * p, osub[1] + dy * p)
+            # a crossfade: the new word comes in exactly as the old one goes, so between them there is always one
+            # word's worth of ink (it used to start late, and for a few frames the card flashed empty white)
+            gone = min(1.0, p / 0.55)
+            q = gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
             wx, wy, sy = self._layout
             self.coords("word", wx, wy + back)
             if sy is not None:
                 self.coords("sub", wx, sy + back)
-            gone = min(1.0, p / 0.55)
             self.itemconfigure("oldword", fill=lerp_color(PALETTE["text"], card, gone))
             self.itemconfigure("oldsub", fill=lerp_color(PALETTE["muted"], card, gone))
             self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
             self.itemconfigure("sub", fill=lerp_color(card, PALETTE["muted"], q))
 
         def done():
-            self.delete("old")
+            if self._frame is frame:              # (a newer transition, started over this one, cleans up itself)
+                self._frame = None
+                self.delete("old")
+        self._frame, self._p = frame, 0.0
         try:
             animator.run(f"card{id(self)}", self.TRANSITION_MS, frame, done)
         except tk.TclError:
@@ -1448,7 +1461,9 @@ class WordCard(tk.Canvas):
         return min(natural, wrap) if wrap else natural
 
     def _draw(self):
-        self.delete("all")
+        for item in self.find_all():          # everything but a transition's outgoing word (a resize must not
+            if "old" not in self.gettags(item):   # wipe it: the card flashed blank white, reported)
+                self.delete(item)
         wrap = self._wrap if self._wrap > 0 else 0
         if wrap and self._wfont.measure(self._word) <= wrap + self.WRAP_SLACK:
             wrap = 0                          # a few pixels over: one line (wrapping would strand a letter or two
@@ -1484,8 +1499,12 @@ class WordCard(tk.Canvas):
         if self._sub:
             self.coords("sub", bw / 2, top + word_h + gap)
         self._layout = (bw / 2, top + (word_h - th) / 2, top + word_h + gap if self._sub else None)   # (transition_from)
+        if self.find_withtag("old"):
+            self.tag_raise("old", "card")        # on the card (not under it), below the new word
         self.tag_raise("word")
         self.tag_raise("sub")
+        if self._frame is not None:           # mid-transition: put the moving words back where they were
+            self._frame(self._p)
 
 
 class Tooltip:

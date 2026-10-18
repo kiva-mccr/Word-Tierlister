@@ -584,6 +584,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           interrupts the card's transition shows at once; (4) content is centred in the visible page
 #           (tab line to bottom bar), which fixes Resolve conflicts sitting low; (5) more room between
 #           the word card and the tier pills.
+#           Then (reported: white flicker when placing fast with the number keys): (6) the word card no longer
+#           goes blank: a redraw during its transition (the card resizing for the next word) kept deleting the
+#           outgoing word or tucking it under the card's face, and the crossfade left a gap where both words
+#           were near white; (7) the placement pill picks its backdrop (white on the card, cream elsewhere)
+#           from its whole rectangle against where the card is now, not from its height alone, which painted a
+#           white box beside the card (over the tier buttons); it comes out at the card's top edge instead
+#           of over it, and a long one narrows to a round drop before it reaches the chart bars.
 # [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
 #           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit

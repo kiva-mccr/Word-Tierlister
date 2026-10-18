@@ -919,14 +919,18 @@ class App:
             return
         f = ui_factor(self.root)
         card_top = card.winfo_rooty() - c.winfo_rooty()
-        card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
         bx, by = ch.bar_top(tier)
 
-        def under(y):          # the card is white, the page around it cream
-            return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
-        # it starts at the card's top edge: over the word itself it would hide the letters (the toast is an
-        # opaque canvas; tk has no transparency)
-        self._new_toast().fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=card_top + int(14 * f),
+        def under(x0, y0, x1, y1):
+            """White while the toast is mostly over the word card, else the cream page. Measured each frame:
+            the card resizes for the next word while the toast is still on its way."""
+            l, t = card.winfo_rootx() - c.winfo_rootx(), card.winfo_rooty() - c.winfo_rooty()
+            r, b = l + card.winfo_width() - WordCard.SHADOW, t + card.winfo_height() - WordCard.SHADOW
+            over = max(0, min(x1, r) - max(x0, l)) * max(0, min(y1, b) - max(y0, t))
+            return PALETTE["surface"] if over * 2 > (x1 - x0) * (y1 - y0) else PALETTE["bg"]
+        # it comes out at the card's top edge and rises: never over the card itself, where an opaque canvas
+        # (tk has no transparency) would hide the letters or paint a box over the card's edge
+        self._new_toast().fling(text, (TIER_COLORS[tier], TIER_TEXT), start_bottom=card_top,
                           rest_bottom=card_top - int(8 * f),
                           target=(bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty()),
                           in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
