@@ -88,12 +88,18 @@ before = (body(), font("word").cget("size"), app.grow)
 assert before[2] == 1.0 and cycle() == {before}, before
 root.geometry(f"{w}x{h}"); pump(10, 0.03)
 app.set_zoom(1.0); pump(4)
+app.toast.hide(); app.anim.finish_all(); pump(2)
+app.set_zoom(1.0); pump(2)                                                      # M-6: already 100%, Ctrl 0 again
+assert app.zoom == 1.0 and app.toast.cget("text") == "Zoom 100%"                 # ...still says so
 # Browse has its own zoom: changing it leaves the main window alone, and the other way round
 main_body = body()
 app.open_browser(); pump(6); bw = app.browsers[0]
 bf = bw.f_body.cget("size")
 bw.zoom_by(2); pump(3)
 assert bw.f_body.cget("size") == bf + 2 and body() == main_body and s.get_meta("browse_zoom") == "2"
+assert bw._toast.cget("text") == "Zoom 117%"                                    # M-6: Browse says its zoom too
+bw.zoom_by(0); bw.zoom_by(0); pump(2); assert bw._toast.cget("text") == "Zoom 100%"   # ...also when unchanged
+bw.zoom_by(2); pump(3)
 app.zoom_step(-1); pump(4)
 assert bw.f_body.cget("size") == bf + 2 and body() < main_body
 z_main = app.zoom

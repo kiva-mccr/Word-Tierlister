@@ -130,7 +130,7 @@ class App:
         for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
             root.bind(seq, lambda e: self._zoom_key(e, -1))
         for seq in ("<Control-0>", "<Control-KP_0>"):
-            root.bind(seq, lambda e: self.set_zoom(1.0))
+            root.bind(seq, lambda e: self._zoom_key(e, 0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<ButtonPress-1>", self._click_background, add="+")
@@ -342,6 +342,7 @@ class App:
         and leaves the zoom as it was."""
         z = round(min(self.ZOOM_MAX, max(self.ZOOM_MIN, z)), 2)
         if z == self.zoom and self.grow == 1:
+            self._say_zoom(z)                     # unchanged (Ctrl 0 at 100%, zoom out at the smallest): say so
             return "break"
         old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
         cap = self._zoom_cap.get(self._layout_key())
@@ -352,22 +353,26 @@ class App:
                 return "break"
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
-        info = (PALETTE["info"][0], PALETTE["info"][1])
         if z > old and now <= before + 1e-9:
             self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
         self.store.set_meta("zoom", z)
-        note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
-        self.flash(f"Zoom {round(z * 100)}%{note}", bg=info[0], fg=info[1], ms=900 if not note else 1600)
+        self._say_zoom(z)
         return "break"
 
+    def _say_zoom(self, z):
+        """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
+        note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
+        self.flash(f"Zoom {round(z * 100)}%{note}", bg=PALETTE["info"][0], fg=PALETTE["info"][1],
+                   ms=900 if not note else 1600)
+
     def _zoom_key(self, e, d):
-        """Ctrl + / Ctrl - pressed: paced like every other held key (500 ms, then every 250 ms after the last
-        step finished), so holding it never queues up refits."""
+        """Ctrl + / Ctrl - (d = 1 / -1) or Ctrl 0 (d = 0, actual size) pressed: paced like every other held key
+        (500 ms, then every 250 ms after the last step finished), so holding it never queues up refits."""
         if self._repeat_allowed(e):
-            self.zoom_step(d)
+            self.set_zoom(1.0) if d == 0 else self.zoom_step(d)
             self._action_done(e)
         return "break"
 

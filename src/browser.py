@@ -16,11 +16,11 @@ from tkinter import ttk
 
 from constants import TIERS
 from errors import show_message
-from fonts import family
+from fonts import family, font
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
-from widgets import ChoiceButton, RoundButton, refresh_widgets
+from widgets import ChoiceButton, RoundButton, Toast, refresh_widgets
 
 
 class Browser:
@@ -52,6 +52,7 @@ class Browser:
         self._count_digits = None                 # digits in the total the minimum size was last set for
         self._seen_version = -1
         self._loading = False
+        self._toast = None                         # the zoom message (_say_zoom)
         self._opening = True                       # easing open; the list fills when it ends (_open_animation)
         self.fsize = 0
         try:
@@ -140,7 +141,8 @@ class Browser:
 
         # Ctrl + / Ctrl - / Ctrl 0 and Ctrl+mouse wheel zoom the text.
         for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1), ("<Control-KP_Add>", 1),
-                           ("<Control-minus>", -1), ("<Control-KP_Subtract>", -1), ("<Control-0>", 0)):
+                           ("<Control-minus>", -1), ("<Control-KP_Subtract>", -1), ("<Control-0>", 0),
+                           ("<Control-KP_0>", 0)):
             self.win.bind(seq, lambda e, d=delta: self.zoom_by(d))
         for widget in (self.win, self.tree):
             widget.bind("<Control-MouseWheel>", self._wheel_zoom)
@@ -334,7 +336,16 @@ class Browser:
         self.zoom = 0 if delta == 0 else max(-4, min(30, self.zoom + delta))
         self.store.set_meta("browse_zoom", self.zoom)
         self._apply_scale()
+        self._say_zoom()
         return "break"
+
+    def _say_zoom(self):
+        """'Zoom 100%' (the manual zoom against the 12 pt text) at the bottom of the definition pane, every time
+        a zoom key is pressed, even when nothing changed (M-6). One message, replaced by the next."""
+        if self._toast is None:
+            self._toast = Toast(self.win, font("label"), animator=self.app.anim, page_bg=PALETTE["surface"])
+        self._toast.show(f"Zoom {round((12 + self.zoom) / 12 * 100)}%", (PALETTE["info"][0], PALETTE["info"][1]),
+                         ms=900, in_=self.def_text)
 
     def _wheel_zoom(self, e, direction=None):
         """Ctrl+mouse-wheel zoom. Windows/macOS give e.delta; X11 passes `direction` from Button-4/5."""

@@ -146,7 +146,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           redraws its frame a beat behind, and the rows popped in after it. Fixed: on X11 Browse loads its
 #           rows before it is first drawn and opens complete and still (Browser.EASE_OPEN, automatic); Windows
 #           and macOS keep the ease. Checked under openbox: the first frame is the full window, ~100 ms.
-# [ ] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
+# [x] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
+#           Built: App._say_zoom also when nothing changed (any zoom key: zoom out at the smallest says 60%);
+#           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows
+#           "Zoom N%" (its own zoom against the 12 pt text) at the bottom of the definition pane (Browser._say_zoom),
+#           and gained Ctrl + keypad 0.
 # [ ] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
 #           click the same heading again to flip between top-to-bottom and bottom-to-top (a small arrow
 #           on the heading shows which).
