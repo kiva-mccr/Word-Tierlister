@@ -54,7 +54,9 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> 
   bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
   minimum sizes at grow 1. Main and Browse zooms are separate and saved.
 - Test speed on a big save (300k-1M words) for anything run per duel or per refresh: a query that sorts a
-  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier.
+  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier. Read the
+  indexes instead (tier+rating, tier+games, ...; check EXPLAIN QUERY PLAN for "TEMP B-TREE"). Look for orphans
+  with vulture (installed here: `python3.12 -m vulture src tierlist.py tools tests`).
 - Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
   else may write the save meanwhile.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
@@ -96,7 +98,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, not on X11 (M-5); remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), M-1..M-10, SZ-1, R-1 (folders). Next: the mini-roadmap M-11 (asked for: these first, in order; M-11 = orphaned code / inefficiency sweep), then UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, not on X11 (M-5); remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.

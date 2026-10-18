@@ -56,11 +56,14 @@ How it works
 * Press D any time to show the dictionary definition next to the word(s).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
-live in src/, the self-tests in tests/, check_release.py in tools/, the Claude notes in .claude/)
+live in src/, the self-tests in tests/, check_release.py and layout_trace.py in tools/, the Claude notes in
+.claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
-    constants.py    tier names, modes, ranking defaults.        (no dependencies)
+    constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
+    problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
+    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
                     conflicts, merging. Every change is committed immediately.
     wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
@@ -68,17 +71,20 @@ live in src/, the self-tests in tests/, check_release.py in tools/, the Claude n
     saves.py        finding your earlier save, remembering it, exporting the tier list.
     definitions.py  Definitions: WordNet offline, dictionaryapi.dev online, cached.
     theme.py        colour palette (UI-1).            fonts.py     typography (UI-2).
-    ui_style.py     ttk / tk styling (UI-3).          widgets.py   RoundButton and other small widgets.
-    ui_motion.py    easing, colour blend, Animator (UI-4).
-    startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
-    problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
-    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
+    sizing.py       window sizes from the screen and the contents; monitors; Windows display scaling.
+    ui_style.py     ttk / tk styling (UI-3).          ui_motion.py easing, colour blend, Animator (UI-4).
+    smooth.py       soft-edged rounded shapes, curves and icons drawn as images (UI-53).
+    widgets.py      RoundButton, the word card, tabs, messages, dialogs and the other small widgets.
     errors.py       friendly error / message / question dialogs, error handlers, run_guarded (ST-2).
+    startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
+    ui_chart.py     each tab's view at the top right (the tier chart...) and the progress shelf.
     browser.py      Browser: the Browse / edit window.
+    filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     app.py          App: the main window and all modes.
 
-Layers: constants -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-sizing, ui_style, ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist. Nothing lower imports anything higher, and
+Layers: constants, problems, deps -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> app ->
+tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
 # ==========================================================================================
@@ -169,12 +175,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           this computer"); change it only if it is off.
 #           Checked: the two lines are one intro paragraph wrapped at the dialogs' usual width, normal line
 #           spacing, the break between its two sentences; the gap under the title matches every dialog. Left.
-# [ ] M-11 Check and verify (asked for, last of the mini-roadmap): look through the whole program for orphaned
+# [x] M-11 Check and verify (asked for, last of the mini-roadmap): look through the whole program for orphaned
 #           code (functions, methods, constants, tags, options and test helpers nothing uses any more, stale
 #           comments) and substantial inefficiencies (per-frame or per-duel work that grows with the save, repeated
 #           queries, images or fonts rebuilt needlessly); remove or fix what is found, measure on a big save.
-#           Also: one full test run failed once (an AssertionError, test not named in the last line) and did not
-#           come back in 4 full runs and 20 single runs: look for timing-sensitive tests.
+#           Orphans (vulture + greps; the layering checked by script: clean): removed App.apply_queue_settings
+#           (the dialog has its own; the test now checks parse_queue_settings), theme.contrast / _lum, curve_rows'
+#           bg_alpha, and dead test code (an always-false branch that never ran, unused helpers and variables,
+#           stale imports). Kept on purpose: the small "(for tests)" helpers (smooth_image, possible, tab_x,
+#           show_at, is_running) and Store.swap_counts (the shelved swap strip reads it). The module docstring's
+#           code map and layers were out of date (no sizing, smooth, ui_chart, filepicker): brought up to date.
+#           Speed, 300k words / 90k placed: a Refine duel 75 -> 35 ms, a Boundary check 92 -> 27 ms, switching tab
+#           78 -> 32 ms, opening Browse ~200 -> ~145 ms; placing stays ~25 ms; animation frames median 0.6 ms,
+#           worst 7 ms, no queries. How: a (tier, rating) index (idx_words_tr; built once on the next open, ~0.2 s
+#           at 300k) so the nearest-rated opponent is read up and down the index (Store._nearest) instead of
+#           sorting a whole tier, and the least-dueled seeds tier by tier; tier_counts counted once per change
+#           (keyed on the connection's total_changes); the shelf redraws only its marks for a new duel; Browse
+#           loads 1,000 rows a page, not 3,000. The one-off test failure did not come back (7 full runs since).
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,

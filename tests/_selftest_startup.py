@@ -129,8 +129,6 @@ def hold(log): time.sleep(0.5); return 1
 S.run_with_progress(root, hold, delay_ms=0, initial_stage="Initializing download...")
 assert shown[0] == ("Initializing download...", "", 1), shown[0]
 
-class Spy:   # capture the real window for a moment to inspect the widgets
-    pass
 seen = {}
 orig_show2 = S.StartupWindow.show
 def peek(self, stage, detail, percent, elapsed, eta=None, step=None):
@@ -189,11 +187,10 @@ except SystemExit as e: assert str(e) == "Could not build it"
 gate, finished = threading.Event(), []
 def long(log):
     log("Reading entries..."); gate.wait(5); finished.append(1)
-holder = {}
 def closer():
     w = [x for x in S.StartupWindow.__dict__ and root.winfo_children() if isinstance(x, tk.Toplevel)]
     assert w, "window should be open"
-    w[0].event_generate("<Destroy>") if False else w[0].tk.call(w[0].wm_protocol("WM_DELETE_WINDOW"))
+    w[0].tk.call(w[0].wm_protocol("WM_DELETE_WINDOW"))
 root.after(300, closer)
 try:
     S.run_with_progress(root, long, delay_ms=0); raise AssertionError("should exit")

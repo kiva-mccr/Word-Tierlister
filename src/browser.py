@@ -26,7 +26,8 @@ from widgets import ChoiceButton, RoundButton, Toast, refresh_widgets
 class Browser:
     """Search / browse / edit window. Text and row height scale with the window; rows load as you scroll."""
 
-    CHUNK = 3000                 # rows fetched per page; the next page loads when you scroll near the end
+    CHUNK = 1000                 # rows fetched per page; the next page loads when you scroll near the end (3000
+                                 # cost ~50 ms more to open Browse on a big save, for rows far off screen)
     BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
     # the columns: heading, the Sort it stands for (M-7: a click on the heading sorts by it), alignment
     COLUMNS = (("tier", "Tier", "Default", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),

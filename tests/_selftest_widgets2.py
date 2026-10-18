@@ -512,7 +512,7 @@ wc.destroy()
 
 # ---- ShapeCard (UI-41): a queue shape's curve; chosen = white with a lilac edge and a "half by" line
 from widgets import ShapeCard, short_rank
-from constants import QUEUE_AXIS, queue_weight
+from constants import queue_weight
 picked = []
 scw = tk.Toplevel(root)
 sc = ShapeCard(scw, "exp", "Exponential", TIER_COLORS[1], on_pick=picked.append, font_=small); sc.pack()

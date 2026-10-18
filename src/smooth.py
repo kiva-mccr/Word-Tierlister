@@ -641,7 +641,7 @@ def _outline_points(x1, y1, x2, y2):
 
 
 # ---------------------------------------------------------------- the area under a curve
-def curve_rows(w, h, ys, fill, line, line_width, bg_alpha=0):
+def curve_rows(w, h, ys, fill, line, line_width):
     """RGBA rows for the area under a curve and its line: ys[i] is the curve's height (pixels from the top,
     fractional) at the left edge of column i (w + 1 values). The area's top edge and the line are soft."""
     fill_c, line_c = _rgb(fill), _rgb(line)

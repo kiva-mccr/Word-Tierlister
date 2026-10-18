@@ -123,6 +123,6 @@ root.destroy()
 # the choice is remembered on the next open
 root = tk.Tk(); app2 = T.App(root, s, T.Definitions(s)); root.update()
 assert app2.reduce_motion is True and app2.motion_var.get() is True and app2.anim.reduce_motion is True
-app2.anim.run("p", 200, got.append); app2.on_close() if False else app2.anim.cancel_all()
+app2.anim.run("p", 200, got.append); app2.anim.cancel_all()
 root.destroy()
 print("MOTION OK")

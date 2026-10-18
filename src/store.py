@@ -104,6 +104,8 @@ class Store:
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_shelf ON words(rank, tier, freq)")   # shelf()
+        # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tr ON words(tier, rating)")
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
@@ -226,13 +228,13 @@ class Store:
         self.version += 1
 
     def tier_counts(self):
-        """{tier index: number of placed words}. Tiers with no words are absent."""
-        return {
-            r[0]: r[1]
-            for r in self.db.execute(
-                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier"
-            )
-        }
+        """{tier index: number of placed words}. Tiers with no words are absent. Counted again only after a
+        change to the save (any write, the connection's total_changes): a duel asked for it twice."""
+        mark = self.db.total_changes
+        if getattr(self, "_tc", (None,))[0] != mark:
+            self._tc = (mark, {r[0]: r[1] for r in self.db.execute(
+                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")})
+        return dict(self._tc[1])
 
     def stats(self):
         """Numbers for the header: total, placed, skipped, per-tier counts, duels, conflicts."""
@@ -665,24 +667,39 @@ class Store:
                 return None
             seeds = [r]
         else:
-            if tier is not None:
-                where, args = "tier=?", [tier]
-            else:
-                where, args = "tier IN (%s)" % ",".join(str(t) for t in eligible), []
-            seeds = list(self.db.execute(
-                f"SELECT * FROM words WHERE {where} ORDER BY games ASC, RANDOM() LIMIT 40", args
-            ).fetchall())
+            # the least-dueled words, from the tiers that have them: tier by tier, so the (tier, games) index
+            # answers it (over all tiers at once it sorted every placed word, ~15 ms at 300k)
+            seeds = []
+            for t in ([tier] if tier is not None else eligible):
+                seeds += self.db.execute("SELECT * FROM words WHERE tier=? ORDER BY games ASC, RANDOM() LIMIT 40",
+                                         (t,)).fetchall()
+            seeds.sort(key=lambda r: (r["games"], random.random()))
+            seeds = seeds[:40]
             random.shuffle(seeds)
         for a in seeds:
             faced = self._faced_set(a["word"])
-            cands = self.db.execute(
-                "SELECT * FROM words WHERE tier=? AND word!=? ORDER BY ABS(rating-?) ASC, RANDOM() LIMIT 80",
-                (a["tier"], a["word"], a["rating"]),
-            ).fetchall()
-            for c in cands:
+            for c in self._nearest(a, 80):
                 if c["word"] not in faced:
                     return a["word"], c["word"], a["tier"]
         return None
+
+    def _nearest(self, a, k):
+        """Up to k words of a's tier with the ratings nearest to a's, nearest first, ties in random order.
+        Read from the (tier, rating) index up and down from a's rating (sorting the whole tier by distance
+        took ~25 ms at 300k words). A big run of equal ratings (new words all start alike) is entered at a
+        random point, so the same few words are not always first."""
+        t, r, w = a["tier"], a["rating"], a["word"]
+        same = self.db.execute("SELECT COUNT(*) FROM words WHERE tier=? AND rating=?", (t, r)).fetchone()[0]
+        skip = random.randrange(same - k) if same > k else 0
+        rows = self.db.execute("SELECT * FROM words WHERE tier=? AND rating=? AND word!=? LIMIT ? OFFSET ?",
+                               (t, r, w, k, skip)).fetchall()
+        if len(rows) < k:
+            rows += self.db.execute("SELECT * FROM words WHERE tier=? AND rating>? ORDER BY rating LIMIT ?",
+                                    (t, r, k)).fetchall()
+            rows += self.db.execute("SELECT * FROM words WHERE tier=? AND rating<? ORDER BY rating DESC LIMIT ?",
+                                    (t, r, k)).fetchall()
+        rows.sort(key=lambda c: (abs(c["rating"] - r), random.random()))
+        return rows[:k]
 
     BOUNDARY_POOL = 30      # words per side a boundary pair is drawn from (at most 900 pairs)
 

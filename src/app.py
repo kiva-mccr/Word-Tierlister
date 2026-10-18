@@ -1422,16 +1422,6 @@ class App:
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
 
-    def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
-        """Validate and apply the queue settings, then reshuffle (here, not in the background). Returns an
-        error message or None."""
-        cfg, err = self.parse_queue_settings(seed_text, spread_text, shape, compound_text)
-        if err:
-            return err
-        self.store.reshuffle(**cfg)
-        self.cmp = None
-        return None
-
     def edit_queue(self):
         """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words
         in the background (a moving bar while it runs: with ~1M words it takes a while), or says that

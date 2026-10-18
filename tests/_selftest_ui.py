@@ -88,13 +88,13 @@ for mode in ("refine", "boundary", "conflict", "place"):
         key("Left")
         key("Down")
 # ---------------------------------------------------------------- queue dialog
-assert app.apply_queue_settings("abc", "5000", "exp", "1")
-assert app.apply_queue_settings("5", "50", "exp", "1")
-assert app.apply_queue_settings("5", "5000", "exp", "99")
-assert app.apply_queue_settings("77", "8,000", "gauss", "2") is None
-cfg = s.queue_settings()
-assert cfg["seed"] == 77 and cfg["spread"] == 8000 and cfg["shape"] == "gauss" and cfg["compound"] == 2
-assert app.apply_queue_settings("11", "3000", "exp", "1") is None
+assert app.parse_queue_settings("abc", "5000", "exp", "1")[1]                    # each problem is named
+assert app.parse_queue_settings("5", "50", "exp", "1")[1]
+assert app.parse_queue_settings("5", "5000", "exp", "99")[1]
+cfg, err = app.parse_queue_settings("77", "8,000", "gauss", "2")
+assert err is None and cfg == {"seed": 77, "spread": 8000, "shape": "gauss", "compound": 2}
+s.reshuffle(**cfg); assert app.queue_unchanged(cfg)
+s.reshuffle(**app.parse_queue_settings("11", "3000", "exp", "1")[0])
 # the dialogs (UI-24): the shared StyledDialog, problems shown inline, the default button on Enter
 qd = app.edit_queue(); pump(3)
 assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply & reshuffle"]
@@ -167,12 +167,12 @@ pump(8)
 bw = app.browsers[0]
 placed = s.stats()["placed"]
 assert placed > 6000
-assert bw.loaded == 3000 and bw.total == placed, (bw.loaded, bw.total)
-assert len(bw.tree.get_children()) == 3000
+assert bw.loaded == bw.CHUNK and bw.total == placed, (bw.loaded, bw.total)
+assert len(bw.tree.get_children()) == bw.CHUNK
 print("browse opens with", bw.loaded, "of", bw.total, "rows; font", bw.fsize, "pt")
 
 # scroll to the end repeatedly: everything beyond 1500 (and beyond the first page) must load
-for _ in range(10):
+for _ in range(placed // bw.CHUNK + 4):                       # (a page per scroll to the end)
     bw.tree.yview_moveto(1.0)
     pump(4, 0.03)
     if bw.loaded >= bw.total:

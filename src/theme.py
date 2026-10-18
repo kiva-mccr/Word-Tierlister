@@ -73,15 +73,3 @@ def _hsv(hexc, tier):
     return hue, sat, val
 
 
-def _lum(h):
-    """Relative luminance of a #RRGGBB colour (WCAG definition)."""
-    h = h.lstrip("#")
-    c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
-
-
-def contrast(a, b):
-    """WCAG contrast ratio between two #RRGGBB colours."""
-    la, lb = sorted((_lum(a), _lum(b)), reverse=True)
-    return (la + 0.05) / (lb + 0.05)

@@ -428,13 +428,9 @@ class Bookshelf(SmoothCanvas):
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
             right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
         super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
-        mw, mh = self._mark_size()
+        self._top = top
         self._marks = [i for i in self._marks if i < len(self._x)]
-        for i in self._marks:                      # over the tallest a spine can be, pointing down at it
-            x0, w, _zi = self._x[i]
-            cols = self._mark_colors.get(i, (MARK_COLOR,))
-            self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), top - self._rise() - mh - 1,
-                              image=self.triangle_image(mw, mh, *cols[:2]), anchor="nw", tags=("mark", f"mark{i}"))
+        self._draw_marks(lifted=False)
         # a redraw (a word placed) keeps the hovered spine and its neighbours where they are
         lifted, self._lift = self._lift, {}
         for j, v in lifted.items():
@@ -443,6 +439,19 @@ class Bookshelf(SmoothCanvas):
         if self._hover is not None and self._hover >= len(self._x):
             self._hover = None
         self._outline(self._hover, True)
+
+    def _draw_marks(self, lifted=True):
+        """The marks, over the tallest a spine can be, pointing down at theirs. Only these are redrawn when the
+        duel changes (redrawing the whole shelf for them cost ~14 ms a duel). lifted: a spine lifted right now
+        (hover) has its mark raised the same hair as _set_lift gives it."""
+        self.delete("mark")
+        mw, mh = self._mark_size()
+        for i in self._marks:
+            x0, w, _zi = self._x[i]
+            cols = self._mark_colors.get(i, (MARK_COLOR,))
+            up = min(self.MARK_ROOM, self._lift.get(i, 0.0) * self.MARK_LIFT) if lifted else 0
+            self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), self._top - self._rise() - mh - 1 - up,
+                              image=self.triangle_image(mw, mh, *cols[:2]), anchor="nw", tags=("mark", f"mark{i}"))
 
     def _set_lift(self, i, v):
         was = self._lift.get(i, 0.0)
@@ -518,7 +527,7 @@ class Bookshelf(SmoothCanvas):
         colors = {i: tuple(c) for i, c in colors.items()}
         if colors != self._mark_colors or sorted(colors) != self._marks:
             self._marks, self._mark_colors = sorted(colors), colors
-            self._draw()
+            self._draw_marks()
 
     def spine_at(self, x):
         for i, (x0, w, _zi) in enumerate(self._x):

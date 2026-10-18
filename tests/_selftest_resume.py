@@ -12,12 +12,10 @@ random.seed(5)
 WORDS = [f"w{i:05d}" for i in range(3000)]
 
 
-def make_save(path, n_placed, skipped=(), extra=(), tier_shift=0, comps=0):
+def make_save(path, n_placed, skipped=(), tier_shift=0, comps=0):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     s = T.Store(path)
     s.insert_words(WORDS[:1000] if "old" in path else WORDS)
-    for w in extra:
-        s.insert_words(WORDS[:1000] + [w]) if False else None
     for i in range(n_placed):
         s.place(WORDS[i], (i + tier_shift) % 6)
     for w in skipped:

@@ -106,7 +106,7 @@ assert card.word == "cat" and card.sub.startswith("frequency")
 assert card.itemcget("word", "text") == "cat" and card.itemcget("sub", "text") == card.sub
 assert len(card.find_withtag("card")) == 1 and len(card.find_withtag("shadow")) == 1
 assert card.smooth_image("card") is not None                                         # rounded, smooth
-sx1, sy1, sx2, sy2 = card.bbox("shadow"); cx1, cy1, cx2, cy2 = card.bbox("card")
+sx2, sy2 = card.bbox("shadow")[2:]; cx2, cy2 = card.bbox("card")[2:]
 assert sx2 > cx2 and sy2 > cy2, "the shadow peeks out below and to the right"
 size = (card.winfo_reqwidth(), card.winfo_reqheight())
 card.set("be", ""); root.update()

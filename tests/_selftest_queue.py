@@ -6,7 +6,7 @@ tmp = tempfile.mkdtemp()
 quiet = lambda *_: None
 
 
-def fresh(name, n, pen=None, ranks=None):
+def fresh(name, n, pen=None):
     s = T.Store(os.path.join(tmp, name))
     s.insert_words([f"w{i:07d}" for i in range(n)])
     if pen:
@@ -133,7 +133,6 @@ first = u.next_unplaced()["word"]
 u.place(first, 1)
 u.unplace("table")
 assert u.next_unplaced()["word"] == "table"
-before_q = u.get_word("table")["qkey"]
 u.undo()
 assert u.get_word("table")["tier"] == 2
 u.undo()                                                # undo the place() of `first`
@@ -191,4 +190,35 @@ for _ in range(50):
 per = (time.time() - t) / 50
 print(f"next+stats at 300k: {per * 1000:.2f} ms")
 assert per < 0.05
+
+# ---- M-11: the duel pickers read indexes instead of sorting whole tiers
+import random as _r
+_r.seed(3)
+rows = [(t % 6, 1300 + (i * 37) % 600 if i % 5 else 1500.0, i % 9, f"w{i:07d}") for t, i in enumerate(range(10, 300000, 7))]
+big.db.executemany("UPDATE words SET tier=?, rating=?, games=? WHERE word=?", rows); big.db.commit()
+assert big.tier_counts() == {t: n for t, n in big.db.execute(
+    "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")}     # a direct write is noticed
+plan = " ".join(r[3] for r in big.db.execute("EXPLAIN QUERY PLAN SELECT * FROM words WHERE tier=2 AND rating>1500 "
+                                             "ORDER BY rating LIMIT 80"))
+assert "idx_words_tr" in plan and "TEMP B-TREE" not in plan, plan
+for word in ("w0000017", "w0000010"):                                   # an ordinary rating; one of a big tie
+    a = big.get_word(word)
+    near = big._nearest(a, 80)
+    every = sorted(abs(r[0] - a["rating"]) for r in big.db.execute(
+        "SELECT rating FROM words WHERE tier=? AND word!=?", (a["tier"], word)))
+    assert len(near) == 80 and word not in [r["word"] for r in near]
+    assert sorted(abs(r["rating"] - a["rating"]) for r in near) == every[:80]     # exactly the 80 nearest
+t = time.time()
+for _ in range(20):
+    assert big.pick_within() and big.pick_boundary()
+per = (time.time() - t) / 20
+print(f"pick_within + pick_boundary at 300k: {per * 1000:.1f} ms")
+assert per < 0.04
+# the least-dueled words have met everyone near them: words with more duels are tried too (never "no pair")
+tiny = fresh("tiny.db", 5)
+for i, w in enumerate(["w0000000", "w0000001", "w0000002", "w0000003"]):
+    tiny.place(w, 0 if i < 2 else 1)
+tiny.record_comparison("w0000000", "w0000001", "a", "within")
+tiny.db.execute("UPDATE words SET games=5 WHERE tier=1"); tiny.db.commit()
+assert set(tiny.pick_within()[:2]) == {"w0000002", "w0000003"}
 print("QUEUE OK")

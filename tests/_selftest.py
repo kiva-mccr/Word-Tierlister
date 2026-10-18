@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, random, sys, tempfile
+import os, random, tempfile
 import tierlist as T
 
 random.seed(1)
@@ -185,7 +185,7 @@ z.close()
 # the fill estimates hyphenated / spaced forms like the ranking does, and an older fill is redone once
 try:
     import wordfreq  # noqa: F401
-    from wordsource import fill_frequencies, prepare_queue
+    from wordsource import prepare_queue
     h = T.Store(os.path.join(tempfile.mkdtemp(), "hyph.db"))
     h.insert_words(["the", "well-known", "ice cream", "qzxv-wvqz"])
     h.set_meta("pen_done", "1"); h.set_meta("freq_done", "1")              # filled by version 1
