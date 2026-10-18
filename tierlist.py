@@ -345,14 +345,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           date by place / unplace / undo (bulk changes recount), ~2 ms per placement. Frequencies live
 #           in a new words.freq column, filled once at start-up from wordfreq (~3 s; wordsource.
 #           fill_frequencies, meta freq_done); words wordfreq does not know count 0 towards coverage.
-#           Redesign under way (asked for; not built yet, the segment bar above stays until it is): a bookshelf.
+#           Redesigned (asked for; built, replacing the segment bar above): a bookshelf.
 #           One shelf of book spines on a softened log scale of commonness, split by small gaps into five zones
 #           named for how often you would meet such a word (wordfreq Zipf steps): page (about once a page),
 #           chapter, book, shelf, library. A spine's height is the share of its words placed; its colour comes
 #           from the tiers its words went into: either the median tier blended round the colour wheel (stays
 #           as bright as the pastels; never a channel mix, which greys) or the "leaning" tier (the tier most
-#           over-represented there compared with the whole list). The user is choosing between these two.
-#           The coverage text after it reads "95% of text". Rejected: separate segments, a plain coverage bar,
+#           over-represented there compared with the whole list). Chosen: the blended median for the colour,
+#           with the leaning tier in each spine's hover note ("shelf · 1,245 words · 94% placed · mostly C,
+#           leans B"). The coverage text after it reads "95% of text".
+#           Built: ui_chart.Bookshelf (soft_median, leaning), theme.tier_blend, constants SHELF_*. Store.shelf()
+#           / shelf_layout(): zones from the stored frequencies (Zipf 6/5/4/3), 64 spines as equal steps of
+#           log(rank + 30), so a spine near the start holds a few words and one near the end thousands (the
+#           note says how many). Tallies per spine (words, placed, per tier) counted once by SQLite on a new
+#           covering index (~0.5 s with a million words), then kept current by every tier change (place, a
+#           Browse move, unplace, a boundary swap, undo): ~2 ms per action. Rejected: separate segments, a plain coverage bar,
 #           a tier-coloured bar, milestone steps, bookends, a bookmark ribbon, a hill profile, average-tier
 #           colour mixing.
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
@@ -757,7 +764,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
 # Decisions
-#   Settled:  progress bar (UI-14): segments by commonness (rank decades), with the covered share as a tag;
+#   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;
 #             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
 #             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
 #             added later: theme.py is built so a second palette with the same keys drops in); the

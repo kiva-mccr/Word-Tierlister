@@ -20,14 +20,14 @@ from tkinter import filedialog, ttk
 
 from browser import Browser
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, SEGMENT_NAMES, TIERS
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
 from fonts import ROLES, init_fonts, font, scale_fonts
 from saves import write_export
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from ui_chart import ConflictCard, DistributionChart, SegmentBar, SettledChart
+from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
@@ -219,8 +219,8 @@ class App:
         # "+N today", small and muted; the pace only in a hover note (UI-15: no pressure on screen)
         self.today_lbl = ttk.Label(line, anchor="w", foreground=PALETTE["muted"])
         self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
-        # the progress bar under it: four segments by commonness, and the coverage tag (UI-14)
-        self.progress_bar = SegmentBar(left, SEGMENT_NAMES, font("body"))
+        # the progress shelf under it: book spines from common to rare words, and "95% of text" (UI-14)
+        self.progress_bar = Bookshelf(left, font("body"))
         self.progress_bar.pack(side="top", anchor="w", pady=(8, 0))
         self.progress_tip = Tooltip(self.progress_bar, lambda e: self.progress_bar.note(e.x), font=font("body"))
         self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"),
@@ -721,8 +721,7 @@ class App:
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
         self.mode_switch.show_only(self.modes_with_work(s))
-        prog = self.store.progress()
-        self.progress_bar.set(prog["segments"], prog["coverage"])
+        self.progress_bar.set(self.store.shelf())
         # each tab shows its own view in the chart's spot (UI-31); the others keep their space, hidden
         for mode, view in self.tab_views.items():
             if view.shown != (mode == self.mode):

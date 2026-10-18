@@ -1,6 +1,6 @@
 """The tier chart (UI-13): six small bars, S..F, showing how many words sit in each tier; and each other tab's
 own view in the same spot (UI-31): SettledChart (Refine), ConflictCard (Conflicts); and
-the progress bar under the status line (UI-14): SegmentBar.
+the progress shelf under the status line (UI-14): Bookshelf.
 
 Built to the dataviz rules where they apply: bars at most 24 px wide with a rounded data end and a square
 baseline on one hairline axis; the tier letter under each bar and its count on the cap are in text colours
@@ -11,7 +11,8 @@ S..F order, not from colour, so the colours can stay pastel (the user's choice o
 import math
 import tkinter as tk
 
-from theme import PALETTE, TIER_BAR
+from constants import TIERS as TIERS_LETTERS
+from theme import PALETTE, TIER_BAR, tier_blend
 from ui_motion import lerp_color
 from widgets import _rounded_points
 
@@ -277,96 +278,132 @@ def format_share(placed, total):
 
 
 def format_coverage(frac):
-    """The coverage tag (UI-14): as many decimals as it takes to keep moving near 100% (93%, 99.4%, 99.97%),
-    rounded down, so it never shows 100% before everything is covered."""
+    """The coverage text (UI-14): the share of running text made of placed words, "95% of text", with as many
+    decimals as it takes to keep moving near 100% (93%, 99.4%, 99.97%), rounded down, so it never shows 100%
+    before everything is covered."""
     if frac >= 1:
-        return "covers 100%"
+        return "100% of text"
     pct = 100.0 * frac
     left = 100.0 - pct
     d = 0 if left >= 1 else 1 if left >= 0.1 else 2 if left >= 0.01 else 3
     shown = math.floor(round(pct * 10 ** d, 6)) / 10 ** d     # (round first: 99.4 * 10 is 993.9999...)
-    return f"covers {min(shown, 100 - 10 ** -d):.{d}f}%"
+    return f"{min(shown, 100 - 10 ** -d):.{d}f}% of text"
 
 
-class SegmentBar(tk.Canvas):
-    """The progress bar (UI-14): four equal segments by how common words are (everyday, common, uncommon, rare;
-    each about ten times the words of the one before), each filling by the share of its own words placed, so it
-    is a log scale over commonness. Under each segment its name and share; after the bar, in the same quiet grey,
-    the share of everyday English the placed words cover. Calm: no goals, no animation.
+def soft_median(tiers):
+    """Where the middle placed word falls, as a position on the tier scale 0 (S) .. 5 (F), part way through its
+    tier: if half the words are in S..B and the middle word is 30% of the way through the C words, 2.8 (the
+    tiers are treated as spans around 0, 1, 2...). None when nothing is placed."""
+    total = sum(tiers)
+    if not total:
+        return None
+    half, acc = total / 2, 0
+    for k, n in enumerate(tiers):
+        if n and acc + n >= half:
+            return max(0.0, min(len(tiers) - 1.0, k - 0.5 + (half - acc) / n))
+        acc += n
+    return len(tiers) - 1.0
 
-        bar = SegmentBar(parent, ["everyday", "common", "uncommon", "rare"], font("body"))
-        bar.set([(1000, 1000), (9700, 10000), (37000, 90000), (2000, 640000)], coverage=0.994)
-        bar.segment_at(x)        # which segment is under x (for the hover note), or None
+
+def leaning(tiers, overall):
+    """The tier most over-represented in `tiers` compared with the whole list (`overall`, per-tier counts), or
+    None when nothing is placed."""
+    total, whole = sum(tiers), sum(overall)
+    if not total or not whole:
+        return None
+    return max((k for k in range(len(tiers)) if overall[k]), key=lambda k: (tiers[k] / total) / (overall[k] / whole))
+
+
+class Bookshelf(tk.Canvas):
+    """The progress shelf (UI-14): a shelf of book spines on a log scale of commonness, split into zones named
+    for how often you would meet such a word (page, chapter, book, shelf, library), with "95% of text" after it.
+
+        shelf = Bookshelf(parent, font("body"))
+        shelf.set(store.shelf())         # {"zones": [(name, n spines)], "spines": [...], "coverage": 0.95}
+        shelf.note(x)                     # the hover note for the spine under x
+
+    A spine's height is the share of its words placed. Its colour is the median tier of those words, part way
+    to the next tier and blended round the colour wheel (theme.tier_blend), so it stays as bright as the pastels.
+    Spines are equal steps of commonness (each a fixed factor rarer than the last), not equal word counts: one
+    near the start holds a few words, one near the end thousands; the hover note says how many.
     """
+    GAP = 10                                   # space between zones
 
-    def __init__(self, parent, names, font=None, canvas_bg=None):
+    def __init__(self, parent, font=None, canvas_bg=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
-        self.names, self._font = list(names), font
-        self.segments = [(0, 0)] * len(self.names)
-        self.coverage = None
+        self._font = font
+        self.data = {"zones": [], "spines": [], "coverage": None}
+        self._x = []                           # left edge and width of each spine, for note()
         self._draw()
 
     def _metrics(self):
-        f = self._font
-        line = f.metrics("linespace") if f else 16
-        seg_w = max(f.measure(f"{n} 100%") for n in self.names) + line // 2 if f else 110
-        return line, seg_w, max(8, int(line * 0.55)), max(4, line // 3)       # line, segment width, bar h, gap
-
-    def _x(self, i):
-        _line, seg_w, _h, gap = self._metrics()
-        return 1 + i * (seg_w + gap)
+        line = self._font.metrics("linespace") if self._font else 16
+        return line, int(line * 30), 2 * line          # line, shelf width, tallest spine
 
     def _draw(self):
         self.delete("all")
-        line, seg_w, bar_h, gap = self._metrics()
-        n = len(self.names)
-        bars_w = n * seg_w + (n - 1) * gap
-        top = max(1, (line - bar_h) // 2)              # room for the coverage text beside the bar
-        r = bar_h / 2
-        for i, (name, (placed, total)) in enumerate(zip(self.names, self.segments)):
-            x1 = self._x(i)
-            x2 = x1 + seg_w
-            self.create_polygon(_rounded_points(x1, top, x2, top + bar_h, r), smooth=True, fill=PALETTE["surface2"],
-                                outline=PALETTE["border"], tags=("track", f"track{i}"))
-            share = placed / total if total else 0.0
-            if share > 0:
-                fw = max(bar_h, share * seg_w)            # a sliver at least as wide as it is tall
-                self.create_polygon(_rounded_points(x1, top, x1 + fw, top + bar_h, r), smooth=True,
-                                    fill=PALETTE["accent"], outline=lerp_color(PALETTE["accent"], PALETTE["text"], 0.18),
-                                    tags=("fill", f"fill{i}"))
-            self.create_text(x1, top + bar_h + 4, text=f"{name} {format_share(placed, total)}", font=self._font,
-                             fill=PALETTE["muted"], anchor="nw", tags=("label", f"label{i}"))
-        width = bars_w + 2
-        if self.coverage is not None:              # quiet text at the end, like the segment labels
-            text = format_coverage(self.coverage)
-            tw = self._font.measure(text) if self._font else 8 * len(text)
-            x1 = bars_w + 2 + line // 2
-            self.create_text(x1, top + bar_h / 2, text=text, font=self._font, fill=PALETTE["muted"], anchor="w",
-                             tags="tag")
-            width = x1 + tw + 2
-        super().configure(width=width, height=top + bar_h + 4 + line + 2)
+        line, width, hmax = self._metrics()
+        zones, spines = self.data["zones"], self.data["spines"]
+        top = 3
+        base = top + hmax
+        n = max(1, len(spines))
+        sw = (width - self.GAP * max(0, len(zones) - 1)) / n
+        self._x = []
+        x, i = 1.0, 0
+        edge = lerp_color(PALETTE["border"], PALETTE["text"], 0.25)
+        for zi, (name, count) in enumerate(zones):
+            x0 = x
+            for k in range(count):
+                sp = spines[i]
+                full = hmax - (k % 3) * 2                  # slightly uneven tops, like real books
+                x1, x2 = x, x + sw - 1.5
+                self.create_rectangle(x1, base - full, x2, base, fill=PALETTE["bg"], outline=PALETTE["border"],
+                                      tags=("spine", f"spine{i}"))
+                share = sp["placed"] / sp["words"] if sp["words"] else 0.0
+                h = full * share
+                if sp["placed"] and h >= 1:
+                    col = tier_blend(soft_median(sp["tiers"]))
+                    self.create_rectangle(x1, base - h, x2, base, fill=col,
+                                          outline=lerp_color(col, PALETTE["text"], 0.18), tags=("fill", f"fill{i}"))
+                self._x.append((x, sw, zi))
+                x += sw
+                i += 1
+            self.create_line(x0 - 1, base + 1, x - 1, base + 1, fill=edge, width=2, tags="board")
+            self.create_text((x0 + x) / 2, base + 4, text=name, font=self._font, fill=PALETTE["muted"], anchor="n",
+                             tags=("zone", f"zone{zi}"))
+            x += self.GAP
+        right = x - self.GAP
+        if self.data["coverage"] is not None:      # quiet text at the end, like the zone names
+            self.create_text(right + line // 2, top + hmax / 2, text=format_coverage(self.data["coverage"]),
+                             font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
+            right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
+        super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
 
-    def set(self, segments, coverage=None):
-        """[(placed, total)] per segment, and the covered share (0..1, or None to leave the tag out)."""
-        segments = [(int(p), int(t)) for p, t in segments]
-        if segments != self.segments or coverage != self.coverage:
-            self.segments, self.coverage = segments, coverage
+    def set(self, data):
+        if data != self.data:
+            self.data = data
             self._draw()
 
-    def segment_at(self, x):
-        _line, seg_w, _h, gap = self._metrics()
-        for i in range(len(self.names)):
-            if self._x(i) <= x < self._x(i) + seg_w + gap:
+    def spine_at(self, x):
+        for i, (x0, w, _zi) in enumerate(self._x):
+            if x0 <= x < x0 + w:
                 return i
         return None
 
     def note(self, x):
-        """The hover note for the segment under x: '37,204 of 90,000 placed'."""
-        i = self.segment_at(x)
+        """'book · 412 words · 61% placed · mostly C, leans A' for the spine under x, or None."""
+        i = self.spine_at(x)
         if i is None:
             return None
-        placed, total = self.segments[i]
-        return f"{placed:,} of {total:,} placed"
+        sp = self.data["spines"][i]
+        head = f"{sp['zone']} \u00b7 {sp['words']:,} word{'s' if sp['words'] != 1 else ''}"
+        if not sp["placed"]:
+            return f"{head} \u00b7 none placed yet"
+        overall = [sum(s_["tiers"][k] for s_ in self.data["spines"]) for k in range(len(TIERS_LETTERS))]
+        mostly = TIERS_LETTERS[min(len(TIERS_LETTERS) - 1, round(soft_median(sp["tiers"])))]
+        lean = leaning(sp["tiers"], overall)
+        tail = f"mostly {mostly}" + (f", leans {TIERS_LETTERS[lean]}" if lean is not None and TIERS_LETTERS[lean] != mostly else "")
+        return f"{head} \u00b7 {format_share(sp['placed'], sp['words'])} placed \u00b7 {tail}"
 
     def refresh(self):
         self._draw()

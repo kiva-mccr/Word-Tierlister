@@ -4,8 +4,9 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import (ConflictCard, DistributionChart, SegmentBar, SettledChart, compact, format_coverage,
-                      format_share)
+from ui_chart import (Bookshelf, ConflictCard, DistributionChart, SettledChart, compact, format_coverage,
+                      format_share, leaning, soft_median)
+from theme import TIER_COLORS, tier_blend
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
 assert compact(12345) == "12.3K" and compact(20000) == "20K" and compact(1234567) == "1.2M" and compact(3000000) == "3M"
@@ -91,23 +92,44 @@ assert cc.itemcget("big", "text") == "None" and cc.itemcget("small", "text") == 
 cc.set(3); assert cc.itemcget("big", "text") == "3" and cc.itemcget("small", "text") == "to look at"
 cc.set(1234); assert cc.itemcget("big", "text") == "1,234"
 cc.show(False); cc.set(2); assert cc.itemcget("big", "state") == "hidden"
-# ---- the progress bar (UI-14)
+# ---- the progress shelf (UI-14)
 assert [format_share(*x) for x in ((0, 10), (10, 10), (97, 100), (3, 1000), (1, 640000), (999, 1000), (0, 0))] == \
     ["0%", "100%", "97%", "0.3%", "<0.001%", "99.9%", "0%"]
 assert [format_coverage(x) for x in (0.5, 0.93, 0.994, 0.9997, 0.99999, 1.0)] == \
-    ["covers 50%", "covers 93%", "covers 99.4%", "covers 99.97%", "covers 99.999%", "covers 100%"]
-assert format_coverage(0.99999999) != "covers 100%"                              # never 100% until it is
-sb = SegmentBar(root, ["everyday", "common", "uncommon", "rare"], body); sb.pack(); root.update()
-sb.set([(1000, 1000), (9700, 10000), (0, 90000), (2, 640000)], coverage=0.994)
-xs = [sb.coords(f"track{i}") for i in range(4)]
-widths = [max(c[0::2]) - min(c[0::2]) for c in xs]
-assert max(widths) - min(widths) < 1                                              # equal segments
-assert abs((max(sb.coords("fill0")[0::2]) - min(sb.coords("fill0")[0::2])) - widths[0]) < 2   # full
-assert not sb.find_withtag("fill2") and sb.find_withtag("fill3")                  # none placed: no fill; a few: a sliver
-assert sb.itemcget("label1", "text") == "common 97%" and sb.itemcget("tag", "text") == "covers 99.4%"
-assert sb.coords("tag")[0] > max(xs[3][0::2]) and sb.itemcget("tag", "fill") == PALETTE["muted"]   # quiet, at the end
-assert not sb.find_withtag("tagbox")
-assert sb.note(sb._x(2) + 3) == "0 of 90,000 placed" and sb.note(-50) is None
-sb.set([(0, 1)] * 4, coverage=None); assert not sb.find_withtag("tag")             # no frequencies yet: no tag
+    ["50% of text", "93% of text", "99.4% of text", "99.97% of text", "99.999% of text", "100% of text"]
+assert format_coverage(0.99999999) != "100% of text"                              # never 100% until it is
+# the median, part way through its tier; the leaning tier; colours blended round the wheel stay bright
+assert soft_median([0, 0, 10, 0, 0, 0]) == 2.0 and soft_median([0] * 6) is None
+assert soft_median([0, 0, 5, 5, 0, 0]) == 2.5 and soft_median([10, 0, 0, 0, 0, 0]) == 0.0      # between C and D
+assert abs(soft_median([0, 0, 3, 7, 0, 0]) - (3 - 0.5 + 2 / 7)) < 1e-9                 # 2/7 of the way into D
+assert leaning([5, 1, 1, 1, 1, 1], [10, 30, 30, 30, 30, 30]) == 0 and leaning([0] * 6, [1] * 6) is None
+assert [tier_blend(k) for k in range(6)] == TIER_COLORS                           # whole tiers: exactly their pastel
+import colorsys
+def sat(h):
+    return colorsys.rgb_to_hsv(*(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)))[1]
+for k in range(5):                                                                 # half-way: as bright as the two ends
+    assert sat(tier_blend(k + 0.5)) >= min(sat(TIER_COLORS[k]), sat(TIER_COLORS[k + 1])) - 0.02
+sh = Bookshelf(root, body); sh.pack(); root.update()
+data = {"zones": [("page", 2), ("chapter", 3)], "coverage": 0.952,
+        "spines": [{"zone": "page", "words": 10, "placed": 10, "tiers": [10, 0, 0, 0, 0, 0]},
+                   {"zone": "page", "words": 20, "placed": 10, "tiers": [0, 0, 5, 5, 0, 0]},
+                   {"zone": "chapter", "words": 40, "placed": 0, "tiers": [0] * 6},
+                   {"zone": "chapter", "words": 50, "placed": 5, "tiers": [0, 5, 0, 0, 0, 0]},
+                   {"zone": "chapter", "words": 60, "placed": 60, "tiers": [0, 0, 0, 0, 0, 60]}]}
+sh.set(data)
+def fh(i):
+    ys = sh.coords(f"fill{i}")[1::2]; return max(ys) - min(ys)
+def full(i):
+    ys = sh.coords(f"spine{i}")[1::2]; return max(ys) - min(ys)
+assert abs(fh(0) - full(0)) < 1 and abs(fh(1) - full(1) / 2) < 1 and not sh.find_withtag("fill2")   # height = share
+assert sh.itemcget("fill0", "fill") == TIER_COLORS[0] and sh.itemcget("fill4", "fill") == TIER_COLORS[5]
+assert sh.itemcget("fill1", "fill") == tier_blend(soft_median([0, 0, 5, 5, 0, 0]))
+gap = sh.coords("spine2")[0] - sh.coords("spine1")[2]
+assert gap > 2 * (sh.coords("spine1")[0] - sh.coords("spine0")[2])                # a gap between zones
+assert [sh.itemcget(f"zone{i}", "text") for i in (0, 1)] == ["page", "chapter"] and sh.itemcget("tag", "text") == "95% of text"
+x = lambda i: (sh.coords(f"spine{i}")[0] + sh.coords(f"spine{i}")[2]) / 2
+assert sh.note(x(0)) == "page \u00b7 10 words \u00b7 100% placed \u00b7 mostly S, leans S".replace(", leans S", "")
+assert sh.note(x(2)) == "chapter \u00b7 40 words \u00b7 none placed yet"
+assert sh.note(x(3)).startswith("chapter \u00b7 50 words \u00b7 10% placed \u00b7 mostly A") and sh.note(-5) is None
 root.destroy()
 print("CHART OK")

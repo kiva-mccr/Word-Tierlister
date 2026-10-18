@@ -20,6 +20,7 @@ Conventions
     * Store.version goes up on every change; open windows compare it to know when to refresh.
     * Methods starting with an underscore are internal helpers.
 """
+import bisect
 import hashlib
 import json
 import math
@@ -30,7 +31,8 @@ import re
 import sqlite3
 import time
 
-from constants import PEN_UNITS, QUEUE_DEFAULTS, SEGMENT_BOUNDS, SEGMENT_NAMES, TIERS, tier_base
+from constants import (PEN_UNITS, QUEUE_DEFAULTS, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
+                       SHELF_ZONES, TIERS, tier_base)
 
 
 # --------------------------------------------------------------------------
@@ -101,10 +103,11 @@ class Store:
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_shelf ON words(rank, tier, freq)")   # shelf()
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
-        self._prog = None    # progress tallies (progress()), counted once, then kept up to date by each change
+        self._prog = None    # the shelf's tallies (shelf()), counted once, then kept up to date by each change
 
     def close(self):
         """Flush and close the database; safe to call twice."""
@@ -249,36 +252,74 @@ class Store:
             "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
         }
 
-    # ---- progress (UI-14) -----------------------------------------------------------------
-    @staticmethod
-    def segment_of(rank):
-        """Which progress segment (0 = everyday .. 3 = rare) a frequency rank falls in."""
-        return sum(rank >= b for b in SEGMENT_BOUNDS)
+    # ---- progress: the shelf (UI-14) ---------------------------------------------------------
+    def shelf_layout(self):
+        """The shelf's zones and spines: [(zone name, [rank bounds of its spines])]. Zones end where wordfreq's
+        Zipf value drops below 6, 5, 4, 3 (SHELF_ZIPF); the spines are equal steps of log(rank + SHELF_SOFT), so a
+        spine near the start holds a few words and one near the end thousands (a log ruler of commonness). A zone
+        with no words in this list is left out."""
+        n = self.count_words()
+        ends = list(SHELF_ZONE_RANKS)
+        if self.get_meta("freq_done") == "1":
+            for i, z in enumerate(SHELF_ZIPF):
+                r = self.db.execute("SELECT MIN(rank) FROM words WHERE freq < ?", (10 ** (z - 9),)).fetchone()[0]
+                ends[i] = r if r is not None else n
+        lg = lambda r: math.log10(r + SHELF_SOFT)
+        bounds = [0] + [min(e, n) for e in ends] + [n]
+        span = lg(n) - lg(0) if n else 1.0
+        zones = []
+        for name, lo, hi in zip(SHELF_ZONES, bounds, bounds[1:]):
+            if hi <= lo:
+                continue
+            k = max(2, round(SHELF_SPINES * (lg(hi) - lg(lo)) / span))
+            edges = sorted({lo, hi} | {min(hi, max(lo, round(10 ** (lg(lo) + (lg(hi) - lg(lo)) * j / k) - SHELF_SOFT)))
+                                        for j in range(1, k)})   # (a tiny list can round two edges together)
+            zones.append((name, edges))
+        return zones
 
-    def progress(self):
-        """{"segments": [(placed, total)] for everyday, common, uncommon, rare; "coverage": the share of the list's
-        word frequency that is placed (0..1), or None before the frequencies are known}. Counted from the save
-        once, then kept up to date by place / unplace / undo, so a refresh never scans the list."""
+    def shelf(self):
+        """The progress shelf: {"zones": [(name, number of spines)], "spines": [{"zone", "words", "placed",
+        "tiers": placed per tier}], "coverage": share of the list's word frequency that is placed (0..1, None
+        before the frequencies are known)}. Counted from the save once (a pass over the list), then kept up to
+        date by every change of a word's tier, so a refresh never rescans."""
         if self._prog is None:
-            b0, b1, b2 = SEGMENT_BOUNDS
-            p = {"placed": [0] * len(SEGMENT_NAMES), "total": [0] * len(SEGMENT_NAMES), "fp": 0.0, "ft": 0.0}
-            for seg, n, placed, ft, fp in self.db.execute(
-                    "SELECT CASE WHEN rank < ? THEN 0 WHEN rank < ? THEN 1 WHEN rank < ? THEN 2 ELSE 3 END, "
-                    "COUNT(*), SUM(tier IS NOT NULL), SUM(freq), SUM(CASE WHEN tier IS NULL THEN 0 ELSE freq END) "
-                    "FROM words GROUP BY 1", (b0, b1, b2)):
-                p["total"][seg], p["placed"][seg] = n, placed or 0
-                p["ft"] += ft or 0.0
-                p["fp"] += fp or 0.0
+            layout = self.shelf_layout()
+            spines, starts = [], []
+            for name, edges in layout:
+                for lo in edges[:-1]:
+                    starts.append(lo)
+                    spines.append({"zone": name, "words": 0, "placed": 0, "tiers": [0] * len(TIERS)})
+            p = {"layout": [(name, len(edges) - 1) for name, edges in layout], "spines": spines, "starts": starts,
+                 "fp": 0.0, "ft": 0.0}
+            ends = starts[1:] + [layout[-1][1][-1]] if layout else []
+            for sp, lo, hi in zip(spines, starts, ends):   # one range per spine, counted by SQLite (idx_words_shelf)
+                for tier, n, fq in self.db.execute("SELECT tier, COUNT(*), SUM(freq) FROM words WHERE rank >= ? AND "
+                                                   "rank < ? GROUP BY tier", (lo, hi)):
+                    sp["words"] += n
+                    p["ft"] += fq or 0.0
+                    if tier is not None:
+                        sp["placed"] += n
+                        sp["tiers"][tier] += n
+                        p["fp"] += fq or 0.0
+            if not spines:
+                p["ft"] = self.db.execute("SELECT TOTAL(freq) FROM words").fetchone()[0]
             self._prog = p
         p = self._prog
-        return {"segments": list(zip(p["placed"], p["total"])),
+        return {"zones": p["layout"], "spines": [dict(sp, tiers=list(sp["tiers"])) for sp in p["spines"]],
                 "coverage": p["fp"] / p["ft"] if p["ft"] > 0 else None}
 
-    def _note_placed(self, row, sign):
-        """Keep the progress tallies current: `row` (with rank and freq) became placed (+1) or unplaced (-1)."""
-        if self._prog is not None:
-            self._prog["placed"][self.segment_of(row["rank"])] += sign
-            self._prog["fp"] += sign * (row["freq"] or 0.0)
+    def _tier_moved(self, row, old, new):
+        """Keep the shelf's tallies current: the word in `row` (with rank and freq) went from tier `old` to `new`
+        (None = not placed)."""
+        p = self._prog
+        if p is None or old == new or not p["spines"]:
+            return
+        sp = p["spines"][bisect.bisect_right(p["starts"], row["rank"]) - 1]
+        for t, sign in ((old, -1), (new, 1)):
+            if t is not None:
+                sp["placed"] += sign
+                sp["tiers"][t] += sign
+                p["fp"] += sign * (row["freq"] or 0.0)
 
     def set_frequencies(self, pairs):
         """Store each word's frequency [(word, freq)] (for the coverage tag; filled once by wordsource)."""
@@ -394,8 +435,8 @@ class Store:
         now = {r["word"]: r for r in self._snap([r["word"] for r in p["before"]])} if p["before"] else {}
         for r in p["before"]:
             cur = now.get(r["word"])
-            if cur is not None and (cur["tier"] is None) != (r["tier"] is None):
-                self._note_placed(cur, 1 if r["tier"] is not None else -1)
+            if cur is not None:
+                self._tier_moved(cur, cur["tier"], r["tier"])
             # qkey is missing from history written by older versions; COALESCE keeps the current one.
             self.db.execute(
                 "UPDATE words SET tier=?, rating=?, games=?, skips=?, qkey=COALESCE(?, qkey) WHERE word=?",
@@ -445,8 +486,8 @@ class Store:
         self.db.execute(
             "UPDATE words SET tier=?, rating=?, games=0 WHERE word=?", (tier, tier_base(tier), word)
         )
-        if before and before[0]["tier"] is None:
-            self._note_placed(before[0], 1)
+        if before:
+            self._tier_moved(before[0], before[0]["tier"], tier)
         changes, anchors = self._follow_anchors(before)
         self._push(before, comp_ids=ids, anchors=anchors)
         self.db.commit()
@@ -461,8 +502,8 @@ class Store:
         front = (front if front is not None else 0.0) - 1.0
         self.db.execute(
             "UPDATE words SET tier=NULL, rating=1500, games=0, skips=0, qkey=? WHERE word=?", (front, word))
-        if before and before[0]["tier"] is not None:
-            self._note_placed(before[0], -1)
+        if before:
+            self._tier_moved(before[0], before[0]["tier"], None)
         self._push(before)
         self.db.commit()
 
@@ -558,6 +599,8 @@ class Store:
                     (rw["tier"], rw["rating"] - 1.0, l),
                 )
                 info["swapped"] = (w, rl["tier"], l, rw["tier"])
+                self._tier_moved(rw, rw["tier"], rl["tier"])
+                self._tier_moved(rl, rl["tier"], rw["tier"])
                 self.db.execute("INSERT INTO swaps(comp_id, boundary) VALUES(?, ?)", (comp_id, rl["tier"]))
             else:
                 self.db.execute("UPDATE words SET games=games+1 WHERE word IN (?, ?)", (a, b))

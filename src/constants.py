@@ -13,9 +13,14 @@ MODES = [
     ("conflict", "Resolve conflicts"),
 ]
 
-# The progress bar's segments (UI-14), by frequency rank: each holds about ten times the words of the one before.
-SEGMENT_NAMES = ["everyday", "common", "uncommon", "rare"]
-SEGMENT_BOUNDS = [1000, 10000, 100000]      # ranks below 1,000 are everyday ... 100,000 and beyond are rare
+# The progress shelf (UI-14): zones named for how often you would meet such a word in reading, by wordfreq's
+# Zipf scale (log10 of uses per billion words): "page" words have Zipf >= 6 (about once a page or more), "chapter"
+# 5-6, "book" 4-5, "shelf" 3-4, "library" below 3. Each step is ten times rarer.
+SHELF_ZONES = ["page", "chapter", "book", "shelf", "library"]
+SHELF_ZIPF = [6, 5, 4, 3]                     # the Zipf value where each zone ends
+SHELF_ZONE_RANKS = [100, 1000, 7000, 30000]   # where they end by rank, until the word frequencies are known
+SHELF_SPINES = 64                             # spines on the whole shelf
+SHELF_SOFT = 30                               # the shelf is a log scale of rank + SHELF_SOFT (see Store.shelf_layout)
 
 
 def tier_base(t):

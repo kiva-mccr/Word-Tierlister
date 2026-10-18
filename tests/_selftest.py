@@ -135,23 +135,40 @@ assert lone.get_anchors()[2] == "x"                                             
 lone.undo(); assert lone.get_anchors() == ["s1", "a1", "b1", "c1", "d1", "f1"] and lone.get_word("a1")["tier"] == 1
 lone.close()
 
-# progress (UI-14): segment tallies and coverage, kept up to date without recounting, always equal to a recount
+# the progress shelf (UI-14): per-spine tallies kept up to date without recounting, always equal to a recount
+class Same(dict):                       # shelves equal: coverage to 1e-12 (a running float sum), the rest exactly
+    def __eq__(self, other):
+        return (self["zones"] == other["zones"] and self["spines"] == other["spines"]
+                and (self["coverage"] is None) == (other["coverage"] is None)
+                and abs((self["coverage"] or 0) - (other["coverage"] or 0)) < 1e-12)
 def recount():
     s._prog = None
-    return s.progress()
+    return Same(s.shelf())
 s.set_frequencies([(w, 1.0 / (i + 1)) for i, w in enumerate(words)])
 assert s.get_meta("freq_done") == "1"
-p0 = s.progress()
-assert len(p0["segments"]) == 4 and sum(t for _p, t in p0["segments"]) == s.count_words()
-assert sum(p for p, _t in p0["segments"]) == s.stats()["placed"] and 0 < p0["coverage"] < 1
+p0 = Same(s.shelf())
+assert [z for z, _n in p0["zones"]] == [z for z in ("page", "chapter", "book", "shelf", "library") if z in dict(p0["zones"])]
+assert sum(n for _z, n in p0["zones"]) == len(p0["spines"]) and all(sp["words"] > 0 for sp in p0["spines"])
+assert sum(sp["words"] for sp in p0["spines"]) == s.count_words()
+assert sum(sp["placed"] for sp in p0["spines"]) == s.stats()["placed"] and 0 < p0["coverage"] < 1
+assert [sum(sp["tiers"][t] for sp in p0["spines"]) for t in range(6)] == [s.tier_counts().get(t, 0) for t in range(6)]
 fresh = s.next_unplaced()["word"]
-s.place(fresh, 3); p1 = s.progress()
-assert sum(p for p, _ in p1["segments"]) == sum(p for p, _ in p0["segments"]) + 1 and p1["coverage"] > p0["coverage"]
-assert p1 == recount()
-s.unplace(fresh); assert s.progress() == recount()
-s.undo(); assert s.progress() == recount() and s.get_word(fresh)["tier"] == 3   # undo of the unplace: placed again
-s.undo(); assert s.progress() == recount() == p0                                  # undo of the place
-assert [T.Store.segment_of(r) for r in (0, 999, 1000, 9999, 10000, 99999, 100000, 10 ** 7)] == [0, 0, 1, 1, 2, 2, 3, 3]
+s.place(fresh, 3); assert Same(s.shelf()) == recount() and s.shelf()["coverage"] > p0["coverage"]
+s.place(fresh, 1); assert Same(s.shelf()) == recount()                                    # moved (Browse): tiers follow
+s.unplace(fresh); assert Same(s.shelf()) == recount()
+s.undo(); assert Same(s.shelf()) == recount()
+s.undo(); assert Same(s.shelf()) == recount()
+s.undo(); assert Same(s.shelf()) == recount() == p0
+hi_w = s.db.execute("SELECT word FROM words WHERE tier=0 AND word NOT IN (SELECT word FROM anchors) LIMIT 1").fetchone()[0]
+lo_w = s.db.execute("SELECT word FROM words WHERE tier=1 AND word NOT IN (SELECT word FROM anchors) LIMIT 1").fetchone()[0]
+assert s.record_comparison(hi_w, lo_w, "b", "boundary")["swapped"]
+assert Same(s.shelf()) == recount() != p0                                                  # a swap moves tier counts
+s.undo(); assert Same(s.shelf()) == recount() == p0
+# the layout: zones end where the Zipf value drops below 6, 5, 4, 3; spines are equal steps of log(rank + 30)
+lay = s.shelf_layout()
+for name, edges in lay:
+    assert edges == sorted(set(edges)) and len(edges) >= 2
+assert lay[0][1][0] == 0 and lay[-1][1][-1] == s.count_words()
 
 # unplace puts word back at the front of the queue
 s.unplace("w050")
