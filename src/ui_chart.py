@@ -11,7 +11,7 @@ S..F order, not from colour, so the colours can stay pastel (the user's choice o
 import math
 
 from constants import TIERS as TIERS_LETTERS
-from theme import PALETTE, TIER_BAR, tier_blend
+from theme import PALETTE, TIER_BAR, TIER_COLORS, tier_blend
 from ui_motion import lerp_color
 from smooth import SmoothCanvas
 
@@ -321,6 +321,12 @@ def leaning(tiers, overall):
 MARK_COLOR = lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)   # the lilac of selections, a little deeper
 
 
+def mark_color(tier):
+    """A shelf mark's colour: its word's tier pastel, deepened so a small triangle still shows on the page
+    (M-4); the lilac for a word with no tier."""
+    return MARK_COLOR if tier is None else lerp_color(TIER_COLORS[tier], PALETTE["text"], 0.3)
+
+
 class Bookshelf(SmoothCanvas):
     """The progress shelf (UI-14): a shelf of book spines on a log scale of commonness, split into zones named
     for how often you would meet such a word (page, chapter, book, shelf, library), with "95% of text" after it.
@@ -353,6 +359,7 @@ class Bookshelf(SmoothCanvas):
         self._lift = {}                        # spine -> pixels it is raised right now
         self._gen = 0                          # bumped by every hover change
         self._marks = []                       # spines with a triangle over them
+        self._mark_colors = {}                 # spine -> its triangle's colour(s): two for a split triangle
         self.bind("<Motion>", lambda e: self.hover(self.spine_at(e.x)), add="+")
         self.bind("<Leave>", lambda e: self.hover(None), add="+")
         self._draw()
@@ -425,8 +432,9 @@ class Bookshelf(SmoothCanvas):
         self._marks = [i for i in self._marks if i < len(self._x)]
         for i in self._marks:                      # over the tallest a spine can be, pointing down at it
             x0, w, _zi = self._x[i]
+            cols = self._mark_colors.get(i, (MARK_COLOR,))
             self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), top - self._rise() - mh - 1,
-                              image=self.triangle_image(mw, mh, MARK_COLOR), anchor="nw", tags=("mark", f"mark{i}"))
+                              image=self.triangle_image(mw, mh, *cols[:2]), anchor="nw", tags=("mark", f"mark{i}"))
         # a redraw (a word placed) keeps the hovered spine and its neighbours where they are
         lifted, self._lift = self._lift, {}
         for j, v in lifted.items():
@@ -496,11 +504,20 @@ class Bookshelf(SmoothCanvas):
             self.data = data
             self._draw()
 
-    def mark(self, spines):
-        """Triangles over these spines (indices; None and repeats are ignored), none for []."""
-        marks = sorted({i for i in spines if i is not None and 0 <= i < len(self.data["spines"])})
-        if marks != self._marks:
-            self._marks = marks
+    def mark(self, spines, tiers=None):
+        """Triangles over these spines (indices; None and repeats are ignored), none for []. `tiers` (the same
+        length: each word's tier, or None) colours each one like its word's tier; two words of different tiers
+        in one spine share a triangle split down the middle, the first word's colour on the left."""
+        tiers = list(tiers) if tiers is not None else [None] * len(spines)
+        colors = {}
+        for i, t in zip(spines, tiers):
+            if i is not None and 0 <= i < len(self.data["spines"]):
+                c = mark_color(t)
+                if c not in colors.setdefault(i, []):
+                    colors[i].append(c)
+        colors = {i: tuple(c) for i, c in colors.items()}
+        if colors != self._mark_colors or sorted(colors) != self._marks:
+            self._marks, self._mark_colors = sorted(colors), colors
             self._draw()
 
     def spine_at(self, x):

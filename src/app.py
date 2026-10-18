@@ -1050,19 +1050,17 @@ class App:
             self.pair_empty.grid_remove()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
                 w.grid()
-            self.duel.show(self.pair["left"], self.pair["right"],
-                           colors=[self._tier_color(self.pair[side]) for side in ("left", "right")])
+            words = [self.pair["left"], self.pair["right"]]
+            tiers = [self.store.get_word(w)["tier"] for w in words]
+            # the duel cards wear their word's tier colour (a neutral pastel without a tier)
+            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
-            self._render_defs([self.pair["left"], self.pair["right"]])
-            # little triangles on the shelf over where the two words come from (UI-55; one if they share a spine)
-            self.progress_bar.mark([self.store.spine_of(self.pair[side]) for side in ("left", "right")])
+            self._render_defs(words)
+            # little triangles on the shelf over where the two words come from (UI-55; one if they share a spine),
+            # each in its word's tier colour (M-4)
+            self.progress_bar.mark([self.store.spine_of(w) for w in words], tiers)
         self._hint()
-
-    def _tier_color(self, word):
-        """A word's tier colour (the duel cards wear it); a neutral pastel if it has no tier yet."""
-        tier = self.store.get_word(word)["tier"]
-        return TIER_COLORS[tier] if tier is not None else PALETTE["neutral"]
 
     def pair_answer(self, ans):
         """Record a duel result ('left' | 'right' | 'tie'), report swaps/conflicts, count down a focus session."""

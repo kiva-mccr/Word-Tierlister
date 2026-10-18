@@ -563,14 +563,25 @@ class SmoothCanvas(tk.Canvas):
     def _stack_index(self, item):
         return super().find_all().index(item)
 
-    def triangle_image(self, w, h, fill):
-        """A small soft-edged triangle pointing down (w x h), blended onto the canvas colour: for marks."""
+    def triangle_image(self, w, h, fill, right=None):
+        """A small soft-edged triangle pointing down (w x h), blended onto the canvas colour: for marks. With
+        `right`, the right half is in that colour (split down the middle; an odd middle column is half each)."""
         bg = self._canvas_rgb()
-        key = ("photo", "triangle", w, h, fill, bg)
+        key = ("photo", "triangle", w, h, fill, right, bg)
 
         def make():
-            poly = [(0.5, 0.5), (w - 0.5, 0.5), (w / 2.0, h - 0.5)]
-            return _photo(self, w, h, paint_mask(coverage_mask(poly, w, h, 0), _rgb(fill), None, bg))
+            mask = coverage_mask([(0.5, 0.5), (w - 0.5, 0.5), (w / 2.0, h - 0.5)], w, h, 0)
+            rows = paint_mask(mask, _rgb(fill), None, bg)
+            if right is not None and right != fill:
+                other, half = paint_mask(mask, _rgb(right), None, bg), w // 2
+                mixed = []
+                for a, b in zip(rows, other):
+                    mid = b""
+                    if w % 2:
+                        mid = bytes((a[4 * half + k] + b[4 * half + k] + 1) // 2 for k in range(4))
+                    mixed.append(a[:4 * half] + mid + b[4 * (w - half):])
+                rows = mixed
+            return _photo(self, w, h, rows)
         return _cached(self, key, make)
 
     def smooth_image(self, tag_or_id):

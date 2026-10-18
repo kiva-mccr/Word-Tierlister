@@ -136,8 +136,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           should move only a hair (or not at all), never past the band (any zoom, Linux and Windows).
 #           Fixed: a mark sat 2 px under the shelf's top and rose the spine's whole lift (~6 px); now it rises a
 #           quarter of it, at most the 2 px of room above it (Bookshelf.MARK_LIFT / MARK_ROOM).
-# [ ] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale
+# [x] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale
 #           background). Two words in one spine with different tiers: one triangle, split in two halves.
+#           Built: Bookshelf.mark(spines, tiers); ui_chart.mark_color (the tier pastel 30% toward the text
+#           colour); SmoothCanvas.triangle_image(w, h, fill, right) draws the split one (left word on the left).
 # [ ] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
 #           not change the window's size or position during or after the ease.
 # [ ] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
@@ -153,6 +155,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           code (functions, methods, constants, tags, options and test helpers nothing uses any more, stale
 #           comments) and substantial inefficiencies (per-frame or per-duel work that grows with the save, repeated
 #           queries, images or fonts rebuilt needlessly); remove or fix what is found, measure on a big save.
+#           Also: one full test run failed once (an AssertionError, test not named in the last line) and did not
+#           come back in 4 full runs and 20 single runs: look for timing-sensitive tests.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,

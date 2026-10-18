@@ -153,6 +153,20 @@ sh._set_lift(1, 100); assert sh.bbox("mark1")[1] >= 0; sh._set_lift(1, sh._rise(
 sh.hover(None); assert sh.coords("mark1")[1] == y
 sh.set(dict(data, coverage=0.5)); assert len(sh.find_withtag("mark")) == 2         # kept through a redraw
 sh.mark([]); assert not sh.find_withtag("mark")
+# M-4: a mark wears its word's tier colour (deepened); two tiers in one spine split one triangle down the middle
+import ui_chart as UC
+from theme import TIER_COLORS
+assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC.MARK_COLOR
+sh.mark([1, 3], [0, 4]); assert sh._mark_colors == {1: (UC.mark_color(0),), 3: (UC.mark_color(4),)}
+sh.mark([2, 2], [1, 3]); assert sh._marks == [2] and sh._mark_colors[2] == (UC.mark_color(1), UC.mark_color(3))
+img = sh.itemcget("mark2", "image")
+mw, mh = sh._mark_size()
+left, right = root.tk.call(img, "get", mw // 4, 1), root.tk.call(img, "get", mw - 1 - mw // 4, 1)
+rgb = lambda c: tuple(int(c[k:k + 2], 16) for k in (1, 3, 5))
+near = lambda px, c: max(abs(int(a) - b) for a, b in zip(px, rgb(c))) <= 12
+assert near(left, UC.mark_color(1)) and near(right, UC.mark_color(3)), (left, right)   # left word left, right word right
+sh.mark([2, 2], [3, 3]); assert sh._mark_colors[2] == (UC.mark_color(3),)          # same tier: one plain colour
+sh.mark([])
 # with an animator: eased, and moving on mid-way never snaps (a replaced lift does nothing more)
 from ui_motion import Animator
 sha = Bookshelf(root, body, animator=Animator(root)); sha.pack(); sha.set(data); root.update()
