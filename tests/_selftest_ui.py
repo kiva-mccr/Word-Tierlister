@@ -46,11 +46,16 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
-assert app.hint_lbl.cget("text") == "Esc cancel"                  # only keys no button shows
+assert app.hint_lbl.cget("text") == "Space stop comparing"        # only keys no button shows
+assert not app.cmp_btns["back"].enabled                            # nothing to step back to yet...
+key("BackSpace"); assert app.cmp is not None                       # ...so Backspace does not leave (UI-37)
+key("space"); assert app.cmp is None and app.tier_row.winfo_manager()       # Space again leaves
+key("space"); assert app.cmp is not None                           # and starts it again
 pump(2)
 assert app.ladder.winfo_ismapped() and app.ladder.possible() == [0, 1, 2, 3, 4, 5]   # UI-9: the ladder shows
 assert app.ladder.mid == app.cmp["mid"]
 key("Up"); pump(2)                                                  # better than the middle anchor
+assert not app.cmp or app.cmp_btns["back"].enabled                 # an answer to step back from
 if app.cmp:
     assert app.ladder.possible() == list(range(app.cmp["lo"], app.cmp["hi"] + 1)) and max(app.ladder.possible()) < 2
 key("BackSpace"); pump(2)
@@ -284,7 +289,7 @@ key("space"); assert flashed[-1] == "compare" and app.cmp
 key("Up"); assert flashed[-1] == "better"
 if app.cmp:
     key("BackSpace"); assert flashed[-1] == "back"
-key("Escape"); assert app.cmp is None
+key("space"); assert app.cmp is None
 for m in ("refine",):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
     for k, name in (("Left", "duel_left"), ("l", "duel_right"), ("t", "duel_tie"), ("s", "duel_skip")):

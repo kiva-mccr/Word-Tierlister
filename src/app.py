@@ -795,7 +795,7 @@ class App:
         compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
         their own key hints, and the Definition (D) button names its key."""
         if self.mode == "place" and self.cmp:
-            h = "Esc cancel"
+            h = "Space stop comparing"           # (the Compare button that shows Space is hidden meanwhile)
         else:
             h = "Backspace or Ctrl+Z undo"
             if len(self.mode_switch.visible) > 1:
@@ -845,6 +845,7 @@ class App:
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
+            self.cmp_btns["back"].set_enabled(bool(self.cmp["stack"]))   # nothing to step back to yet
             if not self.ladder.winfo_manager():                     # not shown yet
                 self.ladder.update_range(0, len(TIERS) - 1, None)   # a fresh comparison starts full
             self.ladder.grid()
@@ -971,18 +972,15 @@ class App:
         self._after_place(word, tier)
 
     def cmp_back(self):
-        """Undo the last anchor answer, or leave the comparison if no answers are left."""
+        """Undo the last anchor answer. With none left it does nothing (its button is greyed out): Space leaves
+        the comparison (UI-37), so holding Backspace never drops you out of it by surprise."""
         c = self.cmp
-        if not c:
+        if not c or not c["stack"]:
             return
-        if c["stack"]:
-            lo, hi, n = c["stack"].pop()
-            c["lo"], c["hi"] = lo, hi
-            del c["log"][n:]
-            self._cmp_step()
-        else:
-            self.cmp = None
-            self._render_place_state()
+        lo, hi, n = c["stack"].pop()
+        c["lo"], c["hi"] = lo, hi
+        del c["log"][n:]
+        self._cmp_step()
 
     # ---- pair modes -----------------------------------------------------------------------------------------------
     def _pick_pair(self):
@@ -1242,7 +1240,7 @@ class App:
                     return b["same"], lambda: self.cmp_answer("same")
                 if ks == "BackSpace":
                     return b["back"], self.cmp_back
-                if ks == "Escape":
+                if ks in ("space", "Escape"):              # Space toggles comparing (UI-37); Escape still works
                     return None, self._cancel_compare
                 return None
             if ks in ("1", "2", "3", "4", "5", "6"):

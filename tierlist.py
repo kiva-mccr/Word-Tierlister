@@ -33,7 +33,8 @@ How it works
   Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
 * Tab / Shift+Tab move to the next / previous tab.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
-  place it by comparing against one anchor word per tier (about 3 questions).
+  place it by comparing against one anchor word per tier (about 3 questions);
+  Space again stops comparing, Backspace steps back one answer.
   "Don't know / later" (U) sends a word to the back of the queue; skipped
   words come back after every fresh word has been handled.
 * REFINE mode: head-to-head duels between words in the same tier (Elo ratings,
@@ -42,9 +43,10 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
-* Under the status line, a progress bar in four equal parts by how common words
-  are (everyday, common, uncommon, rare), each filling by the share of its own
-  words placed, and a tag with how much of everyday English the placed words cover.
+* Under the status line, the progress shelf: book spines from the commonest words
+  to the rarest (zones page, chapter, book, shelf, library), each filled by the
+  share of its words placed and coloured by their median tier, then how much of
+  everyday text the placed words cover ("95% of text").
 * Tabs have their own little view at the top right: the tier chart (Place), how
   settled each tier's order is (Refine), and the number of conflicts (Conflicts).
 * A mode's tab only shows once it has work (Refine: a tier with two words;
@@ -535,10 +537,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           open at full height for every size it tried. It now stays folded and is counted at its full height
 #           (_fit_window(folded_drawer=True)); the text steps down once to what fits, then the drawer slides.
 # [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
-# [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
+# [x] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
 #           stepping back one answer while comparing (confirmed). The Compare button's key hint and the bottom-right
 #           hint follow.
+#           Built: Space (or Escape) leaves; Back is greyed out until there is an answer to step back from, so
+#           a held Backspace stops at the first question; the bottom-right hint reads "Space stop comparing".
 # [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
 #           in from slightly smaller; preferred over a fade), and a click on the main window's empty
 #           background closes it (not a click on a pill, card or button, so a quick click never loses your
