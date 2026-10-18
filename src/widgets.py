@@ -337,6 +337,7 @@ class DuelCards(tk.Frame):
     def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
         super().__init__(parent, bg=PALETTE["bg"])
         self.columnconfigure((0, 1), uniform="duel")
+        self.grid_anchor("n")                # centred when the frame is wider than the cards (a long context line)
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
                                 padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3, lift=self.LIFT,
                                 hint_font=small_font)

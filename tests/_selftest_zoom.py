@@ -39,6 +39,14 @@ for m in ("refine", "boundary", "place"):
     app.mode_var.set(m); app.on_mode_change(); pump(3)
     if m == "place":
         assert body() == top, (body(), top)
+# opening the definitions when there is no room: the drawer stays folded while the window is fitted (it used to
+# flash open at full height for each size tried)
+seen = []
+real_cs = app._content_size
+app._content_size = lambda: (seen.append(app.def_frame.winfo_height() if app.def_frame.winfo_ismapped() else 0), real_cs())[1]
+app.toggle_defs(True); app._content_size = real_cs
+assert seen and max(seen) <= 1, seen
+app.anim.finish_all(); pump(4); app.toggle_defs(False); app.anim.finish_all(); pump(6)
 # the definitions: they may shrink things to fit while open; closing brings the zoom back
 app.toggle_defs(True); pump(4); app.anim.finish_all(); pump(4)
 assert body() <= top

@@ -418,6 +418,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           toast already says what moved.
 #           Later (asked for): the duel cards wear their word's tier colour in Refine, Boundary check and
 #           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
+#           Fixed (reported): the cards sat left of centre when the line under them (the conflict note) was
+#           wider than they are; DuelCards centres its grid (grid_anchor "n").
 # [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 #           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
@@ -523,6 +525,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           are already the right size; and the drawer is packed folded, so it never flashes at full
 #           height first. Now: the slide starts within ~25 ms (was ~430) and runs one frame every ~17 ms,
 #           opening and closing. Also: switching tabs finishes a duel result still showing.
+#           Later (reported: the drawer flickered opening when zoomed in): with no room, the fit showed the drawer
+#           open at full height for every size it tried. It now stays folded and is counted at its full height
+#           (_fit_window(folded_drawer=True)); the text steps down once to what fits, then the drawer slides.
 # [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
 # [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep

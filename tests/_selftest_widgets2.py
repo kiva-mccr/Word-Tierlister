@@ -446,6 +446,15 @@ dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
 
+# ---- DuelCards stays centred in a frame wider than the cards (reported: the conflict line widened it)
+wide = tk.Toplevel(root); wide.geometry("1400x500+0+0"); wide.columnconfigure(0, weight=1)
+dc = DuelCards(wide, lambda side: None, small, small); dc.grid(row=0, column=0, sticky="ew")
+dc.show("panel", "thy"); update(4)
+mid = dc.winfo_rootx() + dc.winfo_width() / 2
+cards = (dc.left.winfo_rootx() + dc.right.winfo_rootx() + dc.right.winfo_width()) / 2
+assert dc.winfo_width() > dc.left.winfo_width() * 3 and abs(cards - mid) <= 2, (cards, mid)
+wide.destroy()
+
 # ---- Tooltip (UI-33): below what it describes, stays put, rounded lilac card in the shared font
 from widgets import Tooltip
 area = tk.Canvas(root, width=300, height=40, bg=PALETTE["bg"]); area.pack(); update()

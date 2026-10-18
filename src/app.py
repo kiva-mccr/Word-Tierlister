@@ -466,7 +466,7 @@ class App:
         height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
         return width, height
 
-    def _fit_window(self, initial=False, rebase=False):
+    def _fit_window(self, initial=False, rebase=False, folded_drawer=False):
         """Size and place the main window for this screen and these contents.
 
         The contents are shown at the zoom, or at the biggest size in 0.1 steps below it that fits the screen,
@@ -476,7 +476,8 @@ class App:
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
         now need more room. The minimum size always follows the contents. It also sets the size at which
         the contents start to grow with the window (UI-25); `rebase` (after a zoom) makes that at least the
-        window's current size.
+        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open; count it at
+        its full height without showing it (showing it open for the measurement made it flash, UI-35).
         """
         r = self.root
         if not initial and self.grow > 1:
@@ -506,6 +507,8 @@ class App:
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
                 self.def_text.config(height=lines)
                 cw, ch = self._content_size()
+                if folded_drawer:
+                    ch += self.def_frame.natural_height()
                 if cw <= area[2] and ch <= area[3]:
                     break
             else:
@@ -615,12 +618,10 @@ class App:
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
         (which took long enough to swallow the slide). The page usually has room; if not, the full fit
-        runs (it may shorten the pane), with the drawer measured at its full height."""
+        runs (it may shorten the pane or the text), counting the folded drawer at its full height."""
         cw, ch = self._content_size()
         if ch + extra > self.root.winfo_height() or cw > self.root.winfo_width():
-            self.def_frame.set_open(True)
-            self._fit_window()
-            self.def_frame.collapse()
+            self._fit_window(folded_drawer=True)      # the drawer stays folded: it never flashes open first
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
