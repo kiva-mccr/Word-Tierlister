@@ -426,6 +426,16 @@ class App:
             free = (ch - inner.winfo_reqheight()) / 2
             inner.place_configure(y=-int(max(0, min(band / 2, free))))
 
+    def _card_minimum(self):
+        """The word card keeps one full-size line's height for long words shown smaller (its buttons must not
+        move when sorting fast). Call while the word font is at its full size."""
+        fnt = font("word")
+        probe = self.word_card.create_text(0, 0, text=self.word_card.word or "Ag", font=fnt, anchor="nw")
+        box = self.word_card.bbox(probe)
+        self.word_card.delete(probe)
+        self.word_card.min_line = box[3] - box[1] if box else fnt.metrics("linespace")
+        self.word_card.full_linespace = fnt.metrics("linespace")
+
     def _fit_big_text(self):
         """Shrink the big word(s) so a long one still fits on a line (down to about a third, then it wraps).
 
@@ -443,12 +453,8 @@ class App:
             base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom * self.grow)))
             fnt = font(role)
             fnt.configure(size=base)
-            if role == "word":                 # the card keeps one full-size line's height for long words
-                probe = self.word_card.create_text(0, 0, text=self.word_card.word or "Ag", font=fnt, anchor="nw")
-                box = self.word_card.bbox(probe)
-                self.word_card.delete(probe)
-                self.word_card.min_line = box[3] - box[1] if box else fnt.metrics("linespace")
-                self.word_card.full_linespace = fnt.metrics("linespace")
+            if role == "word":
+                self._card_minimum()
                 # aim inside the card's own wrap limit: its padding shrinks with the font, and a word that comes
                 # out a pixel wider than the limit wraps onto two lines (and the card grows)
                 avail = min(avail, self.word_card.cget("wraplength") - 4)
@@ -511,6 +517,7 @@ class App:
                 self._applied_scale = size       # skip it when the size is already right
                 rescaled = True
                 scale_fonts(size)
+                self._card_minimum()             # (measured at this size, not the one tried before)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
