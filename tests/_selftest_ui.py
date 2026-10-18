@@ -81,6 +81,10 @@ for mode in ("refine", "boundary", "conflict", "place"):
     pump(2)
     if mode in ("refine", "boundary"):
         assert app.pair is not None, mode
+        want = sorted({s.spine_of(app.pair["left"]), s.spine_of(app.pair["right"])})
+        assert app.progress_bar._marks == want, (mode, app.progress_bar._marks, want)   # UI-55: where they are
+    if mode == "place":
+        assert app.progress_bar._marks == []                                       # none while placing
         key("Left")
         key("Down")
 # ---------------------------------------------------------------- queue dialog

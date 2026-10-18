@@ -699,9 +699,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           like a picture (soft, pixelated text and edges) and positions are real pixels. Not yet tried on a
 #           real Windows machine (the calls are covered by tests with stand-ins). Tk 8.6 does not re-scale
 #           when the window moves to a monitor with a different scaling: it keeps the size it opened at.
-# [ ] UI-55 Where the words are, on the shelf (asked for): in Refine within tier, Boundary check and Resolve
+# [x] UI-55 Where the words are, on the shelf (asked for): in Refine within tier, Boundary check and Resolve
 #           conflicts, a little triangle pointing down at the spine (book) each word on screen comes from;
 #           when both words are in the same spine, one triangle only.
+#           Built: Bookshelf.mark(spines) draws a small soft lilac triangle over each (a band above the shelf
+#           holds them; a mark rises with its spine on hover); Store.spine_of(word) finds the spine from the
+#           word's rank. Cleared in Place new words and when a tab has no duel.
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

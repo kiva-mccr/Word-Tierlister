@@ -152,6 +152,13 @@ assert sum(n for _z, n in p0["zones"]) == len(p0["spines"]) and all(sp["words"] 
 assert sum(sp["words"] for sp in p0["spines"]) == s.count_words()
 assert sum(sp["placed"] for sp in p0["spines"]) == s.stats()["placed"] and 0 < p0["coverage"] < 1
 assert [sum(sp["tiers"][t] for sp in p0["spines"]) for t in range(6)] == [s.tier_counts().get(t, 0) for t in range(6)]
+# spine_of (UI-55): the spine a word's rank falls in; the commonest word in the first, the rarest in the last
+by_rank = [r[0] for r in s.db.execute("SELECT word FROM words ORDER BY rank")]
+assert s.spine_of(by_rank[0]) == 0 and s.spine_of(by_rank[-1]) == len(p0["spines"]) - 1
+assert s.spine_of("surely-not-a-word") is None
+spine_ix = [s.spine_of(w) for w in by_rank]
+assert spine_ix == sorted(spine_ix)
+assert [spine_ix.count(i) for i in range(len(p0["spines"]))] == [sp["words"] for sp in p0["spines"]]
 fresh = s.next_unplaced()["word"]
 s.place(fresh, 3); assert Same(s.shelf()) == recount() and s.shelf()["coverage"] > p0["coverage"]
 s.place(fresh, 1); assert Same(s.shelf()) == recount()                                    # moved (Browse): tiers follow

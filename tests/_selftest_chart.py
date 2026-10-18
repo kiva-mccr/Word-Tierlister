@@ -140,6 +140,17 @@ assert sh.itemcget("spine1", "outline") != edge0 and sh.itemcget("spine0", "outl
 sh.set(dict(data, coverage=0.9)); assert top(1) < rest[1]                         # a redraw keeps the lift
 sh.hover(None)
 assert [top(i) for i in range(5)] == rest and sh.itemcget("spine1", "outline") == edge0
+# UI-55: marks over the spines the words on screen come from; one for two words in the same spine
+sh.mark([1, 3, 3, None, 99]); assert sh._marks == [1, 3]                         # repeats / unknowns ignored
+m1, m3 = sh.find_withtag("mark1"), sh.find_withtag("mark3")
+assert len(sh.find_withtag("mark")) == 2 and m1 and m3
+mx = sh.coords("mark1")[0] + sh.triangle_image(*sh._mark_size(), "#B19BD9").width() / 2
+assert sh.coords("spine1")[0] <= mx <= sh.coords("spine1")[2] + 1                # centred over its spine
+assert sh.bbox("mark1")[3] <= min(sh.coords(f"spine{i}")[1] for i in range(5)) + 1  # above every spine
+y = sh.coords("mark1")[1]; sh.hover(1); assert sh.coords("mark1")[1] < y            # it rises with its spine
+sh.hover(None); assert sh.coords("mark1")[1] == y
+sh.set(dict(data, coverage=0.5)); assert len(sh.find_withtag("mark")) == 2         # kept through a redraw
+sh.mark([]); assert not sh.find_withtag("mark")
 # with an animator: eased, and moving on mid-way never snaps (a replaced lift does nothing more)
 from ui_motion import Animator
 sha = Bookshelf(root, body, animator=Animator(root)); sha.pack(); sha.set(data); root.update()

@@ -311,6 +311,9 @@ def leaning(tiers, overall):
     return max((k for k in range(len(tiers)) if overall[k]), key=lambda k: (tiers[k] / total) / (overall[k] / whole))
 
 
+MARK_COLOR = lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)   # the lilac of selections, a little deeper
+
+
 class Bookshelf(SmoothCanvas):
     """The progress shelf (UI-14): a shelf of book spines on a log scale of commonness, split into zones named
     for how often you would meet such a word (page, chapter, book, shelf, library), with "95% of text" after it.
@@ -325,6 +328,8 @@ class Bookshelf(SmoothCanvas):
     near the start holds a few words, one near the end thousands; the hover note says how many.
     Hovering a spine darkens its outline and lifts it a little off the shelf, its two neighbours less
     (hover(i); eased over LIFT_MS, at once with Reduce motion).
+    mark([i, j]) puts a little triangle over those spines, pointing down at them (UI-55: where the words
+    on screen in a duel come from; one triangle when both are in the same spine); mark([]) clears them.
     """
     GAP = 10                                   # space between zones
     LIFT_MS = 140
@@ -339,6 +344,7 @@ class Bookshelf(SmoothCanvas):
         self._hover = None                     # the spine under the pointer
         self._lift = {}                        # spine -> pixels it is raised right now
         self._gen = 0                          # bumped by every hover change
+        self._marks = []                       # spines with a triangle over them
         self.bind("<Motion>", lambda e: self.hover(self.spine_at(e.x)), add="+")
         self.bind("<Leave>", lambda e: self.hover(None), add="+")
         self._draw()
@@ -351,11 +357,16 @@ class Bookshelf(SmoothCanvas):
         """How far the hovered spine lifts, in pixels (there is that much room above the tallest spine)."""
         return max(3, int(self._metrics()[0] * 0.35))
 
+    def _mark_size(self):
+        """(width, height) of a mark's triangle: about a spine wide, never smaller than 7 x 5."""
+        h = max(5, int(self._metrics()[0] * 0.38))
+        return h + h // 2 + 1, h
+
     def _draw(self):
         self.delete("all")
         line, width, hmax = self._metrics()
         zones, spines = self.data["zones"], self.data["spines"]
-        top = 3 + self._rise()
+        top = 3 + self._mark_size()[1] + 2 + self._rise()       # room for a mark, and for a spine lifting
         self._edges = []
         base = top + hmax
         n = max(1, len(spines))
@@ -402,6 +413,12 @@ class Bookshelf(SmoothCanvas):
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
             right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
         super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
+        mw, mh = self._mark_size()
+        self._marks = [i for i in self._marks if i < len(self._x)]
+        for i in self._marks:                      # over the tallest a spine can be, pointing down at it
+            x0, w, _zi = self._x[i]
+            self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), top - self._rise() - mh - 1,
+                              image=self.triangle_image(mw, mh, MARK_COLOR), anchor="nw", tags=("mark", f"mark{i}"))
         # a redraw (a word placed) keeps the hovered spine and its neighbours where they are
         lifted, self._lift = self._lift, {}
         for j, v in lifted.items():
@@ -416,6 +433,7 @@ class Bookshelf(SmoothCanvas):
         if dy:
             self.move(f"spine{i}", 0, -dy)
             self.move(f"fill{i}", 0, -dy)
+            self.move(f"mark{i}", 0, -dy)          # a mark rises with its spine
         self._lift[i] = v
 
     def _outline(self, i, dark):
@@ -465,6 +483,13 @@ class Bookshelf(SmoothCanvas):
     def set(self, data):
         if data != self.data:
             self.data = data
+            self._draw()
+
+    def mark(self, spines):
+        """Triangles over these spines (indices; None and repeats are ignored), none for []."""
+        marks = sorted({i for i in spines if i is not None and 0 <= i < len(self.data["spines"])})
+        if marks != self._marks:
+            self._marks = marks
             self._draw()
 
     def spine_at(self, x):

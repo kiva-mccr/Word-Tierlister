@@ -311,6 +311,15 @@ class Store:
         return {"zones": p["layout"], "spines": [dict(sp, tiers=list(sp["tiers"])) for sp in p["spines"]],
                 "coverage": p["fp"] / p["ft"] if p["ft"] > 0 else None}
 
+    def spine_of(self, word):
+        """Which spine of the progress shelf `word` belongs to (its index in shelf()["spines"]), or None."""
+        self.shelf()
+        row = self.get_word(word)
+        starts = self._prog["starts"]
+        if row is None or not starts:
+            return None
+        return bisect.bisect_right(starts, row["rank"]) - 1
+
     def _tier_moved(self, row, old, new):
         """Keep the shelf's tallies current: the word in `row` (with rank and freq) went from tier `old` to `new`
         (None = not placed)."""

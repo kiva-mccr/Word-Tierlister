@@ -807,6 +807,7 @@ class App:
     # ---- place mode ------------------------------------------------------------------------------------------
     def _show_place(self):
         """Place view: show the next unplaced word (or the 'all placed' message) and set up its buttons."""
+        self.progress_bar.mark([])                    # (the shelf marks only the duel tabs' words, UI-55)
         self.pair_frame.pack_forget()
         self.place_frame.pack(fill="both", expand=True)
         row = self.store.next_unplaced()
@@ -1040,6 +1041,7 @@ class App:
             self.pair_empty.grid(row=2, column=0)
             self.duel.set_enabled(False)              # (their keys are off too)
             self._render_defs([])
+            self.progress_bar.mark([])
         else:
             self.pair_empty.grid_remove()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
@@ -1049,6 +1051,8 @@ class App:
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
             self._render_defs([self.pair["left"], self.pair["right"]])
+            # little triangles on the shelf over where the two words come from (UI-55; one if they share a spine)
+            self.progress_bar.mark([self.store.spine_of(self.pair[side]) for side in ("left", "right")])
         self._hint()
 
     def _tier_color(self, word):

@@ -529,6 +529,16 @@ class SmoothCanvas(tk.Canvas):
     def _stack_index(self, item):
         return super().find_all().index(item)
 
+    def triangle_image(self, w, h, fill):
+        """A small soft-edged triangle pointing down (w x h), blended onto the canvas colour: for marks."""
+        bg = self._canvas_rgb()
+        key = ("photo", "triangle", w, h, fill, bg)
+
+        def make():
+            poly = [(0.5, 0.5), (w - 0.5, 0.5), (w / 2.0, h - 0.5)]
+            return _photo(self, w, h, paint_mask(coverage_mask(poly, w, h, 0), _rgb(fill), None, bg))
+        return _cached(self, key, make)
+
     def smooth_image(self, tag_or_id):
         """The image item drawn for a round_rect (tests), or None."""
         rr = self._rr_items(tag_or_id)
