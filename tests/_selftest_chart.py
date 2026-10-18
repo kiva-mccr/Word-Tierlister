@@ -128,6 +128,31 @@ gap = sh.coords("spine2")[0] - sh.coords("spine1")[2]
 assert gap > 2 * (sh.coords("spine1")[0] - sh.coords("spine0")[2])                # a gap between zones
 assert [sh.itemcget(f"zone{i}", "text") for i in (0, 1)] == ["page", "chapter"] and sh.itemcget("tag", "text") == "95% of text"
 x = lambda i: (sh.coords(f"spine{i}")[0] + sh.coords(f"spine{i}")[2]) / 2
+# hover: the spine lifts and its outline darkens; its neighbours lift less; leaving puts them all back
+top = lambda i: sh.coords(f"spine{i}")[1]
+rest = [top(i) for i in range(5)]
+edge0 = sh.itemcget("spine1", "outline")
+sh.hover(1)
+assert rest[1] - top(1) > rest[0] - top(0) > 0 and rest[2] - top(2) == rest[0] - top(0)       # neighbours: less
+assert top(3) == rest[3] and top(4) == rest[4]
+assert sh.coords("fill1")[3] < sh.coords("spine1")[3] + 1 and sh.coords("fill1")[3] == sh.coords("spine1")[3]
+assert sh.itemcget("spine1", "outline") != edge0 and sh.itemcget("spine0", "outline") == edge0
+sh.set(dict(data, coverage=0.9)); assert top(1) < rest[1]                         # a redraw keeps the lift
+sh.hover(None)
+assert [top(i) for i in range(5)] == rest and sh.itemcget("spine1", "outline") == edge0
+# with an animator: eased, and moving on mid-way never snaps (a replaced lift does nothing more)
+from ui_motion import Animator
+sha = Bookshelf(root, body, animator=Animator(root)); sha.pack(); sha.set(data); root.update()
+r2, r3 = sha.coords("spine2")[1], sha.coords("spine3")[1]
+sha.hover(2); root.after(40, root.quit); root.mainloop()
+mid = r2 - sha.coords("spine2")[1]
+assert 0 < mid < sha._rise()                                                        # on its way up
+sha.hover(4); now = r2 - sha.coords("spine2")[1]
+assert abs(now - mid) < 0.01                                                        # no jump when the pointer moves on
+sha._anim.finish_all()
+assert abs(sha.coords("spine2")[1] - r2) < 0.01                                     # back down: not a neighbour
+assert abs(r3 - sha.coords("spine3")[1] - round(sha._rise() * sha.NEIGHBOUR_LIFT)) < 0.01
+sha.destroy()
 # zone names stay whole: never cut off at the left edge, never overlapping, even for a one-spine zone
 narrow = {"zones": [("page", 1), ("chapter", 1), ("book", 30)], "coverage": None,
           "spines": [{"zone": "page", "words": 3, "placed": 0, "tiers": [0] * 6},

@@ -220,7 +220,7 @@ class App:
         self.today_lbl = ttk.Label(line, anchor="w", foreground=PALETTE["muted"])
         self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
         # the progress shelf under it: book spines from common to rare words, and "95% of text" (UI-14)
-        self.progress_bar = Bookshelf(left, font("body"))
+        self.progress_bar = Bookshelf(left, font("body"), animator=self.anim)
         self.progress_bar.pack(side="top", anchor="w", pady=(8, 0))
         self.progress_tip = Tooltip(self.progress_bar, lambda e: self.progress_bar.note(e.x), font=font("body"))
         self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"),

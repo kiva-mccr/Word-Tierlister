@@ -644,6 +644,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           word on the card in Place new words, to sort now, without changing the queue order for the rest.
 #           Where the icon goes is to be talked over first (beside the word card, in the header, or the tab
 #           row). (Browse can already find placed words; W-1 looks words up from inside a definition.)
+# [x] UI-52 Shelf hover (asked for): hovering a spine darkens its outline and lifts it a little off the
+#           shelf, its left and right neighbours less (Bookshelf.hover; eased 140 ms, at once with Reduce
+#           motion; moving along the shelf never snaps). The shelf has that much room above it.
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

@@ -326,25 +326,40 @@ class Bookshelf(tk.Canvas):
     to the next tier and blended round the colour wheel (theme.tier_blend), so it stays as bright as the pastels.
     Spines are equal steps of commonness (each a fixed factor rarer than the last), not equal word counts: one
     near the start holds a few words, one near the end thousands; the hover note says how many.
+    Hovering a spine darkens its outline and lifts it a little off the shelf, its two neighbours less
+    (hover(i); eased over LIFT_MS, at once with Reduce motion).
     """
     GAP = 10                                   # space between zones
+    LIFT_MS = 140
+    NEIGHBOUR_LIFT = 0.45                      # the neighbours rise this share of the hovered spine's lift
 
-    def __init__(self, parent, font=None, canvas_bg=None):
+    def __init__(self, parent, font=None, canvas_bg=None, animator=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
-        self._font = font
+        self._font, self._anim = font, animator
         self.data = {"zones": [], "spines": [], "coverage": None}
         self._x = []                           # left edge and width of each spine, for note()
+        self._edges = []                       # each spine's (outline, fill outline) colours at rest
+        self._hover = None                     # the spine under the pointer
+        self._lift = {}                        # spine -> pixels it is raised right now
+        self._gen = 0                          # bumped by every hover change
+        self.bind("<Motion>", lambda e: self.hover(self.spine_at(e.x)), add="+")
+        self.bind("<Leave>", lambda e: self.hover(None), add="+")
         self._draw()
 
     def _metrics(self):
         line = self._font.metrics("linespace") if self._font else 16
         return line, int(line * 30), 2 * line          # line, shelf width, tallest spine
 
+    def _rise(self):
+        """How far the hovered spine lifts, in pixels (there is that much room above the tallest spine)."""
+        return max(3, int(self._metrics()[0] * 0.35))
+
     def _draw(self):
         self.delete("all")
         line, width, hmax = self._metrics()
         zones, spines = self.data["zones"], self.data["spines"]
-        top = 3
+        top = 3 + self._rise()
+        self._edges = []
         base = top + hmax
         n = max(1, len(spines))
         sw = (width - self.GAP * max(0, len(zones) - 1)) / n
@@ -362,10 +377,12 @@ class Bookshelf(tk.Canvas):
                                       tags=("spine", f"spine{i}"))
                 share = sp["placed"] / sp["words"] if sp["words"] else 0.0
                 h = full * share
+                col = None
                 if sp["placed"] and h >= 1:
                     col = tier_blend(soft_median(sp["tiers"]))
                     self.create_rectangle(x1, base - h, x2, base, fill=col,
                                           outline=lerp_color(col, PALETTE["text"], 0.18), tags=("fill", f"fill{i}"))
+                self._edges.append(col)
                 self._x.append((x, sw, zi))
                 x += sw
                 i += 1
@@ -388,6 +405,65 @@ class Bookshelf(tk.Canvas):
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
             right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
         super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
+        # a redraw (a word placed) keeps the hovered spine and its neighbours where they are
+        lifted, self._lift = self._lift, {}
+        for j, v in lifted.items():
+            if j < len(self._x):
+                self._set_lift(j, v)
+        if self._hover is not None and self._hover >= len(self._x):
+            self._hover = None
+        self._outline(self._hover, True)
+
+    def _set_lift(self, i, v):
+        dy = v - self._lift.get(i, 0.0)
+        if dy:
+            self.move(f"spine{i}", 0, -dy)
+            self.move(f"fill{i}", 0, -dy)
+        self._lift[i] = v
+
+    def _outline(self, i, dark):
+        if i is None or i >= len(self._edges):
+            return
+        col = self._edges[i]
+        self.itemconfigure(f"spine{i}", outline=lerp_color(PALETTE["border"], PALETTE["text"], 0.6) if dark
+                           else PALETTE["border"])
+        if col is not None:
+            self.itemconfigure(f"fill{i}", outline=lerp_color(col, PALETTE["text"], 0.55 if dark else 0.18))
+
+    def hover(self, i):
+        """Lift spine i (None: the pointer left) and its neighbours, and darken its outline."""
+        if i == self._hover:
+            return
+        self._outline(self._hover, False)
+        self._hover = i
+        self._outline(i, True)
+        targets = {}
+        if i is not None:
+            rise = self._rise()
+            for j in (i - 1, i + 1):
+                if 0 <= j < len(self._x):
+                    targets[j] = round(rise * self.NEIGHBOUR_LIFT)
+            targets[i] = rise
+        start = dict(self._lift)
+        moving = set(start) | set(targets)
+        self._gen = gen = self._gen + 1     # a replaced lift (the pointer moved on) does nothing more:
+                                                           # finishing it would snap the spines to its end first
+
+        def frame(p):
+            if gen == self._gen:
+                for j in moving:
+                    a = start.get(j, 0.0)
+                    self._set_lift(j, a + (targets.get(j, 0) - a) * p)
+
+        def done():
+            if gen == self._gen:
+                for j in [j for j, v in self._lift.items() if not v]:
+                    del self._lift[j]
+        if self._anim is None:
+            frame(1.0)
+            done()
+        else:
+            self._anim.run(f"shelf{id(self)}", self.LIFT_MS, frame, done)
 
     def set(self, data):
         if data != self.data:
