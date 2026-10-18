@@ -341,6 +341,7 @@ class Bookshelf(SmoothCanvas):
     GAP = 10                                   # space between zones
     LIFT_MS = 140
     NEIGHBOUR_LIFT = 0.45                      # the neighbours rise this share of the hovered spine's lift
+    MARK_LIFT, MARK_ROOM = 0.25, 2             # a mark rises only a hair with its spine, within the room above it
 
     def __init__(self, parent, font=None, canvas_bg=None, animator=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
@@ -373,7 +374,7 @@ class Bookshelf(SmoothCanvas):
         self.delete("all")
         line, width, hmax = self._metrics()
         zones, spines = self.data["zones"], self.data["spines"]
-        top = 3 + self._mark_size()[1] + 2 + self._rise()       # room for a mark, and for a spine lifting
+        top = 1 + self.MARK_ROOM + self._mark_size()[1] + 2 + self._rise()   # room for a mark, a spine lifting
         self._edges = []
         base = top + hmax
         n = max(1, len(spines))
@@ -436,11 +437,14 @@ class Bookshelf(SmoothCanvas):
         self._outline(self._hover, True)
 
     def _set_lift(self, i, v):
-        dy = v - self._lift.get(i, 0.0)
+        was = self._lift.get(i, 0.0)
+        dy = v - was
         if dy:
             self.move(f"spine{i}", 0, -dy)
             self.move(f"fill{i}", 0, -dy)
-            self.move(f"mark{i}", 0, -dy)          # a mark rises with its spine
+            # a mark moves the slightest bit with its spine: rising all the way, it went past the top and was cut off
+            mark = lambda lift: min(self.MARK_ROOM, lift * self.MARK_LIFT)
+            self.move(f"mark{i}", 0, mark(was) - mark(v))
         self._lift[i] = v
 
     def _outline(self, i, dark):

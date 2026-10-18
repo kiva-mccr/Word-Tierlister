@@ -147,7 +147,9 @@ assert len(sh.find_withtag("mark")) == 2 and m1 and m3
 mx = sh.coords("mark1")[0] + sh.triangle_image(*sh._mark_size(), "#B19BD9").width() / 2
 assert sh.coords("spine1")[0] <= mx <= sh.coords("spine1")[2] + 1                # centred over its spine
 assert sh.bbox("mark1")[3] <= min(sh.coords(f"spine{i}")[1] for i in range(5)) + 1  # above every spine
-y = sh.coords("mark1")[1]; sh.hover(1); assert sh.coords("mark1")[1] < y            # it rises with its spine
+y = sh.coords("mark1")[1]; sh.hover(1); assert sh.coords("mark1")[1] < y            # it rises with its spine...
+assert y - sh.MARK_ROOM <= sh.coords("mark1")[1] and sh.bbox("mark1")[1] >= 0        # ...a hair: never cut off (M-3)
+sh._set_lift(1, 100); assert sh.bbox("mark1")[1] >= 0; sh._set_lift(1, sh._rise())  # (however far the spine goes)
 sh.hover(None); assert sh.coords("mark1")[1] == y
 sh.set(dict(data, coverage=0.5)); assert len(sh.find_withtag("mark")) == 2         # kept through a redraw
 sh.mark([]); assert not sh.find_withtag("mark")

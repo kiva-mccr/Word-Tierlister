@@ -115,7 +115,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
 # Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
-# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-10 below. Last of all: IC-1 (the icon).
+# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon).
 #
 # --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
 # [x] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
@@ -132,8 +132,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (DistributionChart.bars_top), crosses, and drops onto its own bar from above, stopping just above
 #           it; the landing point is the bar's final height. Checked frame by frame: no overlap with any bar
 #           for every tier at 100% and 200% in two window sizes.
-# [ ] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It
+# [x] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It
 #           should move only a hair (or not at all), never past the band (any zoom, Linux and Windows).
+#           Fixed: a mark sat 2 px under the shelf's top and rose the spine's whole lift (~6 px); now it rises a
+#           quarter of it, at most the 2 px of room above it (Bookshelf.MARK_LIFT / MARK_ROOM).
 # [ ] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale
 #           background). Two words in one spine with different tiers: one triangle, split in two halves.
 # [ ] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
@@ -147,6 +149,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.
 # [ ] M-10 Import dialog (UI-42): check the spacing of the first two lines of text (the intro and "Found on
 #           this computer"); change it only if it is off.
+# [ ] M-11 Check and verify (asked for, last of the mini-roadmap): look through the whole program for orphaned
+#           code (functions, methods, constants, tags, options and test helpers nothing uses any more, stale
+#           comments) and substantial inefficiencies (per-frame or per-duel work that grows with the save, repeated
+#           queries, images or fonts rebuilt needlessly); remove or fix what is found, measure on a big save.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
