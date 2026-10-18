@@ -42,6 +42,9 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
+* Under the status line, a progress bar in four equal parts by how common words
+  are (everyday, common, uncommon, rare), each filling by the share of its own
+  words placed, and a tag with how much of everyday English the placed words cover.
 * Each tab has its own little view at the top right: the tier chart (Place), how
   settled each tier's order is (Refine), swaps per boundary (Boundary), and the
   number of conflicts (Conflicts).
@@ -320,7 +323,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
 #           letter + count on every bar already tell the tiers apart without colour.
 #           Covered by tests/_selftest_chart.py.
-# [ ] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
+# [x] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
 #           words are, each segment holding ten times the words of the one before: everyday (frequency rank
 #           top 1,000), common (1,000-10,000), uncommon (10,000-100,000), rare (100,000 and beyond, including
 #           words wordfreq does not know). Each segment fills by the share of its own words placed, so it
@@ -336,6 +339,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Both come from per-segment counts and a running coverage sum in the Store (no full scan per
 #           refresh). Calm: no goals, no streaks. Placed / total stays as text. No ETA: this measures the
 #           list, it is not a task running (the ETA rule is for set-up bars).
+#           Built: ui_chart.SegmentBar under the status line (lilac fill on the soft track; each segment's
+#           name and share under it; a hover note gives the counts: "uncommon words: 22,574 of 90,000
+#           placed"), the "covers 92%" tag to its right (ui_chart.format_coverage / format_share).
+#           Store.progress(): counted from the save once (~0.6 s with a million words), then kept up to
+#           date by place / unplace / undo (bulk changes recount), ~2 ms per placement. Frequencies live
+#           in a new words.freq column, filled once at start-up from wordfreq (~3 s; wordsource.
+#           fill_frequencies, meta freq_done); words wordfreq does not know count 0 towards coverage.
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
@@ -471,7 +481,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
-# [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
+# [x] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
 #           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
 # [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window
 #           manager: pressing D blocked ~150 ms in a full window-fitting pass, then the first update took

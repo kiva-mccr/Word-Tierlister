@@ -4,7 +4,8 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip, compact
+from ui_chart import (ConflictCard, DistributionChart, SegmentBar, SettledChart, SwapStrip, compact, format_coverage,
+                      format_share)
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
 assert compact(12345) == "12.3K" and compact(20000) == "20K" and compact(1234567) == "1.2M" and compact(3000000) == "3M"
@@ -103,5 +104,22 @@ assert cc.itemcget("big", "text") == "None" and cc.itemcget("small", "text") == 
 cc.set(3); assert cc.itemcget("big", "text") == "3" and cc.itemcget("small", "text") == "to look at"
 cc.set(1234); assert cc.itemcget("big", "text") == "1,234"
 cc.show(False); cc.set(2); assert cc.itemcget("big", "state") == "hidden"
+# ---- the progress bar (UI-14)
+assert [format_share(*x) for x in ((0, 10), (10, 10), (97, 100), (3, 1000), (1, 640000), (999, 1000), (0, 0))] == \
+    ["0%", "100%", "97%", "0.3%", "<0.001%", "99.9%", "0%"]
+assert [format_coverage(x) for x in (0.5, 0.93, 0.994, 0.9997, 0.99999, 1.0)] == \
+    ["covers 50%", "covers 93%", "covers 99.4%", "covers 99.97%", "covers 99.999%", "covers 100%"]
+assert format_coverage(0.99999999) != "covers 100%"                              # never 100% until it is
+sb = SegmentBar(root, ["everyday", "common", "uncommon", "rare"], body); sb.pack(); root.update()
+sb.set([(1000, 1000), (9700, 10000), (0, 90000), (2, 640000)], coverage=0.994)
+xs = [sb.coords(f"track{i}") for i in range(4)]
+widths = [max(c[0::2]) - min(c[0::2]) for c in xs]
+assert max(widths) - min(widths) < 1                                              # equal segments
+assert abs((max(sb.coords("fill0")[0::2]) - min(sb.coords("fill0")[0::2])) - widths[0]) < 2   # full
+assert not sb.find_withtag("fill2") and sb.find_withtag("fill3")                  # none placed: no fill; a few: a sliver
+assert sb.itemcget("label1", "text") == "common 97%" and sb.itemcget("tag", "text") == "covers 99.4%"
+assert min(sb.coords("tagbox")[0::2]) > max(xs[3][0::2])                          # the tag sits to the right
+assert sb.note(sb._x(2) + 3) == "uncommon words: 0 of 90,000 placed" and sb.note(-50) is None
+sb.set([(0, 1)] * 4, coverage=None); assert not sb.find_withtag("tag")             # no frequencies yet: no tag
 root.destroy()
 print("CHART OK")

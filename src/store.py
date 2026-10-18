@@ -30,7 +30,7 @@ import re
 import sqlite3
 import time
 
-from constants import PEN_UNITS, QUEUE_DEFAULTS, TIERS, tier_base
+from constants import PEN_UNITS, QUEUE_DEFAULTS, SEGMENT_BOUNDS, SEGMENT_NAMES, TIERS, tier_base
 
 
 # --------------------------------------------------------------------------
@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS words(
     games INTEGER NOT NULL DEFAULT 0,
     skips INTEGER NOT NULL DEFAULT 0,
     qkey REAL,
-    pen INTEGER NOT NULL DEFAULT 0
+    pen INTEGER NOT NULL DEFAULT 0,
+    freq REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,12 +96,15 @@ class Store:
             self.db.execute("ALTER TABLE words ADD COLUMN qkey REAL")
         if "pen" not in cols:
             self.db.execute("ALTER TABLE words ADD COLUMN pen INTEGER NOT NULL DEFAULT 0")
+        if "freq" not in cols:                   # word frequency (wordfreq), for the coverage tag (UI-14)
+            self.db.execute("ALTER TABLE words ADD COLUMN freq REAL NOT NULL DEFAULT 0")
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
+        self._prog = None    # progress tallies (progress()), counted once, then kept up to date by each change
 
     def close(self):
         """Flush and close the database; safe to call twice."""
@@ -145,8 +149,10 @@ class Store:
             ((w, i, 1e18 + i) for i, w in enumerate(words)),
         )
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '0')")
         self.db.commit()
         self._total = None
+        self._prog = None
         self.version += 1
 
     def has_word(self, word):
@@ -243,6 +249,45 @@ class Store:
             "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
         }
 
+    # ---- progress (UI-14) -----------------------------------------------------------------
+    @staticmethod
+    def segment_of(rank):
+        """Which progress segment (0 = everyday .. 3 = rare) a frequency rank falls in."""
+        return sum(rank >= b for b in SEGMENT_BOUNDS)
+
+    def progress(self):
+        """{"segments": [(placed, total)] for everyday, common, uncommon, rare; "coverage": the share of the list's
+        word frequency that is placed (0..1), or None before the frequencies are known}. Counted from the save
+        once, then kept up to date by place / unplace / undo, so a refresh never scans the list."""
+        if self._prog is None:
+            b0, b1, b2 = SEGMENT_BOUNDS
+            p = {"placed": [0] * len(SEGMENT_NAMES), "total": [0] * len(SEGMENT_NAMES), "fp": 0.0, "ft": 0.0}
+            for seg, n, placed, ft, fp in self.db.execute(
+                    "SELECT CASE WHEN rank < ? THEN 0 WHEN rank < ? THEN 1 WHEN rank < ? THEN 2 ELSE 3 END, "
+                    "COUNT(*), SUM(tier IS NOT NULL), SUM(freq), SUM(CASE WHEN tier IS NULL THEN 0 ELSE freq END) "
+                    "FROM words GROUP BY 1", (b0, b1, b2)):
+                p["total"][seg], p["placed"][seg] = n, placed or 0
+                p["ft"] += ft or 0.0
+                p["fp"] += fp or 0.0
+            self._prog = p
+        p = self._prog
+        return {"segments": list(zip(p["placed"], p["total"])),
+                "coverage": p["fp"] / p["ft"] if p["ft"] > 0 else None}
+
+    def _note_placed(self, row, sign):
+        """Keep the progress tallies current: `row` (with rank and freq) became placed (+1) or unplaced (-1)."""
+        if self._prog is not None:
+            self._prog["placed"][self.segment_of(row["rank"])] += sign
+            self._prog["fp"] += sign * (row["freq"] or 0.0)
+
+    def set_frequencies(self, pairs):
+        """Store each word's frequency [(word, freq)] (for the coverage tag; filled once by wordsource)."""
+        self.db.executemany("UPDATE words SET freq=? WHERE word=?", ((f, w) for w, f in pairs))
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '1')")
+        self.db.commit()
+        self._prog = None
+        self.version += 1
+
     def settled_shares(self, min_games, totals=None):
         """Per tier, the share of its words with at least `min_games` duels (how settled its order is, UI-31);
         None for an empty tier. `totals` is tier_counts() if the caller has it already. Index-only
@@ -281,6 +326,7 @@ class Store:
                 (t, tier_base(t), w, t),
             )
         self.db.commit()
+        self._prog = None
         self.version += 1
 
     def _follow_anchors(self, before):
@@ -345,7 +391,11 @@ class Store:
         if row is None:
             return None
         p = json.loads(row["payload"])
+        now = {r["word"]: r for r in self._snap([r["word"] for r in p["before"]])} if p["before"] else {}
         for r in p["before"]:
+            cur = now.get(r["word"])
+            if cur is not None and (cur["tier"] is None) != (r["tier"] is None):
+                self._note_placed(cur, 1 if r["tier"] is not None else -1)
             # qkey is missing from history written by older versions; COALESCE keeps the current one.
             self.db.execute(
                 "UPDATE words SET tier=?, rating=?, games=?, skips=?, qkey=COALESCE(?, qkey) WHERE word=?",
@@ -395,6 +445,8 @@ class Store:
         self.db.execute(
             "UPDATE words SET tier=?, rating=?, games=0 WHERE word=?", (tier, tier_base(tier), word)
         )
+        if before and before[0]["tier"] is None:
+            self._note_placed(before[0], 1)
         changes, anchors = self._follow_anchors(before)
         self._push(before, comp_ids=ids, anchors=anchors)
         self.db.commit()
@@ -409,6 +461,8 @@ class Store:
         front = (front if front is not None else 0.0) - 1.0
         self.db.execute(
             "UPDATE words SET tier=NULL, rating=1500, games=0, skips=0, qkey=? WHERE word=?", (front, word))
+        if before and before[0]["tier"] is not None:
+            self._note_placed(before[0], -1)
         self._push(before)
         self.db.commit()
 
@@ -784,5 +838,6 @@ class Store:
             self.db.rollback()
             raise
         self._total = None
+        self._prog = None
         self.version += 1
         return res

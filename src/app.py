@@ -20,24 +20,23 @@ from tkinter import filedialog, ttk
 
 from browser import Browser
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, SEGMENT_NAMES, TIERS
 from fonts import ROLES, init_fonts, font, scale_fonts
 from saves import write_export
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip
+from ui_chart import ConflictCard, DistributionChart, SegmentBar, SettledChart, SwapStrip
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
 def format_stats(stats):
-    """The status line (UI-15): one quiet line. Placed / total stays while the progress bar is on hold
-    (UI-14); conflicts only appear when there are some."""
+    """The status line (UI-15): one quiet line. Placed / total stays next to the progress bar (UI-14); "N left"
+    went (UI-34: it repeats placed / total); conflicts only appear when there are some."""
     pct = 100.0 * stats["placed"] / stats["total"] if stats["total"] else 0.0
     parts = [f"Placed {stats['placed']:,} of {stats['total']:,} ({pct:.1f}%)",
-             f"{stats['total'] - stats['placed']:,} left",
              f"{stats['skipped']:,} skipped"]
     if stats["conflicts"]:
         parts.append(f"{stats['conflicts']:,} conflict{'s' if stats['conflicts'] != 1 else ''} to look at")
@@ -208,11 +207,19 @@ class App:
         # the status band: the numbers on the left, the tier chart (UI-13) on the right
         band = self.status_band = ttk.Frame(r, padding=(10, 2, 10, 0))
         band.pack(side="top", fill="x")
-        self.stats_lbl = ttk.Label(band, anchor="w")
+        left = ttk.Frame(band)
+        left.pack(side="left", anchor="n")
+        line = ttk.Frame(left)
+        line.pack(side="top", anchor="w")
+        self.stats_lbl = ttk.Label(line, anchor="w")
         self.stats_lbl.pack(side="left", anchor="n", pady=(4, 0))
         # "+N today", small and muted; the pace only in a hover note (UI-15: no pressure on screen)
-        self.today_lbl = ttk.Label(band, anchor="w", foreground=PALETTE["muted"])
+        self.today_lbl = ttk.Label(line, anchor="w", foreground=PALETTE["muted"])
         self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
+        # the progress bar under it: four segments by commonness, and the coverage tag (UI-14)
+        self.progress_bar = SegmentBar(left, SEGMENT_NAMES, font("body"))
+        self.progress_bar.pack(side="top", anchor="w", pady=(8, 0))
+        self.progress_tip = Tooltip(self.progress_bar, lambda e: self.progress_bar.note(e.x), font=font("body"))
         self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"))
         # each tab's own view in one spot (UI-31): they share its space, so switching tabs never moves the page
         views = tk.Frame(band, bg=PALETTE["bg"])
@@ -682,6 +689,8 @@ class App:
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
         self.mode_switch.show_only(self.modes_with_work(s))
+        prog = self.store.progress()
+        self.progress_bar.set(prog["segments"], prog["coverage"])
         # each tab shows its own view in the chart's spot (UI-31); the others keep their space, hidden
         for mode, view in self.tab_views.items():
             if view.shown != (mode == self.mode):

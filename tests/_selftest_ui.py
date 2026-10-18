@@ -412,10 +412,18 @@ app.anim.finish_all(); root.after(900, root.quit); root.mainloop(); app.anim.fin
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A
 line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})
-assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   2,500 left   \u00b7   3 skipped", line
+assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   3 skipped", line          # no "N left" (UI-34)
 assert "conflict" not in line                                       # only when there are some
 assert A.format_stats({"placed": 1, "total": 2, "skipped": 0, "conflicts": 1}).endswith("1 conflict to look at")
 assert "/hr" not in app.stats_lbl.cget("text") and "today" not in app.stats_lbl.cget("text")
+# the progress bar (UI-14) follows placements; its hover note gives the counts
+seg = T.Store.segment_of(s.get_word(s.next_unplaced()["word"])["rank"])
+before = app.progress_bar.segments[seg][0]
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+key("3"); app.anim.finish_all(); pump(2)
+assert app.progress_bar.segments[seg][0] == before + 1 and app.progress_bar.segments == s.progress()["segments"]
+assert app.progress_bar.note(app.progress_bar._x(seg) + 5).endswith(f"{before + 1:,} of {s.progress()['segments'][seg][1]:,} placed")
+app.undo(); pump(2); assert app.progress_bar.segments[seg][0] == before
 n0 = int(app.today_lbl.cget("text").split()[0].lstrip("+").replace(",", ""))
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
 key("4")

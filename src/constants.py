@@ -13,6 +13,10 @@ MODES = [
     ("conflict", "Resolve conflicts"),
 ]
 
+# The progress bar's segments (UI-14), by frequency rank: each holds about ten times the words of the one before.
+SEGMENT_NAMES = ["everyday", "common", "uncommon", "rare"]
+SEGMENT_BOUNDS = [1000, 10000, 100000]      # ranks below 1,000 are everyday ... 100,000 and beyond are rare
+
 
 def tier_base(t):
     """Starting Elo rating for a word placed in tier t: S (0) = 1875 down to F (5) = 1125, 150 apart."""

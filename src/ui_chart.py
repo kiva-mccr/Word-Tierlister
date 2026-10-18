@@ -1,5 +1,6 @@
 """The tier chart (UI-13): six small bars, S..F, showing how many words sit in each tier; and each other tab's
-own view in the same spot (UI-31): SettledChart (Refine), SwapStrip (Boundary), ConflictCard (Conflicts).
+own view in the same spot (UI-31): SettledChart (Refine), SwapStrip (Boundary), ConflictCard (Conflicts); and
+the progress bar under the status line (UI-14): SegmentBar.
 
 Built to the dataviz rules where they apply: bars at most 24 px wide with a rounded data end and a square
 baseline on one hairline axis; the tier letter under each bar and its count on the cap are in text colours
@@ -7,6 +8,7 @@ baseline on one hairline axis; the tier letter under each bar and its count on t
 the tier pastels with the pills' faint edge (theme.TIER_BAR): identity comes from the letter and the fixed
 S..F order, not from colour, so the colours can stay pastel (the user's choice over a colour-blind-tuned set).
 """
+import math
 import tkinter as tk
 
 from theme import PALETTE, TIER_BAR
@@ -326,3 +328,117 @@ class ConflictCard(tk.Canvas):
     def refresh(self):
         self._draw()
         self.show(self.shown)
+
+
+def format_share(placed, total):
+    """A segment's share placed, short: '100%' only when complete, '97%', '0.3%', '0%' when none."""
+    if not total or not placed:
+        return "0%"
+    if placed >= total:
+        return "100%"
+    pct = 100.0 * placed / total
+    for d in (0, 1, 2, 3):
+        text = f"{pct:.{d}f}"
+        if 0 < float(text) < 100:                        # never rounds to a flat 0% or 100%
+            return f"{text}%"
+    return "<0.001%"
+
+
+def format_coverage(frac):
+    """The coverage tag (UI-14): as many decimals as it takes to keep moving near 100% (93%, 99.4%, 99.97%),
+    rounded down, so it never shows 100% before everything is covered."""
+    if frac >= 1:
+        return "covers 100%"
+    pct = 100.0 * frac
+    left = 100.0 - pct
+    d = 0 if left >= 1 else 1 if left >= 0.1 else 2 if left >= 0.01 else 3
+    shown = math.floor(round(pct * 10 ** d, 6)) / 10 ** d     # (round first: 99.4 * 10 is 993.9999...)
+    return f"covers {min(shown, 100 - 10 ** -d):.{d}f}%"
+
+
+class SegmentBar(tk.Canvas):
+    """The progress bar (UI-14): four equal segments by how common words are (everyday, common, uncommon, rare;
+    each about ten times the words of the one before), each filling by the share of its own words placed, so it
+    is a log scale over commonness. Under each segment its name and share; to the right a small tag with the
+    share of everyday English the placed words cover. Calm: no goals, no animation.
+
+        bar = SegmentBar(parent, ["everyday", "common", "uncommon", "rare"], font("body"))
+        bar.set([(1000, 1000), (9700, 10000), (37000, 90000), (2000, 640000)], coverage=0.994)
+        bar.segment_at(x)        # which segment is under x (for the hover note), or None
+    """
+
+    def __init__(self, parent, names, font=None, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
+        self.names, self._font = list(names), font
+        self.segments = [(0, 0)] * len(self.names)
+        self.coverage = None
+        self._draw()
+
+    def _metrics(self):
+        f = self._font
+        line = f.metrics("linespace") if f else 16
+        seg_w = max(f.measure(f"{n} 100%") for n in self.names) + line // 2 if f else 110
+        return line, seg_w, max(8, int(line * 0.55)), max(4, line // 3)       # line, segment width, bar h, gap
+
+    def _x(self, i):
+        _line, seg_w, _h, gap = self._metrics()
+        return 1 + i * (seg_w + gap)
+
+    def _draw(self):
+        self.delete("all")
+        line, seg_w, bar_h, gap = self._metrics()
+        n = len(self.names)
+        bars_w = n * seg_w + (n - 1) * gap
+        top = max(1, (line + 6 - bar_h) // 2)          # room for the coverage tag, which is taller than the bar
+        r = bar_h / 2
+        for i, (name, (placed, total)) in enumerate(zip(self.names, self.segments)):
+            x1 = self._x(i)
+            x2 = x1 + seg_w
+            self.create_polygon(_rounded_points(x1, top, x2, top + bar_h, r), smooth=True, fill=PALETTE["surface2"],
+                                outline=PALETTE["border"], tags=("track", f"track{i}"))
+            share = placed / total if total else 0.0
+            if share > 0:
+                fw = max(bar_h, share * seg_w)            # a sliver at least as wide as it is tall
+                self.create_polygon(_rounded_points(x1, top, x1 + fw, top + bar_h, r), smooth=True,
+                                    fill=PALETTE["accent"], outline=lerp_color(PALETTE["accent"], PALETTE["text"], 0.18),
+                                    tags=("fill", f"fill{i}"))
+            self.create_text(x1, top + bar_h + 4, text=f"{name} {format_share(placed, total)}", font=self._font,
+                             fill=PALETTE["muted"], anchor="nw", tags=("label", f"label{i}"))
+        width = bars_w + 2
+        if self.coverage is not None:
+            text = format_coverage(self.coverage)
+            tw = self._font.measure(text) if self._font else 8 * len(text)
+            x1 = bars_w + 2 + line
+            h = line + 4
+            y1 = top + bar_h / 2 - h / 2
+            self.create_polygon(_rounded_points(x1, y1, x1 + tw + line, y1 + h, h / 2), smooth=True,
+                                fill=PALETTE["surface"], outline=PALETTE["border"], tags="tagbox")
+            self.create_text(x1 + (tw + line) / 2, y1 + h / 2, text=text, font=self._font, fill=PALETTE["text"],
+                             tags="tag")
+            width = x1 + tw + line + 2
+        super().configure(width=width, height=top + bar_h + 4 + line + 2)
+
+    def set(self, segments, coverage=None):
+        """[(placed, total)] per segment, and the covered share (0..1, or None to leave the tag out)."""
+        segments = [(int(p), int(t)) for p, t in segments]
+        if segments != self.segments or coverage != self.coverage:
+            self.segments, self.coverage = segments, coverage
+            self._draw()
+
+    def segment_at(self, x):
+        _line, seg_w, _h, gap = self._metrics()
+        for i in range(len(self.names)):
+            if self._x(i) <= x < self._x(i) + seg_w + gap:
+                return i
+        return None
+
+    def note(self, x):
+        """The hover note for the segment under x: 'uncommon: 37,204 of 90,000 placed'."""
+        i = self.segment_at(x)
+        if i is None:
+            return None
+        placed, total = self.segments[i]
+        return f"{self.names[i]} words: {placed:,} of {total:,} placed"
+
+    def refresh(self):
+        self._draw()

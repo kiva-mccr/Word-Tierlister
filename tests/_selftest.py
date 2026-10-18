@@ -135,6 +135,24 @@ assert lone.get_anchors()[2] == "x"                                             
 lone.undo(); assert lone.get_anchors() == ["s1", "a1", "b1", "c1", "d1", "f1"] and lone.get_word("a1")["tier"] == 1
 lone.close()
 
+# progress (UI-14): segment tallies and coverage, kept up to date without recounting, always equal to a recount
+def recount():
+    s._prog = None
+    return s.progress()
+s.set_frequencies([(w, 1.0 / (i + 1)) for i, w in enumerate(words)])
+assert s.get_meta("freq_done") == "1"
+p0 = s.progress()
+assert len(p0["segments"]) == 4 and sum(t for _p, t in p0["segments"]) == s.count_words()
+assert sum(p for p, _t in p0["segments"]) == s.stats()["placed"] and 0 < p0["coverage"] < 1
+fresh = s.next_unplaced()["word"]
+s.place(fresh, 3); p1 = s.progress()
+assert sum(p for p, _ in p1["segments"]) == sum(p for p, _ in p0["segments"]) + 1 and p1["coverage"] > p0["coverage"]
+assert p1 == recount()
+s.unplace(fresh); assert s.progress() == recount()
+s.undo(); assert s.progress() == recount() and s.get_word(fresh)["tier"] == 3   # undo of the unplace: placed again
+s.undo(); assert s.progress() == recount() == p0                                  # undo of the place
+assert [T.Store.segment_of(r) for r in (0, 999, 1000, 9999, 10000, 99999, 100000, 10 ** 7)] == [0, 0, 1, 1, 2, 2, 3, 3]
+
 # unplace puts word back at the front of the queue
 s.unplace("w050")
 assert s.next_unplaced()["word"] == "w050"

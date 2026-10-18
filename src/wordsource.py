@@ -2,7 +2,8 @@
 
 Flow on a first run (driven by main() in tierlist.py):
     build_word_list() or build_wiktionary()   fill the `words` table, most common first
-    prepare_queue()                           flag compounds (compute_penalties), then give every
+    prepare_queue()                           look up word frequencies once (fill_frequencies), flag
+                                              compounds (compute_penalties), then give every
                                               unplaced word a seeded queue key (Store.reshuffle)
 
 The Wiktionary path is resumable at every stage: the 3 GB download continues from its .part file,
@@ -329,6 +330,19 @@ def compute_penalties(store, log=print):
     return True
 
 
+def fill_frequencies(store, log=print):
+    """Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14). Words wordfreq has never
+    seen keep 0: they add nothing to how much of everyday English is covered."""
+    try:
+        from wordfreq import get_frequency_dict
+    except ImportError:
+        log("wordfreq is not installed, so the coverage figure is not available (pip install wordfreq).")
+        return
+    fd = get_frequency_dict("en")
+    words = [r[0] for r in store.db.execute("SELECT word FROM words")]
+    store.set_frequencies((w, fd[w]) for w in words if w in fd)
+
+
 def prepare_queue(store, log=print):
     """Make sure every unplaced word has a queue position. Runs at startup; cheap when up to date."""
     if not store.count_words():
@@ -339,6 +353,9 @@ def prepare_queue(store, log=print):
         if compute_penalties(store, log):
             store.set_meta("pen_done", "1")
             changed = True
+    if store.get_meta("freq_done") != "1":
+        log("Looking up how common each word is (one time, a few seconds)...")
+        fill_frequencies(store, log)
     stale = store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone()
     if stale or changed:
