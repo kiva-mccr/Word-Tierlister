@@ -168,6 +168,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           bottom up for an up arrow, over 260 ms while the rows load (whole at once with Reduce motion). It is a
 #           soft image now (smooth.arrow_image), set just after the heading's text (Browser._show_sort; the
 #           heading style uses a Label element, as the theme's own put an image at the far right of the column).
+#           Fixed (reported: the Word one went pale to full after a pause, no slide): on a save with a few
+#           thousand placed out of a million, A-Z / Z-A walked every word in order to find the placed ones (~200
+#           ms), freezing the fill. Two small indexes over the placed words only (idx_placed_word / _rank) make
+#           every sort < 5 ms there; and the arrow now shows pale at once, the rows load, then it fills, so a slow
+#           load can never make it jump.
 #           300k words: Rating / Duels ~50 ms a page (Default is ~85 ms).
 # [x] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
 #           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.

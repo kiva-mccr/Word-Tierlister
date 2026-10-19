@@ -160,7 +160,7 @@ rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
 arrow = lambda: bw.arrow[:2]
 assert arrow() == ("tier", "up") and bw.tree.heading("tier", "image")                # Default: S..F, arrow up
 bw.tree.tk.call(bw.tree.heading("games", "command"))                                # (what a click runs)
-root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # at once: the arrow starts filling
+root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # rows in; the arrow fills from here
 pump(8)                                                                             # ...and is full once loaded
 duels = [int(v) for v in rows("games")]
 assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0

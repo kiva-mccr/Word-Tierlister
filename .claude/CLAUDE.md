@@ -55,7 +55,9 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> 
   minimum sizes at grow 1. Main and Browse zooms are separate and saved.
 - Test speed on a big save (300k-1M words) for anything run per duel or per refresh: a query that sorts a
   whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier. Read the
-  indexes instead (tier+rating, tier+games, ...; check EXPLAIN QUERY PLAN for "TEMP B-TREE"). Look for orphans
+  indexes instead (tier+rating, tier+games, partial ones over placed words, ...; check EXPLAIN QUERY PLAN for
+  "TEMP B-TREE"). Test both a densely placed save and a sparse one (a few thousand placed of a million): a
+  query can be quick on one and slow on the other. Look for orphans
   with vulture (installed here: `python3.12 -m vulture src tierlist.py tools tests`).
 - Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
   else may write the save meanwhile.

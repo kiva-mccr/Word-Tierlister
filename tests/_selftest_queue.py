@@ -201,6 +201,10 @@ assert big.tier_counts() == {t: n for t, n in big.db.execute(
 plan = " ".join(r[3] for r in big.db.execute("EXPLAIN QUERY PLAN SELECT * FROM words WHERE tier=2 AND rating>1500 "
                                              "ORDER BY rating LIMIT 80"))
 assert "idx_words_tr" in plan and "TEMP B-TREE" not in plan, plan
+for order in ("word DESC", "word ASC", "rank DESC"):                    # Browse's A-Z / Z-A / rarest first
+    plan = " ".join(r[3] for r in big.db.execute(f"EXPLAIN QUERY PLAN SELECT word FROM words WHERE tier IS NOT NULL "
+                                                 f"ORDER BY {order} LIMIT 1000"))
+    assert "idx_placed_" in plan and "TEMP B-TREE" not in plan, plan
 for word in ("w0000017", "w0000010"):                                   # an ordinary rating; one of a big tie
     a = big.get_word(word)
     near = big._nearest(a, 80)

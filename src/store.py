@@ -106,6 +106,10 @@ class Store:
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_shelf ON words(rank, tier, freq)")   # shelf()
         # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tr ON words(tier, rating)")
+        # Browse's A-Z / Z-A and Frequency over the placed words only: with a few thousand placed out of a
+        # million, walking every word in order to find them took ~200 ms (and froze the sort arrow's fill)
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_word ON words(word) WHERE tier IS NOT NULL")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_rank ON words(rank) WHERE tier IS NOT NULL")
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None

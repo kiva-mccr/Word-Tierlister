@@ -397,10 +397,14 @@ class Browser:
         self.reverse = (not self.reverse) if toggle and sort == self.sort_var.get() else False
         if self.sort_var.get() != sort:
             self.sort_var.set(sort)
-        # the arrow fills like a loading bar (top down for a down arrow, bottom up for an up arrow), starting at
-        # once so the click shows it worked; the rows load just after its first frame is drawn
+        # the click shows at once: the arrow appears pale, then the rows load, then it fills like a loading bar
+        # (top down for a down arrow, bottom up for an up arrow). Filling while the rows loaded froze it
+        # mid-way when a load was slow, and it then jumped to full
+        self.app.anim.finish(f"sortarrow{id(self)}")
+        self._show_sort(0.0)
+        self.tree.update_idletasks()
+        self.reload()
         self.app.anim.run(f"sortarrow{id(self)}", self.SORT_MS, self._show_sort, ease=lambda t: t)
-        self.win.after(15, lambda: self.alive() and self.reload())
 
     def _arrow_size(self):
         h = max(6, round(self.f_bold.metrics("linespace") * 0.5))
