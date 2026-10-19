@@ -39,7 +39,7 @@ replacing the other folders never loses your list.
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes). |
-| `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page (no tkinter). |
+| `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
 | `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`; tick-box choices can link to a web page), global error handlers, `run_guarded` (the whole program runs inside it). |
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
@@ -86,6 +86,15 @@ tkinter and run headless under `xvfb-run` when there is no display. A single tes
 
 To see the friendly error dialog on purpose, start with `python tierlist.py --crash-test`: three
 seconds after start it raises a fake bug. The dialog appears and the program keeps running.
+
+## Running it on Linux / macOS
+
+- Started from a terminal, the program opens its window and gives the terminal its prompt back: you can
+  close the terminal, and the program keeps running. Its messages go to `tierlist.log` next to your save
+  (`--console` keeps the terminal attached and prints there). If the window cannot open (no desktop), it
+  stays in the terminal and says why.
+- File > Add to applications menu (Linux) puts Word Tier List in your desktop's applications menu, so it
+  starts with no terminal at all. Anything that must be installed is then asked in the window.
 
 ## Missing packages
 Installing happens in two stages.

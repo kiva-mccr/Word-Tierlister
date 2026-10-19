@@ -125,7 +125,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
-# Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
+# Added later, in this order after the UI steps: ST-5 (Linux terminal, done), ST-6 (how words are dealt), then
 # T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon).
 #
 # --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
@@ -288,7 +288,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Tick boxes are drawn as images now (ui_style._tick_boxes): the clam theme's tiny cross was
 #           unreadable. Covered by _selftest_install.py and _selftest_deps.py; tried for real in a fresh
 #           venv without wordfreq (the dialog appears; screenshot taken).
-# [ ] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
+# [x] ST-5  Linux: the terminal only when it is really needed (asked for after ST-4). Today a Linux
 #           start from a terminal keeps that terminal busy until the window closes, and closing the
 #           terminal ends the program. Plan: once the terminal stage (ST-4) has nothing left to ask, the
 #           program starts itself again in its own session (setsid; output to tierlist.log, like the
@@ -299,6 +299,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           all; anything that must be installed is then asked in the window (ST-3). A program cannot
 #           close a terminal window the user opened themselves; giving the prompt back is the most it
 #           can do. macOS behaves the same way and gets the same treatment if it is cheap.
+#           Built: deps.should_detach (Linux / macOS, a real terminal for input and output, no --console, not
+#           already detached, and on Linux a desktop to draw on: without one the window cannot open and the
+#           message saying so stays in the terminal) and deps.detach_terminal: the program starts itself again
+#           in its own session (start_new_session) and waits up to 1.5 s; if the new copy fails straight away
+#           its words are printed here, else "Word Tier List is open in its own window: you can close this
+#           terminal". That copy writes to tierlist.log next to the save (DETACHED_ENV). File > Add to
+#           applications menu (Linux; App.add_launcher, deps.add_to_menu) writes
+#           ~/.local/share/applications/word-tierlist.desktop (Terminal=false; again: "updated"). Checked in a
+#           real pseudo-terminal: the prompt is back after ~1.7 s, the program runs on in its own session. macOS
+#           gets the terminal hand-back the same way (not tried on a Mac here); no launcher there.
 # [ ] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
 #           (UI-41). On the first start (and any time from Settings > How words are dealt...), one friendly
 #           page asks how new words should come:
@@ -1066,7 +1076,7 @@ try:
     from app import App
     from fonts import init_fonts
     from errors import install_handlers, run_guarded
-    from problems import SetupError, ensure_streams
+    from problems import SetupError, ensure_streams, open_log
     from startup import detach_console, ensure_packages, run_with_progress
     from ui_style import apply_ttk_style
     from browser import Browser  # noqa: F401
@@ -1074,7 +1084,7 @@ except ImportError as exc:
     if (getattr(exc, "name", "") or "").split(".")[0] not in ("tkinter", "_tkinter"):
         raise  # a real bug, not a missing tkinter
     tk = App = Browser = None
-    from problems import SetupError, ensure_streams   # these need no tkinter
+    from problems import SetupError, ensure_streams, open_log   # these need no tkinter
 
 
 def main():
@@ -1096,9 +1106,9 @@ def main():
     ap.add_argument("--keep-download", action="store_true",
                     help="keep the 3 GB Wiktionary download after building the word list")
     ap.add_argument("--console", action="store_true",
-                    help="Windows: keep the console window open and print to it (for troubleshooting). "
-                         "Normally the console is closed once the program starts and messages go to "
-                         "tierlist.log next to the save file")
+                    help="keep the terminal (Linux, macOS) or console window (Windows) attached and print to "
+                         "it, for troubleshooting. Normally the program carries on in its own window, the "
+                         "terminal gets its prompt back and messages go to tierlist.log next to the save file")
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt)")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
@@ -1118,6 +1128,10 @@ def main():
     # tkinter is needed for the window (everything else works without it)
     if tk is None:
         sys.exit("tkinter is not installed. " + deps.tk_advice())
+    # --- 1b. Linux / macOS (ST-5): nothing more to ask in the terminal, so the program carries on in a session
+    #        of its own and the terminal gets its prompt back (closing it no longer closes the program)
+    if deps.should_detach(args.console):
+        sys.exit(deps.detach_terminal(restart_argv))
 
     def start():
         # --- 2. find the save file: --db, else the earlier save (see saves.choose_save)
@@ -1139,7 +1153,9 @@ def main():
         # --- 3. Windows: close the console window behind the app (messages go to tierlist.log from
         #        here on, and errors become dialogs; see startup.detach_console / run_guarded).
         log_path = os.path.join(os.path.dirname(db_path), "tierlist.log")
-        if not args.console:
+        if os.environ.get(deps.DETACHED_ENV):     # (ST-5: the copy that gave the terminal back)
+            sys.stdout = sys.stderr = open_log(log_path)
+        elif not args.console:
             detach_console(log_path)
         ensure_streams(log_path)          # started without a console at all (pythonw): print() must not crash
         # `current` is the source the list was built from; an older WordNet save is upgraded to

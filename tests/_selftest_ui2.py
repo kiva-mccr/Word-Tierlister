@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, tempfile, time
+import os, sys, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
@@ -185,6 +185,19 @@ bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(8)                        
 assert not bw.reverse and arrow() == ("rating", "down")
 bw.close(); app.browse_state = None
 app.on_close()
+
+# --- ST-5: File > Add to applications menu (Linux): a launcher that starts the program with no terminal
+if sys.platform.startswith("linux"):
+    ls = T.Store(os.path.join(tempfile.mkdtemp(), "launch.db")); ls.insert_words(WORDS[:50])
+    root = tk.Tk(); app = T.App(root, ls, T.Definitions(ls)); pump(4)
+    assert "Add to applications menu" in [it[1] for it in app.header.menus["File"] if len(it) > 1]
+    os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
+    path = app.add_launcher(); pump(2)
+    text = open(path).read()
+    assert "Terminal=false" in text and "tierlist.py" in text and app.toast.cget("text").startswith("Word Tier List added")
+    app.add_launcher(); pump(2); assert app.toast.cget("text") == "Word Tier List updated in your applications menu"
+    del os.environ["XDG_DATA_HOME"]
+    app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons
 done = T.Store(os.path.join(tempfile.mkdtemp(), "done.db"))

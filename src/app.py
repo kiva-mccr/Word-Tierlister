@@ -12,12 +12,14 @@ import math
 import os
 import random
 import sqlite3
+import sys
 import threading
 import time
 
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+import deps
 from browser import Browser
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
@@ -162,6 +164,8 @@ class App:
             ("File", [("command", "Import earlier progress...", self.import_progress, None),
                       ("command", "Export tier list...", self.export, None),
                       ("command", "Where is my save file?", self.show_save_location, None),
+                      *([("command", "Add to applications menu", self.add_launcher, None)]
+                        if sys.platform.startswith("linux") else []),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
             ("Edit", [("command", "Undo", self.undo, key("undo"))]),
@@ -1491,6 +1495,19 @@ class App:
         cur = self.store.queue_settings()
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
+
+    def add_launcher(self):
+        """File > Add to applications menu (Linux, ST-5): a launcher that starts the program with no terminal."""
+        frozen = getattr(sys, "frozen", False)
+        try:
+            path, how = deps.add_to_menu(sys.executable, None if frozen else os.path.join(SCRIPT_DIR, "tierlist.py"))
+        except OSError as exc:
+            show_exception("Applications menu", exc, self.root, "Could not add Word Tier List to the applications menu.")
+            return
+        text = ("Word Tier List added to your applications menu (it starts without a terminal)" if how == "added"
+                else "Word Tier List updated in your applications menu")
+        self.flash(text, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=2600)
+        return path
 
     def edit_keys(self):
         """Settings > Keyboard shortcuts... (UI-48)."""

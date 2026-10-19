@@ -1,7 +1,7 @@
 """Missing packages (deps.py, startup.ensure_packages, errors.ask_yes_no / ask_choices): detection, asking,
 installing."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, subprocess, sys
+import os, subprocess, sys, tempfile
 import tkinter as tk
 from widgets import RoundButton
 import deps, errors as E, startup as S
@@ -212,4 +212,58 @@ with contextlib.redirect_stderr(io.StringIO()):
     assert E.ask_yes_no("T", "H", "M", parent=root) is False
 E._dialog = real_dialog
 root.destroy()
+
+# ---- ST-5: started from a terminal on Linux / macOS, the program carries on in its own session
+class Tty:
+    def __init__(self, tty=True): self.tty = tty
+    def isatty(self): return self.tty
+term, desk = (Tty(), Tty()), {"DISPLAY": ":0"}
+assert deps.should_detach(env=desk, streams=term, posix=True)
+assert not deps.should_detach(console=True, env=desk, streams=term, posix=True)              # --console keeps it
+assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True)            # output redirected
+assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True)   # never twice
+assert not deps.should_detach(env=desk, streams=term, posix=False)                          # Windows: its own way
+if sys.platform != "darwin":
+    assert not deps.should_detach(env={}, streams=term, posix=True)                         # no desktop: stay put
+    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True)
+said, started = [], []
+
+
+class Child:
+    def __init__(self, code, after, text=b""):
+        self.code, self.after, self.text, self.polls = code, after, text, 0
+    def poll(self):
+        self.polls += 1
+        return self.code if self.polls > self.after else None
+
+
+def popen_of(child):
+    def popen(cmd, stdin=None, stdout=None, stderr=None, start_new_session=False, env=None):
+        started.append((cmd, start_new_session, env.get(deps.DETACHED_ENV)))
+        stdout.write(child.text); stdout.flush()
+        return child
+    return popen
+clock = [0.0]
+tick = lambda: clock[0]
+step = lambda dt: clock.__setitem__(0, clock[0] + 0.05)
+# it gets going: the terminal is told it can close, and gets its prompt back (exit 0)
+assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
+                         clock=tick, sleep=step) == 0
+assert started[-1] == ([sys.executable, "tierlist.py", "--db", "x.db"], True, "1") and "close this terminal" in said[-1]
+# it fails straight away (no window could open): what it said is shown here, with its exit code
+clock[0] = 0.0
+assert deps.detach_terminal(["tierlist.py"], out=said.append, popen=popen_of(Child(1, 2, b"TclError: no display")),
+                         clock=tick, sleep=step) == 1
+assert said[-1] == "TclError: no display"
+# File > Add to applications menu: a launcher with no terminal; adding it again updates it
+entry = deps.desktop_entry("/usr/bin/python3", '/home/me/My "Tier" List/tierlist.py')
+assert 'Exec="/usr/bin/python3" "/home/me/My \\"Tier\\" List/tierlist.py"' in entry and "Terminal=false" in entry
+assert "Path=/home/me/My \"Tier\" List" in entry and entry.startswith("[Desktop Entry]")
+assert 'Exec="/opt/word-tierlist"' in deps.desktop_entry("/opt/word-tierlist", None)        # a built program
+home = tempfile.mkdtemp()
+os.environ.pop("XDG_DATA_HOME", None)
+path, how = deps.add_to_menu("/usr/bin/python3", "/x/tierlist.py", home=home)
+assert how == "added" and path == os.path.join(home, ".local", "share", "applications", "word-tierlist.desktop")
+assert open(path).read() == deps.desktop_entry("/usr/bin/python3", "/x/tierlist.py")
+assert deps.add_to_menu("/usr/bin/python3", "/y/tierlist.py", home=home)[1] == "updated" and "/y/tierlist.py" in open(path).read()
 print("DEPS OK")

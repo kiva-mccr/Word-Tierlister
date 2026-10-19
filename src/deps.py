@@ -322,3 +322,78 @@ def wants_terminal_setup(no_install):
         return sys.stdin is not None and sys.stdin.isatty() and sys.stdout is not None and sys.stdout.isatty()
     except (AttributeError, ValueError):
         return False
+
+
+# --------------------------------------------------------------------------
+# ST-5: give the terminal back (Linux / macOS), and a launcher in the applications menu (Linux)
+# --------------------------------------------------------------------------
+DETACHED_ENV = "WORD_TIERLIST_DETACHED"     # set in the copy started in its own session (so it never loops)
+DETACH_WAIT = 1.5                           # seconds the terminal waits to see the new copy get going
+
+
+def should_detach(console=False, env=None, streams=None, posix=None):
+    """True when the program, started from a terminal on Linux or macOS, should carry on in its own session
+    and give the terminal its prompt back (so closing the terminal no longer closes it). Not with --console,
+    not when output is redirected on purpose, not twice, and on Linux only with a desktop to draw on (else the
+    window could not open, and the message saying so must stay in the terminal). Arguments are for tests."""
+    env = os.environ if env is None else env
+    posix = (os.name == "posix") if posix is None else posix
+    if console or not posix or env.get(DETACHED_ENV):
+        return False
+    if sys.platform != "darwin" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
+        return False
+    try:
+        return all(s is not None and s.isatty() for s in (streams or (sys.stdin, sys.stdout)))
+    except (AttributeError, ValueError):
+        return False
+
+
+def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, clock=time.monotonic,
+                    sleep=time.sleep):
+    """Start the program again in a session of its own (setsid), not tied to this terminal, and return the
+    exit code for this one. It waits a moment: if the new copy fails straight away (it could not open its
+    window), what it said is shown here, so a failure is never silent; otherwise the terminal gets its prompt
+    back. The new copy writes its messages to tierlist.log next to the save. The keyword arguments are for
+    tests."""
+    early = tempfile.TemporaryFile()             # what it says while getting going (shown only if it fails)
+    env = dict(os.environ, **{DETACHED_ENV: "1"})
+    child = popen([sys.executable, *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
+                  start_new_session=True, env=env)
+    end = clock() + wait
+    while clock() < end:
+        code = child.poll()
+        if code is not None:
+            if code:
+                early.seek(0)
+                said = early.read().decode("utf-8", "replace").strip()
+                out(said or f"The program stopped straight away (exit code {code}).")
+            return code
+        sleep(0.05)
+    out("Word Tier List is open in its own window: you can close this terminal. "
+        "(Messages go to tierlist.log next to your save; --console keeps them here.)")
+    return 0
+
+
+def desktop_entry(python, script, name="Word Tier List"):
+    """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
+    program, started by itself)."""
+    q = lambda p: '"' + p.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    run = f"{q(python)} {q(script)}" if script else q(python)
+    return "\n".join([
+        "[Desktop Entry]", "Type=Application", f"Name={name}",
+        "Comment=Tier-list every English word, at your own pace",
+        f"Exec={run}", f"Path={os.path.dirname(script or python)}", "Terminal=false",
+        "Icon=accessories-dictionary", "Categories=Education;Game;", "StartupNotify=true", ""])
+
+
+def add_to_menu(python, script, home=None):
+    """Write (or update) the launcher in ~/.local/share/applications. Returns (path, "added" or "updated")."""
+    home = home or os.path.expanduser("~")
+    folder = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), "applications")
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, "word-tierlist.desktop")
+    was = os.path.exists(path)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(desktop_entry(python, script))
+    os.chmod(path, 0o755)
+    return path, "updated" if was else "added"
