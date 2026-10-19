@@ -64,7 +64,7 @@ assert fl.find_withtag("scrollmark") and len(fl.find_withtag("name")) == 3
 win.destroy()
 
 # ---- the browser (A): into a folder, up again, pick a file; or choose a folder
-fb = FP.FolderBrowser(root, "Import", HOME, "file", FP.IMPORT_EXTS, save_dir=HOME); pump()
+fb = FP.FolderBrowser(root, "Import", HOME, "file", FP.IMPORT_EXTS, save_dir=HOME); fb.dlg.show(); pump()   # (shown, as browse() does)
 assert fb.folder == HOME and fb.list.rows[0]["name"] == "Documents/" and fb.places.selected["name"] == "Home"
 fb.places.select(1); pump(); assert fb.folder == os.path.join(HOME, "Documents")              # a place opens it
 assert fb.places.selected["name"] == "Documents"

@@ -1974,6 +1974,9 @@ class StyledDialog:
         self.on_cancel = self.close
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(parent)
+        # hidden until show() has sized and centred it: built while showing, it appeared where the window
+        # manager put it (the parent's top left) and then jumped to the middle
+        self.win.withdraw()
         self.win.title(title)
         self.win.configure(bg=bg)
         self.win.resizable(False, False)
@@ -2014,8 +2017,10 @@ class StyledDialog:
         return b
 
     def show(self, wait=False):
-        """Size to the contents, centre over the parent, take the input (and with wait, block until closed)."""
+        """Size to the contents, centre over the parent, then appear there; take the input (and with wait, block
+        until closed)."""
         place_dialog(self.win, self.parent)
+        self.win.deiconify()
         try:                             # some Linux window managers refuse a grab before the window shows
             self.win.wait_visibility()
             self.win.grab_set()
