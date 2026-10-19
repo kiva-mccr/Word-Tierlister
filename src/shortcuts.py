@@ -36,16 +36,17 @@ class ShortcutsDialog:
 
     # ---- drawing ------------------------------------------------------------------------------------------
     def _draw(self):
-        for w in self.cards.winfo_children():
-            w.destroy()
-        self.caps = {}
+        """The cards, once: a label, a strip of keycaps and a cell for "↺ default" per action. Changes refill
+        only the strips (_refresh): rebuilding every row at once (Reset all) emptied the window for a moment, so
+        it shrank and showed black."""
         bg, f = PALETTE["bg"], font("body")
         line = f.metrics("linespace")
+        self.rows = {}                          # action -> (its keycap strip, its "↺ default" cell)
         for ci, groups in enumerate(COLUMNS):
             col = tk.Frame(self.cards, bg=bg)
             col.grid(row=0, column=ci, sticky="n", padx=(0 if ci == 0 else round(line * 1.4), 0))
             # room for "↺ default" kept on every row, so nothing shifts when one appears
-            col.columnconfigure(2, minsize=f.measure("↺ default") + 2 * 6 + 4)
+            col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
             for gi, g in enumerate(groups):
                 tk.Label(col, text=GROUP_NAMES[g], bg=bg, fg=PALETTE["muted"], font=f).grid(
@@ -53,15 +54,30 @@ class ShortcutsDialog:
                 r += 1
                 for a, ga, _label, _k in ACTIONS:
                     if ga == g:
-                        self._row(col, a, r)
+                        tk.Label(col, text=LABEL_OF[a], bg=bg, fg=PALETTE["text"], font=f, anchor="w").grid(
+                            row=r, column=0, sticky="w", pady=2, padx=(0, 12))
+                        strip, cell = tk.Frame(col, bg=bg), tk.Frame(col, bg=bg)
+                        strip.grid(row=r, column=1, sticky="w")
+                        cell.grid(row=r, column=2, sticky="w")
+                        self.rows[a] = (strip, cell)
                         r += 1
-        self.dlg.refit()
-    def _row(self, parent, action, r):
+        self._refresh()
+
+    def _refresh(self, actions=None):
+        """Refill these actions' keycaps (all by default). The new ones go in before the old ones go, so a row is
+        never empty and the window keeps its size; it only grows if a row needs more room."""
+        for a in actions or list(self.rows):
+            self._fill(a)
+        win = self.dlg.win
+        win.update_idletasks()
+        if win.winfo_reqwidth() > win.winfo_width() or win.winfo_reqheight() > win.winfo_height():
+            self.dlg.refit()
+
+    def _fill(self, action):
         bg, f = PALETTE["bg"], font("body")
-        tk.Label(parent, text=LABEL_OF[action], bg=bg, fg=PALETTE["text"], font=f, anchor="w").grid(
-            row=r, column=0, sticky="w", pady=2, padx=(0, 12))
-        keys = tk.Frame(parent, bg=bg)
-        keys.grid(row=r, column=1, sticky="w")
+        strip, cell = self.rows[action]
+        old = strip.winfo_children() + cell.winfo_children()
+        self.caps = {k: c for k, c in self.caps.items() if k[0] != action}
         shown = [place_display(self.km.keys["place"][0])] if action == "place" else \
             [display(k) for k in self.km.keys[action]]
         slots = list(range(len(shown)))
@@ -70,11 +86,11 @@ class ShortcutsDialog:
         for slot in slots:
             waiting = self.waiting == (action, slot)
             if slot is None:
-                text, fill, flat = ("…", PALETTE["select_bg"], False) if waiting else ("+", bg, True)
+                text, fill, flat = ("\u2026", PALETTE["select_bg"], False) if waiting else ("+", bg, True)
             else:                                       # (waiting: "…", about a key wide, so the row keeps still)
-                text = "…" if waiting else shown[slot]
+                text = "\u2026" if waiting else shown[slot]
                 fill, flat = (PALETTE["select_bg"] if waiting else PALETTE["surface"]), False
-            cap = RoundButton(keys, text, lambda a=action, s=slot: self.listen(a, s), bg=fill, font=f, padx=10,
+            cap = RoundButton(strip, text, lambda a=action, s=slot: self.listen(a, s), bg=fill, font=f, padx=10,
                               pady=2, radius=8, canvas_bg=bg, flat=flat, animator=self.app.anim)
             cap.pack(side="left", padx=(0, 6))
             self.caps[(action, slot)] = cap
@@ -82,18 +98,21 @@ class ShortcutsDialog:
                 cap.bind("<Key>", self._caught)
                 cap.after_idle(cap.focus_set)
         if not self.km.is_default(action):
-            RoundButton(parent, "↺ default", lambda a=action: self.reset(a), bg=bg, font=f, padx=6, pady=2,
-                        radius=8, canvas_bg=bg, flat=True, animator=self.app.anim).grid(row=r, column=2, sticky="w")
+            RoundButton(cell, "\u21ba default", lambda a=action: self.reset(a), bg=bg, font=f, padx=6, pady=2,
+                        radius=8, canvas_bg=bg, flat=True, animator=self.app.anim).pack(side="left")
+        for w in old:
+            w.destroy()
 
     def _say(self, text, buttons=()):
         """The line under the cards: what is happening, and the buttons for it (Swap, Remove...)."""
-        for w in self.note.winfo_children():
-            w.destroy()
+        old = self.note.winfo_children()                 # (removed after the new line is in: no jump)
         bg = PALETTE["bg"]
         tk.Label(self.note, text=text or " ", bg=bg, fg=PALETTE["warn"][1], font=font("body")).pack(side="left")
         for label, command in buttons:
             RoundButton(self.note, label, command, bg=PALETTE["surface"], font=font("body"), padx=10, pady=2,
                         radius=10, canvas_bg=bg, animator=self.app.anim).pack(side="left", padx=(8, 0))
+        for w in old:
+            w.destroy()
         self.note_text = text
 
     # ---- changing a key -------------------------------------------------------------------------------------
@@ -103,7 +122,7 @@ class ShortcutsDialog:
             self.cancel()
             return
         self.waiting, self.offer = (action, slot), None
-        self._draw()
+        self._refresh()
         what = LABEL_OF[action]
         if action == "place":
             self._say("Press the first of the six placing keys: the other five follow it along its row (1, Q, A, "
@@ -115,7 +134,7 @@ class ShortcutsDialog:
 
     def cancel(self):
         self.waiting = self.offer = None
-        self._draw()
+        self._refresh()
         self._say("")
 
     def _caught(self, e):
@@ -200,6 +219,6 @@ class ShortcutsDialog:
     def _saved(self, text):
         self.app.store.set_meta("keymap", self.km.dumps())
         self.app.apply_keys()
-        self._draw()
+        self._refresh()
         self._say(text)
         self.note.winfo_children()[0].configure(fg=PALETTE["muted"])
