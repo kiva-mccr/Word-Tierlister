@@ -157,6 +157,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (reported on Windows too: "it bounces weird"): no size ease anywhere. Browse stays hidden while
 #           it is built, placed and filled, then appears complete in its place and only fades in (150 ms, where
 #           the system can fade a window; at once with Reduce motion). Browser._open; the window never resizes.
+#           Then (reported: it opened unlike the other windows, really fast): no fade of its own either. A
+#           see-through window gets no system opening animation (Windows 11 has one for every window), so Browse
+#           now simply appears, complete and placed, the way the dialogs do.
 # [x] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
 #           Built: App._say_zoom also when nothing changed (any zoom key: zoom out at the smallest says 60%);
 #           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows

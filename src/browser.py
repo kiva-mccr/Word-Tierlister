@@ -38,7 +38,6 @@ class Browser:
     RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
                                                  # first: rank 1, 2...); Rating and Duels start with the highest
     SORT_MS = 260                                # the sort arrow fills like a loading bar as the rows load
-    OPEN_MS = 150                # opening: it fades in, complete and in its place (UI-38)
 
     def __init__(self, app):
         """Build the window and load the first page of rows. `app` is the main App (store, fonts, definitions)."""
@@ -210,27 +209,11 @@ class Browser:
             self.render_def()
 
     def _open(self):
-        """Show the window, already built, sized, placed and filled with its rows, fading in (about 150 ms) where
-        the system can fade a window; at once with Reduce motion or where it cannot. It used to grow from 94%
-        round its centre and fill its rows afterwards: every step re-laid out the whole window and the window
-        manager redrew its frame behind it, which read as a bounce (reported on Linux, M-5, then on Windows)."""
-        anim = self.app.anim
-        fade = not anim.reduce_motion
-        if fade:
-            try:
-                self.win.attributes("-alpha", 0.0)
-            except tk.TclError:
-                fade = False
+        """Show the window, already built, sized, placed and filled with its rows, the way every other window
+        appears: the system's own opening (Windows 11 animates it). It once grew from 94% round its centre and
+        filled its rows afterwards, which read as a bounce (M-5); a fade of our own then made it open faster
+        and differently from the rest (a see-through window gets no system animation)."""
         self.win.deiconify()
-
-        def frame(p):
-            try:
-                self.win.attributes("-alpha", p)
-            except tk.TclError:
-                pass                                 # closed meanwhile
-        if fade:
-            anim.run(f"browse-open{id(self)}", self.OPEN_MS, frame)
-            self.win.after(self.OPEN_MS + 400, lambda: frame(1.0))      # (never left see-through)
 
     # ---- scaling ------------------------------------------------------------------------------------
     def _on_configure(self, e):
