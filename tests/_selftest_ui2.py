@@ -63,7 +63,10 @@ pump(3)
 assert store.stats()["placed"] == 26 + 280 and "Brought over 280 words placed" in shown[-1][1], shown[-1]
 assert "were in a different tier here" in shown[-1][1] and "backup" in shown[-1][1].lower()
 assert app.cur_word and store.get_word(app.cur_word)["tier"] is None   # the screen moved on to an unplaced word
-# --- File > Import earlier progress with an exported list
+# --- File > Import earlier progress with an exported list (the system dialog's path: Windows and macOS; the
+#     app's own picker, used on Linux, has its own test in _selftest_filepicker.py)
+import app as A
+A.use_themed = lambda root: False
 exp = os.path.join(tmp, "mine.txt")
 other_store = T.Store(os.path.join(tmp, "elsewhere.db"))
 other_store.insert_words(WORDS); other_store.place("w01000", 1); other_store.place("w01001", 0)
@@ -95,7 +98,88 @@ assert os.path.getsize(os.path.join(tmp, "out.csv")) > 100
 app.open_browser(); pump(6)
 bw = app.browsers[0]
 assert bw.total == store.stats()["placed"]
+# UI-39: Delete unplaces the selected word (like the Unplace button); Ctrl+Z in Browse puts it back
+victim = next(i for i in bw.tree.get_children() if i not in store.get_anchors())
+tier_before = store.get_word(victim)["tier"]
+bw.tree.selection_set(victim); bw.tree.focus_set(); pump(2)
+bw.tree.event_generate("<Delete>"); pump(2)
+assert store.get_word(victim)["tier"] is None and victim not in bw.tree.get_children()
+bw.win.event_generate("<Control-z>"); pump(2)
+assert store.get_word(victim)["tier"] == tier_before and victim in bw.tree.get_children()
+bw.entry.focus_set(); bw.entry.insert(0, "x"); pump(1)                   # typing in the search box: Delete edits it
+n_placed = store.stats()["placed"]
+bw.entry.icursor(0); bw.entry.event_generate("<Delete>"); pump(2)
+assert store.stats()["placed"] == n_placed
+# UI-38: closing remembers what you were looking at; the next open starts there
+bw.search_var.set(victim[:3]); bw.filter_var.set("All placed"); pump(8)
+bw.reload(); pump(2); bw.tree.selection_set(victim); pump(2)
+bw.close(); pump(2)
+app.open_browser(); pump(8)
+bw = app.browsers[0]
+assert bw.search_var.get() == victim[:3] and bw.tree.selection() == (victim,) and bw.current == victim
+# a click on a pill or the card does not close it; a click on the bare background does
+app.tier_btns[0].event_generate("<ButtonPress-1>", x=1, y=1); app.tier_btns[0].event_generate("<ButtonRelease-1>",
+                                                                                              x=-50, y=-50)
+app.tier_row.event_generate("<ButtonPress-1>", x=1, y=1); pump(2)
+assert bw.alive() and app.browsers == [bw]
+app.center.event_generate("<ButtonPress-1>", x=2, y=2); pump(2)
+assert not bw.alive() and not app.browsers
+app.browse_state = None
+import browser as _B
+_B.Browser.EASE_OPEN = True                                      # (Windows / macOS)
+app.open_browser(); bw = app.browsers[0]
+assert bw._opening and not bw.tree.get_children()                # it eases open first; the rows come after
+pump(8)
+assert not bw._opening and bw.tree.get_children() and bw.search_var.get() == ""
+w_full = bw.win.winfo_width()
 bw.close()
+_B.Browser.EASE_OPEN = None                                      # automatic: on X11 (M-5) it opens complete, still
+app.open_browser(); bw = app.browsers[0]
+if bw.win.tk.call("tk", "windowingsystem") == "x11":
+    assert not bw._opening and bw.tree.get_children()
+    sizes = set()
+    for _ in range(8):
+        pump(1); sizes.add((bw.win.winfo_width(), bw.win.winfo_height()))
+    assert len(sizes) == 1 and abs(bw.win.winfo_width() - w_full) <= 2, sizes   # no size change at all
+bw.close()
+app.anim.reduce_motion = True                                    # Reduce motion: no ease, rows at once
+app.open_browser(); bw = app.browsers[0]
+assert not bw._opening and bw.tree.get_children()
+pump(4); assert abs(bw.win.winfo_width() - w_full) <= 2
+bw.close()
+app.anim.reduce_motion = False
+# M-7: a click on a column heading sorts by it (the Sort drop-down follows); again, the other way round
+app.browse_state = None
+app.open_browser(); pump(4); bw = app.browsers[0]
+ws = [r["word"] for r in app.store.list_words("", "All placed", limit=6)[0]]
+for i in range(2, len(ws)):                                                          # (some words with more duels)
+    for _ in range(i):
+        app.store.record_comparison(ws[i], ws[1], "a", "within")
+bw.reload(); pump(2)
+rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
+arrow = lambda: bw.arrow[:2]
+assert arrow() == ("tier", "up") and bw.tree.heading("tier", "image")                # Default: S..F, arrow up
+bw.tree.tk.call(bw.tree.heading("games", "command"))                                # (what a click runs)
+root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # rows in; the arrow fills from here
+pump(8)                                                                             # ...and is full once loaded
+duels = [int(v) for v in rows("games")]
+assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0
+assert bw.arrow == ("games", "down", 1.0) and not bw.tree.heading("tier", "image") and bw.tree.heading("tier", "text") == "Tier"
+bw.tree.tk.call(bw.tree.heading("games", "command")); pump(8)                       # same heading: turned round
+duels = [int(v) for v in rows("games")]
+assert bw.reverse and duels == sorted(duels) and arrow() == ("games", "up")
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
+assert bw.sort_var.get() == "A-Z" and not bw.reverse and rows("word") == sorted(rows("word"))
+assert bw.tree.heading("word", "text").strip() == "Word  (A\u2013Z)" and arrow() == ("word", "up")   # in words too
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
+assert rows("word") == sorted(rows("word"), reverse=True) and "(Z\u2013A)" in bw.tree.heading("word", "text")
+assert arrow() == ("word", "down")
+bw.close(); app.open_browser(); pump(4); bw = app.browsers[0]                       # remembered, either way round
+assert bw.sort_var.get() == "A-Z" and bw.reverse and rows("word") == sorted(rows("word"), reverse=True)
+assert bw.arrow == ("word", "down", 1.0)                                             # (no fill on opening)
+bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(8)                            # the drop-down: its usual order
+assert not bw.reverse and arrow() == ("rating", "down")
+bw.close(); app.browse_state = None
 app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons

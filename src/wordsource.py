@@ -2,7 +2,8 @@
 
 Flow on a first run (driven by main() in tierlist.py):
     build_word_list() or build_wiktionary()   fill the `words` table, most common first
-    prepare_queue()                           flag compounds (compute_penalties), then give every
+    prepare_queue()                           look up word frequencies once (fill_frequencies), flag
+                                              compounds (compute_penalties), then give every
                                               unplaced word a seeded queue key (Store.reshuffle)
 
 The Wiktionary path is resumable at every stage: the 3 GB download continues from its .part file,
@@ -329,6 +330,49 @@ def compute_penalties(store, log=print):
     return True
 
 
+def fill_frequencies(store, log=print):
+    """Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14). Words wordfreq has never
+    seen keep 0: they add nothing to how much of everyday English is covered."""
+    try:
+        from wordfreq import get_frequency_dict, word_frequency
+    except ImportError:
+        log("wordfreq is not installed, so the coverage figure is not available (pip install wordfreq).")
+        return
+    fd = get_frequency_dict("en")
+
+    def freq(w):        # the same as the ranking (build_wiktionary's zipf): hyphenated / spaced forms are estimated
+        f = fd.get(w)
+        if f:
+            return f
+        return word_frequency(w, "en") if ("-" in w or " " in w) else 0.0
+    words = [r[0] for r in store.db.execute("SELECT word FROM words")]
+    store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
+
+
+def wiktionary_steps(store, path=None):
+    """The main steps build_wiktionary will report, for the progress window's "Step 2 of 5" (plan_line)."""
+    steps = []
+    if store.get_meta("wk_done") != "1":
+        default = os.path.join(os.path.dirname(os.path.abspath(store.path)), WIKT_FILENAME)
+        if path is None and not os.path.exists(default):
+            steps.append("Downloading English Wiktionary")
+        steps.append("Reading entries")
+    return steps + ["Ranking words"]
+
+
+def queue_steps(store, adds_words=False):
+    """The main steps prepare_queue will report (see wiktionary_steps). `adds_words`: words are about to be
+    added first, which makes it redo all three (adding words resets pen_done and freq_done)."""
+    if not adds_words and not store.count_words():
+        return []
+    pen = adds_words or store.get_meta("pen_done") != "1"
+    freq = adds_words or store.get_meta("freq_done") != store.FREQ_VERSION
+    shuffle = pen or store.db.execute(
+        "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
+    return ((["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
+            + (["Shuffling the queue"] if shuffle else []))
+
+
 def prepare_queue(store, log=print):
     """Make sure every unplaced word has a queue position. Runs at startup; cheap when up to date."""
     if not store.count_words():
@@ -339,6 +383,9 @@ def prepare_queue(store, log=print):
         if compute_penalties(store, log):
             store.set_meta("pen_done", "1")
             changed = True
+    if store.get_meta("freq_done") != store.FREQ_VERSION:
+        log("Looking up how common each word is (one time, a few seconds)...")
+        fill_frequencies(store, log)
     stale = store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone()
     if stale or changed:

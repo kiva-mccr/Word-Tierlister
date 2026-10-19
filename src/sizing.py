@@ -2,7 +2,11 @@
 
 Three questions this module answers:
     * How big is the usable screen?   usable_area(root): the monitor the pointer is on (Linux asks
-      xrandr, because Tk reports all monitors as one wide screen), minus room for panels and title bars.
+      xrandr, because Tk reports all monitors as one wide screen; Windows asks the system, because Tk
+      reports only the main monitor), minus room for panels and title bars. monitor_at(root, x, y) and
+      clamp_to_monitor() keep pop-ups (drop-downs, hover notes) on the monitor they open from.
+    * Windows display scaling: set_dpi_awareness() (called before the first window) tells Windows the
+      program sizes itself, so at 125% / 150% it is drawn sharp instead of stretched as a picture.
     * How big is "one unit" of UI?    ui_factor(root): 1.0 at the classic 96 dpi; larger on high-dpi
       screens where Tk's point-based fonts are bigger but pixel sizes written in code are not.
     * Where does a window go?         fit_size / center_geometry / place_dialog.
@@ -10,6 +14,7 @@ Three questions this module answers:
 Layers that call this: App (main window), Browser, StartupWindow and the dialogs. Everything that
 reads the screen goes through usable_area(), so tests can pretend to have a different screen.
 """
+import os
 import re
 import shutil
 import subprocess
@@ -52,25 +57,122 @@ def _xrandr_monitors(root):
     return found
 
 
-def monitor_box(root):
-    """(x, y, w, h) of the monitor to open on: the one under the pointer, else the primary, else the screen."""
-    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-    mons = [m for m in _xrandr_monitors(root) if m[0] + m[2] <= sw + 1 and m[1] + m[3] <= sh + 1]
-    if mons:
+def _windows_monitors(user32=None):
+    """Windows: each monitor's work area (without the taskbar) as [(x, y, w, h, is_primary)], [] on failure.
+    Real pixels once set_dpi_awareness() has run (else Windows hands out scaled ones)."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = user32 or ctypes.windll.user32
+
+        class RECT(ctypes.Structure):
+            _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long),
+                        ("bottom", ctypes.c_long)]
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", RECT), ("rcWork", RECT), ("dwFlags", wintypes.DWORD)]
+
+        found = []
+
+        def each(hmon, _hdc, _rect, _data):
+            info = MONITORINFO()
+            info.cbSize = ctypes.sizeof(MONITORINFO)
+            if user32.GetMonitorInfoW(hmon, ctypes.byref(info)):
+                r = info.rcWork
+                found.append((r.left, r.top, r.right - r.left, r.bottom - r.top, bool(info.dwFlags & 1)))
+            return 1
+        proc = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(RECT),
+                                  ctypes.c_ssize_t)(each)
+        user32.EnumDisplayMonitors(None, None, proc, 0)
+        return found
+    except Exception:
+        return []
+
+
+def monitors(root):
+    """Every monitor as (x, y, w, h, is_primary), asked once; [] when the system cannot tell (then Tk's single
+    screen is used)."""
+    if "monitors" not in _xrandr_cache:
+        found = []
         try:
-            px, py = root.winfo_pointerxy()
+            system = root.tk.call("tk", "windowingsystem")
         except Exception:
-            px = py = -1
+            system = ""
+        if system == "x11":
+            sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+            found = [m for m in _xrandr_monitors(root) if m[0] + m[2] <= sw + 1 and m[1] + m[3] <= sh + 1]
+        elif system == "win32":
+            found = _windows_monitors()
+        _xrandr_cache["monitors"] = found
+    return _xrandr_cache["monitors"]
+
+
+def monitor_at(root, px, py):
+    """(x, y, w, h) of the monitor the point is on: else the nearest one, else Tk's whole screen."""
+    mons = monitors(root)
+    if mons:
         for x, y, w, h, _p in mons:
             if x <= px < x + w and y <= py < y + h:
                 return x, y, w, h
-        for x, y, w, h, primary in mons:
-            if primary:
-                return x, y, w, h
-        return mons[0][:4]
+        def gap(m):
+            x, y, w, h, _p = m
+            return max(x - px, 0, px - (x + w)) + max(y - py, 0, py - (y + h))
+        return min(mons, key=gap)[:4]
+    sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
     if sw > 2.2 * sh:                      # several monitors reported as one very wide screen
         return 0, 0, int(sh * 16 / 9), sh
     return 0, 0, sw, sh
+
+
+def monitor_box(root):
+    """(x, y, w, h) of the monitor to open on: the one under the pointer, else the primary, else the screen."""
+    try:
+        px, py = root.winfo_pointerxy()
+    except Exception:
+        px = py = -1
+    mons = monitors(root)
+    if mons and not any(x <= px < x + w and y <= py < y + h for x, y, w, h, _p in mons):
+        for x, y, w, h, primary in mons:
+            if primary:
+                return x, y, w, h
+    return monitor_at(root, px, py)
+
+
+def clamp_to_monitor(root, x, y, w, h, at=None):
+    """(x, y) moved just enough that a w x h pop-up stays on the monitor of the point `at` (default: x, y).
+    A pop-up from a window on a second monitor stays there (it used to be pushed onto the main one)."""
+    mx, my, mw, mh = monitor_at(root, *(at or (x, y)))
+    return max(mx, min(x, mx + mw - w)), max(my, min(y, my + mh - h))
+
+
+def set_dpi_awareness(windll=None):
+    """Windows: tell the system this program handles display scaling itself (per monitor), before the first
+    window opens. Without it, at 125% / 150% Windows draws the window small and stretches it like a
+    picture, so text and every rounded button look soft and pixelated, and positions are scaled too (pop-ups
+    land in the wrong place on a second monitor). Tk then reports the real dpi and the layout follows
+    (ui_factor). Returns True if it was set. Does nothing elsewhere; `windll` is for tests."""
+    if windll is None:
+        if os.name != "nt":
+            return False
+        import ctypes
+        windll = ctypes.windll
+    try:                                   # Windows 10 1703+: per monitor, version 2
+        import ctypes
+        fn = windll.user32.SetProcessDpiAwarenessContext
+        fn.argtypes = [ctypes.c_ssize_t]
+        if fn(-4):                         # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+            return True
+    except Exception:
+        pass
+    try:                                   # Windows 8.1+: per monitor
+        if windll.shcore.SetProcessDpiAwareness(2) == 0:
+            return True
+    except Exception:
+        pass
+    try:                                   # Vista+: the whole system's dpi
+        return bool(windll.user32.SetProcessDPIAware())
+    except Exception:
+        return False
 
 
 def usable_area(root):

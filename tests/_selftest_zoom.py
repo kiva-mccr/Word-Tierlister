@@ -32,12 +32,21 @@ for _ in range(8):
 top, z_top = body(), app.zoom
 assert top > b0 and z_top < 1.8                                     # it grew, but stopped where the screen is full
 assert app.toast.cget("text") == "This is as big as fits on this screen"
+assert app._zoom_cap.get(app._layout_key()) == round(z_top + app.ZOOM_STEP, 2)       # remembered: not tried again
 assert s.get_meta("zoom") == str(z_top)
 # switching tabs and back keeps the zoom (it used to shrink a step in a taller tab and never grow back)
 for m in ("refine", "boundary", "place"):
     app.mode_var.set(m); app.on_mode_change(); pump(3)
     if m == "place":
         assert body() == top, (body(), top)
+# opening the definitions when there is no room: the drawer stays folded while the window is fitted (it used to
+# flash open at full height for each size tried)
+seen = []
+real_cs = app._content_size
+app._content_size = lambda: (seen.append(app.def_frame.winfo_height() if app.def_frame.winfo_ismapped() else 0), real_cs())[1]
+app.toggle_defs(True); app._content_size = real_cs
+assert seen and max(seen) <= 1, seen
+app.anim.finish_all(); pump(4); app.toggle_defs(False); app.anim.finish_all(); pump(6)
 # the definitions: they may shrink things to fit while open; closing brings the zoom back
 app.toggle_defs(True); pump(4); app.anim.finish_all(); pump(4)
 assert body() <= top
@@ -53,12 +62,44 @@ for _ in range(3):
 app.toggle_defs(False); pump(4); app.anim.finish_all(); pump(4)
 assert abs(body() - round(12 * app.zoom)) <= 1                                  # closed: the zoom itself shows
 z_main = app.zoom
+# reported twice: after a zoom (out, or in a window bigger than normal) the contents grew past the zoom, and past
+# what zoom in allows, whenever the definitions closed or the tab changed. The size that counts as "normal" is set
+# by opening and by a zoom, and never re-measured smaller.
+def cycle():
+    sizes = set()
+    for step in ("defs", "nodefs", "refine", "place", "defs", "boundary", "place", "nodefs"):
+        if step in ("defs", "nodefs"):
+            app.toggle_defs(step == "defs")
+        else:
+            app.mode_var.set(step); app.on_mode_change()
+        pump(4); app.anim.finish_all(); pump(6)
+        if not app.show_defs and app.mode == "place":
+            sizes.add((body(), font("word").cget("size"), app.grow))
+    return sizes
+for steps in (-2, 1):
+    for _ in range(abs(steps)):
+        app.zoom_step(1 if steps > 0 else -1); pump(4)
+    before = (body(), font("word").cget("size"), app.grow)
+    assert cycle() == {before}, (steps, before)
+w, h = root.winfo_width(), root.winfo_height()
+root.geometry(f"{w + 200}x{h + 60}"); pump(10, 0.03)                           # a bigger window, by hand
+app.zoom_step(-1); pump(4)
+before = (body(), font("word").cget("size"), app.grow)
+assert before[2] == 1.0 and cycle() == {before}, before
+root.geometry(f"{w}x{h}"); pump(10, 0.03)
+app.set_zoom(1.0); pump(4)
+app.toast.hide(); app.anim.finish_all(); pump(2)
+app.set_zoom(1.0); pump(2)                                                      # M-6: already 100%, Ctrl 0 again
+assert app.zoom == 1.0 and app.toast.cget("text") == "Zoom 100%"                 # ...still says so
 # Browse has its own zoom: changing it leaves the main window alone, and the other way round
 main_body = body()
 app.open_browser(); pump(6); bw = app.browsers[0]
 bf = bw.f_body.cget("size")
 bw.zoom_by(2); pump(3)
 assert bw.f_body.cget("size") == bf + 2 and body() == main_body and s.get_meta("browse_zoom") == "2"
+assert bw._toast.cget("text") == "Zoom 117%"                                    # M-6: Browse says its zoom too
+bw.zoom_by(0); bw.zoom_by(0); pump(2); assert bw._toast.cget("text") == "Zoom 100%"   # ...also when unchanged
+bw.zoom_by(2); pump(3)
 app.zoom_step(-1); pump(4)
 assert bw.f_body.cget("size") == bf + 2 and body() < main_body
 z_main = app.zoom

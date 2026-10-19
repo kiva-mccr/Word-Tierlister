@@ -68,6 +68,7 @@ for sw, sh, sc in cases:
     # Browse window: toolbars and columns must fit its width, on this screen too
     import browser as B
     B.usable_area = A.usable_area
+    app.anim.reduce_motion = True                  # (sizes, not motion: no opening ease)
     app.open_browser(); root.update(); bw = app.browsers[-1]; root.update()
     W = bw.win.winfo_width()
     assert W <= int(sw * 0.96) and bw.win.winfo_height() <= int(sh * 0.90), f"browse bigger than screen {sw}x{sh}"
@@ -102,5 +103,42 @@ dlg = tk.Toplevel(root); tk.Label(dlg, text="x" * 40).pack(padx=300, pady=200)
 Z.place_dialog(dlg, root); dlg.update_idletasks()
 ax, ay, aw, ah = Z.usable_area(root)
 assert ax <= dlg.winfo_x() and dlg.winfo_x() + dlg.winfo_width() <= ax + aw + 2
+# ---- several monitors: a pop-up stays on the monitor it opens from (reported on Windows: a drop-down on a
+#      second monitor opened at the far side of the main one, because Tk's screen size is the main monitor's)
+two = [(0, 0, 1920, 1080, True), (1920, 0, 2560, 1440, False)]
+saved = Z._xrandr_cache.get("monitors")
+Z._xrandr_cache["monitors"] = two
+assert Z.monitor_at(root, 2500, 300) == (1920, 0, 2560, 1440) and Z.monitor_at(root, 100, 100) == (0, 0, 1920, 1080)
+assert Z.monitor_at(root, 5000, 300) == (1920, 0, 2560, 1440)                  # off every monitor: the nearest
+assert Z.clamp_to_monitor(root, 2400, 300, 200, 100) == (2400, 300)            # fits: left where it is
+assert Z.clamp_to_monitor(root, 4400, 1400, 200, 100) == (4280, 1340)          # kept on the second monitor
+assert Z.clamp_to_monitor(root, 1850, 300, 200, 100, at=(1850, 300)) == (1720, 300)   # opened from the first
+Z._xrandr_cache["monitors"] = []
+assert Z.monitor_at(root, 10, 10)[:2] == (0, 0)                                # unknown: Tk's one screen
+if saved is None:
+    Z._xrandr_cache.pop("monitors")
+else:
+    Z._xrandr_cache["monitors"] = saved
+assert Z._windows_monitors() == [] or os.name == "nt"                          # (only answers on Windows)
 root.destroy()
+
+# ---- Windows display scaling: asked for once, newest way first, older ways as fallbacks
+class Fn:
+    def __init__(self, result, calls, name): self.result, self.calls, self.name = result, calls, name
+    def __call__(self, *a): self.calls.append((self.name, a)); return self.result
+def fake_windll(ctx, shcore, legacy):
+    calls = []
+    def part(**fns):
+        return type("P", (), {k: Fn(v, calls, k) for k, v in fns.items()})()
+    w = type("W", (), {})()
+    w.user32 = part(SetProcessDpiAwarenessContext=ctx, SetProcessDPIAware=legacy)
+    w.shcore = part(SetProcessDpiAwareness=shcore)
+    return w, calls
+w, calls = fake_windll(1, 0, 1)
+assert Z.set_dpi_awareness(w) and calls == [("SetProcessDpiAwarenessContext", (-4,))]   # per monitor, v2
+w, calls = fake_windll(0, 0, 1)
+assert Z.set_dpi_awareness(w) and [c[0] for c in calls] == ["SetProcessDpiAwarenessContext", "SetProcessDpiAwareness"]
+w, calls = fake_windll(0, 5, 1)
+assert Z.set_dpi_awareness(w) and calls[-1][0] == "SetProcessDPIAware"
+assert Z.set_dpi_awareness() is (os.name == "nt") or os.name == "nt"           # elsewhere: nothing to do
 print("sizing OK")

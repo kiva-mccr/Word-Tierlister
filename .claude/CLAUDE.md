@@ -23,7 +23,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -34,6 +34,12 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
   is its own Toast with the newest on top.
 - Keep the pastel look over colour-blind colour tuning wherever labels (letters, counts) already carry the
   meaning; the user chose this for the tier chart.
+- The word card has a fixed size (fonts + room, never the word) and fits each word in its own font copy; keep
+  per-word work free of geometry changes. Check layout jitter with `tools/layout_trace.py` (under xvfb-run).
+- Rounded shapes are drawn with `SmoothCanvas.round_rect` (smooth.py: soft-edged images over an invisible
+  polygon; Tk's own canvas shapes are jagged, worst on Windows). Never `create_polygon(..., smooth=True)` for
+  them (small icons: `SmoothCanvas.icon_image` with `smooth.ICONS`, never text symbols). Use `round_rect_coords` to resize; a shape on the plain canvas colour is pre-blended (cheap), over
+  other shapes its edge stays see-through. Pop-ups are kept on their monitor with `sizing.clamp_to_monitor`.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
 - The bottom-right hint lists only keys no on-screen button already shows.
@@ -48,7 +54,11 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
   bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
   minimum sizes at grow 1. Main and Browse zooms are separate and saved.
 - Test speed on a big save (300k-1M words) for anything run per duel or per refresh: a query that sorts a
-  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier.
+  whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier. Read the
+  indexes instead (tier+rating, tier+games, partial ones over placed words, ...; check EXPLAIN QUERY PLAN for
+  "TEMP B-TREE"). Test both a densely placed save and a sparse one (a few thousand placed of a million): a
+  query can be quick on one and slow on the other. Look for orphans
+  with vulture (installed here: `python3.12 -m vulture src tierlist.py tools tests`).
 - Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
   else may write the save meanwhile.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
@@ -58,6 +68,9 @@ ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
+  Long jobs name their main steps first (`constants.plan_line`) for the "Step i of n" corner; keep
+  `wordsource.wiktionary_steps` / `queue_steps` in step with the stage lines they predict. pip downloads are
+  measured by watching its TMPDIR (`deps.install`); re-measure `deps.DOWNLOAD` if requirements change.
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
@@ -81,22 +94,24 @@ missed). Keep the README current in the same commit as the change (the user aske
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
   "Place new words"). UI-10 does the top; UI-24 restyles dialogs only.
 - Ask before changing decisions already settled (see "Decisions" in the roadmap): light theme only,
-  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): equal segments by commonness (rank
-  decades) with a "covers 99.4%" tag to its right, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
+  "+N today" with the "/hr" rate only on hover, progress bar (UI-14): a bookshelf of spines (zones page,
+  chapter, book, shelf, library; height = share placed; colour = median tier blended round the colour wheel;
+  the leaning tier in the hover note) with "95% of text" after it, packaging: T-6..T-8 (make a program / back to source as a sync / one command for Linux +
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), SZ-1, R-1 (folders). Next: UI-33, UI-34, UI-37..42, UI-48, UI-14, then UI-26 (final pass), then
-ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1 (the very last). UI-32 (moving pastel
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, not on X11 (M-5); remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
+ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.
-Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek.
+Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
+commit 9b78889; swaps are still counted).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
 - The Windows console detach (`startup.detach_console`) was only simulated here; confirm on real Windows.
-- Tk's own file dialog (Import / Export) still uses tk menus that grab input (can float over other
-  programs on Linux); UI-42's themed file picker replaces it.
+- UI-54 (dpi awareness, monitor work areas) was only simulated here; confirm on real Windows 11. Tk 8.6 keeps
+  its size when moved to a monitor with a different scaling.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
 - A read-only save file's dialog could not be verified (the test machine ran as root).

@@ -8,9 +8,15 @@ requirements.txt (a test checks it).
 import importlib
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
+import time
+
+from constants import plan_line
 
 # import name -> what to hand to pip
 PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
@@ -23,6 +29,9 @@ OPTIONAL = ["nltk"]
 # download, 70 installed, mostly frequency data) and nltk 3.10 (3 MB download, 23 installed, plus 11 MB of
 # WordNet data on first use), Python 3.12; re-measure when the requirements change.
 SIZE = {"wordfreq": 70, "nltk": 35}
+# what pip downloads for each, with the packages it pulls in (MB; measured with pip 24 for wordfreq 3.1 and
+# nltk 3.10): the installing window measures the download against this to show a percentage and a speed
+DOWNLOAD = {"wordfreq": 59, "nltk": 3}
 
 # what each one is for, in the words used in the install question
 PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
@@ -49,29 +58,99 @@ def pip_available():
         return False
 
 
-def install(names, log=print, python=None):
+_DOWNLOADING = re.compile(r"Downloading (\S+) \(([\d.]+) (kB|MB|GB)\)")
+_UNIT = {"kB": 1e3, "MB": 1e6, "GB": 1e9}
+_ARCHIVES = (".whl", ".tar.gz", ".zip")
+INSTALL_STEPS = ["Downloading", "Installing"]      # the main steps install() reports (plan_line)
+
+
+def install(names, log=print, python=None, plan=True):
     """pip-install the packages for the import names `names`, streaming pip's output through `log`.
 
     Returns (ok, tail): whether pip succeeded and its last lines (for an error message). Runs in this
     Python (sys.executable) unless `python` names another (a private environment), so the packages land
-    where the program will find them.
+    where the program will find them. `plan`: announce the two steps (downloading, installing) to the
+    progress window; off when a caller announced a longer plan of its own.
+
+    How fast it downloads is measured, not guessed: pip prints no progress when its output is not a terminal,
+    so it gets a temporary folder of its own (TMPDIR) and a watcher thread follows the file being downloaded
+    there, adding up the files already done (pip names each one and its size as it starts it). Every half
+    second that becomes a detail line, "12.4 of 62 MB at 3.1 MB/s (20%)", whose percentage drives the bar and
+    the time-left estimate.
     """
+    total = sum(DOWNLOAD.get(n, 1) for n in names) * 1e6
+    if plan:
+        log(plan_line(INSTALL_STEPS))
+    log(f"Downloading {', '.join(names)} (about {total / 1e6:.0f} MB)...")
+    tmp = tempfile.mkdtemp(prefix="wordtier-pip-")
+    env = dict(os.environ, TMPDIR=tmp, TEMP=tmp, TMP=tmp)
     cmd = [python or sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
            "--no-input", "--progress-bar", "off", *[PACKAGES.get(n, n) for n in names]]
+    state = {"done": 0.0, "current": 0.0, "installing": False, "finished": False}
+    watcher = threading.Thread(target=_watch_download, args=(tmp, total, state, log), daemon=True)
     lines = []
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                errors="replace", **_hidden())
+                                errors="replace", env=env, **_hidden())
+        watcher.start()
         for line in proc.stdout:
             line = line.rstrip()
-            if line:
-                lines.append(line)
+            if not line:
+                continue
+            lines.append(line)
+            m = _DOWNLOADING.search(line)
+            if m and not m.group(1).endswith(".metadata"):
+                state["done"] += state["current"]          # the one before it has finished
+                state["current"] = float(m.group(2)) * _UNIT[m.group(3)]
+            elif line.startswith("Installing collected packages") and not state["installing"]:
+                state["installing"] = True
+                log("Installing...")
+            if not line.lstrip().startswith(("Collecting", "Downloading", "Using cached")):
                 log("  " + line[:90])        # a leading space = a detail line in the progress window
         proc.wait()
     except OSError as exc:
         return False, str(exc)
+    finally:
+        state["finished"] = True
+        if watcher.is_alive():
+            watcher.join(timeout=2)
+        shutil.rmtree(tmp, ignore_errors=True)
     importlib.invalidate_caches()           # so the new packages can be imported without restarting
     return proc.returncode == 0, "\n".join(lines[-12:])
+
+
+def _watch_download(folder, total, state, log, every=0.5, clock=time.monotonic):
+    """install()'s watcher: until pip starts installing, report how much has come down and how fast."""
+    history = []                                      # (time, bytes) over the last few seconds, for the speed
+    last = None
+    while not state["finished"] and not state["installing"]:
+        got = state["done"] + min(_largest_archive(folder), state["current"] or float("inf"))
+        now = clock()
+        history.append((now, got))
+        while len(history) > 2 and now - history[0][0] > 5:
+            history.pop(0)
+        span = history[-1][0] - history[0][0]
+        speed = (history[-1][1] - history[0][1]) / span if span > 0.9 else None
+        whole = max(total, state["done"] + state["current"])
+        line = (f"  {got / 1e6:.1f} of {whole / 1e6:.0f} MB" + (f" at {speed / 1e6:.1f} MB/s" if speed else "")
+                + f" ({min(99, int(got * 100 / whole))}%)")
+        if got and line != last:
+            log(line)
+            last = line
+        time.sleep(every)
+
+
+def _largest_archive(folder):
+    """Size of the biggest package file under `folder` (the one being downloaded), 0 if none."""
+    best = 0
+    for top, _dirs, files in os.walk(folder):
+        for f in files:
+            if f.endswith(_ARCHIVES):
+                try:
+                    best = max(best, os.path.getsize(os.path.join(top, f)))
+                except OSError:
+                    pass
+    return best
 
 
 def _hidden():
@@ -222,11 +301,12 @@ def make_private_env(home, names, log=print):
     refuses installs (externally-managed). Returns (ok, tail, python of the environment)."""
     venv = os.path.join(home, ".venv")
     vpy = venv_python(venv)
+    log(plan_line(["Making a private environment"] + INSTALL_STEPS))
     log(f"Making a private environment in {venv}...")
     if _make_venv(venv, log) != 0 or not os.path.exists(vpy):
         return False, ("Could not make the private environment. On Debian/Ubuntu it needs:\n"
                        "    sudo apt install python3-venv"), vpy
-    ok, tail = install(names, log, python=vpy)
+    ok, tail = install(names, log, python=vpy, plan=False)
     return ok, tail, vpy
 
 

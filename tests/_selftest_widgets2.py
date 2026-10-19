@@ -2,7 +2,7 @@
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
 DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import time
+import time, types
 import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
@@ -58,7 +58,7 @@ p.event_generate("<Enter>"); p.event_generate("<ButtonPress-1>", x=6, y=8); upda
 p.event_generate("<ButtonRelease-1>", x=6, y=8); update()
 assert picked == [5]
 # pill shape: radius clamps to half the height (a true pill)
-assert str(p.itemcget("shape", "smooth")) in ("1", "true")
+assert p.smooth_image("shape") is not None
 
 # ---- flat RoundButton (UI-8): no fill or outline at rest, a soft fill on hover
 f = RoundButton(root, "Skip pair", lambda: None, font=fnt, flat=True); f.pack(); update()
@@ -296,7 +296,7 @@ assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40            
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
 landed = []
-toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
 update(); x0, y0 = toast_xy()
 assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
@@ -310,14 +310,27 @@ xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
 assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
-toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(200, -30),
+# M-2: with clear= (the top of the tallest bar) it goes over the bars and comes down onto its own from above,
+# stopping just above the landing point: the drop is opaque, and it used to brush the bars' tops (a pale square)
+toast.fling("over", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
+            hold_ms=10, in_=page, clear=-70)
+anim.finish_all(); anim.finish_all()
+seen, t0 = [], time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.004)
+    if toast.winfo_ismapped():
+        x, y = toast_xy(); seen.append((x, y + toast.winfo_height()))
+assert len(seen) > 6
+assert all(bottom <= -70 for x, bottom in seen if 100 < x < 195), seen          # over the chart: above every bar
+assert abs(seen[-1][0] - 200) <= 2 and -40 < seen[-1][1] <= -31, seen[-1]       # ends resting on its bar
+toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=10, in_=page, on_arrive=lambda: landed.append(2))
 toast.show("cut short", in_=page); anim.finish_all(); root.after(60, root.quit); root.mainloop(); anim.finish_all()
 assert landed == [1]                                                           # a replaced fling never "lands"
 toast.hide(); anim.finish_all()
 
 # hurry(): a newer message has started; the old one speeds through its stages and still lands
-toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(100, -30),
+toast.fling("fast", (TIER_COLORS[1], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(100, -30),
             hold_ms=5000, in_=page, on_arrive=lambda: landed.append(3))
 update(); toast.hurry()
 t0 = time.perf_counter()
@@ -335,19 +348,36 @@ t2.hurry()                                                                     #
 t2.destroy()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
-toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(50, 0),
-            hold_ms=10, in_=page, under=lambda y: PALETTE["surface"] if y > 100 else PALETTE["bg"])
+toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(50, 0),
+            hold_ms=10, in_=page, under=lambda x0, y0, x1, y1: PALETTE["surface"] if y0 > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
+# under() is asked with the toast's whole rectangle (reported: a white box beside the card, over the buttons,
+# when the backdrop went by height alone), and a long message narrows to a round drop before it reaches the bars
+rects = []
+def under_rect(x0, y0, x1, y1):
+    rects.append((x0, y0, x1, y1)); return PALETTE["surface"] if x1 < 150 else PALETTE["bg"]
+toast.fling("a rather long message for a drop", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60,
+            target=(200, 0), hold_ms=10, in_=page, under=under_rect)
+update(); x0r, y0r, x1r, y1r = rects[-1]
+assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1
+assert toast.cget("bg") == PALETTE["bg"]                                    # beside the "card": cream, never white
+wide = int(toast.cget("width"))
+anim.finish_all(); anim.finish_all()                                        # risen and rested: now it flies
+sizes, t0 = [], time.perf_counter()
+while toast.cget("text") and time.perf_counter() - t0 < 2:
+    root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+late = sizes[len(sizes) // 2:]                                              # the second half of the flight
+assert len(sizes) > 6 and all(w <= h + 4 < wide / 3 for w, h in late), sizes  # a drop, not a bar, over the chart
 # a new message cuts a fling short, and the old one's pending stages do nothing
-toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
+toast.fling("old", (TIER_COLORS[1], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=10, in_=page)
 toast.show("new", ms=5000, in_=page); anim.finish_all()
 root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_mid=165, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
 assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
 root.after(80, root.quit); root.mainloop(); update()
 assert toast.cget("text") == ""                                                # then simply gone
@@ -399,11 +429,27 @@ root.after(90, root.quit); root.mainloop()
 mid = card.coords("oldword"); assert mid[0] > rest[0] and mid[1] > rest[1]   # old word on its way (right, down)
 anim.finish_all(); update(1)                                                # a key press: straight to the end
 assert not card.find_withtag("old") and card.coords("word") == card.coords("word")
-assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
+assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
 # a redraw in the middle (window resized) still ends with the word exactly in place
 card.set("plum", "rank #3"); card.transition_from("pear", "rank #2", dx=-10, dy=12, animator=anim); update(1)
 card.set("plum", "rank #3"); anim.finish_all(); update(1)
-assert abs(card.coords("word")[1] - card._layout[1]) < 0.5 and not card.find_withtag("old")
+assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and not card.find_withtag("old")
+# reported: a white flash when placing fast. A redraw mid-transition (the card resizing for the next word) keeps
+# the outgoing word, above the card's face, and the two words always have about one word's worth of ink between them
+card.set("kiwi", "rank #4"); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim); update(1)
+card.set("kiwi", "rank #4")                                                 # what a resize does
+items = card.find_all()
+assert card.find_withtag("oldword") and items.index(card.find_withtag("oldword")[0]) > items.index(card.find_withtag("card")[0])
+assert card.itemcget("oldword", "text") == "plum"
+for p in (0.0, 0.25, 0.5, 0.75, 1.0):
+    card._frame(p)
+    ink = sum(1 - sum(int(card.itemcget(t, "fill")[i:i + 2], 16) for i in (1, 3, 5)) / 765 for t in ("oldword", "word"))
+    assert ink > 0.6 * (1 - sum(int(PALETTE["text"][i:i + 2], 16) for i in (1, 3, 5)) / 765), p
+# the darker word is always on top (a pale one over a dark one cut white gaps through it: reported)
+above = lambda a, b: card.find_all().index(card.find_withtag(a)[0]) > card.find_all().index(card.find_withtag(b)[0])
+card._frame(0.1); assert above("oldword", "word") and above("oldsub", "sub")
+card._frame(0.9); assert above("word", "oldword") and above("sub", "oldsub")
+anim.finish_all(); update(1); assert not card.find_withtag("old")
 anim.reduce_motion = True                                                   # Reduce motion: no transition at all
 card.set("fig", ""); card.transition_from("plum", "rank #3", dx=10, dy=12, animator=anim)
 assert not card.find_withtag("old") and card.itemcget("word", "fill") == PALETTE["text"]
@@ -417,6 +463,13 @@ tb, bb = ec.bbox("title"), ec.bbox("body")
 assert tb[3] <= bb[1] and bb[2] - bb[0] <= small.measure("n" * 34) + 2               # title above; body wraps
 assert ec.winfo_reqwidth() > bb[2] - bb[0] and ec.winfo_reqheight() > bb[3]           # the panel holds both
 ew.destroy()
+
+# ---- Toast.wiggle: a little "no" shake of the message on screen, which then stays longer
+wt = Toast(root, small, animator=anim); wt.show("No further", ms=400); update()
+assert wt.wiggle() and anim.is_running(f"wiggle{id(wt)}")
+anim.finish_all(); assert int(wt.place_info()["x"]) == 0
+wt._fire(); anim.finish_all(); update(); assert not wt.wiggle()                 # gone: nothing to wiggle
+wt.destroy()
 
 # ---- StyledDialog (UI-24): headline, intro, body, rounded buttons; Enter = default, Escape = on_cancel
 from fonts import init_fonts
@@ -439,11 +492,84 @@ dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
 dlg.close(); update(); assert not dlg.alive()
 
+# ---- WordCard's size never depends on the word (reported: the buttons moved / flashed when sorting fast)
+wc_font = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
+wc = WordCard(root, wc_font, small, wraplength=600); wc.pack(); wc.set("ox", "rank #1"); update()
+size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
+assert size[0] % 2 == 0                                                                   # even: centring never wobbles
+for word, sub in (("incomprehensibilities", "rank #2"), ("a", ""), ("well-to-do", "rank #3 - compound word"),
+                  ("antidisestablishmentarianism " * 5, "rank #4 - revisiting a word you skipped - compound word")):
+    wc.set(word, sub); update()
+    assert (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size, word
+    cb = wc.bbox("card")
+    for tag in ("word", "sub"):
+        b = wc.bbox(tag)
+        assert not b or (cb[0] <= b[0] and b[2] <= cb[2] and cb[1] <= b[1] and b[3] <= cb[3]), (word, tag, b, cb)
+wc.set("ox", "rank #5 - " + "a very long note " * 8); update()
+assert wc.itemcget("sub", "text").endswith("\u2026") and wc.bbox("sub")[2] <= wc.bbox("card")[2]   # cut short
+assert wc_font.cget("size") == 40                                                         # the shared font untouched
+wc.destroy()
+
+# ---- ShapeCard (UI-41): a queue shape's curve; chosen = white with a lilac edge and a "half by" line
+from widgets import ShapeCard, short_rank
+from constants import queue_weight
+picked = []
+scw = tk.Toplevel(root)
+sc = ShapeCard(scw, "exp", "Exponential", TIER_COLORS[1], on_pick=picked.append, font_=small); sc.pack()
+sc.set(spread=20000, chosen=True); update()
+assert sc.itemcget("face", "fill") == PALETTE["surface"] and sc.itemcget("face", "outline") == PALETTE["accent"]
+assert sc.itemcget("area", "fill") == TIER_COLORS[1] and sc.itemcget("median_text", "text") == "half by #13.9k"
+y20 = sc.coords("curve")[1::2]
+sc.set(spread=5000); y5 = sc.coords("curve")[1::2]
+assert sum(y5) > sum(y20) and len(y5) == len(y20)                    # a smaller spread: the curve drops sooner
+assert abs(y5[0] - y20[0]) < 0.01                                   # (both start at the top: rank #1)
+sc.set(chosen=False)
+assert sc.itemcget("face", "fill") == PALETTE["surface2"] and not sc.find_withtag("median")
+sc.set(spread=400000, chosen=True)                                  # median past the axis: pinned to the edge
+assert sc.coords("median")[0] <= int(sc.cget("width")) and sc.itemcget("median_text", "anchor") == "ne"
+update(); sc.event_generate("<Button-1>", x=5, y=5); update(); assert picked == ["exp"]
+assert [short_rank(n) for n in (840, 13863, 100000, 250000, 1_200_000)] == ["840", "13.9k", "100k", "250k", "1.2M"]
+assert queue_weight("gauss", 1) > queue_weight("exp", 1) and queue_weight("gauss", 3) < queue_weight("exp", 3)
+scw.destroy()
+
+# ---- DuelCards stays centred in a frame wider than the cards (reported: the conflict line widened it)
+wide = tk.Toplevel(root); wide.geometry("1400x500+0+0"); wide.columnconfigure(0, weight=1)
+dc = DuelCards(wide, lambda side: None, small, small); dc.grid(row=0, column=0, sticky="ew")
+dc.show("panel", "thy"); update(4)
+mid = dc.winfo_rootx() + dc.winfo_width() / 2
+cards = (dc.left.winfo_rootx() + dc.right.winfo_rootx() + dc.right.winfo_width()) / 2
+assert dc.winfo_width() > dc.left.winfo_width() * 3 and abs(cards - mid) <= 2, (cards, mid)
+wide.destroy()
+
+# ---- Tooltip (UI-33): below what it describes, stays put, rounded lilac card in the shared font
+from widgets import Tooltip
+area = tk.Canvas(root, width=300, height=40, bg=PALETTE["bg"]); area.pack(); update()
+tip = Tooltip(area, lambda e: "left half" if e.x < 150 else "right half", font=small)
+shown_states = []
+real_place = Tooltip._place
+Tooltip._place = lambda self, e: (shown_states.append(self.win.state()), real_place(self, e))
+tip.show_at(types.SimpleNamespace(x=40, y=10)); update()
+Tooltip._place = real_place
+assert shown_states == ["withdrawn"] and tip.win.state() == "normal"            # placed before it is ever shown
+tx, ty = tip.win.winfo_rootx(), tip.win.winfo_rooty()
+assert tip.text == "left half" and ty >= area.winfo_rooty() + area.winfo_height()   # below it, never over it
+tip._on_motion(types.SimpleNamespace(x=200, y=20)); update()
+assert tip.text == "right half" and (tip.win.winfo_rootx(), tip.win.winfo_rooty()) == (tx, ty)   # same place
+card = tip._canvas.find_withtag("card")[0]
+assert tip._canvas.itemcget(card, "fill") == PALETTE["surface2"] and tip._canvas.itemcget(card, "outline") == PALETTE["border"]
+assert tip._canvas.smooth_image(card) is not None and tip._canvas.itemcget("text", "font") == str(small)
+tip.hide(); assert tip.text == "" and tip.win is None
+side = Tooltip(area, lambda e: "beside", font=small, side="right")
+side.show_at(types.SimpleNamespace(x=40, y=10)); update()
+assert side.win.winfo_rootx() >= area.winfo_rootx() + area.winfo_width()            # to its right
+side.hide()
+area.destroy()
+
 # ---- TierChip (UI-28): a rounded pastel tier label, sized from its font
 from widgets import TierChip
 chip = TierChip(root, "S", TIER_COLORS[0], small); chip.pack(); update()
 poly = chip.find_withtag("all")[0]
-assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.itemcget(poly, "smooth") in ("1", "true", "bezier")
+assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.smooth_image(poly) is not None
 w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
 small.configure(size=11); chip.destroy()
 root.destroy()

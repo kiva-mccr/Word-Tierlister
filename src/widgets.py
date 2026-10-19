@@ -4,11 +4,14 @@ Both are canvases drawn with smoothed rounded corners. Canvas (not tk.Button or 
 colours then look the same on macOS, Windows and Linux, and corners can be round everywhere.
 After a shared Font object is resized, call refresh_widgets(window) so they re-measure.
 """
+import math
 import tkinter as tk
 import tkinter.font as tkfont
 
+from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
-from sizing import place_dialog
+from sizing import clamp_to_monitor, monitor_at, place_dialog
+from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
@@ -17,14 +20,7 @@ DIP = 2                 # pixels the button sinks while pressed
 _CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg")
 
 
-def _rounded_points(x1, y1, x2, y2, r):
-    """Polygon outline of a rounded rectangle; drawn with smooth=True it gives round corners."""
-    return [x1 + r, y1, x1 + r, y1, x2 - r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y1 + r,
-            x2, y2 - r, x2, y2 - r, x2, y2, x2 - r, y2, x2 - r, y2, x1 + r, y2, x1 + r, y2,
-            x1, y2, x1, y2 - r, x1, y2 - r, x1, y1 + r, x1, y1 + r, x1, y1]
-
-
-class RoundButton(tk.Canvas):
+class RoundButton(SmoothCanvas):
     """A rounded, pastel button with a hover tint, a pressed 'dip', a disabled look and a key hint.
 
         RoundButton(parent, "Better", command, bg=PALETTE["better"], hint="Up / B", animator=app.anim)
@@ -200,9 +196,8 @@ class RoundButton(tk.Canvas):
         body_h = h - DIP - 1 - lift
         r = max(4, min(self._radius, body_h // 2))
         if lift:     # the shadow stays put; the body sits on it and rises off it on hover
-            self.create_polygon(_rounded_points(2, 1 + lift + 1, w - 2, 1 + lift + body_h, r), smooth=True,
-                                fill=super().cget("bg"), outline="", tags="shadow")
-        self.create_polygon(_rounded_points(1, 1 + lift, w - 1, 1 + lift + body_h, r), smooth=True, tags=("shape", "body"))
+            self.round_rect(2, 1 + lift + 1, w - 2, 1 + lift + body_h, r, fill=super().cget("bg"), tags="shadow")
+        self.round_rect(1, 1 + lift, w - 1, 1 + lift + body_h, r, tags=("shape", "body"))
         top = 1 + lift + (body_h - (th + gap + hh)) / 2
         self.coords(label, w / 2, top)
         if self._hint:
@@ -296,7 +291,7 @@ class TierRow(tk.Frame):
             self.buttons.append(b)
 
 
-class TierChip(tk.Canvas):
+class TierChip(SmoothCanvas):
     """A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for
     places that name a tier without being a button: the Anchor words dialog (UI-28).
 
@@ -314,8 +309,7 @@ class TierChip(tk.Canvas):
         h = int(line * 1.5)
         w = max(h, self._font.measure(self._text) + line)
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, h // 2 - 1), smooth=True, fill=self._color,
-                            outline=lerp_color(self._color, PALETTE["text"], 0.14))
+        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, PALETTE["text"], 0.14))
         self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=PALETTE["text"])
 
     def refresh(self):
@@ -336,6 +330,7 @@ class DuelCards(tk.Frame):
     def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
         super().__init__(parent, bg=PALETTE["bg"])
         self.columnconfigure((0, 1), uniform="duel")
+        self.grid_anchor("n")                # centred when the frame is wider than the cards (a long context line)
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
                                 padx=40, pady=40, radius=24, hint="\u2190  A", animator=animator, ring=3, lift=self.LIFT,
                                 hint_font=small_font)
@@ -387,7 +382,7 @@ class DuelCards(tk.Frame):
             b.set_enabled(enabled)
 
 
-class AnchorLadder(tk.Canvas):
+class AnchorLadder(SmoothCanvas):
     """The S..F strip shown while a word is placed by comparing it to anchors (UI-9).
 
         ladder = AnchorLadder(parent, ["S", "A", "B", "C", "D", "F"], font("head"), animator=app.anim)
@@ -419,8 +414,7 @@ class AnchorLadder(tk.Canvas):
         super().configure(width=total + 6, height=h + caret + 8)
         for i, name in enumerate(self._tiers):
             x = 3 + i * (w + gap)
-            self.create_polygon(_rounded_points(x, 3, x + w, 3 + h, h // 2), smooth=True,
-                                tags=("pill", f"pill{i}"), width=1)
+            self.round_rect(x, 3, x + w, 3 + h, h // 2, tags=("pill", f"pill{i}"), width=1)
             self.create_text(x + w / 2, 3 + h / 2, text=name, font=self._font, tags=("txt", f"txt{i}"))
         self._caret_size = (w, h, gap, caret)
         self._paint()
@@ -464,7 +458,7 @@ class AnchorLadder(tk.Canvas):
         self._draw()
 
 
-class TabBar(tk.Canvas):
+class TabBar(SmoothCanvas):
     """Folder-style tabs over a page (UI-10): a hairline runs the full width under the tabs, and the
     chosen tab is drawn in the page colour with its sides and rounded top outlined, open at the bottom,
     so it looks joined to the page below.
@@ -519,9 +513,11 @@ class TabBar(tk.Canvas):
         tab_w, h, x0, width = self._metrics()
         super().configure(height=h + 1, cursor="hand2")
         super().configure(width=len(self.options) * tab_w + 20)
-        self.create_polygon(0, 0, 0, 0, fill=PALETTE["surface2"], outline="", tags="hoverfill")
-        self.create_polygon(0, 0, 0, 0, fill=self._page, outline="", tags="tabfill")
-        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], smooth=True, tags="tabedge")
+        self.round_rect(0, 0, 0, 0, 0, fill=PALETTE["surface2"], tags="hoverfill")
+        # the open tab: page coloured with a hairline, round on top; its bottom edge sits just below the canvas,
+        # so it is open at the bottom (it runs into the page)
+        self.round_rect(0, 0, 0, 0, 0, fill=self._page, outline=PALETTE["border"], tags="tabfill")
+        self.create_line(0, 0, 0, 0, fill=PALETTE["border"], state="hidden", tags="tabedge")   # (its outline, for tests)
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_left")
         self.create_line(0, 0, 0, 0, fill=PALETTE["border"], tags="baseline_right")
         for key, label in self.options:
@@ -543,14 +539,14 @@ class TabBar(tk.Canvas):
         x1 = x0 + self._x * tab_w + 2
         x2 = x1 + self._open[self.value] * tab_w - 4
         shape = self._tab_shape(x1, max(x2, x1 + 2 * r), top, base + 1, r)
-        self.coords("tabfill", *shape)
+        self.round_rect_coords("tabfill", x1, top, max(x2, x1 + 2 * r), base + 3, radii=(r, r, 0, 0))
         self.coords("tabedge", *shape[2:-2])       # sides and top only: open at the bottom
         self.coords("baseline_left", 0, base, x1, base)
         self.coords("baseline_right", x2, base, width, base)
         hov = self._hover if self._hover != self.value else None
         if hov is not None:
             hx1 = x0 + self._slot(hov) * tab_w + 6
-            self.coords("hoverfill", *self._tab_shape(hx1, hx1 + tab_w - 12, top + 4, base - 1, r))
+            self.round_rect_coords("hoverfill", hx1, top + 4, hx1 + tab_w - 12, base - 1, radii=(r, r, 0, 0))
             self.itemconfigure("hoverfill", state="normal")
         else:
             self.itemconfigure("hoverfill", state="hidden")
@@ -719,8 +715,7 @@ class DropMenu:
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
-        x = max(0, min(x, win.winfo_screenwidth() - w))
-        y = max(0, min(y, win.winfo_screenheight() - h))
+        x, y = clamp_to_monitor(win, x, y, w, h)     # on the monitor it opens from, not the main one
         win.geometry(f"+{x}+{y}")
         win.deiconify()
         win.lift()
@@ -897,7 +892,7 @@ class HeaderMenus(tk.Frame):
             self.drops[self._open].close()
 
 
-class Toast(tk.Canvas):
+class Toast(SmoothCanvas):
     """A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
 
         toast = Toast(root, font("label"), animator=app.anim, on_gone=forget)
@@ -970,16 +965,38 @@ class Toast(tk.Canvas):
         self._fade(0.0, 1.0, self.FADE_IN_MS)
         self._later(ms, self.hide)
 
-    def fling(self, text, tint, start_mid, rest_bottom, target, hold_ms=550, in_=None, wraplength=None, under=None,
-              on_arrive=None):
-        """The placement message (UI-11, UI-17): rise from its centre at y=start_mid until its bottom edge is at
+    WIGGLE_MS = 320
+
+    def wiggle(self, ms=1500):
+        """A little side-to-side "no" shake of the message on screen (a repeated refusal, like a zoom that cannot
+        go further), and it stays `ms` longer. Nothing moves with Reduce motion; it only stays longer."""
+        if not self._text or self._next is None:
+            return False
+        if self._job is not None:
+            self.after_cancel(self._job)
+        self._later(ms, self.hide)
+
+        def frame(p):
+            self.place_configure(x=int(round(7 * math.sin(p * 3 * 2 * math.pi) * (1 - p))))
+        if self._anim is not None and not self._anim.reduce_motion:
+            self._anim.run(f"wiggle{id(self)}", self.WIGGLE_MS, frame, lambda: self.place_configure(x=0),
+                           ease=lambda t: t)
+        return True
+
+    def fling(self, text, tint, start_bottom, rest_bottom, target, hold_ms=550, in_=None, wraplength=None,
+              under=None, on_arrive=None, clear=None):
+        """The placement message (UI-11, UI-17): rise from its bottom edge at y=start_bottom until it is at
         y=rest_bottom, fading in; rest for hold_ms while paling slightly; then shrink into a small drop that
-        flies to `target` = (x offset from the centre of `in_`, y of the landing point), fading out, and call
-        on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry() speeds it all up, a
-        replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
+        flies to `target` = (x offset from the centre of `in_`, y of the landing point: it stops just above
+        it), fading out, and call on_arrive(). y values are inside `in_`. Every stage is <= 250 ms; hurry()
+        speeds it all up, a replaced one never arrives. With Reduce motion it stays put, then goes. Shrinking matters: tk has no
         transparency, so a full-size pill would be an opaque box passing over the chart.
-        `under(y_mid)` returns the colour behind the toast at that height (the toast takes that colour as its
-        own background and blends toward it)."""
+        `under(x0, y0, x1, y1)` returns the colour behind the toast's rectangle (inside `in_`); the toast takes
+        that colour as its own background and blends toward it. It is asked every frame, with the whole
+        rectangle: a backdrop picked by height alone painted a white box over the page beside the card.
+        `clear` (a y inside `in_`, the top of the tallest bar): the drop flies in an arc over that height and
+        drops onto its landing point from above, so it never crosses a bar (being opaque, its corners showed
+        as a pale square on the bars it brushed)."""
         self._reset()
         gen = self._gen
         self._text, self._tint = text, tint
@@ -991,11 +1008,12 @@ class Toast(tk.Canvas):
         key = self._key
         alive = lambda: gen == self._gen
         w0, h0 = int(self.cget("width")), int(self.cget("height"))
-        from_y, to_y = start_mid - h0 / 2, rest_bottom - h0
+        from_y, to_y = start_bottom - h0, rest_bottom - h0
 
-        def backdrop(y_mid):
+        def backdrop(x, y, w, h):
             if under is not None:
-                c = under(y_mid)
+                cx = self._in.winfo_width() / 2 + x
+                c = under(cx - w / 2, y, cx + w / 2, y + h)
                 if c != self._page:
                     self._page = c
                     super(Toast, self).configure(bg=c)
@@ -1003,7 +1021,7 @@ class Toast(tk.Canvas):
         def rise(p):
             if alive():
                 y = from_y + (to_y - from_y) * p
-                backdrop(y + h0 / 2)
+                backdrop(0, y, w0, h0)
                 self._put(0, y)
                 self._paint(p)
 
@@ -1011,13 +1029,36 @@ class Toast(tk.Canvas):
             if alive():
                 self._paint(1.0 - 0.3 * p)
 
+        y0 = to_y + h0 / 2
+
+        def path(p, h):
+            """Where the drop's middle is, for its size h. The drop is a little opaque window 2 px bigger than
+            itself, so its bottom stays a pixel clear of a bar's top (and the bar's soft edge above that): it
+            ends resting just above its bar. With `clear` it first rises just above the tallest bar (by its own
+            size: it is shrinking), crosses to straight above its bar, then drops onto it."""
+            land = target[1] - h / 2 - 4
+            if clear is None:
+                return target[0] * p, y0 + (land - y0) * p
+            a = min(1.0, p / 0.7)
+            x = target[0] * a * a * (3 - 2 * a)                      # across (eased in and out)
+            top = min(y0, clear - h / 2 - 4)
+            if p < 0.7:
+                b = min(1.0, p / 0.45)
+                return x, y0 + (top - y0) * (1 - (1 - b) ** 2)      # up first (eased out), ahead of across
+            c = (p - 0.7) / 0.3
+            return x, top + (land - top) * c * c                     # then it drops (eased in)
+
         def fly(p):
             if alive():
                 scale = 1.0 - 0.85 * p                         # shrinks to a small drop
-                y_mid = to_y + h0 / 2 + (target[1] - to_y - h0 / 2) * p
-                backdrop(y_mid)
-                self._resize(max(4, w0 * scale), max(4, h0 * scale), text_alpha=max(0.0, 1.0 - p * 2.5))
-                self._put(target[0] * p, y_mid - h0 * scale / 2)
+                # ...and narrows to a round drop by the time its text has gone (p = 0.4): a long word's pill
+                # stayed wide all the way and covered the chart bars as an opaque box
+                h = max(4, h0 * scale)
+                w = max(4, h + (w0 * scale - h) * max(0.0, 1.0 - p * 2.5))
+                x, y_mid = path(p, h)
+                backdrop(x, y_mid - h / 2, w, h)
+                self._resize(w, h, text_alpha=max(0.0, 1.0 - p * 2.5))
+                self._put(x, y_mid - h / 2)
                 self._paint(0.7 * (1.0 - 0.6 * p), text=max(0.0, 0.7 - p * 2.5))
 
         def gone():
@@ -1099,7 +1140,7 @@ class Toast(tk.Canvas):
         h = (y2 - y1) + 2 * pady
         self._line, self._pady = line, pady
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, min(h // 2, line)), smooth=True, tags="pill")
+        self.round_rect(1, 1, w, h, min(h // 2, line), tags="pill")
         self.coords(t, 1 + w / 2, 1 + pady)
         self.tag_raise("text")
 
@@ -1107,7 +1148,7 @@ class Toast(tk.Canvas):
         """Redraw the pill at another size (the flying drop); the text stays centred, then fades away."""
         w, h = int(w), int(h)
         super().configure(width=w + 2, height=h + 2)
-        self.coords("pill", *_rounded_points(1, 1, w, h, max(2, min(h // 2, self._line))))
+        self.round_rect_coords("pill", 1, 1, w, h, r=max(2, min(h // 2, self._line)))
         self.coords("text", 1 + w / 2, 1 + max(0, (h - self._line) / 2))
         self.itemconfigure("text", state="normal" if text_alpha > 0 else "hidden")
 
@@ -1253,7 +1294,236 @@ class DefinitionDrawer(tk.Frame):
             self._anim.run(f"drawer{id(self)}", self.SLIDE_MS, frame, done)
 
 
-class EmptyCard(tk.Canvas):
+class ShapeCard(SmoothCanvas):
+    """One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve
+    (how likely a word is to come up early, from rank #1 to QUEUE_AXIS), its name under it, and for the
+    chosen card a dotted line at the rank above which half the early words come from. The chosen card is
+    white with a lilac hairline and a filled curve; the other is faint. A click calls on_pick(shape).
+
+        card = ShapeCard(parent, "exp", "Exponential", TIER_COLORS[1], on_pick=choose)
+        card.set(spread=20000, chosen=True)       # redraw (live, as the spread is typed)
+    """
+    def __init__(self, parent, shape, name, color, on_pick, font_=None, canvas_bg=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"], cursor="hand2")
+        self.shape, self.name, self.color = shape, name, color
+        self._font = font_ or font("body")
+        self.spread, self.chosen = 20000.0, False
+        self.bind("<Button-1>", lambda e: on_pick(shape))
+        self._draw()
+
+    def set(self, spread=None, chosen=None):
+        if spread is not None:
+            self.spread = max(1.0, float(spread))
+        if chosen is not None:
+            self.chosen = bool(chosen)
+        self._draw()
+
+    def refresh(self):
+        self._draw()
+
+    def median_rank(self):
+        return QUEUE_MEDIAN[self.shape] * self.spread
+
+    def _draw(self):
+        self.delete("all")
+        f, chosen = self._font, self.chosen
+        line = f.metrics("linespace")
+        pad, w, h = int(line * 0.75), line * 12, line * 5
+        W, H = w + 2 * pad, h + 2 * pad + 2 * line + line // 2
+        self.configure(width=W, height=H)
+        self.create_rectangle(1, 1, W - 2, H - 2, fill=PALETTE["surface"] if chosen else PALETTE["surface2"],
+                              outline=PALETTE["accent"] if chosen else PALETTE["border"], width=2 if chosen else 1,
+                              tags="face")
+        x0, y0 = pad, pad
+        pts = []
+        for i in range(0, w + 1, 2):
+            pts += [x0 + i, y0 + h - queue_weight(self.shape, (i / w) * QUEUE_AXIS / self.spread) * (h - 4)]
+        ink = lerp_color(self.color, PALETTE["text"], 0.45) if chosen else PALETTE["disabled"]
+        area = self.color if chosen else lerp_color(PALETTE["disabled"], "#FFFFFF", 0.75)
+        # drawn as one smooth image (canvas lines and polygons have jagged edges, worst on Windows); the plain
+        # items stay, hidden, as the record of what is drawn
+        self.create_polygon([x0, y0 + h] + pts + [x0 + w, y0 + h], outline="", tags="area", fill=area, state="hidden")
+        self.create_line(pts, fill=ink, width=2 if chosen else 1.5, tags="curve", state="hidden")
+        ys = [h - queue_weight(self.shape, (i / w) * QUEUE_AXIS / self.spread) * (h - 4) for i in range(w + 1)]
+        self._curve_img = curve_image(self, w, h, ys, area, ink, 2 if chosen else 1.5)
+        self.create_image(x0, y0, image=self._curve_img, anchor="nw", tags="curve_image")
+        self.create_line(x0, y0 + h, x0 + w, y0 + h, fill=PALETTE["border"], tags="axis")
+        if chosen:
+            med = self.median_rank()
+            mx = x0 + w * min(1.0, med / QUEUE_AXIS)
+            self.create_line(mx, y0 + 6, mx, y0 + h, fill=PALETTE["muted"], dash=(2, 3), tags="median")
+            right = mx > x0 + w * 0.6                       # near the right edge: the label goes on its left
+            self.create_text(mx - 4 if right else mx + 4, y0 + 4, text=f"half by #{short_rank(med)}", font=f,
+                             fill=PALETTE["muted"], anchor="ne" if right else "nw", tags="median_text")
+        yl = y0 + h + 4
+        self.create_text(x0, yl, text="common", anchor="nw", font=f, fill=PALETTE["muted"])
+        self.create_text(x0 + w, yl, text=f"#{short_rank(QUEUE_AXIS)}", anchor="ne", font=f, fill=PALETTE["muted"])
+        self.create_text(W / 2, H - pad + 2, text=("\u25cf  " if chosen else "\u25cb  ") + self.name, anchor="s",
+                         font=f, fill=PALETTE["text"] if chosen else PALETTE["muted"], tags="name")
+
+
+def short_rank(n):
+    """13,863 -> '13.9k', 250,000 -> '250k', 1,200,000 -> '1.2M', 840 -> '840'."""
+    if n >= 999_500:
+        return f"{n / 1e6:.1f}".rstrip("0").rstrip(".") + "M"
+    if n >= 1000:
+        k = n / 1000
+        return (f"{k:.1f}".rstrip("0").rstrip(".") if k < 100 else f"{k:.0f}") + "k"
+    return f"{n:.0f}"
+
+
+class FileList(SmoothCanvas):
+    """A white rounded list of files and folders (UI-42): a muted icon, the name, a quiet detail (size, words
+    placed) and a date per row; the selected row in lilac. Only the rows on screen are drawn, so a folder with
+    thousands of files stays quick.
+
+        fl = FileList(parent, on_open=open_it, on_select=show_it)
+        fl.set_rows([{"icon": "folder", "name": "Documents/", "info": "", "date": "", "value": path}, ...])
+        fl.selected            # the selected row's dict, or None
+
+    Keys (it takes focus on a click): Up / Down / Home / End / Page Up / Down move the selection, Enter opens
+    (on_open(row)), the mouse wheel scrolls; a click selects, a double click opens. A row with "dim": True is
+    shown greyed (a file you cannot pick here) and cannot be selected. "icon" names one of smooth.ICONS (drawn,
+    all in one style, M-8); any other text is shown as it is.
+    """
+    def __init__(self, parent, on_open=None, on_select=None, rows_visible=9, width_chars=52, font_=None):
+        super().__init__(parent, bd=0, highlightthickness=0, bg=PALETTE["bg"], takefocus=1)
+        self._font = font_ or font("body")
+        self.on_open, self.on_select = on_open, on_select
+        self.rows, self.index, self.top = [], None, 0
+        self.rows_visible, self.width_chars = rows_visible, width_chars
+        for seq, d in (("<Up>", -1), ("<Down>", 1), ("<Prior>", -rows_visible), ("<Next>", rows_visible)):
+            self.bind(seq, lambda e, d=d: (self.move_selection(d), "break")[1])
+        self.bind("<Home>", lambda e: (self.select(self._first(1)), "break")[1])
+        self.bind("<End>", lambda e: (self.select(self._first(-1)), "break")[1])
+        self.bind("<Return>", lambda e: (self.open_selected(), "break")[1])
+        self.bind("<KP_Enter>", lambda e: (self.open_selected(), "break")[1])
+        self.bind("<Button-1>", self._click)
+        self.bind("<Double-Button-1>", lambda e: self.open_selected())
+        self.bind("<MouseWheel>", lambda e: self.scroll(-1 if e.delta > 0 else 1))
+        self.bind("<Button-4>", lambda e: self.scroll(-1))
+        self.bind("<Button-5>", lambda e: self.scroll(1))
+        self._draw()
+
+    @property
+    def line(self):
+        return self._font.metrics("linespace") + 10
+
+    @property
+    def selected(self):
+        return self.rows[self.index] if self.index is not None and self.index < len(self.rows) else None
+
+    def set_rows(self, rows, select=None):
+        """Show these rows (dicts, see the class note), scrolled to the top; `select` = index to select."""
+        self.rows, self.top = list(rows), 0
+        self.index = None
+        if select is not None and 0 <= select < len(self.rows) and not self.rows[select].get("dim"):
+            self.index = select
+        self._draw()
+
+    def _first(self, step):
+        order = range(len(self.rows)) if step > 0 else range(len(self.rows) - 1, -1, -1)
+        return next((i for i in order if not self.rows[i].get("dim")), None)
+
+    def select(self, i):
+        if i is None or not (0 <= i < len(self.rows)) or self.rows[i].get("dim"):
+            return
+        self.index = i
+        if i < self.top:
+            self.top = i
+        elif i >= self.top + self.rows_visible:
+            self.top = i - self.rows_visible + 1
+        self._draw()
+        if self.on_select:
+            self.on_select(self.rows[i])
+
+    def move_selection(self, d):
+        if not self.rows:
+            return
+        if self.index is None:
+            self.select(self._first(1 if d > 0 else -1))
+            return
+        i = self.index
+        step = 1 if d > 0 else -1
+        target = max(0, min(len(self.rows) - 1, i + d))
+        while 0 <= target < len(self.rows) and self.rows[target].get("dim"):
+            target += step
+        if 0 <= target < len(self.rows):
+            self.select(target)
+
+    def open_selected(self):
+        if self.selected is not None and self.on_open:
+            self.on_open(self.selected)
+
+    def scroll(self, d):
+        most = max(0, len(self.rows) - self.rows_visible)
+        top = max(0, min(most, self.top + d * 3))
+        if top != self.top:
+            self.top = top
+            self._draw()
+
+    def _click(self, e):
+        self.focus_set()
+        i = self.top + int((e.y - 3) // self.line)
+        if 0 <= i < len(self.rows):
+            self.select(i)
+
+    def refresh(self):
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        f, line = self._font, self.line
+        w = f.measure("n") * self.width_chars
+        h = line * self.rows_visible + 6
+        super().configure(width=w, height=h)
+        self.round_rect(1, 1, w - 1, h - 1, 10, fill=PALETTE["surface"], outline=PALETTE["border"], tags="frame")
+        date_w = f.measure("today 00:00")
+        info_x = w - 16 - date_w - f.measure("n") * 2
+        ls = f.metrics("linespace")
+        icon = max(10, round(ls * 0.9))                   # the icon and the room after it grow with the text
+        name_x = 14 + icon + max(12, round(ls * 0.8))
+        for k in range(self.rows_visible):
+            i = self.top + k
+            if i >= len(self.rows):
+                break
+            row, y = self.rows[i], 3 + k * line
+            if i == self.index:
+                self.round_rect(6, y + 1, w - 6, y + line - 1, 8, fill=PALETTE["select_bg"], tags="sel")
+            ink = PALETTE["disabled"] if row.get("dim") else PALETTE["text"]
+            mark = row.get("icon", "")
+            if mark in ICONS:
+                tint = PALETTE["disabled"] if row.get("dim") else PALETTE["muted"]
+                self.create_image(14, int(y + (line - icon) / 2), image=self.icon_image(mark, icon, tint),
+                                  anchor="nw", tags="icon")
+            elif mark:
+                self.create_text(14, y + line / 2, text=mark, font=f, fill=PALETTE["muted"], anchor="w", tags="icon")
+            name = row["name"]
+            if row.get("info"):                           # the room the name has, up to the next column
+                room = info_x - f.measure(row["info"]) - 20 - name_x
+            elif row.get("date"):
+                room = w - 16 - date_w - 16 - name_x
+            else:
+                room = w - 16 - name_x
+            while f.measure(name) > room and len(name) > 4:       # long names are cut in the middle
+                name = name[: len(name) // 2 - 1] + "\u2026" + name[len(name) // 2 + 1:]
+                if f.measure(name) <= room:
+                    break
+            self.create_text(name_x, y + line / 2, text=name, font=f, fill=ink, anchor="w", tags=("name", f"name{i}"))
+            if row.get("info"):
+                self.create_text(info_x, y + line / 2, text=row["info"], font=f, fill=PALETTE["muted"], anchor="e")
+            if row.get("date"):
+                self.create_text(w - 16, y + line / 2, text=row["date"], font=f, fill=PALETTE["muted"], anchor="e")
+        if len(self.rows) > self.rows_visible:            # a quiet scroll mark down the right edge
+            frac, size = self.top / max(1, len(self.rows) - self.rows_visible), self.rows_visible / len(self.rows)
+            bar_h = max(16, (h - 12) * size)
+            y0 = 6 + (h - 12 - bar_h) * frac
+            self.round_rect(w - 7, y0, w - 4, y0 + bar_h, 1.5, fill=PALETTE["border"], tags="scrollmark")
+        if not self.rows:
+            self.create_text(w / 2, h / 2, text="Nothing here", font=f, fill=PALETTE["muted"], tags="empty")
+
+
+class EmptyCard(SmoothCanvas):
     """A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of
     help, shown instead of greyed-out controls.
 
@@ -1286,8 +1556,7 @@ class EmptyCard(tk.Canvas):
         w = max(tw, bw, wrap * 0.6) + 2 * pad
         h = th + gap + bh + 2 * int(pad * 0.8)
         super().configure(width=w + 2, height=h + 2)
-        self.create_polygon(_rounded_points(1, 1, w, h, min(22, h // 3)), smooth=True, fill=PALETTE["surface2"],
-                            outline=PALETTE["border"], tags="panel")
+        self.round_rect(1, 1, w, h, min(22, h // 3), fill=PALETTE["surface2"], outline=PALETTE["border"], tags="panel")
         top = 1 + int(pad * 0.8)
         self.coords(t, 1 + w / 2, top)
         self.coords(b, 1 + w / 2, top + th + gap)
@@ -1298,26 +1567,38 @@ class EmptyCard(tk.Canvas):
         self._draw()
 
 
-class WordCard(tk.Canvas):
+class WordCard(SmoothCanvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").
 
         card = WordCard(parent, font("word"), font("body"))
         card.set("serendipity", "frequency rank #4,321")
 
-    * The card is at least as wide as `min_chars` letters of the word font, so it does not jump in
-      width from word to word; longer words widen it (up to `wraplength`, then they wrap).
-    * `word` / `sub` read the current text. configure(wraplength=) sets where text wraps.
-    * refresh() re-measures after the shared fonts were resized.
+    * The card's size never depends on the word: only on the two fonts and the room it is given
+      (configure(wraplength=) = the widest the text may be). So nothing around it moves from word to word
+      (reported more than once: the tier buttons shifting or flashing while sorting fast, even with Reduce
+      motion). It is CARD_CHARS letters of the word font wide (less if the room is smaller), always even,
+      and tall enough for one line of the word and one of the sub-line.
+    * A word too wide for it is drawn in a smaller copy of the font (the shared font is never touched); below
+      MIN_SCALE of the size it wraps, still inside the one line's height. A sub-line too wide shrinks the same
+      way, then is cut short with "...".
+    * `word` / `sub` read the current text; refresh() re-measures after the shared fonts were resized.
     """
     SHADOW = 4
-    MIN_CHARS = 6
+    CARD_CHARS = 12
+    MIN_SCALE = 0.35
+    MIN_SUB_SCALE = 0.75
 
     def __init__(self, parent, word_font, sub_font, wraplength=0, radius=26, canvas_bg=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"])
         self._wfont, self._sfont = word_font, sub_font
+        # the fonts the text is actually drawn in (sized to fit this word), and the outgoing word's
+        self._fit, self._fit_sub, self._old_font = word_font.copy(), sub_font.copy(), word_font.copy()
+        self._fit_wrap = 0             # 0, or the width the current word wraps at
         self._word, self._sub, self._wrap = "", "", wraplength
         self._radius = radius
+        self._frame, self._p = None, 0.0   # the running transition's frame (re-applied after a redraw) and its stage
+        self._box = None                   # (width, height) last given to the canvas
         self.bind("<Configure>", lambda e: self._draw())
         self._draw()
 
@@ -1330,6 +1611,17 @@ class WordCard(tk.Canvas):
     def _pady(self):
         return int(self._wfont.metrics("linespace") * 0.28)
 
+    def box(self):
+        """(width, height) of the card for the current fonts and room; the same for every word."""
+        line, sline = self._wfont.metrics("linespace"), self._sfont.metrics("linespace")
+        inner = self._wfont.measure("n" * self.CARD_CHARS)
+        if self._wrap > 0:
+            inner = min(inner, self._wrap)
+        w = inner + 2 * self.padx + self.SHADOW
+        w += w % 2                                 # even: centring it never lands on half a pixel
+        h = line + int(sline * 0.4) + sline + 2 * self._pady + self.SHADOW
+        return w, h
+
     @property
     def word(self):
         return self._word
@@ -1340,6 +1632,8 @@ class WordCard(tk.Canvas):
 
     def set(self, word, sub=""):
         """Show `word` with the muted line `sub` under it."""
+        self._old_font.configure(**self._fit.actual())      # (transition_from draws the outgoing word as it was)
+        self._old_wrap = self._fit_wrap
         self._word, self._sub = word, sub
         self._draw()
 
@@ -1372,104 +1666,173 @@ class WordCard(tk.Canvas):
         if animator is None or animator.reduce_motion or not old_word:
             return
         self.delete("old")
-        wrap = self._wrap if self._wrap > 0 else 0
-        word_xy, sub_xy = self.coords("word"), self.coords("sub")
-        if not word_xy:
+        if not self.coords("word"):
             return
-        # the old text, at the place the word was drawn (the card may have resized: centre on it)
-        self.create_text(*word_xy, text=old_word, font=self._wfont, fill=PALETTE["text"], width=wrap,
-                         justify="center", anchor="n", tags=("old", "oldword"))
-        if old_sub:
-            y = sub_xy[1] if sub_xy else word_xy[1] + self._wfont.metrics("linespace")
-            self.create_text(word_xy[0], y, text=old_sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
-                             justify="center", anchor="n", tags=("old", "oldsub"))
-        self.tag_lower("old", "word")              # under the new word: fading to white must not rub it out
-        # sorting fast (this interrupts a running transition): the new word shows at once instead of waiting
-        delay = 0.0 if animator.is_running(f"card{id(self)}") else 0.35
+        # the old text, as it was drawn: its own size, centred in the word's line (the card itself does not move)
+        cx, top, sub_y = self._layout
+        old = self.create_text(cx, 0, text=old_word, font=self._old_font, fill=PALETTE["text"],
+                               width=getattr(self, "_old_wrap", 0), justify="center", anchor="n",
+                               tags=("old", "oldword"))
+        ob = self.bbox(old)
+        ow = [cx, top + (self._wfont.metrics("linespace") - (ob[3] - ob[1] if ob else 0)) / 2]
+        self.coords(old, *ow)
+        osub = None
+        if old_sub and sub_y is not None:
+            osub = [cx, sub_y]
+            self.create_text(*osub, text=old_sub, font=self._fit_sub, fill=PALETTE["muted"], justify="center",
+                             anchor="n", tags=("old", "oldsub"))
+        self.tag_raise("old", "word")              # on top while it is the darker one (frame swaps them halfway)
         rise = max(4, self._wfont.metrics("linespace") // 10)
         card = PALETTE["surface"]
-        ow, osub = list(word_xy), (list(self.coords("oldsub")) if old_sub else None)
 
         def frame(p):
+            self._p = p
             self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
             if osub:
                 self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
-            q = max(0.0, (p - delay) / (1 - delay))   # the new word starts once the old one is mostly gone
+            # a crossfade: the new word comes in exactly as the old one goes, so between them there is always one
+            # word's worth of ink (it used to start late, and for a few frames the card flashed empty white)
+            gone = min(1.0, p / 0.55)
+            q = gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
-            wx, wy, sy = self._layout
+            wx, wy, sy = self._word_xy[0], self._word_xy[1], self._layout[2]
             self.coords("word", wx, wy + back)
             if sy is not None:
                 self.coords("sub", wx, sy + back)
-            gone = min(1.0, p / 0.55)
+            # tk cannot blend two texts: a pale one drawn over a dark one cuts white gaps through its letters
+            # (reported: a "white text version" of the word), so the darker of the two is always on top
+            for old_tag, new_tag in (("oldword", "word"), ("oldsub", "sub")):
+                if self.find_withtag(old_tag) and self.find_withtag(new_tag):
+                    if gone < 0.5:
+                        self.tag_raise(old_tag, new_tag)
+                    else:
+                        self.tag_raise(new_tag, old_tag)
             self.itemconfigure("oldword", fill=lerp_color(PALETTE["text"], card, gone))
             self.itemconfigure("oldsub", fill=lerp_color(PALETTE["muted"], card, gone))
             self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
             self.itemconfigure("sub", fill=lerp_color(card, PALETTE["muted"], q))
 
         def done():
-            self.delete("old")
+            if self._frame is frame:              # (a newer transition, started over this one, cleans up itself)
+                self._frame = None
+                self.delete("old")
+        self._frame, self._p = frame, 0.0
         try:
             animator.run(f"card{id(self)}", self.TRANSITION_MS, frame, done)
         except tk.TclError:
             pass
 
-    @staticmethod
-    def _text_width(text, fnt, wrap):
-        """Width of `text` on one line, capped at the wrap width (a wrapped canvas text reports the
-        full wrap width as its box, which would make every card as wide as the window)."""
-        natural = fnt.measure(text)
-        return min(natural, wrap) if wrap else natural
+    def _fit_word(self, avail, line):
+        """Size the drawing font for the current word: the full size if it fits on one line in `avail` pixels,
+        else smaller (down to MIN_SCALE), else wrapped at `avail` and as big as still fits in `line` pixels of
+        height. Sets self._fit and self._fit_wrap."""
+        base = self._wfont
+        full = base.cget("size")
+        sign = -1 if full < 0 else 1               # (a negative size is in pixels)
+        full = abs(full)
+        a = base.actual()
+        self._fit.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * full)
+        self._fit_wrap = 0
+        need = base.measure(self._word)
+        if need <= avail or not self._word:
+            return
+        floor = max(6, int(full * self.MIN_SCALE))
+        size = max(floor, int(full * avail / need))
+        self._fit.configure(size=sign * size)
+        while size > floor and self._fit.measure(self._word) > avail:
+            size -= 1
+            self._fit.configure(size=sign * size)
+        if self._fit.measure(self._word) <= avail:
+            return
+        self._fit_wrap = avail                       # still too long: wrap, as big as fits the line's height
+        probe = self.create_text(0, 0, text=self._word, font=self._fit, width=avail, anchor="nw")
+        while size > 6:
+            b = self.bbox(probe)
+            if b and b[3] - b[1] <= line:
+                break
+            size -= 1
+            self._fit.configure(size=sign * size)
+        self.delete(probe)
+
+    def _fit_subline(self, avail):
+        """Size the sub-line's font (down to MIN_SUB_SCALE), then cut it short with "..." if it still does not fit."""
+        base = self._sfont
+        full = base.cget("size")
+        sign, full = (-1 if full < 0 else 1), abs(full)
+        a = base.actual()
+        self._fit_sub.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * full)
+        text = self._sub
+        need = base.measure(text)
+        if need <= avail:
+            return text
+        size = max(6, int(full * self.MIN_SUB_SCALE), int(full * avail / need))
+        self._fit_sub.configure(size=sign * size)
+        while self._fit_sub.measure(text) > avail and len(text) > 1:
+            text = text[:-2].rstrip() + "\u2026"
+        return text
 
     def _draw(self):
-        self.delete("all")
-        wrap = self._wrap if self._wrap > 0 else 0
-        word = self.create_text(0, 0, text=self._word, font=self._wfont, fill=PALETTE["text"], width=wrap,
-                                justify="center", anchor="n", tags="word")
+        for item in self.find_all():          # everything but a transition's outgoing word (a resize must not
+            if "old" not in self.gettags(item):   # wipe it: the card flashed blank white, reported)
+                self.delete(item)
+        w, h = self.box()
+        if self._box != (w, h):               # only when the fonts or the room changed, never for a new word
+            self._box = (w, h)
+            super().configure(width=w, height=h)
+        bw, bh = w - self.SHADOW, h - self.SHADOW
+        line, sline = self._wfont.metrics("linespace"), self._sfont.metrics("linespace")
+        avail = bw - 2 * self.padx
+        self._fit_word(avail, line)
+        r = max(6, min(self._radius, bh // 2))
+        # the shadow is drawn in the card's own image (one solid image: much cheaper to draw); this invisible
+        # item only marks where it is
+        self.create_polygon(1 + self.SHADOW, 1 + self.SHADOW, bw + self.SHADOW - 1, 1 + self.SHADOW,
+                            bw + self.SHADOW - 1, bh + self.SHADOW - 1, 1 + self.SHADOW, bh + self.SHADOW - 1,
+                            fill="", outline="", tags="shadow")
+        self.round_rect(1, 1, bw - 1, bh - 1, r, fill=PALETTE["surface"], outline=PALETTE["border"], tags="card",
+                        shadow=(PALETTE["shadow"], self.SHADOW, self.SHADOW))
+        # fixed rows: the word's line, a gap, the sub-line's line, the whole block centred in the card
+        gap = int(sline * 0.4)
+        top = (bh - (line + gap + sline)) / 2
+        word = self.create_text(bw / 2, 0, text=self._word, font=self._fit, fill=PALETTE["text"],
+                                width=self._fit_wrap, justify="center", anchor="n", tags="word")
         wb = self.bbox(word)
         th = wb[3] - wb[1] if wb else 0
-        tw = self._text_width(self._word, self._wfont, wrap)
-        sw = sh = 0
+        self._word_xy = (bw / 2, top + (line - th) / 2)
+        self.coords(word, *self._word_xy)
+        sub_y = None
         if self._sub:
-            sub = self.create_text(0, 0, text=self._sub, font=self._sfont, fill=PALETTE["muted"], width=wrap,
-                                   justify="center", anchor="n", tags="sub")
-            sb = self.bbox(sub)
-            sh = sb[3] - sb[1]
-            sw = self._text_width(self._sub, self._sfont, wrap)
-        gap = int(self._sfont.metrics("linespace") * 0.4) if self._sub else 0
-        min_w = self._wfont.measure("n" * self.MIN_CHARS)
-        need_w = max(tw, sw, min_w) + 2 * self.padx + self.SHADOW
-        need_h = th + gap + sh + 2 * self._pady + self.SHADOW
-        super().configure(width=need_w, height=need_h)
-        w, h = max(self.winfo_width(), need_w), max(self.winfo_height(), need_h)
-        bw, bh = w - self.SHADOW, h - self.SHADOW
-        r = max(6, min(self._radius, bh // 2))
-        self.create_polygon(_rounded_points(1 + self.SHADOW, 1 + self.SHADOW, bw + self.SHADOW - 1, bh + self.SHADOW - 1, r),
-                            smooth=True, fill=PALETTE["shadow"], outline="", tags="shadow")
-        self.create_polygon(_rounded_points(1, 1, bw - 1, bh - 1, r), smooth=True, fill=PALETTE["surface"],
-                            outline=PALETTE["border"], tags="card")
-        top = (bh - (th + gap + sh)) / 2
-        self.coords(word, bw / 2, top)
-        if self._sub:
-            self.coords("sub", bw / 2, top + th + gap)
-        self._layout = (bw / 2, top, top + th + gap if self._sub else None)   # resting places (transition_from)
+            sub_y = top + line + gap + (sline - self._fit_sub.metrics("linespace")) / 2
+            self.create_text(bw / 2, sub_y, text=self._fit_subline(avail), font=self._fit_sub,
+                             fill=PALETTE["muted"], justify="center", anchor="n", tags="sub")
+        self._layout = (bw / 2, top, sub_y)          # (transition_from: the word's line and the sub-line)
+        if self.find_withtag("old"):
+            self.tag_raise("old", "card")        # on the card (not under it), below the new word
         self.tag_raise("word")
         self.tag_raise("sub")
+        if self._frame is not None:           # mid-transition: put the moving words back where they were
+            self._frame(self._p)
 
 
 class Tooltip:
-    """A small hover note (UI-13 / UI-15): appears after DELAY_MS of hovering, follows the pointer, and goes
-    when the pointer leaves or a key or button is pressed.
+    """A small hover note (UI-13 / UI-15 / UI-33): appears after DELAY_MS of hovering, just below what it
+    describes, and stays there (only its text changes over another part of the same widget); it goes when the
+    pointer leaves or a key or button is pressed.
 
         Tooltip(widget, lambda e: "1,234 words")    # text_fn(event) -> text, or None for "nothing here"
+        Tooltip(label, text_fn, side="right")        # beside it instead (when something sits below it)
 
-    text_fn gets the Motion event, so one tooltip can say different things over different parts of a
-    canvas (each bar of the chart). It is a borderless window in the surface colour with a hairline.
+    text_fn gets the Motion event, so one tooltip can say different things over different parts of a canvas
+    (each segment of the progress bar). It looks like the rest of the theme: a rounded card in the faint lilac
+    with a hairline, in the shared font. (tk windows cannot be see-through, so the corners are painted in the
+    page colour.)
     """
     DELAY_MS = 350
 
-    def __init__(self, widget, text_fn, font=None):
-        self.widget, self.text_fn, self.font = widget, text_fn, font
-        self.win = self._label = None
+    def __init__(self, widget, text_fn, font=None, side="below"):
+        self.widget, self.text_fn, self.font, self.side = widget, text_fn, font, side
+        self.win = self._canvas = None
+        self._text = ""
         self._job = None
         self._last = None
         widget.bind("<Motion>", self._on_motion, add="+")
@@ -1479,7 +1842,7 @@ class Tooltip:
     @property
     def text(self):
         """What is showing now ("" when hidden)."""
-        return self._label.cget("text") if self.win is not None else ""
+        return self._text if self.win is not None else ""
 
     def _on_motion(self, e):
         self._last = e
@@ -1488,8 +1851,8 @@ class Tooltip:
             self.hide()
             return
         if self.win is not None:
-            self._label.configure(text=text)
-            self._place(e)
+            if text != self._text:
+                self._draw(text)                  # same place, new words (UI-33: it does not chase the pointer)
             return
         if self._job is None:
             self._job = self.widget.after(self.DELAY_MS, self._show)
@@ -1500,13 +1863,29 @@ class Tooltip:
         text = self.text_fn(e) if e is not None else None
         if not text:
             return
-        win = self.win = tk.Toplevel(self.widget, bg=PALETTE["border"])
+        win = self.win = tk.Toplevel(self.widget, bg=PALETTE["bg"])
+        win.withdraw()                    # drawn and placed first: no blank box flashing at the corner
         win.overrideredirect(True)
         # (not "-topmost": that kept it in front of other programs after switching away, UI-43)
-        self._label = tk.Label(win, text=text, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
-                               padx=8, pady=4, justify="left")
-        self._label.pack(padx=1, pady=1)
+        self._canvas = SmoothCanvas(win, bd=0, highlightthickness=0, bg=PALETTE["bg"])
+        self._canvas.pack()
+        self._draw(text)
         self._place(e)
+        win.deiconify()
+
+    def _draw(self, text):
+        self._text = text
+        c, f = self._canvas, self.font
+        c.delete("all")
+        line = f.metrics("linespace") if f else 16
+        pad_x, pad_y = max(8, line // 2), max(4, line // 4)
+        t = c.create_text(pad_x + 1, pad_y + 1, text=text, font=f, fill=PALETTE["text"], anchor="nw",
+                          justify="left", tags="text")
+        x1, y1, x2, y2 = c.bbox(t)
+        w, h = x2 + pad_x + 1, y2 + pad_y + 1
+        c.configure(width=w + 1, height=h + 1)
+        c.round_rect(1, 1, w, h, min(10, h // 2), fill=PALETTE["surface2"], outline=PALETTE["border"], tags="card")
+        c.tag_raise("text")
 
     def show_at(self, e):
         """Show now for this event (tests, and keyboard focus later)."""
@@ -1514,8 +1893,20 @@ class Tooltip:
         self._show()
 
     def _place(self, e):
-        x = self.widget.winfo_rootx() + e.x + 14
-        y = self.widget.winfo_rooty() + e.y + 18
+        """Just below the widget, starting near the pointer (or just right of it, centred), kept on the screen."""
+        self.win.update_idletasks()
+        w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
+        if self.side == "right":
+            x = self.widget.winfo_rootx() + self.widget.winfo_width() + 8
+            y = self.widget.winfo_rooty() + (self.widget.winfo_height() - h) // 2
+        else:
+            x = self.widget.winfo_rootx() + e.x - 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
+        at = (self.widget.winfo_rootx(), self.widget.winfo_rooty())
+        mx, my, mw, mh = monitor_at(self.widget, *at)
+        if y + h > my + mh:
+            y = self.widget.winfo_rooty() - h - 6           # no room below: above it instead
+        x, y = clamp_to_monitor(self.widget, x, y, w, h, at=at)
         self.win.geometry(f"+{x}+{y}")
 
     def hide(self):
@@ -1527,7 +1918,7 @@ class Tooltip:
                 self.win.destroy()
             except tk.TclError:
                 pass
-            self.win = self._label = None
+            self.win = self._canvas = None
 
 
 def close_popups():
@@ -1630,6 +2021,7 @@ class StyledDialog:
             self.win.grab_set()
         except tk.TclError:
             pass
+        self.win.lift()                  # in front, even of a window that was raised a moment before
         self.win.focus_force()
         if wait:
             self.win.wait_window()

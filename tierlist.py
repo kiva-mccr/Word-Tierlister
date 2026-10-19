@@ -33,7 +33,8 @@ How it works
   Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
 * Tab / Shift+Tab move to the next / previous tab.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
-  place it by comparing against one anchor word per tier (about 3 questions).
+  place it by comparing against one anchor word per tier (about 3 questions);
+  Space again stops comparing, Backspace steps back one answer.
   "Don't know / later" (U) sends a word to the back of the queue; skipped
   words come back after every fresh word has been handled.
 * REFINE mode: head-to-head duels between words in the same tier (Elo ratings,
@@ -42,9 +43,12 @@ How it works
   the next; if the lower-tier word wins, the two swap tiers.
 * CONFLICTS: if a new answer contradicts earlier ones (A>B, B>C, then C>A) the
   pair is flagged; re-judge them in "Resolve conflicts".
-* Each tab has its own little view at the top right: the tier chart (Place), how
-  settled each tier's order is (Refine), swaps per boundary (Boundary), and the
-  number of conflicts (Conflicts).
+* Under the status line, the progress shelf: book spines from the commonest words
+  to the rarest (zones page, chapter, book, shelf, library), each filled by the
+  share of its words placed and coloured by their median tier, then how much of
+  everyday text the placed words cover ("95% of text").
+* Tabs have their own little view at the top right: the tier chart (Place), how
+  settled each tier's order is (Refine), and the number of conflicts (Conflicts).
 * A mode's tab only shows once it has work (Refine: a tier with two words;
   Boundary: two neighbouring tiers with words; Resolve conflicts: a conflict).
 * Every action is committed to SQLite immediately: close the window or lose
@@ -52,11 +56,14 @@ How it works
 * Press D any time to show the dictionary definition next to the word(s).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
-live in src/, the self-tests in tests/, check_release.py in tools/, the Claude notes in .claude/)
+live in src/, the self-tests in tests/, check_release.py and layout_trace.py in tools/, the Claude notes in
+.claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
-    constants.py    tier names, modes, ranking defaults.        (no dependencies)
+    constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
+    problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
+    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
                     conflicts, merging. Every change is committed immediately.
     wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
@@ -64,17 +71,20 @@ live in src/, the self-tests in tests/, check_release.py in tools/, the Claude n
     saves.py        finding your earlier save, remembering it, exporting the tier list.
     definitions.py  Definitions: WordNet offline, dictionaryapi.dev online, cached.
     theme.py        colour palette (UI-1).            fonts.py     typography (UI-2).
-    ui_style.py     ttk / tk styling (UI-3).          widgets.py   RoundButton and other small widgets.
-    ui_motion.py    easing, colour blend, Animator (UI-4).
-    startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
-    problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
-    deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
+    sizing.py       window sizes from the screen and the contents; monitors; Windows display scaling.
+    ui_style.py     ttk / tk styling (UI-3).          ui_motion.py easing, colour blend, Animator (UI-4).
+    smooth.py       soft-edged rounded shapes, curves and icons drawn as images (UI-53).
+    widgets.py      RoundButton, the word card, tabs, messages, dialogs and the other small widgets.
     errors.py       friendly error / message / question dialogs, error handlers, run_guarded (ST-2).
+    startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
+    ui_chart.py     each tab's view at the top right (the tier chart...) and the progress shelf.
     browser.py      Browser: the Browse / edit window.
+    filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     app.py          App: the main window and all modes.
 
-Layers: constants -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-sizing, ui_style, ui_motion, widgets, errors, startup -> ui_chart, browser -> app -> tierlist. Nothing lower imports anything higher, and
+Layers: constants, problems, deps -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> app ->
+tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
 # ==========================================================================================
@@ -111,7 +121,87 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
 # Added later, in this order after the UI steps: ST-5 (Linux terminal), ST-6 (how words are dealt), then
-# T-1..T-3 -> T-6, T-7, T-8.
+# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon).
+#
+# --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
+# [x] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
+#           Windows). Cause: the pills' corner radius is more than half their width, so in Tk's outline recipe
+#           the top's two tangent points pass each other and the outline ran back and forth along the top,
+#           past where the corners' curves leave it: no fill, but its hairline showed, longer the bigger the
+#           zoom. Fixed: smooth._straighten cuts each straight stretch of the outline down to its two ends
+#           (the fill is unchanged, so the rounded-square look stays).
+# [x] M-2  The word flying into the chart leaves what looks like a little white square on top of its bar
+#           (Linux and Windows). Cause: the flying drop is a tiny opaque window (tk has no transparency), and it
+#           landed centred on the bar's top edge, crossing bars on its way in a straight line, so its page-
+#           coloured corners covered them. Also its landing point was measured while the bar was still
+#           growing, so a bar grew up into it. Fixed: the drop rises just above the tallest bar
+#           (DistributionChart.bars_top), crosses, and drops onto its own bar from above, stopping just above
+#           it; the landing point is the bar's final height. Checked frame by frame: no overlap with any bar
+#           for every tier at 100% and 200% in two window sizes.
+# [x] M-3  Shelf marks (UI-55): on hover the triangle rises with its spine and gets clipped at the top. It
+#           should move only a hair (or not at all), never past the band (any zoom, Linux and Windows).
+#           Fixed: a mark sat 2 px under the shelf's top and rose the spine's whole lift (~6 px); now it rises a
+#           quarter of it, at most the 2 px of room above it (Bookshelf.MARK_LIFT / MARK_ROOM).
+# [x] M-4  Shelf marks take the tier colour of their word (a deeper shade so they show on the pale
+#           background). Two words in one spine with different tiers: one triangle, split in two halves.
+#           Built: Bookshelf.mark(spines, tiers); ui_chart.mark_color (the tier pastel 30% toward the text
+#           colour); SmoothCanvas.triangle_image(w, h, fill, right) draws the split one (left word on the left).
+# [x] M-5  Browse / edit opening (UI-38) bounces as the rows load in (Linux only): the rows' arrival must
+#           not change the window's size or position during or after the ease.
+#           Cause: on X11 every step of the size ease re-lays out the whole window while the window manager
+#           redraws its frame a beat behind, and the rows popped in after it. Fixed: on X11 Browse loads its
+#           rows before it is first drawn and opens complete and still (Browser.EASE_OPEN, automatic); Windows
+#           and macOS keep the ease. Checked under openbox: the first frame is the full window, ~100 ms.
+# [x] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
+#           Built: App._say_zoom also when nothing changed (any zoom key: zoom out at the smallest says 60%);
+#           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows
+#           "Zoom N%" (its own zoom against the 12 pt text) at the bottom of the definition pane (Browser._say_zoom),
+#           and gained Ctrl + keypad 0.
+# [x] M-7  Browse: click a column heading (Word, Tier, Duels...) to sort by it, the Sort drop-down following;
+#           click the same heading again to flip between top-to-bottom and bottom-to-top (a small arrow
+#           on the heading shows which).
+#           Built: Tier = Default (S..F, by rating), Word = A-Z, Rating, Duels (new Sorts: highest first),
+#           Freq # = Frequency (Browser.COLUMNS, sort_by); Store.list_words(reverse=) turns the whole order round;
+#           the arrow points up when the values rise down the list; the direction is kept with the view (UI-38).
+#           Then (asked for): the Word heading also says "(A-Z)" or "(Z-A)" beside its arrow; and the arrow fills
+#           like a loading bar the moment a heading (or the Sort drop-down) is clicked, top down for a down arrow,
+#           bottom up for an up arrow, over 260 ms while the rows load (whole at once with Reduce motion). It is a
+#           soft image now (smooth.arrow_image), set just after the heading's text (Browser._show_sort; the
+#           heading style uses a Label element, as the theme's own put an image at the far right of the column).
+#           Fixed (reported: the Word one went pale to full after a pause, no slide): on a save with a few
+#           thousand placed out of a million, A-Z / Z-A walked every word in order to find the placed ones (~200
+#           ms), freezing the fill. Two small indexes over the placed words only (idx_placed_word / _rank) make
+#           every sort < 5 ms there; and the arrow now shows pale at once, the rows load, then it fills, so a slow
+#           load can never make it jump.
+#           300k words: Rating / Duels ~50 ms a page (Default is ~85 ms).
+# [x] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
+#           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.
+#           Cause: they were text characters, each from whichever font had it. Now smooth.ICONS (house, monitor,
+#           page, arrow into a tray, folder, book), drawn soft-edged and see-through by SmoothCanvas.icon_image;
+#           in FileList the icon and the room after it grow with the text. The path's first step reads "Home".
+# [x] M-9  Export dialog (UI-42): the Name / As / In rows are too close together; more room between them.
+#           Done: ~0.4 of a line above and below each row (it grows with the text).
+# [x] M-10 Import dialog (UI-42): check the spacing of the first two lines of text (the intro and "Found on
+#           this computer"); change it only if it is off.
+#           Checked: the two lines are one intro paragraph wrapped at the dialogs' usual width, normal line
+#           spacing, the break between its two sentences; the gap under the title matches every dialog. Left.
+# [x] M-11 Check and verify (asked for, last of the mini-roadmap): look through the whole program for orphaned
+#           code (functions, methods, constants, tags, options and test helpers nothing uses any more, stale
+#           comments) and substantial inefficiencies (per-frame or per-duel work that grows with the save, repeated
+#           queries, images or fonts rebuilt needlessly); remove or fix what is found, measure on a big save.
+#           Orphans (vulture + greps; the layering checked by script: clean): removed App.apply_queue_settings
+#           (the dialog has its own; the test now checks parse_queue_settings), theme.contrast / _lum, curve_rows'
+#           bg_alpha, and dead test code (an always-false branch that never ran, unused helpers and variables,
+#           stale imports). Kept on purpose: the small "(for tests)" helpers (smooth_image, possible, tab_x,
+#           show_at, is_running) and Store.swap_counts (the shelved swap strip reads it). The module docstring's
+#           code map and layers were out of date (no sizing, smooth, ui_chart, filepicker): brought up to date.
+#           Speed, 300k words / 90k placed: a Refine duel 75 -> 35 ms, a Boundary check 92 -> 27 ms, switching tab
+#           78 -> 32 ms, opening Browse ~200 -> ~145 ms; placing stays ~25 ms; animation frames median 0.6 ms,
+#           worst 7 ms, no queries. How: a (tier, rating) index (idx_words_tr; built once on the next open, ~0.2 s
+#           at 300k) so the nearest-rated opponent is read up and down the index (Store._nearest) instead of
+#           sorting a whole tier, and the least-dueled seeds tier by tier; tier_counts counted once per change
+#           (keyed on the connection's total_changes); the shelf redraws only its marks for a new duel; Browse
+#           loads 1,000 rows a page, not 3,000. The one-off test failure did not come back (7 full runs since).
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -212,6 +302,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
 #           Browse (decided): the kinds appear in its Show drop-down only ("Nouns", "Verbs", "Obscene
 #           words"...), so Browse lists just those words; no extra sort.
+# [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
+#           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
+#           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
+#           file being downloaded, adding up the finished ones (pip names each and its size as it starts):
+#           "18.6 of 62 MB at 6.2 MB/s (30%)", which drives the bar and the time left (deps.DOWNLOAD holds the
+#           measured download sizes). Any pip version. Then "Installing..." with the sweep.
+#           "Step 2 of 5" sits in the window's bottom right corner: a job names its main steps up front
+#           (constants.plan_line; never printed) and each matching stage line moves it on (retry notes do
+#           not). Packages: downloading, installing (plus "making a private environment" when needed);
+#           first run: downloading English Wiktionary, reading entries, ranking words, detecting compound
+#           words, looking up how common, shuffling the queue (only the ones that will run:
+#           wordsource.wiktionary_steps / queue_steps). Nothing shows for a one-step job.
 #
 # --- Phase 0: housekeeping -------------------------------------------------------------------
 # [x] UI-0  Tidy the dead leftovers found in the audit (adds nothing, removes):
@@ -320,7 +422,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           dataviz validator) was built and then dropped by request: it lost the pastel look, and the
 #           letter + count on every bar already tell the tiers apart without colour.
 #           Covered by tests/_selftest_chart.py.
-# [ ] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
+# [x] UI-14 ProgressBar. Decided (no longer on hold): a bar split into equal-width segments by how common
 #           words are, each segment holding ten times the words of the one before: everyday (frequency rank
 #           top 1,000), common (1,000-10,000), uncommon (10,000-100,000), rare (100,000 and beyond, including
 #           words wordfreq does not know). Each segment fills by the share of its own words placed, so it
@@ -336,6 +438,35 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Both come from per-segment counts and a running coverage sum in the Store (no full scan per
 #           refresh). Calm: no goals, no streaks. Placed / total stays as text. No ETA: this measures the
 #           list, it is not a task running (the ETA rule is for set-up bars).
+#           Built: ui_chart.SegmentBar under the status line (lilac fill on the soft track; each segment's
+#           name and share under it; a hover note gives the counts: "uncommon words: 22,574 of 90,000
+#           placed"), the "covers 92%" tag to its right (ui_chart.format_coverage / format_share).
+#           Store.progress(): counted from the save once (~0.6 s with a million words), then kept up to
+#           date by place / unplace / undo (bulk changes recount), ~2 ms per placement. Frequencies live
+#           in a new words.freq column, filled once at start-up from wordfreq (~3 s; wordsource.
+#           fill_frequencies, meta freq_done); words wordfreq does not know count 0 towards coverage.
+#           Redesigned (asked for; built, replacing the segment bar above): a bookshelf.
+#           One shelf of book spines on a softened log scale of commonness, split by small gaps into five zones
+#           named for how often you would meet such a word (wordfreq Zipf steps): page (about once a page),
+#           chapter, book, shelf, library. A spine's height is the share of its words placed; its colour comes
+#           from the tiers its words went into: either the median tier blended round the colour wheel (stays
+#           as bright as the pastels; never a channel mix, which greys) or the "leaning" tier (the tier most
+#           over-represented there compared with the whole list). Chosen: the blended median for the colour,
+#           with the leaning tier in each spine's hover note ("shelf · 1,245 words · 94% placed · mostly C,
+#           leans B"). The coverage text after it reads "95% of text".
+#           Built: ui_chart.Bookshelf (soft_median, leaning), theme.tier_blend, constants SHELF_*. Store.shelf()
+#           / shelf_layout(): zones from the stored frequencies (Zipf 6/5/4/3), 64 spines as equal steps of
+#           log(rank + 30), so a spine near the start holds a few words and one near the end thousands (the
+#           note says how many). Tallies per spine (words, placed, per tier) counted once by SQLite on a new
+#           covering index (~0.5 s with a million words), then kept current by every tier change (place, a
+#           Browse move, unplace, a boundary swap, undo): ~2 ms per action.
+#           Fixed (reported: a real save showed only "page", cut off, and "library"): the frequency fill left
+#           hyphenated / spaced forms at 0, though the ranking had estimated them near the top, so the first
+#           zone boundary landed at rank ~3. The fill now estimates them the same way (Store.FREQ_VERSION 2:
+#           older fills redo once at start-up), the zone boundaries ignore words with no frequency, and the
+#           zone names are kept whole and apart on the shelf. Rejected: separate segments, a plain coverage bar,
+#           a tier-coloured bar, milestone steps, bookends, a bookmark ribbon, a hill profile, average-tier
+#           colour mixing.
 # [x] UI-15 Calm stats.  adds format_stats(stats): one quiet line (placed, left, skipped;
 #           conflicts only when there are some) replacing the dense two-line header. The session
 #           count STAYS, as a small muted "+N today" at the end of the line; the "/hr" rate shows
@@ -387,6 +518,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           toast already says what moved.
 #           Later (asked for): the duel cards wear their word's tier colour in Refine, Boundary check and
 #           Resolve conflicts (DuelCards.show(colors=)); a word with no tier gets a neutral pastel.
+#           Fixed (reported): the cards sat left of centre when the line under them (the conflict note) was
+#           wider than they are; DuelCards centres its grid (grid_anchor "n").
+#           Fixed (reported: sorting very fast, the buttons moved as the card changed): a long word shown in a
+#           smaller font made the card shorter (its padding follows the font) or, a pixel over the wrap limit,
+#           wrapped onto two lines and made it taller, so everything below re-centred; and an odd card width
+#           shifted the centring by a pixel. (First patched with a minimum height; since replaced by a card of
+#           one fixed size, UI-44 (8).)
+#           The key hint in the bottom bar no longer has a fixed wrap width (it broke onto two lines when zoomed).
 # [x] UI-20 Friendly empty states. adds show_empty_state(kind): short, warm messages ("Nothing to
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 #           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
@@ -449,6 +588,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           one raised and the others hidden, so switching tabs never moves the page.
 #           Fixed (reported): switching from Place new words while the chart was still growing (or a bar
 #           glowing) left the chart drawn under the next tab's view; a hidden chart now stays hidden mid-animation.
+#           Then (asked for): Boundary check's swap strip archived (see "In consideration"); that tab shows no
+#           view in the spot. The save still counts swaps per boundary (swaps table, Store.swap_counts).
 # [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
 #           drifting and jiggling slowly. Two things to settle before building:
 #           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
@@ -461,7 +602,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             sit on a plain cream box. To look right, the pieces on the page need their canvases to
 #             paint the pattern under themselves, or the page becomes one canvas. Try it on a small
 #             mock-up first and show screenshots before committing to it.
-# [ ] UI-33 Pace and hover-note polish (asked for, four parts):
+# [x] UI-33 Pace and hover-note polish (asked for, four parts):
 #           1. Pace with a timeout: the rate counts only active time. The time between two actions counts
 #              up to a cap (about 2 minutes); a longer gap is a break and adds nothing, so stepping away
 #              does not drag the number down. (Today it is actions / time since the window opened.)
@@ -471,7 +612,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           4. The hover note matches the theme: rounded corners, the soft lilac surface and hairline used
 #              by the drop-down menus, the shared fonts; the same look for every Tooltip (chart, "+N
 #              today", later ones).
-# [ ] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
+#           Built: App._count_action adds the time since the last action, capped at PACE_GAP_S (120 s);
+#           Tooltip opens just below its widget (or beside it, side="right", for "+N today", which has the
+#           progress bar under it) and keeps its place while its text changes; drawn as a rounded faint-lilac
+#           card with a hairline (corners painted in the page colour: tk windows cannot be see-through).
+#           Then (asked for): the notes say just "22,574 of 90,000 placed" and "about +120/hr" (nothing
+#           until there is enough to say); a note is drawn and placed before it shows (no blank white box
+#           flashing first); "covers 92%" is quiet grey text after the bar, like the segment labels.
+# [x] UI-34 Status line: "Placed N of M (x%)" stays and the "N left" part goes (it repeats what placed / total
 #           already says). The frequency-weighted coverage becomes the tag beside the progress bar (UI-14).
 # [x] UI-35 The definition drawer did not open smoothly (reported). Measured frame by frame under a real window
 #           manager: pressing D blocked ~150 ms in a full window-fitting pass, then the first update took
@@ -483,32 +631,66 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           are already the right size; and the drawer is packed folded, so it never flashes at full
 #           height first. Now: the slide starts within ~25 ms (was ~430) and runs one frame every ~17 ms,
 #           opening and closing. Also: switching tabs finishes a duel result still showing.
+#           Later (reported: the drawer flickered opening when zoomed in): with no room, the fit showed the drawer
+#           open at full height for every size it tried. It now stays folded and is counted at its full height
+#           (_fit_window(folded_drawer=True)); the text steps down once to what fits, then the drawer slides.
 # [x] UI-36 Tier chart: no hover note at all (asked for: remove it from the whole chart). Done in the tidy-up.
-# [ ] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
+# [x] UI-37 Compare to anchors: Space toggles it (asked for): Space starts comparing, Space again leaves it
 #           (what Escape does today), so Backspace is no longer how you get out. Backspace / Back keep
 #           stepping back one answer while comparing (confirmed). The Compare button's key hint and the bottom-right
 #           hint follow.
-# [ ] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
+#           Built: Space (or Escape) leaves; Back is greyed out until there is an answer to step back from, so
+#           a held Backspace stops at the first question; the bottom-right hint reads "Space stop comparing".
+# [x] UI-38 Browse window opening and closing (asked for): a quick opening animation (about 150 ms: it eases
 #           in from slightly smaller; preferred over a fade), and a click on the main window's empty
 #           background closes it (not a click on a pill, card or button, so a quick click never loses your
 #           place). Its unsaved state (search, filter, scroll) is
 #           remembered for the next open, so closing by accident costs nothing.
-# [ ] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
+#           Built: it eases out from 94% of its size round its centre once it is on screen, and the list
+#           fills when the ease ends (loading rows mid-ease made each frame 40-60 ms; now ~6 ms). A click on a
+#           bare frame of the main window closes it (App._click_background; not the pills' row, cards,
+#           buttons, labels or the shelf). Search, Show, Sort, the selected word and the scroll position come
+#           back on the next open (for this run of the program). Reduce motion: no ease.
+# [x] UI-39 Browse: the Delete key (and Backspace on macOS) unplaces the selected word(s) (asked for), same as
 #           the Unplace button, with undo.
-# [ ] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
+#           Built: Delete (keypad too; Backspace on macOS) in the list unplaces the selected word, anchors
+#           still protected; Ctrl+Z (Cmd+Z) in Browse undoes the last saved action and shows it there. Typing in
+#           the search box is unaffected. (Browse selects one word at a time.)
+# [x] UI-40 Anchors follow their tier (asked for): when an anchor word is moved to another tier (Browse, a
 #           duel swap, a merge), its old tier gets a new anchor straight away: if it moved down, the word
 #           ranked just below it in that tier; if it moved up, the word ranked just above it. A short
 #           toast says so ("table moved to C; the B anchor is now gristle"). If the old tier has no other
 #           words, its anchor slot stays empty until one is picked (confirmed). Today the moved word stays
 #           registered as the old tier's anchor, which is quietly wrong.
-# [ ] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
+#           Built: Store._follow_anchors runs after every tier change (place: Browse's Move to; a boundary
+#           swap) and returns what changed; ties in rating are fine (any of the equals). Undo puts the
+#           anchors back (the history keeps them). Browse's Move to no longer refuses anchor words; moving a
+#           word to the tier it is already in does nothing (it used to reset its duels). App.anchors now
+#           reads the save each time. A merge never moves placed words, so it cannot move an anchor.
+#           Unplace (back to queue) still refuses anchor words.
+# [x] UI-41 Queue randomness dialog: two small diagrams (asked for), the exponential and the gaussian drop-off
 #           drawn as soft pastel curves (chance of coming up early against frequency rank), the chosen one
 #           highlighted and redrawn live as spread changes. The intro text shrinks to one line.
-# [ ] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
+#           Built (mock-up A, chosen): a card per shape (widgets.ShapeCard) replaces the radio buttons; a click
+#           picks it. The chosen card is white with a lilac edge, its curve filled (peach / sky) and a dotted
+#           "half by #13.9k" line; the axis is fixed (#1 to #100k, constants.QUEUE_AXIS) so typing a spread
+#           visibly reshapes the curves. The old "half of early words rank below" note is gone (the card says
+#           it). The intro no longer says gaussian "drops off faster": it is flatter at first and only falls
+#           faster past about 2 spreads, which the curves now show.
+# [x] UI-42 File dialogs (Import earlier progress, Export tier list): clicking the label next to the file-type
 #           drop-down should open the drop-down too; today it flickers open and shut. Applies to the file
 #           browser in general. Seen on Linux, where tk draws this dialog itself: fix it there, or replace
 #           it with a small themed file picker that matches the app (Windows and macOS keep the system's
 #           own dialog).
+#           Built (mock-up C with A behind it, chosen): filepicker.py, on Linux only. Import lists what it
+#           finds first (other saves with how many words they have placed, and exports named like a tier
+#           list, newest first); "Look somewhere else..." opens the browser. Export asks for a name, a format
+#           (Text / CSV / Markdown pills) and shows the folder as steps; "Change folder..." opens the browser
+#           to pick a folder; the folder and format are remembered (meta export_dir / export_kind); replacing a
+#           file asks first. The browser: places (Home, Desktop, Documents, Downloads, next to your save), the
+#           path as clickable steps, a list (widgets.FileList) of folders and the files that fit; Enter /
+#           double-click opens, Backspace goes up. No tk menus anywhere, so nothing grabs input or floats over
+#           other programs. _selftest_filepicker.py.
 # [x] UI-43 Bug (reported, Linux): open a drop-down, switch to another program (Chrome, say), and the drop-down
 #           stayed in front of that program. First fix (closing menus when focus left) did not work: tried
 #           again with a real window manager (openbox + xdotool), the Tier list (a ttk.Combobox) grabs all
@@ -527,6 +709,22 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           interrupts the card's transition shows at once; (4) content is centred in the visible page
 #           (tab line to bottom bar), which fixes Resolve conflicts sitting low; (5) more room between
 #           the word card and the tier pills.
+#           Then (reported: white flicker when placing fast with the number keys): (6) the word card no longer
+#           goes blank: a redraw during its transition (the card resizing for the next word) kept deleting the
+#           outgoing word or tucking it under the card's face, and the crossfade left a gap where both words
+#           were near white; (7) the placement pill picks its backdrop (white on the card, cream elsewhere)
+#           from its whole rectangle against where the card is now, not from its height alone, which painted a
+#           white box beside the card (over the tier buttons); it comes out at the card's top edge instead
+#           of over it, and a long one narrows to a round drop before it reaches the chart bars.
+#           Then (reported again: buttons moving or covered while sorting fast, even with Reduce motion):
+#           (8) the word card has one fixed size, from the fonts and the room only, never from the word; a long
+#           word is fitted inside it in a private copy of the font (smaller, then wrapped), so placing a word
+#           changes no widget's size and no shared font. Before, the card hugged the word: the centred block
+#           shifted a pixel either way and, for a frame, went wide before the font was shrunk. Found and
+#           checked with tools/layout_trace.py (frame-by-frame widget geometry: moves, spikes, overlaps).
+#           (9) Then (reported: a "white text" copy of the word showing): mid-transition the paler word was drawn
+#           over the darker one and cut white gaps through its letters (tk cannot blend); the darker of the
+#           two is now always on top, swapping halfway.
 # [x] UI-45 Zoom the whole main window (asked for): View > Zoom in / Zoom out / Actual size, and Ctrl + /
 #           Ctrl - / Ctrl 0 (keypad too). Every shared font scales (60-200%, steps of 10%), so buttons,
 #           cards, the chart and menus follow; saved in the save (meta zoom). It multiplies the screen-fit
@@ -540,6 +738,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and never makes anything bigger; a zoom in that cannot get bigger says "as big as fits" and
 #           changes nothing. In a window enlarged by UI-25, Ctrl + / - step from the size on screen.
 #           Main and Browse keep separate zooms, both saved (meta zoom / browse_zoom). _selftest_zoom.py.
+#           Then (reported: holding Ctrl + caused trouble): the zoom keys are paced like every held key; a
+#           zoom in that did not fit is remembered per layout (tab, definitions pane, screen) and refused on
+#           the spot afterwards, so a held key tries it on screen once at most; a repeated refusal wiggles
+#           the one "as big as fits" message side to side (Toast.wiggle) instead of stacking new ones.
+#           Then (reported again: the zoom "reset" on opening / closing the definitions or switching tabs, and
+#           went closer than 100% and closer than zoom in allows): the UI-25 growth, not the zoom. Each fit
+#           re-measured the size that counts as "normal" smaller than the window, so the contents grew to fill
+#           it, past the zoom and past the screen-fit limit. Now that size is set when the window opens and by
+#           a zoom, and later fits may only raise it, so the contents grow only when you enlarge the window.
+#           Checked under a real window manager at 1366x768, 1920x1080 and 2560x1440, with the window normal,
+#           enlarged and maximised, zoomed in and out (18 cases, all keep their size); _selftest_zoom covers it.
 # [x] UI-46 Tabs only when they have something to do (asked for): the "Refine within tier" tab is hidden
 #           while no tier holds two words yet (only at the very start), "Boundary check" while no two
 #           neighbouring tiers both hold words, and "Resolve conflicts" while there are no conflicts. A tab appears (sliding in, with the same 180 ms ease as the tab bar) as soon
@@ -555,6 +764,42 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
 #           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
 #           Reduce motion the bar stands still.
+# [ ] UI-51 Look up a word to sort it (asked for): a little search icon opens a search over the whole unsorted
+#           list (as you type, like Browse's search, but over words not placed yet); picking one makes it the
+#           word on the card in Place new words, to sort now, without changing the queue order for the rest.
+#           Where the icon goes is to be talked over first (beside the word card, in the header, or the tab
+#           row). (Browse can already find placed words; W-1 looks words up from inside a definition.)
+# [x] UI-52 Shelf hover (asked for): hovering a spine darkens its outline and lifts it a little off the
+#           shelf, its left and right neighbours less (Bookshelf.hover; eased 140 ms, at once with Reduce
+#           motion; moving along the shelf never snaps). The shelf has that much room above it.
+# [x] UI-53 Smooth shapes (reported on Windows 11: the queue dialog's curve, the tier pills, buttons and chart
+#           bars looked pixelated, and the bars had little bumps on their corners). Tk draws canvas shapes
+#           with no anti-aliasing, and the old rounded-corner trick (a smoothed polygon) left bumps. Tk 8.6
+#           cannot draw SVG, so smooth.py draws each rounded shape into a small image with soft edges
+#           (SmoothCanvas.round_rect): the very outline Tk drew before (so the pills keep their rounded-square
+#           look), filled with exact left / right edges and 4 sub-rows per row, and a soft 1 px hairline.
+#           The shape is still an (invisible) canvas polygon, so tags, coords, move, delete, stacking and
+#           itemcget("fill") work as before; its image follows it. Fast enough to animate: a shape's
+#           coverage is worked out once (its straight middle is stretched, not recomputed, so growing bars
+#           and shrinking messages cost almost nothing), colours snap to steps of 4 so fades reuse images,
+#           and a shape on the plain canvas colour is blended in advance into a solid image (Tk on Linux
+#           blends see-through pixels slowly); the word card carries its shadow in its own image. The queue
+#           dialog's curve is one smooth image too. _selftest_smooth.py.
+# [x] UI-54 Windows: sharp at display scaling, and pop-ups on the right monitor (reported: a drop-down on a
+#           second monitor opened at the far side of the main screen). Pop-ups were kept inside Tk's screen
+#           size, which on Windows is the main monitor only; now sizing.monitor_at / clamp_to_monitor keep
+#           drop-downs, hover notes and dialogs on the monitor they open from (the monitors' work areas come
+#           from Windows, as they already did from xrandr on Linux). set_dpi_awareness() runs before the first
+#           window: per-monitor display scaling, so at 125% / 150% Windows no longer stretches the window
+#           like a picture (soft, pixelated text and edges) and positions are real pixels. Not yet tried on a
+#           real Windows machine (the calls are covered by tests with stand-ins). Tk 8.6 does not re-scale
+#           when the window moves to a monitor with a different scaling: it keeps the size it opened at.
+# [x] UI-55 Where the words are, on the shelf (asked for): in Refine within tier, Boundary check and Resolve
+#           conflicts, a little triangle pointing down at the spine (book) each word on screen comes from;
+#           when both words are in the same spine, one triangle only.
+#           Built: Bookshelf.mark(spines) draws a small soft lilac triangle over each (a band above the shelf
+#           holds them; a mark rises with its spine on hover); Store.spine_of(word) finds the spine from the
+#           word's rank. Cleared in Place new words and when a tab has no duel.
 # [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by
@@ -615,11 +860,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #                        UI-31, UI-36), word card and its motion (UI-6, UI-16, UI-17), keys (UI-37,
 #                        UI-47), duel view (UI-8, UI-19), empty states (UI-20), next-up peek (UI-21),
 #                        definition drawer (UI-12, UI-35), background (UI-32), responsive sizing (UI-25)
-#   Browse / edit ...... restyle (UI-23), open / close (UI-38), Delete unplaces (UI-39)
+#   Browse / edit ...... restyle (UI-23), open / close (UI-38, M-5), Delete unplaces (UI-39), sort by
+#                        clicking a column (M-7)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
 #   Keyboard shortcuts . new dialog (UI-48)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
-#   Import / Export .... file dialog (UI-42)
+#   Import / Export .... file dialog (UI-42), spacing and icons (M-8..M-10)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)
 #   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
 #   First-run progress . shared dialog look (UI-24)
@@ -718,14 +964,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
+# --- The very end (asked for: after everything else, W-1 and packaging included) -------------------------
+# [ ] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
+#           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
+#
 # Decisions
-#   Settled:  progress bar (UI-14): segments by commonness (rank decades), with the covered share as a tag;
+#   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;
 #             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
 #             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
 #             added later: theme.py is built so a second palette with the same keys drops in); the
 #             session count stays as a muted "+N today", with the pace only in a hover note.
 #   In consideration (shelved, not planned; ask before building):
 #             - Next-up peek (UI-21).
+#             - Boundary check's swap strip (UI-31, archived by request): the six tiers as pills with the swaps
+#               per join under them, the join being checked in bold. Last version: ui_chart.SwapStrip in commit
+#               9b78889. The swap counts are still recorded, so it would show the full history if it came back.
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
 #             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
 #             stay notes. After the UI steps.
@@ -745,14 +998,15 @@ import deps  # noqa: E402  (after the path line above)
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, save_progress, write_export)
+from sizing import set_dpi_awareness
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
 from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
-                        prepare_queue)
+                        prepare_queue, queue_steps, wiktionary_steps)
 
 # The window code needs tkinter, which is optional (e.g. Debian needs `apt install python3-tk`).
 # Without it everything above still works; main() explains what is missing.
@@ -801,6 +1055,7 @@ def main():
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
+    set_dpi_awareness()          # Windows: sharp at 125% / 150% display scaling (before any window opens)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a
     #        terminal, before any window, only tkinter is asked about (the window needs it to open);
@@ -845,6 +1100,20 @@ def main():
                              and args.source == "wiktionary" and current != "wiktionary")
 
         def set_up(log):
+            # the main steps, up front, for the progress window's "Step 2 of 5" (the same branches as below)
+            steps, adds = [], False
+            if args.wordlist:
+                adds = existing == 0
+            elif current == "custom":
+                pass
+            elif builds_wiktionary:
+                steps, adds = wiktionary_steps(store, args.wiktionary_file), True
+            elif args.source == "wordnet" and existing == 0:
+                steps, adds = ["First run: building the word list"], True
+            steps += queue_steps(store, adds_words=adds)
+            if args.seed is not None and args.seed != store.queue_settings()["seed"]:
+                steps.append("Reshuffling the queue")
+            log(plan_line(steps))
             if args.wordlist:
                 if existing == 0:
                     store.insert_words(build_word_list(args.wordlist))

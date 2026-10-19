@@ -27,17 +27,20 @@ from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
+from filepicker import ask_export, ask_import, use_themed
+from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, ShapeCard, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # (where tierlist.py is)
+
+
 def format_stats(stats):
-    """The status line (UI-15): one quiet line. Placed / total stays while the progress bar is on hold
-    (UI-14); conflicts only appear when there are some."""
+    """The status line (UI-15): one quiet line. Placed / total stays next to the progress bar (UI-14); "N left"
+    went (UI-34: it repeats placed / total); conflicts only appear when there are some."""
     pct = 100.0 * stats["placed"] / stats["total"] if stats["total"] else 0.0
     parts = [f"Placed {stats['placed']:,} of {stats['total']:,} ({pct:.1f}%)",
-             f"{stats['total'] - stats['placed']:,} left",
              f"{stats['skipped']:,} skipped"]
     if stats["conflicts"]:
         parts.append(f"{stats['conflicts']:,} conflict{'s' if stats['conflicts'] != 1 else ''} to look at")
@@ -82,7 +85,6 @@ class App:
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
-        self.anchors = store.get_anchors()
         self.cur_word = None
         self.cmp = None
         self.pair = None
@@ -90,9 +92,12 @@ class App:
         self.focus_left = 0
         self.session_count = 0
         self.session_start = time.time()
+        self._active_s = 0.0             # active time this session (UI-33: breaks over PACE_GAP_S do not count)
+        self._last_action = self.session_start
         self.mem_defs = {}
         self.def_words = []
         self.browsers = []
+        self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
@@ -101,6 +106,7 @@ class App:
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
+        self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
         self._settled_ready = False
@@ -120,13 +126,14 @@ class App:
         root.bind("<KeyRelease>", self.on_key_release)
         self._held = {}                            # keysym -> held-key state (_repeat_allowed)
         for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
-            root.bind(seq, lambda e: self.zoom_step(1))
+            root.bind(seq, lambda e: self._zoom_key(e, 1))
         for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
-            root.bind(seq, lambda e: self.zoom_step(-1))
+            root.bind(seq, lambda e: self._zoom_key(e, -1))
         for seq in ("<Control-0>", "<Control-KP_0>"):
-            root.bind(seq, lambda e: self.set_zoom(1.0))
+            root.bind(seq, lambda e: self._zoom_key(e, 0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<Control-z>", lambda e: self.undo())
+        root.bind("<ButtonPress-1>", self._click_background, add="+")
         root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._update_options()
@@ -209,21 +216,29 @@ class App:
         # the status band: the numbers on the left, the tier chart (UI-13) on the right
         band = self.status_band = ttk.Frame(r, padding=(10, 2, 10, 0))
         band.pack(side="top", fill="x")
-        self.stats_lbl = ttk.Label(band, anchor="w")
+        left = ttk.Frame(band)
+        left.pack(side="left", anchor="n")
+        line = ttk.Frame(left)
+        line.pack(side="top", anchor="w")
+        self.stats_lbl = ttk.Label(line, anchor="w")
         self.stats_lbl.pack(side="left", anchor="n", pady=(4, 0))
         # "+N today", small and muted; the pace only in a hover note (UI-15: no pressure on screen)
-        self.today_lbl = ttk.Label(band, anchor="w", foreground=PALETTE["muted"])
+        self.today_lbl = ttk.Label(line, anchor="w", foreground=PALETTE["muted"])
         self.today_lbl.pack(side="left", anchor="n", pady=(4, 0), padx=(14, 0))
-        self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"))
+        # the progress shelf under it: book spines from common to rare words, and "95% of text" (UI-14)
+        self.progress_bar = Bookshelf(left, font("body"), animator=self.anim)
+        self.progress_bar.pack(side="top", anchor="w", pady=(8, 0))
+        self.progress_tip = Tooltip(self.progress_bar, lambda e: self.progress_bar.note(e.x), font=font("body"))
+        self.today_tip = Tooltip(self.today_lbl, lambda e: self._pace_text(), font=font("body"),
+                                 side="right")                     # (the progress bar is below it)
         # each tab's own view in one spot (UI-31): they share its space, so switching tabs never moves the page
         views = tk.Frame(band, bg=PALETTE["bg"])
         views.pack(side="right", anchor="n")
         self.chart = DistributionChart(views, TIERS, font("body"), font("head"), animator=self.anim)
         self.settled_chart = SettledChart(views, TIERS, font("body"), font("head"), animator=self.anim)
-        self.swap_strip = SwapStrip(views, TIERS, font("body"), font("head"))
         self.conflict_card = ConflictCard(views, font("title"), font("body"))
-        self.tab_views = {"place": self.chart, "refine": self.settled_chart, "boundary": self.swap_strip,
-                          "conflict": self.conflict_card}
+        # (Boundary check has none: its swap strip was archived by request; see "In consideration")
+        self.tab_views = {"place": self.chart, "refine": self.settled_chart, "conflict": self.conflict_card}
         for v in self.tab_views.values():
             v.grid(row=0, column=0, sticky="ne")
 
@@ -234,7 +249,7 @@ class App:
         ttk.Button(bottom, text="Undo", command=self.undo, takefocus=0).pack(side="left")
         ttk.Button(bottom, text="Browse / edit...", command=self.open_browser, takefocus=0).pack(side="left", padx=6)
         ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0).pack(side="left")
-        self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right", wraplength=560)
+        self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
         self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim)
@@ -327,18 +342,38 @@ class App:
         and leaves the zoom as it was."""
         z = round(min(self.ZOOM_MAX, max(self.ZOOM_MIN, z)), 2)
         if z == self.zoom and self.grow == 1:
+            self._say_zoom(z)                     # unchanged (Ctrl 0 at 100%, zoom out at the smallest): say so
             return "break"
         old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
+        cap = self._zoom_cap.get(self._layout_key())
+        if z > old and cap is not None and z >= cap:
+            z = round(cap - self.ZOOM_STEP, 2)    # known not to fit here: refuse on the spot, nothing tried on screen
+            if z <= old and self.grow == 1:
+                self._refuse_zoom()
+                return "break"
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
-        info = (PALETTE["info"][0], PALETTE["info"][1])
         if z > old and now <= before + 1e-9:
+            self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
             self._apply_zoom(old)
-            self.flash("This is as big as fits on this screen", bg=info[0], fg=info[1], ms=1500)
+            self._refuse_zoom()
             return "break"
         self.store.set_meta("zoom", z)
+        self._say_zoom(z)
+        return "break"
+
+    def _say_zoom(self, z):
+        """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
         note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
-        self.flash(f"Zoom {round(z * 100)}%{note}", bg=info[0], fg=info[1], ms=900 if not note else 1600)
+        self.flash(f"Zoom {round(z * 100)}%{note}", bg=PALETTE["info"][0], fg=PALETTE["info"][1],
+                   ms=900 if not note else 1600)
+
+    def _zoom_key(self, e, d):
+        """Ctrl + / Ctrl - (d = 1 / -1) or Ctrl 0 (d = 0, actual size) pressed: paced like every other held key
+        (500 ms, then every 250 ms after the last step finished), so holding it never queues up refits."""
+        if self._repeat_allowed(e):
+            self.set_zoom(1.0) if d == 0 else self.zoom_step(d)
+            self._action_done(e)
         return "break"
 
     def zoom_step(self, d):
@@ -346,9 +381,24 @@ class App:
         window enlarged by UI-25 is more than the saved zoom."""
         return self.set_zoom(round(self.zoom * self.grow, 1) + d * self.ZOOM_STEP)
 
+    def _layout_key(self):
+        """What decides how big things can get: the tab, the definitions pane and the screen."""
+        return (self.mode, self.show_defs, tuple(usable_area(self.root)))
+
+    def _refuse_zoom(self):
+        """Zoom in cannot go further: say so once; while that message shows, a repeat just wiggles it."""
+        t = getattr(self, "_zoom_note", None)
+        if t is not None and t.cget("text") == self.ZOOM_FULL and t.wiggle():
+            return
+        self.flash(self.ZOOM_FULL, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+        self._zoom_note = self.toast
+
+    ZOOM_FULL = "This is as big as fits on this screen"
+
     def _apply_zoom(self, z):
         self.zoom = z
         self.grow = 1.0                        # a zoom sets the size: the window as it is now becomes "normal"
+        self._ref_size = None                  # (measured afresh at the new zoom, then the window's size at least)
         self._fit_cache.clear()
         self._fit_window(rebase=True)
 
@@ -388,26 +438,31 @@ class App:
             inner.place_configure(y=-int(max(0, min(band / 2, free))))
 
     def _fit_big_text(self):
-        """Shrink the big word(s) so a long one still fits on a line (down to about a third, then it wraps).
-
-        Short words keep the normal size. The shared role fonts are used only by these labels, so
-        resizing them here affects nothing else.
-        """
+        """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
+        (down to about a third, then it wraps). The word card fits its own word in a private copy of its font
+        (WordCard), so placing a word never resizes a shared font. A font is only configured when its size
+        really changes: every change makes Tk re-measure each widget that uses it."""
         width = self.center.winfo_width()
         if width < 50:                         # not laid out yet
             return
         f = ui_factor(self.root)
-        for role, texts, avail in (
-                ("word", [self.word_card.word], width - int(80 * f) - 2 * self.word_card.padx),
-                ("pair", [self.left_btn.cget("text"), self.right_btn.cget("text")],
-                 (width - int(220 * f)) // 2 - int(80 * f))):
+        changed = False
+        for role in ("word", "pair"):
             base = max(7, int(round(ROLES[role][0] * self.font_scale * self.zoom * self.grow)))
-            fnt = font(role)
-            fnt.configure(size=base)
-            need = max((fnt.measure(t) for t in texts if t), default=0)
-            if need > avail > 0:
-                fnt.configure(size=max(7, int(base * 0.35), int(base * avail / need)))
-        refresh_widgets(self.center)           # the word card and duel cards follow the (possibly shrunk) fonts
+            fnt, size = font(role), base
+            if role == "pair":
+                probe = fnt.copy()                 # measured at the full size without touching the shared font
+                probe.configure(size=base)
+                avail = (width - int(220 * f)) // 2 - int(80 * f)
+                need = max((probe.measure(t) for t in (self.left_btn.cget("text"), self.right_btn.cget("text"))
+                            if t), default=0)
+                if need > avail > 0:
+                    size = max(7, int(base * 0.35), int(base * avail / need))
+            if fnt.cget("size") != size:
+                fnt.configure(size=size)
+                changed = True
+        if changed:
+            refresh_widgets(self.center)       # the word card and duel cards follow the resized fonts
 
     def _content_size(self):
         """(width, height) the window needs to show everything without clipping, in pixels.
@@ -427,7 +482,7 @@ class App:
         height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
         return width, height
 
-    def _fit_window(self, initial=False, rebase=False):
+    def _fit_window(self, initial=False, rebase=False, folded_drawer=False):
         """Size and place the main window for this screen and these contents.
 
         The contents are shown at the zoom, or at the biggest size in 0.1 steps below it that fits the screen,
@@ -437,7 +492,8 @@ class App:
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
         now need more room. The minimum size always follows the contents. It also sets the size at which
         the contents start to grow with the window (UI-25); `rebase` (after a zoom) makes that at least the
-        window's current size.
+        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open; count it at
+        its full height without showing it (showing it open for the measurement made it flash, UI-35).
         """
         r = self.root
         if not initial and self.grow > 1:
@@ -467,6 +523,8 @@ class App:
             for lines in (range(9, 2, -1) if self.show_defs else (9,)):
                 self.def_text.config(height=lines)
                 cw, ch = self._content_size()
+                if folded_drawer:
+                    ch += self.def_frame.natural_height()
                 if cw <= area[2] and ch <= area[3]:
                     break
             else:
@@ -483,7 +541,14 @@ class App:
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
         r.minsize(min_w, min_h)
         pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
-        self._ref_size = (max(pref[0], cw), max(pref[1], ch))
+        need = (max(pref[0], cw), max(pref[1], ch))
+        # The size at which nothing grows (UI-25) is set when the window opens and by a zoom (rebase, below);
+        # a later fit (a tab, the definitions pane) may only raise it. Re-measuring it smaller made the contents
+        # grow past the zoom, and past what a zoom may reach, after every tab switch or pane close (reported).
+        if initial or self._ref_size is None:
+            self._ref_size = need
+        else:
+            self._ref_size = (max(self._ref_size[0], need[0]), max(self._ref_size[1], need[1]))
         if initial:
             w, h = fit_size((min_w, min_h), pref, (area[2], area[3]))
             r.geometry(center_geometry(w, h, area))
@@ -569,12 +634,10 @@ class App:
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
         (which took long enough to swallow the slide). The page usually has room; if not, the full fit
-        runs (it may shorten the pane), with the drawer measured at its full height."""
+        runs (it may shorten the pane or the text), counting the folded drawer at its full height."""
         cw, ch = self._content_size()
         if ch + extra > self.root.winfo_height() or cw > self.root.winfo_width():
-            self.def_frame.set_open(True)
-            self._fit_window()
-            self.def_frame.collapse()
+            self._fit_window(folded_drawer=True)      # the drawer stays folded: it never flashes open first
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
@@ -678,17 +741,19 @@ class App:
 
     def _update_stats(self):
         """Status band: one quiet line (format_stats), "+N today", which tabs show (UI-46), and the current
-        tab's own view: the tier chart, how settled each tier is, the swaps per boundary, or the conflicts."""
+        tab's own view: the tier chart, how settled each tier is, or the conflicts (Boundary check has none)."""
         s = self.store.stats()
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
         self.mode_switch.show_only(self.modes_with_work(s))
+        self.progress_bar.set(self.store.shelf())
         # each tab shows its own view in the chart's spot (UI-31); the others keep their space, hidden
         for mode, view in self.tab_views.items():
             if view.shown != (mode == self.mode):
                 view.show(mode == self.mode)
         # on top of the others (a hidden canvas still paints its background); Canvas.lift would raise its items
-        self.root.tk.call("raise", str(self.tab_views[self.mode]))
+        if self.mode in self.tab_views:
+            self.root.tk.call("raise", str(self.tab_views[self.mode]))
         if self.mode == "place":
             self.chart.set([s["tiers"].get(t, 0) for t in range(len(TIERS))], animate=self._chart_ready)
             self._chart_ready = True             # the first fill does not grow from zero
@@ -700,8 +765,6 @@ class App:
             self._settled_ready = True
         else:
             self._settled_ready = False
-        if self.mode == "boundary":
-            self.swap_strip.set(self.store.swap_counts(), self.swap_strip.current)
         if self.mode == "conflict":
             self.conflict_card.set(s["conflicts"])
 
@@ -721,20 +784,29 @@ class App:
             modes.add("conflict")
         return modes
 
+    PACE_GAP_S = 120     # a longer pause between two actions is a break: it adds only this much to the pace
+
+    def _count_action(self):
+        """One more word or duel this session: the time since the last one counts towards the pace, up to
+        PACE_GAP_S (UI-33), so stepping away does not drag the number down."""
+        now = time.time()
+        self._active_s += min(max(0.0, now - self._last_action), self.PACE_GAP_S)
+        self._last_action = now
+        self.session_count += 1
+
     def _pace_text(self):
         """The hover note on "+N today": this session's pace, once there is enough to say anything."""
-        hours = (time.time() - self.session_start) / 3600.0
+        hours = self._active_s / 3600.0
         if self.session_count < 5 or hours <= 0:
-            return "Words and duels done today"
-        return (f"Words and duels done today. This session: {self.session_count:,}, "
-                f"about {self.session_count / hours:,.0f} an hour")
+            return None                                 # too early to say anything: no note
+        return f"about +{self.session_count / hours:,.0f}/hr"
 
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
         compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
         their own key hints, and the Definition (D) button names its key."""
         if self.mode == "place" and self.cmp:
-            h = "Esc cancel"
+            h = "Space stop comparing"           # (the Compare button that shows Space is hidden meanwhile)
         else:
             h = "Backspace or Ctrl+Z undo"
             if len(self.mode_switch.visible) > 1:
@@ -744,6 +816,7 @@ class App:
     # ---- place mode ------------------------------------------------------------------------------------------
     def _show_place(self):
         """Place view: show the next unplaced word (or the 'all placed' message) and set up its buttons."""
+        self.progress_bar.mark([])                    # (the shelf marks only the duel tabs' words, UI-55)
         self.pair_frame.pack_forget()
         self.place_frame.pack(fill="both", expand=True)
         row = self.store.next_unplaced()
@@ -765,8 +838,7 @@ class App:
         self.word_card.grid()
         notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
-        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")
-        self._fit_big_text()
+        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")   # (it fits the word itself)
         anchors_ok = all(self.anchors)
         self.compare_btn.set_enabled(anchors_ok)
         if self.cmp is None and self.auto_compare and anchors_ok:
@@ -785,6 +857,7 @@ class App:
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
+            self.cmp_btns["back"].set_enabled(bool(self.cmp["stack"]))   # nothing to step back to yet
             if not self.ladder.winfo_manager():                     # not shown yet
                 self.ladder.update_range(0, len(TIERS) - 1, None)   # a fresh comparison starts full
             self.ladder.grid()
@@ -819,7 +892,7 @@ class App:
             return
         word = self.cur_word
         self.store.skip(word)
-        self.session_count += 1
+        self._count_action()
         old_sub = self.word_card.sub
         self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
         self.refresh()
@@ -829,7 +902,7 @@ class App:
     def _after_place(self, word, tier):
         """Shared tail of every placement: count it, show the next word (the old one nudges toward its tier
         and fades, UI-16), confirm in the toast."""
-        self.session_count += 1
+        self._count_action()
         self.cmp = None
         old_sub = self.word_card.sub
         self.refresh()
@@ -847,18 +920,22 @@ class App:
             return
         f = ui_factor(self.root)
         card_top = card.winfo_rooty() - c.winfo_rooty()
-        card_bottom = card_top + card.winfo_height() - WordCard.SHADOW
         bx, by = ch.bar_top(tier)
 
-        def under(y):          # the card is white, the page around it cream
-            return PALETTE["surface"] if card_top + 2 < y < card_bottom - 2 else PALETTE["bg"]
-        # it starts at the card's top edge: over the word itself it would hide the letters (the toast is an
-        # opaque canvas; tk has no transparency)
-        self._new_toast().fling(text, (TIER_COLORS[tier], TIER_TEXT), start_mid=card_top + int(14 * f),
+        def under(x0, y0, x1, y1):
+            """White while the toast is mostly over the word card, else the cream page. Measured each frame:
+            the card resizes for the next word while the toast is still on its way."""
+            l, t = card.winfo_rootx() - c.winfo_rootx(), card.winfo_rooty() - c.winfo_rooty()
+            r, b = l + card.winfo_width() - WordCard.SHADOW, t + card.winfo_height() - WordCard.SHADOW
+            over = max(0, min(x1, r) - max(x0, l)) * max(0, min(y1, b) - max(y0, t))
+            return PALETTE["surface"] if over * 2 > (x1 - x0) * (y1 - y0) else PALETTE["bg"]
+        # it comes out at the card's top edge and rises: never over the card itself, where an opaque canvas
+        # (tk has no transparency) would hide the letters or paint a box over the card's edge
+        self._new_toast().fling(text, (TIER_COLORS[tier], TIER_TEXT), start_bottom=card_top,
                           rest_bottom=card_top - int(8 * f),
                           target=(bx - (c.winfo_rootx() + c.winfo_width() / 2), by - c.winfo_rooty()),
                           in_=c, wraplength=max(240, c.winfo_width() - 120), under=under,
-                          on_arrive=lambda: ch.pulse(tier))
+                          on_arrive=lambda: ch.pulse(tier), clear=ch.bars_top() - c.winfo_rooty())
 
     def start_compare(self):
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
@@ -907,18 +984,15 @@ class App:
         self._after_place(word, tier)
 
     def cmp_back(self):
-        """Undo the last anchor answer, or leave the comparison if no answers are left."""
+        """Undo the last anchor answer. With none left it does nothing (its button is greyed out): Space leaves
+        the comparison (UI-37), so holding Backspace never drops you out of it by surprise."""
         c = self.cmp
-        if not c:
+        if not c or not c["stack"]:
             return
-        if c["stack"]:
-            lo, hi, n = c["stack"].pop()
-            c["lo"], c["hi"] = lo, hi
-            del c["log"][n:]
-            self._cmp_step()
-        else:
-            self.cmp = None
-            self._render_place_state()
+        lo, hi, n = c["stack"].pop()
+        c["lo"], c["hi"] = lo, hi
+        del c["log"][n:]
+        self._cmp_step()
 
     # ---- pair modes -----------------------------------------------------------------------------------------------
     def _pick_pair(self):
@@ -940,7 +1014,6 @@ class App:
             if not res:
                 return None
             a, b, t = res
-            join = t
             ctx = (f"Boundary {TIERS[t]} | {TIERS[t + 1]}: if you prefer the {TIERS[t + 1]}-tier word, "
                    f"the two swap tiers")
         else:
@@ -951,7 +1024,7 @@ class App:
             ctx = "Conflict: your answers about this pair contradict each other. Decide again."
         pair = [a, b]
         random.shuffle(pair)  # avoid left/right position bias
-        return {"left": pair[0], "right": pair[1], "ctx": ctx, "join": join if self.mode == "boundary" else None}
+        return {"left": pair[0], "right": pair[1], "ctx": ctx}
 
     EMPTY = {   # UI-20: what an empty duel tab says instead of greyed-out cards
         "refine": ("Nothing to refine yet", "Duels start as soon as a tier holds two words. Keep placing!"),
@@ -965,8 +1038,6 @@ class App:
         self.place_frame.pack_forget()
         self.pair_frame.pack(fill="both", expand=True)
         self.pair = self._pick_pair()
-        if self.mode == "boundary":                # the join being checked is the bold one in the strip (UI-31)
-            self.swap_strip.set(self.swap_strip.counts, self.pair["join"] if self.pair else None)
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:
@@ -979,21 +1050,22 @@ class App:
             self.pair_empty.grid(row=2, column=0)
             self.duel.set_enabled(False)              # (their keys are off too)
             self._render_defs([])
+            self.progress_bar.mark([])
         else:
             self.pair_empty.grid_remove()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
                 w.grid()
-            self.duel.show(self.pair["left"], self.pair["right"],
-                           colors=[self._tier_color(self.pair[side]) for side in ("left", "right")])
+            words = [self.pair["left"], self.pair["right"]]
+            tiers = [self.store.get_word(w)["tier"] for w in words]
+            # the duel cards wear their word's tier colour (a neutral pastel without a tier)
+            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
-            self._render_defs([self.pair["left"], self.pair["right"]])
+            self._render_defs(words)
+            # little triangles on the shelf over where the two words come from (UI-55; one if they share a spine),
+            # each in its word's tier colour (M-4)
+            self.progress_bar.mark([self.store.spine_of(w) for w in words], tiers)
         self._hint()
-
-    def _tier_color(self, word):
-        """A word's tier colour (the duel cards wear it); a neutral pastel if it has no tier yet."""
-        tier = self.store.get_word(word)["tier"]
-        return TIER_COLORS[tier] if tier is not None else PALETTE["neutral"]
 
     def pair_answer(self, ans):
         """Record a duel result ('left' | 'right' | 'tie'), report swaps/conflicts, count down a focus session."""
@@ -1003,10 +1075,11 @@ class App:
         kind = {"refine": "within", "boundary": "boundary", "conflict": "conflict"}[self.mode]
         res = {"left": "a", "right": "b", "tie": "tie"}[ans]
         info = self.store.record_comparison(a, b, res, kind)
-        self.session_count += 1
+        self._count_action()
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
             self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.note_anchor_changes(info["anchors"])
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
                        "(Resolve conflicts).", bg=PALETTE["alert"][0], fg=PALETTE["alert"][1], ms=5000)
@@ -1071,9 +1144,10 @@ class App:
         self._fit_window()
 
     # ---- undo ------------------------------------------------------------------------------------------------------------
-    def undo(self):
-        """Undo: step back inside an anchor comparison, otherwise revert the last saved action (survives restarts)."""
-        if self.mode == "place" and self.cmp:
+    def undo(self, saved_only=False):
+        """Undo: step back inside an anchor comparison, otherwise revert the last saved action (survives restarts).
+        `saved_only` (Ctrl+Z in Browse): always the saved action, never a step inside a comparison."""
+        if self.mode == "place" and self.cmp and not saved_only:
             self.cmp_back()
             return
         word = self.store.undo()
@@ -1180,7 +1254,7 @@ class App:
                     return b["same"], lambda: self.cmp_answer("same")
                 if ks == "BackSpace":
                     return b["back"], self.cmp_back
-                if ks == "Escape":
+                if ks in ("space", "Escape"):              # Space toggles comparing (UI-37); Escape still works
                     return None, self._cancel_compare
                 return None
             if ks in ("1", "2", "3", "4", "5", "6"):
@@ -1237,7 +1311,30 @@ class App:
                     bw.render_def()
         self.root.after(120, self._poll_defs)
 
+    # ---- anchors ----------------------------------------------------------------------------------------------
+    @property
+    def anchors(self):
+        """The six anchor words (None for an empty slot), read from the save: they can change under us (UI-40)."""
+        return self.store.get_anchors()
+
+    def note_anchor_changes(self, changes):
+        """A short message for each anchor that moved and handed its tier's anchor on (UI-40)."""
+        for word, old, new_tier, new in changes:
+            where = f"moved to {TIERS[new_tier]}" if new_tier is not None else "left its tier"
+            then = (f"the {TIERS[old]} anchor is now {new}" if new else
+                    f"tier {TIERS[old]} has no anchor until you pick one (Settings)")
+            self.flash(f"{word} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
+
     # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
+    def _click_background(self, e):
+        """A click on the main window's empty background (a bare frame, not a pill, card, button, label or the
+        shelf) closes the Browse window (UI-38), so a quick click on something never loses your place."""
+        if not self.browsers or type(e.widget) not in (tk.Tk, tk.Frame, ttk.Frame):
+            return                     # (exactly a frame: the tier pills' row and other widgets are frames too)
+        for bw in list(self.browsers):
+            if bw.alive():
+                bw.close()
+
     def open_browser(self):
         """Open the Browse window, or raise it if one is already open."""
         for bw in self.browsers:
@@ -1294,7 +1391,6 @@ class App:
                 dlg.refit()
                 return
             self.store.set_anchors(words)
-            self.anchors = self.store.get_anchors()
             dlg.close()
             self.after_external_change()
 
@@ -1326,27 +1422,14 @@ class App:
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
 
-    def apply_queue_settings(self, seed_text, spread_text, shape, compound_text):
-        """Validate and apply the queue settings, then reshuffle (here, not in the background). Returns an
-        error message or None."""
-        cfg, err = self.parse_queue_settings(seed_text, spread_text, shape, compound_text)
-        if err:
-            return err
-        self.store.reshuffle(**cfg)
-        self.cmp = None
-        return None
-
     def edit_queue(self):
         """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words
         in the background (a moving bar while it runs: with ~1M words it takes a while), or says that
         nothing changed."""
         cfg = self.store.queue_settings()
         dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
-                           "New words are drawn at random, but the odds fall off with how rare a word is: a "
-                           "word 'spread' ranks further down the frequency list is about 2.7x less likely to "
-                           "come up early (exponential), or drops off faster still (gaussian). The same seed "
-                           "always gives the same order. Applying reshuffles the words you haven't placed yet.",
-                           animator=self.anim, wrap_chars=60)
+                           "New words come up at random, commoner ones sooner. The same seed, the same order.",
+                           animator=self.anim, wrap_chars=84)                     # one line
         box = dlg.body
         seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
         comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
@@ -1359,13 +1442,14 @@ class App:
         new_seed.grid(row=0, column=2, sticky="w", padx=12)
         ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
-        info = ttk.Label(box, text="", foreground=PALETTE["muted"])
-        info.grid(row=1, column=2, sticky="w", padx=12)
-        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="e", padx=(0, 8), pady=4)
+        # the shape: a card per choice with its curve (UI-41); clicking a card picks it
+        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="ne", padx=(0, 8), pady=(10, 4))
         sh = ttk.Frame(box)
-        sh.grid(row=2, column=1, columnspan=2, sticky="w")
-        ttk.Radiobutton(sh, text="Exponential (e^-x)", value="exp", variable=shape_v).pack(side="left")
-        ttk.Radiobutton(sh, text="Gaussian", value="gauss", variable=shape_v).pack(side="left", padx=12)
+        sh.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 4))
+        cards = {}
+        for shape, name, colour in (("exp", "Exponential", TIER_COLORS[1]), ("gauss", "Gaussian", TIER_COLORS[4])):
+            cards[shape] = ShapeCard(sh, shape, name, colour, on_pick=shape_v.set)
+            cards[shape].pack(side="left", padx=(0, 10))
         ttk.Label(box, text="Compound strength:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
         ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
         ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
@@ -1376,18 +1460,19 @@ class App:
         for v in (seed_v, spread_v, comp_v, shape_v):
             v.trace_add("write", lambda *_: status.grid_remove())       # an edit clears the last note
 
-        def update_info(*_):  # live hint next to "Spread": the median rank of early words
+        def redraw(*_):  # live: the curves follow the spread as it is typed (an unreadable one keeps the last)
             try:
-                s = float(spread_v.get().replace(",", ""))
+                spread = float(spread_v.get().replace(",", ""))
             except ValueError:
-                info.config(text="")
-                return
-            med = s * math.log(2) if shape_v.get() == "exp" else s * 0.6745
-            info.config(text=f"half of early words rank below ~{med:,.0f}")
+                spread = None
+            if spread is not None and spread <= 0:
+                spread = None
+            for shape, card in cards.items():
+                card.set(spread=spread, chosen=shape == shape_v.get())
 
-        spread_v.trace_add("write", update_info)
-        shape_v.trace_add("write", update_info)
-        update_info()
+        spread_v.trace_add("write", redraw)
+        shape_v.trace_add("write", redraw)
+        redraw()
 
         def say(text, colour):
             status.config(text=text, foreground=colour)
@@ -1489,10 +1574,14 @@ class App:
         return True, f"{name}\n{self.describe_merge(res)}"
 
     def import_progress(self):
-        """File > Import earlier progress: pick a save file or export and merge it in."""
-        path = filedialog.askopenfilename(
-            parent=self.root, title="Import earlier progress",
-            filetypes=[("Tier list save or export", "*.db *.csv *.txt *.md"), ("All files", "*.*")])
+        """File > Import earlier progress: pick a save file or export and merge it in. On Linux the app's own
+        picker (filepicker.py, UI-42: what it found first, a browser behind it); elsewhere the system's."""
+        if use_themed(self.root):
+            path = ask_import(self.root, self.store.path, SCRIPT_DIR, animator=self.anim)
+        else:
+            path = filedialog.askopenfilename(
+                parent=self.root, title="Import earlier progress",
+                filetypes=[("Tier list save or export", "*.db *.csv *.txt *.md"), ("All files", "*.*")])
         if not path:
             return
         ok, text = self.merge_file(path)
@@ -1525,10 +1614,23 @@ class App:
         show_message("Merged", "Your earlier progress is merged in", "\n\n".join(msgs), parent=self.root)
 
     def export(self):
-        """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md."""
-        path = filedialog.asksaveasfilename(
-            parent=self.root, title="Export tier list", defaultextension=".txt", initialfile="tierlist.txt",
-            filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
+        """File > Export tier list: write the placed words (and skipped ones) to .txt, .csv or .md. On Linux the
+        app's own dialog (UI-42: name, format, folder; the folder and format are remembered)."""
+        if use_themed(self.root):
+            folder = self.store.get_meta("export_dir") or ""
+            if not os.path.isdir(folder):
+                docs = os.path.join(os.path.expanduser("~"), "Documents")
+                folder = docs if os.path.isdir(docs) else os.path.expanduser("~")
+            path, kind, folder = ask_export(self.root, folder, kind=self.store.get_meta("export_kind", "txt"),
+                                            save_dir=os.path.dirname(os.path.abspath(self.store.path)),
+                                            animator=self.anim)
+            if path:
+                self.store.set_meta("export_dir", folder)
+                self.store.set_meta("export_kind", kind)
+        else:
+            path = filedialog.asksaveasfilename(
+                parent=self.root, title="Export tier list", defaultextension=".txt", initialfile="tierlist.txt",
+                filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
         if not path:
             return
         rows = self.store.export_rows()

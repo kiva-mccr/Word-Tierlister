@@ -20,6 +20,7 @@ Conventions
     * Store.version goes up on every change; open windows compare it to know when to refresh.
     * Methods starting with an underscore are internal helpers.
 """
+import bisect
 import hashlib
 import json
 import math
@@ -30,7 +31,8 @@ import re
 import sqlite3
 import time
 
-from constants import PEN_UNITS, QUEUE_DEFAULTS, TIERS, tier_base
+from constants import (PEN_UNITS, QUEUE_DEFAULTS, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
+                       SHELF_ZONES, TIERS, tier_base)
 
 
 # --------------------------------------------------------------------------
@@ -46,7 +48,8 @@ CREATE TABLE IF NOT EXISTS words(
     games INTEGER NOT NULL DEFAULT 0,
     skips INTEGER NOT NULL DEFAULT 0,
     qkey REAL,
-    pen INTEGER NOT NULL DEFAULT 0
+    pen INTEGER NOT NULL DEFAULT 0,
+    freq REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,12 +98,22 @@ class Store:
             self.db.execute("ALTER TABLE words ADD COLUMN qkey REAL")
         if "pen" not in cols:
             self.db.execute("ALTER TABLE words ADD COLUMN pen INTEGER NOT NULL DEFAULT 0")
+        if "freq" not in cols:                   # word frequency (wordfreq), for the coverage tag (UI-14)
+            self.db.execute("ALTER TABLE words ADD COLUMN freq REAL NOT NULL DEFAULT 0")
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_shelf ON words(rank, tier, freq)")   # shelf()
+        # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tr ON words(tier, rating)")
+        # Browse's A-Z / Z-A and Frequency over the placed words only: with a few thousand placed out of a
+        # million, walking every word in order to find them took ~200 ms (and froze the sort arrow's fill)
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_word ON words(word) WHERE tier IS NOT NULL")
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_rank ON words(rank) WHERE tier IS NOT NULL")
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
+        self._prog = None    # the shelf's tallies (shelf()), counted once, then kept up to date by each change
 
     def close(self):
         """Flush and close the database; safe to call twice."""
@@ -145,8 +158,10 @@ class Store:
             ((w, i, 1e18 + i) for i, w in enumerate(words)),
         )
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '0')")
         self.db.commit()
         self._total = None
+        self._prog = None
         self.version += 1
 
     def has_word(self, word):
@@ -217,13 +232,13 @@ class Store:
         self.version += 1
 
     def tier_counts(self):
-        """{tier index: number of placed words}. Tiers with no words are absent."""
-        return {
-            r[0]: r[1]
-            for r in self.db.execute(
-                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier"
-            )
-        }
+        """{tier index: number of placed words}. Tiers with no words are absent. Counted again only after a
+        change to the save (any write, the connection's total_changes): a duel asked for it twice."""
+        mark = self.db.total_changes
+        if getattr(self, "_tc", (None,))[0] != mark:
+            self._tc = (mark, {r[0]: r[1] for r in self.db.execute(
+                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")})
+        return dict(self._tc[1])
 
     def stats(self):
         """Numbers for the header: total, placed, skipped, per-tier counts, duels, conflicts."""
@@ -242,6 +257,98 @@ class Store:
             "comparisons": self.db.execute("SELECT COUNT(*) FROM comparisons").fetchone()[0],
             "conflicts": self.db.execute("SELECT COUNT(*) FROM conflicts").fetchone()[0],
         }
+
+    # ---- progress: the shelf (UI-14) ---------------------------------------------------------
+    def shelf_layout(self):
+        """The shelf's zones and spines: [(zone name, [rank bounds of its spines])]. Zones end where wordfreq's
+        Zipf value drops below 6, 5, 4, 3 (SHELF_ZIPF); the spines are equal steps of log(rank + SHELF_SOFT), so a
+        spine near the start holds a few words and one near the end thousands (a log ruler of commonness). A zone
+        with no words in this list is left out."""
+        n = self.count_words()
+        ends = list(SHELF_ZONE_RANKS)
+        if self.get_meta("freq_done") in ("1", self.FREQ_VERSION):
+            for i, z in enumerate(SHELF_ZIPF):
+                # the first known word below the threshold (a word with no frequency at all says nothing here:
+                # one near the top, which a version-1 fill could leave, used to collapse every zone)
+                r = self.db.execute("SELECT MIN(rank) FROM words WHERE freq > 0 AND freq < ?",
+                                    (10 ** (z - 9),)).fetchone()[0]
+                ends[i] = r if r is not None else n
+        lg = lambda r: math.log10(r + SHELF_SOFT)
+        bounds = [0] + [min(e, n) for e in ends] + [n]
+        span = lg(n) - lg(0) if n else 1.0
+        zones = []
+        for name, lo, hi in zip(SHELF_ZONES, bounds, bounds[1:]):
+            if hi <= lo:
+                continue
+            k = max(2, round(SHELF_SPINES * (lg(hi) - lg(lo)) / span))
+            edges = sorted({lo, hi} | {min(hi, max(lo, round(10 ** (lg(lo) + (lg(hi) - lg(lo)) * j / k) - SHELF_SOFT)))
+                                        for j in range(1, k)})   # (a tiny list can round two edges together)
+            zones.append((name, edges))
+        return zones
+
+    def shelf(self):
+        """The progress shelf: {"zones": [(name, number of spines)], "spines": [{"zone", "words", "placed",
+        "tiers": placed per tier}], "coverage": share of the list's word frequency that is placed (0..1, None
+        before the frequencies are known)}. Counted from the save once (a pass over the list), then kept up to
+        date by every change of a word's tier, so a refresh never rescans."""
+        if self._prog is None:
+            layout = self.shelf_layout()
+            spines, starts = [], []
+            for name, edges in layout:
+                for lo in edges[:-1]:
+                    starts.append(lo)
+                    spines.append({"zone": name, "words": 0, "placed": 0, "tiers": [0] * len(TIERS)})
+            p = {"layout": [(name, len(edges) - 1) for name, edges in layout], "spines": spines, "starts": starts,
+                 "fp": 0.0, "ft": 0.0}
+            ends = starts[1:] + [layout[-1][1][-1]] if layout else []
+            for sp, lo, hi in zip(spines, starts, ends):   # one range per spine, counted by SQLite (idx_words_shelf)
+                for tier, n, fq in self.db.execute("SELECT tier, COUNT(*), SUM(freq) FROM words WHERE rank >= ? AND "
+                                                   "rank < ? GROUP BY tier", (lo, hi)):
+                    sp["words"] += n
+                    p["ft"] += fq or 0.0
+                    if tier is not None:
+                        sp["placed"] += n
+                        sp["tiers"][tier] += n
+                        p["fp"] += fq or 0.0
+            if not spines:
+                p["ft"] = self.db.execute("SELECT TOTAL(freq) FROM words").fetchone()[0]
+            self._prog = p
+        p = self._prog
+        return {"zones": p["layout"], "spines": [dict(sp, tiers=list(sp["tiers"])) for sp in p["spines"]],
+                "coverage": p["fp"] / p["ft"] if p["ft"] > 0 else None}
+
+    def spine_of(self, word):
+        """Which spine of the progress shelf `word` belongs to (its index in shelf()["spines"]), or None."""
+        self.shelf()
+        row = self.get_word(word)
+        starts = self._prog["starts"]
+        if row is None or not starts:
+            return None
+        return bisect.bisect_right(starts, row["rank"]) - 1
+
+    def _tier_moved(self, row, old, new):
+        """Keep the shelf's tallies current: the word in `row` (with rank and freq) went from tier `old` to `new`
+        (None = not placed)."""
+        p = self._prog
+        if p is None or old == new or not p["spines"]:
+            return
+        sp = p["spines"][bisect.bisect_right(p["starts"], row["rank"]) - 1]
+        for t, sign in ((old, -1), (new, 1)):
+            if t is not None:
+                sp["placed"] += sign
+                sp["tiers"][t] += sign
+                p["fp"] += sign * (row["freq"] or 0.0)
+
+    FREQ_VERSION = "2"     # bumped when fill_frequencies changes, so saves filled by an older one refill once
+                           # (2: hyphenated / spaced forms estimated like the ranking; 1 left them at 0)
+
+    def set_frequencies(self, pairs):
+        """Store each word's frequency [(word, freq)] (for the coverage tag; filled once by wordsource)."""
+        self.db.executemany("UPDATE words SET freq=? WHERE word=?", ((f, w) for w, f in pairs))
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', ?)", (self.FREQ_VERSION,))
+        self.db.commit()
+        self._prog = None
+        self.version += 1
 
     def settled_shares(self, min_games, totals=None):
         """Per tier, the share of its words with at least `min_games` duels (how settled its order is, UI-31);
@@ -281,7 +388,39 @@ class Store:
                 (t, tier_base(t), w, t),
             )
         self.db.commit()
+        self._prog = None
         self.version += 1
+
+    def _follow_anchors(self, before):
+        """After a move (UI-40): an anchor word that left its tier hands the job to its neighbour there, the
+        word ranked just below it if it moved down (or out of the tiers), just above if it moved up (the other
+        side if there is none). A tier left with no other words keeps an empty slot. `before` are the moved
+        words' rows from before the move. Returns (changes, anchors before) with changes as
+        [(word, old tier, new tier, new anchor or None)], or ([], None) when no anchor moved."""
+        anchors = self.get_anchors()
+        changes = []
+        for r in before:
+            t = r["tier"]
+            if t is None or anchors[t] != r["word"]:
+                continue
+            now = self.db.execute("SELECT tier FROM words WHERE word=?", (r["word"],)).fetchone()[0]
+            if now == t:
+                continue
+            below = ("rating<=? ORDER BY rating DESC", "rating>? ORDER BY rating ASC")
+            for cond in (below if now is None or now > t else below[::-1]):
+                row = self.db.execute(f"SELECT word FROM words WHERE tier=? AND word!=? AND {cond} LIMIT 1",
+                                      (t, r["word"], r["rating"])).fetchone()
+                if row:
+                    break
+            new = row[0] if row else None
+            changes.append((r["word"], t, now, new))
+        if not changes:
+            return [], None
+        for _w, t, _now, new in changes:
+            self.db.execute("DELETE FROM anchors WHERE tier=?", (t,))
+            if new is not None:
+                self.db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, new))
+        return changes, anchors
 
     # ---- history / undo -------------------------------------------------------
     def _snap(self, words):
@@ -289,9 +428,11 @@ class Store:
         q = ",".join("?" * len(words))
         return [dict(r) for r in self.db.execute(f"SELECT * FROM words WHERE word IN ({q})", list(words))]
 
-    def _push(self, before, comp_ids=(), conf_added=(), comps_deleted=(), conf_deleted=()):
-        """Record one undoable action: the rows as they were, plus which comparisons/conflicts it added or removed."""
+    def _push(self, before, comp_ids=(), conf_added=(), comps_deleted=(), conf_deleted=(), anchors=None):
+        """Record one undoable action: the rows as they were, plus which comparisons/conflicts it added or removed
+        and, when it changed them (UI-40), the anchors as they were."""
         payload = {
+            "anchors": anchors,
             "before": before,
             "comp_ids": list(comp_ids),
             "conf_added": [list(p) for p in conf_added],
@@ -312,7 +453,11 @@ class Store:
         if row is None:
             return None
         p = json.loads(row["payload"])
+        now = {r["word"]: r for r in self._snap([r["word"] for r in p["before"]])} if p["before"] else {}
         for r in p["before"]:
+            cur = now.get(r["word"])
+            if cur is not None:
+                self._tier_moved(cur, cur["tier"], r["tier"])
             # qkey is missing from history written by older versions; COALESCE keeps the current one.
             self.db.execute(
                 "UPDATE words SET tier=?, rating=?, games=?, skips=?, qkey=COALESCE(?, qkey) WHERE word=?",
@@ -330,6 +475,11 @@ class Store:
             )
         for a, b in p["conf_deleted"]:
             self.db.execute("INSERT OR IGNORE INTO conflicts(a, b) VALUES(?, ?)", (a, b))
+        if p.get("anchors") is not None:                 # an anchor had followed its tier: put them back
+            self.db.execute("DELETE FROM anchors")
+            for t, w in enumerate(p["anchors"]):
+                if w is not None:
+                    self.db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, w))
         self.db.execute("DELETE FROM history WHERE id=?", (row["id"],))
         self.db.commit()
         self.version += 1
@@ -337,7 +487,8 @@ class Store:
 
     # ---- placement ----------------------------------------------------------------
     def place(self, word, tier, comps=()):
-        """Put `word` in `tier`. comps = [(anchor_word, 'a'|'b'|'tie')] where 'a' means word won."""
+        """Put `word` in `tier`. comps = [(anchor_word, 'a'|'b'|'tie')] where 'a' means word won. Moving an anchor
+        word hands its old tier's anchor on (UI-40); returns those changes (see _follow_anchors)."""
         before = self._snap([word])
         ids = []
         now = time.time()
@@ -356,8 +507,12 @@ class Store:
         self.db.execute(
             "UPDATE words SET tier=?, rating=?, games=0 WHERE word=?", (tier, tier_base(tier), word)
         )
-        self._push(before, comp_ids=ids)
+        if before:
+            self._tier_moved(before[0], before[0]["tier"], tier)
+        changes, anchors = self._follow_anchors(before)
+        self._push(before, comp_ids=ids, anchors=anchors)
         self.db.commit()
+        return changes
 
     def unplace(self, word):
         """Send a placed word back to the front of the queue so it is judged again next."""
@@ -368,6 +523,8 @@ class Store:
         front = (front if front is not None else 0.0) - 1.0
         self.db.execute(
             "UPDATE words SET tier=NULL, rating=1500, games=0, skips=0, qkey=? WHERE word=?", (front, word))
+        if before:
+            self._tier_moved(before[0], before[0]["tier"], None)
         self._push(before)
         self.db.commit()
 
@@ -463,16 +620,20 @@ class Store:
                     (rw["tier"], rw["rating"] - 1.0, l),
                 )
                 info["swapped"] = (w, rl["tier"], l, rw["tier"])
+                self._tier_moved(rw, rw["tier"], rl["tier"])
+                self._tier_moved(rl, rl["tier"], rw["tier"])
                 self.db.execute("INSERT INTO swaps(comp_id, boundary) VALUES(?, ?)", (comp_id, rl["tier"]))
             else:
                 self.db.execute("UPDATE words SET games=games+1 WHERE word IN (?, ?)", (a, b))
 
+        info["anchors"], anchors = self._follow_anchors(before)
         self._push(
             before,
             comp_ids=[comp_id],
             conf_added=conf_added,
             comps_deleted=comps_deleted,
             conf_deleted=conf_deleted,
+            anchors=anchors,
         )
         self.db.commit()
         return info
@@ -510,24 +671,39 @@ class Store:
                 return None
             seeds = [r]
         else:
-            if tier is not None:
-                where, args = "tier=?", [tier]
-            else:
-                where, args = "tier IN (%s)" % ",".join(str(t) for t in eligible), []
-            seeds = list(self.db.execute(
-                f"SELECT * FROM words WHERE {where} ORDER BY games ASC, RANDOM() LIMIT 40", args
-            ).fetchall())
+            # the least-dueled words, from the tiers that have them: tier by tier, so the (tier, games) index
+            # answers it (over all tiers at once it sorted every placed word, ~15 ms at 300k)
+            seeds = []
+            for t in ([tier] if tier is not None else eligible):
+                seeds += self.db.execute("SELECT * FROM words WHERE tier=? ORDER BY games ASC, RANDOM() LIMIT 40",
+                                         (t,)).fetchall()
+            seeds.sort(key=lambda r: (r["games"], random.random()))
+            seeds = seeds[:40]
             random.shuffle(seeds)
         for a in seeds:
             faced = self._faced_set(a["word"])
-            cands = self.db.execute(
-                "SELECT * FROM words WHERE tier=? AND word!=? ORDER BY ABS(rating-?) ASC, RANDOM() LIMIT 80",
-                (a["tier"], a["word"], a["rating"]),
-            ).fetchall()
-            for c in cands:
+            for c in self._nearest(a, 80):
                 if c["word"] not in faced:
                     return a["word"], c["word"], a["tier"]
         return None
+
+    def _nearest(self, a, k):
+        """Up to k words of a's tier with the ratings nearest to a's, nearest first, ties in random order.
+        Read from the (tier, rating) index up and down from a's rating (sorting the whole tier by distance
+        took ~25 ms at 300k words). A big run of equal ratings (new words all start alike) is entered at a
+        random point, so the same few words are not always first."""
+        t, r, w = a["tier"], a["rating"], a["word"]
+        same = self.db.execute("SELECT COUNT(*) FROM words WHERE tier=? AND rating=?", (t, r)).fetchone()[0]
+        skip = random.randrange(same - k) if same > k else 0
+        rows = self.db.execute("SELECT * FROM words WHERE tier=? AND rating=? AND word!=? LIMIT ? OFFSET ?",
+                               (t, r, w, k, skip)).fetchall()
+        if len(rows) < k:
+            rows += self.db.execute("SELECT * FROM words WHERE tier=? AND rating>? ORDER BY rating LIMIT ?",
+                                    (t, r, k)).fetchall()
+            rows += self.db.execute("SELECT * FROM words WHERE tier=? AND rating<? ORDER BY rating DESC LIMIT ?",
+                                    (t, r, k)).fetchall()
+        rows.sort(key=lambda c: (abs(c["rating"] - r), random.random()))
+        return rows[:k]
 
     BOUNDARY_POOL = 30      # words per side a boundary pair is drawn from (at most 900 pairs)
 
@@ -559,11 +735,15 @@ class Store:
         return (r["a"], r["b"]) if r else None
 
     # ---- listing / export ------------------------------------------------------------------
-    SORTS = ("Default", "A-Z", "Frequency")
+    SORTS = ("Default", "A-Z", "Frequency", "Rating", "Duels")
+    # each sort's natural order (reverse=True flips every part of it); Default is per filter, below
+    _ORDERS = {"A-Z": "word ASC", "Frequency": "rank ASC", "Rating": "rating DESC, rank ASC",
+               "Duels": "games DESC, rank ASC"}
 
     def list_words(self, text="", tier_filter="All placed", sort="Default", limit=3000, offset=0,
-                   with_total=True):
-        """One page of words. Default order = tier/rating for placed words, queue order for unplaced."""
+                   with_total=True, reverse=False):
+        """One page of words. Default order = tier/rating for placed words, queue order for unplaced; A-Z,
+        Frequency (commonest first), Rating and Duels (highest first); `reverse` turns the order round (M-7)."""
         where, args = [], []
         if tier_filter == "Unplaced":
             where.append("tier IS NULL")
@@ -574,7 +754,10 @@ class Store:
             if tier_filter.startswith("Tier "):
                 where.append("tier=?")
                 args.append(TIERS.index(tier_filter[5:]))
-        order = {"A-Z": "word ASC", "Frequency": "rank ASC"}.get(sort, default_order)
+        order = self._ORDERS.get(sort, default_order)
+        if reverse:
+            order = ", ".join(part.replace(" ASC", " DESC") if part.endswith(" ASC") else part.replace(" DESC", " ASC")
+                              for part in order.split(", "))
         if text:
             where.append("word LIKE ?")
             args.append("%" + text.replace("%", "").replace("_", "") + "%")
@@ -741,5 +924,6 @@ class Store:
             self.db.rollback()
             raise
         self._total = None
+        self._prog = None
         self.version += 1
         return res

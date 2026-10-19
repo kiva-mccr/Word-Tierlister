@@ -18,6 +18,7 @@ for i in range(6500):
 root = tk.Tk()
 shown = []
 import app as A, browser as B
+from widgets import ShapeCard
 A.show_message = B.show_message = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
 A.show_error = lambda *a, **k: shown.append(a)
 app = T.App(root, s, T.Definitions(s))
@@ -46,11 +47,16 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
-assert app.hint_lbl.cget("text") == "Esc cancel"                  # only keys no button shows
+assert app.hint_lbl.cget("text") == "Space stop comparing"        # only keys no button shows
+assert not app.cmp_btns["back"].enabled                            # nothing to step back to yet...
+key("BackSpace"); assert app.cmp is not None                       # ...so Backspace does not leave (UI-37)
+key("space"); assert app.cmp is None and app.tier_row.winfo_manager()       # Space again leaves
+key("space"); assert app.cmp is not None                           # and starts it again
 pump(2)
 assert app.ladder.winfo_ismapped() and app.ladder.possible() == [0, 1, 2, 3, 4, 5]   # UI-9: the ladder shows
 assert app.ladder.mid == app.cmp["mid"]
 key("Up"); pump(2)                                                  # better than the middle anchor
+assert not app.cmp or app.cmp_btns["back"].enabled                 # an answer to step back from
 if app.cmp:
     assert app.ladder.possible() == list(range(app.cmp["lo"], app.cmp["hi"] + 1)) and max(app.ladder.possible()) < 2
 key("BackSpace"); pump(2)
@@ -75,16 +81,20 @@ for mode in ("refine", "boundary", "conflict", "place"):
     pump(2)
     if mode in ("refine", "boundary"):
         assert app.pair is not None, mode
+        want = sorted({s.spine_of(app.pair["left"]), s.spine_of(app.pair["right"])})
+        assert app.progress_bar._marks == want, (mode, app.progress_bar._marks, want)   # UI-55: where they are
+    if mode == "place":
+        assert app.progress_bar._marks == []                                       # none while placing
         key("Left")
         key("Down")
 # ---------------------------------------------------------------- queue dialog
-assert app.apply_queue_settings("abc", "5000", "exp", "1")
-assert app.apply_queue_settings("5", "50", "exp", "1")
-assert app.apply_queue_settings("5", "5000", "exp", "99")
-assert app.apply_queue_settings("77", "8,000", "gauss", "2") is None
-cfg = s.queue_settings()
-assert cfg["seed"] == 77 and cfg["spread"] == 8000 and cfg["shape"] == "gauss" and cfg["compound"] == 2
-assert app.apply_queue_settings("11", "3000", "exp", "1") is None
+assert app.parse_queue_settings("abc", "5000", "exp", "1")[1]                    # each problem is named
+assert app.parse_queue_settings("5", "50", "exp", "1")[1]
+assert app.parse_queue_settings("5", "5000", "exp", "99")[1]
+cfg, err = app.parse_queue_settings("77", "8,000", "gauss", "2")
+assert err is None and cfg == {"seed": 77, "spread": 8000, "shape": "gauss", "compound": 2}
+s.reshuffle(**cfg); assert app.queue_unchanged(cfg)
+s.reshuffle(**app.parse_queue_settings("11", "3000", "exp", "1")[0])
 # the dialogs (UI-24): the shared StyledDialog, problems shown inline, the default button on Enter
 qd = app.edit_queue(); pump(3)
 assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply & reshuffle"]
@@ -95,6 +105,19 @@ qd.win.event_generate("<Return>"); pump(2)
 assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
 qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
 labels = lambda d: " ".join(str(w.cget("text")) for w in d.body.winfo_children() if w.winfo_class() == "TLabel" and w.winfo_manager())
+qd = app.edit_queue(); pump(3)
+# UI-41: a card per shape instead of radio buttons; a click picks it, the curves follow the spread as it is typed
+cards = {c.shape: c for f in qd.body.winfo_children() for c in f.winfo_children() if isinstance(c, ShapeCard)}
+assert set(cards) == {"exp", "gauss"} and cards[s.queue_settings()["shape"]].chosen
+other = "gauss" if cards["exp"].chosen else "exp"
+cards[other].event_generate("<Button-1>", x=5, y=5); pump(1)
+assert cards[other].chosen and not cards["gauss" if other == "exp" else "exp"].chosen
+spread_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
+before = cards["exp"].coords("curve")
+spread_e.delete(0, "end"); spread_e.insert(0, "5000"); pump(1)
+assert cards["exp"].coords("curve") != before and cards["exp"].spread == 5000
+spread_e.delete(0, "end"); spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+qd.close(); pump(2)
 qd = app.edit_queue(); pump(3)
 qd.buttons["Apply & reshuffle"].invoke(); pump(2)                               # nothing changed: says so, stays open
 assert qd.alive() and "No settings changed" in labels(qd)
@@ -144,12 +167,12 @@ pump(8)
 bw = app.browsers[0]
 placed = s.stats()["placed"]
 assert placed > 6000
-assert bw.loaded == 3000 and bw.total == placed, (bw.loaded, bw.total)
-assert len(bw.tree.get_children()) == 3000
+assert bw.loaded == bw.CHUNK and bw.total == placed, (bw.loaded, bw.total)
+assert len(bw.tree.get_children()) == bw.CHUNK
 print("browse opens with", bw.loaded, "of", bw.total, "rows; font", bw.fsize, "pt")
 
 # scroll to the end repeatedly: everything beyond 1500 (and beyond the first page) must load
-for _ in range(10):
+for _ in range(placed // bw.CHUNK + 4):                       # (a page per scroll to the end)
     bw.tree.yview_moveto(1.0)
     pump(4, 0.03)
     if bw.loaded >= bw.total:
@@ -209,8 +232,14 @@ bw.filter_var.set("All placed"); bw.search_var.set("serend"); bw.reload(); pump(
 assert "serendipity" in bw.tree.get_children()
 bw.tree.selection_set("serendipity"); pump(2)
 assert "serendipity" in bw.def_text.get("1.0", "end")
-bw.move(2)                                                         # anchors are protected
-assert shown and s.get_word("serendipity")["tier"] == 0
+# an anchor may move (UI-40): its old tier's anchor passes on, a message says so, undo puts it all back
+anchors0 = s.get_anchors()
+bw.move(2); pump(2)
+assert s.get_word("serendipity")["tier"] == 2 and s.get_anchors()[0] not in (None, "serendipity")
+assert app.anchors == s.get_anchors() and app.toast.cget("text").startswith("serendipity moved to B; the S anchor is now")
+app.undo(); pump(2)
+assert s.get_word("serendipity")["tier"] == 0 and s.get_anchors() == anchors0
+bw.reload(keep_view=True); bw.tree.selection_set("serendipity"); pump(1)
 bw.search_var.set("w00010"); bw.reload(); pump(2)
 bw.tree.selection_set("w00010"); pump(2)
 bw.move(0)
@@ -278,7 +307,7 @@ key("space"); assert flashed[-1] == "compare" and app.cmp
 key("Up"); assert flashed[-1] == "better"
 if app.cmp:
     key("BackSpace"); assert flashed[-1] == "back"
-key("Escape"); assert app.cmp is None
+key("space"); assert app.cmp is None
 for m in ("refine",):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
     for k, name in (("Left", "duel_left"), ("l", "duel_right"), ("t", "duel_tie"), ("s", "duel_skip")):
@@ -332,8 +361,10 @@ assert app.zoom == 1.3 and s.get_meta("zoom") == "1.3"
 assert app.toast.cget("text") == "Zoom 130%" and app.toast._tint[0] == T.PALETTE["info"][0] == "#FFFFFF"   # a white card
 assert _font("body").cget("size") > body0 and _font("word").cget("size") > word0
 assert root.winfo_width() <= app.root.winfo_screenwidth()                          # never past the screen
-root.event_generate("<Control-minus>"); pump(3); assert app.zoom == 1.2
-app.set_zoom(9); assert app.zoom == app.ZOOM_MAX; app.set_zoom(0); assert app.zoom == app.ZOOM_MIN   # limits
+root.event_generate("<Control-minus>"); root.event_generate("<KeyRelease-minus>"); pump(3); assert app.zoom == 1.2
+z_before = app.zoom
+app.set_zoom(9); assert z_before < app.zoom <= app.ZOOM_MAX            # as big as fits, at most the maximum
+app.set_zoom(0); assert app.zoom == app.ZOOM_MIN                         # limits
 root.event_generate("<Control-0>"); pump(3)
 assert app.zoom == 1.0 and abs(_font("body").cget("size") - body0) <= 1
 app.set_zoom(1.1); zoom_saved = s.get_meta("zoom"); app.set_zoom(1.0)
@@ -356,6 +387,31 @@ hidden = [k for k, _ in T.MODES if k not in app.mode_switch.visible]
 for _ in range(len(T.MODES)):
     key("Tab"); pump(1); assert app.mode not in hidden                          # hidden tabs are skipped
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
+
+# holding Ctrl + is paced like any held key, and once the screen is full a repeat only wiggles the one message
+app.set_zoom(1.0); pump(2)
+real_mono = time.monotonic
+clock = {"t": 9000.0}
+time.monotonic = lambda: clock["t"]
+calls = []
+real_apply = app._apply_zoom
+app._apply_zoom = lambda z: (calls.append(z), real_apply(z))
+ev = lambda t: types.SimpleNamespace(keysym="plus", time=t)
+app._zoom_key(ev(1), 1)                                                         # first press: one step
+for i in range(40):                                                            # held: 30 repeats a second
+    clock["t"] += 0.033
+    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app._zoom_key(ev(100 + i), 1)
+assert len(calls) <= 1 + (40 * 33 - 500) // 250 + 1, calls                     # paced, not 40 refits
+app._zoom_cap[app._layout_key()] = round(app.zoom * app.grow + app.ZOOM_STEP, 2)   # the next step is known not to fit
+n_calls = len(calls)
+app.zoom_step(1); first = app.toast
+assert first.cget("text") == app.ZOOM_FULL and len(calls) == n_calls          # refused without trying on screen
+app.zoom_step(1); app.zoom_step(1)
+assert app.toast is first and app.anim.is_running(f"wiggle{id(first)}")       # the same message wiggles
+app._zoom_cap.clear()
+app._apply_zoom, time.monotonic = real_apply, real_mono
+app.on_key_release(types.SimpleNamespace(keysym="plus", time=999))
+app.anim.finish_all(); app.set_zoom(1.0); pump(2)
 
 # ---- a bigger window, bigger contents (UI-25): the fonts grow with the window, then shrink back with it
 assert app._grow_for(*app._ref_size) == 1.0 and app._grow_for(app._ref_size[0] * 9, app._ref_size[1] * 9) == app.GROW_MAX
@@ -406,10 +462,34 @@ app.anim.finish_all(); root.after(900, root.quit); root.mainloop(); app.anim.fin
 # ---- calm stats (UI-15): one quiet line, "+N today" muted, the pace only on hover
 import app as A
 line = A.format_stats({"placed": 6506, "total": 9006, "skipped": 3, "conflicts": 0})
-assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   2,500 left   \u00b7   3 skipped", line
+assert line == "Placed 6,506 of 9,006 (72.2%)   \u00b7   3 skipped", line          # no "N left" (UI-34)
 assert "conflict" not in line                                       # only when there are some
 assert A.format_stats({"placed": 1, "total": 2, "skipped": 0, "conflicts": 1}).endswith("1 conflict to look at")
 assert "/hr" not in app.stats_lbl.cget("text") and "today" not in app.stats_lbl.cget("text")
+# sorting fast through long and short words: the buttons never move (reported); the key hint stays on one line
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+long_short = ["incomprehensibilities", "ox", "electroencephalograph", "cat"]
+s.insert_words(long_short)
+s.db.executemany("UPDATE words SET qkey=? WHERE word=?", [(-100 + i, w) for i, w in enumerate(long_short)]); s.db.commit()
+app.refresh(); pump(2)
+spots = set()
+for _ in range(4):
+    key("2"); root.update()
+    for _ in range(3):
+        root.update(); time.sleep(0.01)
+        spots.add(tuple((b.winfo_rootx(), b.winfo_rooty()) for b in (app.tier_btns[0], app.tier_btns[5], app.compare_btn, app.later_btn)))
+app.anim.finish_all(); pump(2)
+assert len(spots) == 1, spots
+assert int(app.hint_lbl.cget("wraplength") or 0) == 0                            # no fixed wrap width
+for _ in range(4):
+    app.undo(); pump(1)
+# the progress shelf (UI-14) follows placements
+placed_before = sum(sp["placed"] for sp in app.progress_bar.data["spines"])
+app.mode_var.set("place"); app.on_mode_change(); pump(2)
+key("3"); app.anim.finish_all(); pump(2)
+assert sum(sp["placed"] for sp in app.progress_bar.data["spines"]) == placed_before + 1
+assert app.progress_bar.data == s.shelf()
+app.undo(); pump(2); assert sum(sp["placed"] for sp in app.progress_bar.data["spines"]) == placed_before
 n0 = int(app.today_lbl.cget("text").split()[0].lstrip("+").replace(",", ""))
 app.mode_var.set("place"); app.on_mode_change(); pump(2)
 key("4")
@@ -418,10 +498,22 @@ app.anim.finish_all(); pump(2)
 assert not app.word_card.find_withtag("old")
 assert app.today_lbl.cget("text") == f"+{n0 + 1:,} today" and str(app.today_lbl.cget("foreground")) == T.PALETTE["muted"]
 key("BackSpace"); pump(2); assert app.today_lbl.cget("text") == f"+{n0:,} today"   # undo takes it back
-app.session_count, app.session_start = 0, time.time() - 1800
-assert app._pace_text() == "Words and duels done today"            # too early to talk about pace
-app.session_count = 60
-assert app._pace_text().endswith("about 120 an hour") and app.today_tip.text_fn(None) == app._pace_text()
+# the pace counts only active time (UI-33): a pause longer than PACE_GAP_S is a break and adds only that much
+real_time = time.time
+clock = {"t": 5000.0}
+time.time = lambda: clock["t"]
+app.session_count, app._active_s, app._last_action = 0, 0.0, clock["t"]
+for _ in range(3):
+    clock["t"] += 30; app._count_action()
+assert app._pace_text() is None                                     # too early to talk about pace: no note
+for _ in range(57):
+    clock["t"] += 30; app._count_action()                            # 60 actions, 30 s apart: 120 per hour
+assert app._pace_text() == "about +120/hr", app._pace_text()
+clock["t"] += 3 * 3600; app._count_action()                          # back after 3 hours away
+assert abs(app._active_s - (60 * 30 + app.PACE_GAP_S)) < 1e-6
+assert app._pace_text() == f"about +{round(61 / ((60 * 30 + app.PACE_GAP_S) / 3600)):,}/hr"
+assert app.today_tip.text_fn(None) == app._pace_text()
+time.time = real_time
 assert abs(A.local_midnight() - time.mktime(time.strptime(time.strftime("%Y-%m-%d"), "%Y-%m-%d"))) < 1
 
 # ---- the tier chart (UI-13): in Place new words only, and it follows placements
@@ -459,22 +551,21 @@ app.on_key_release(types.SimpleNamespace(keysym="Left", time=99)); pump(2)
 sizes = set()
 for m in ("place", "refine", "boundary", "conflict"):
     app.mode_var.set(m); app.on_mode_change(); pump(2)
-    view = app.tab_views[m]
-    assert view.shown and all(not v.shown for k, v in app.tab_views.items() if k != m), m
-    assert str(root.tk.splitlist(root.tk.call("winfo", "children", str(view.master)))[-1]) == str(view)   # raised
+    assert all(v.shown == (k == m) for k, v in app.tab_views.items()), m        # Boundary: none (archived)
+    if m in app.tab_views:
+        view = app.tab_views[m]
+        assert str(root.tk.splitlist(root.tk.call("winfo", "children", str(view.master)))[-1]) == str(view)   # raised
     sizes.add((app.status_band.winfo_height(), app.center.winfo_rooty()))
 assert len(sizes) == 1, sizes                                                   # the page never moves
 app.mode_var.set("refine"); app.on_mode_change(); pump(2)
 assert app.settled_chart.shares == s.settled_shares(app.SETTLED_DUELS)
 app.mode_var.set("boundary"); app.on_mode_change(); pump(2)
-assert app.swap_strip.counts == s.swap_counts()
-if app.pair:
-    assert app.swap_strip.current == app.pair["join"]                           # the join being checked is bold
+if app.pair:                                                                    # swaps are still counted in the save
     n0 = s.swap_counts()
     side = "left" if s.get_word(app.pair["left"])["tier"] > s.get_word(app.pair["right"])["tier"] else "right"
     app._on_duel(side); app.anim.finish_all(); pump(3)                          # the lower-tier word wins: a swap
-    assert sum(s.swap_counts()) == sum(n0) + 1 and app.swap_strip.counts == s.swap_counts()
-    app.undo(); pump(2); assert app.swap_strip.counts == n0
+    assert sum(s.swap_counts()) == sum(n0) + 1
+    app.undo(); pump(2); assert s.swap_counts() == n0
 app.mode_var.set("conflict"); app.on_mode_change(); pump(2)
 assert app.conflict_card.count == s.stats()["conflicts"]
 app.mode_var.set("place"); app.on_mode_change(); pump(2)

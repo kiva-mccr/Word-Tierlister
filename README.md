@@ -18,7 +18,7 @@ tierlist.py        run this. Your save (tierlist.db), its log and exports stay n
 requirements.txt   the Python packages (the program offers to install them itself)
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
-tools/             check_release.py (pre-hand-off checks, builds the zip)
+tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -31,27 +31,30 @@ replacing the other folders never loses your list.
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults. No dependencies. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, Elo duels, undo, queue order, conflicts, boundary swaps, merging. |
-| `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, queue prep. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, conflicts, boundary swaps, the progress shelf's tallies, merging. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, word frequencies (for the coverage tag), queue prep. |
 | `src/saves.py` | Finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes). |
-| `src/deps.py` | Packages: finds missing ones and installs them; the terminal stage, the private `.venv`; each package's size, purpose and web page (no tkinter). |
+| `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
 | `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`; tick-box choices can link to a web page), global error handlers, `run_guarded` (the whole program runs inside it). |
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
-| `src/startup.py` | First-run progress window (set-up on a worker thread) and the window's package install step. |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` and other small widgets. |
-| `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `SwapStrip` (Boundary), `ConflictCard` (Conflicts). |
-| `src/browser.py` | The Browse / edit window: search, Show / Sort, rows in soft tier colours, Move to, definition. |
+| `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
+| `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows). |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in Queue randomness), `StyledDialog` (the shared dialog frame), `DefinitionDrawer`, `FileList` (the file picker's list) and other small widgets. |
+| `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
+| `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
+| `src/browser.py` | The Browse / edit window: search, Show / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours, Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it eases open (on Linux it opens complete and still) and remembers what it showed. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
+| `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `problems`, `deps` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser` -> `app` -> `tierlist`. A file only imports from files
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Where to change things

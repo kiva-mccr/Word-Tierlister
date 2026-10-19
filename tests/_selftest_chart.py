@@ -4,7 +4,9 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_BAR
 from ui_motion import Animator
-from ui_chart import ConflictCard, DistributionChart, SettledChart, SwapStrip, compact
+from ui_chart import (Bookshelf, ConflictCard, DistributionChart, SettledChart, compact, format_coverage,
+                      format_share, leaning, soft_median)
+from theme import TIER_COLORS, tier_blend
 
 assert compact(0) == "0" and compact(1085) == "1,085" and compact(9999) == "9,999"
 assert compact(12345) == "12.3K" and compact(20000) == "20K" and compact(1234567) == "1.2M" and compact(3000000) == "3M"
@@ -83,19 +85,6 @@ assert sc.itemcget("count2", "text") == "0%" and sc.itemcget("bar2", "state") ==
 assert "settled" in sc.itemcget("caption", "text") and max(sc.bbox("caption")[0::2]) < min(sc.coords("track0")[0::2])
 sc.set([0.2] * 6); assert anim.is_running(f"chart{id(sc)}"); anim.finish_all()           # grows like the tier chart
 sc.show(False); assert sc.itemcget("track0", "state") == "hidden"; sc.show(True)
-# Boundary: six pills, one swap count per join under it, one "swaps" caption, the current join bold
-st = SwapStrip(root, list("SABCDF"), body, head); st.pack(); root.update()
-st.set([3, 2, 4, 1, 0], current=2)
-assert [st.itemcget(f"num{j}", "text") for j in range(5)] == ["3", "2", "4", "1", "0"]
-assert st.itemcget("caption", "text") == "swaps" and len(st.find_withtag("chip")) == 6
-for j in range(5):                                                               # each number under its join
-    nx = st.coords(f"num{j}")[0]
-    assert max(st.coords(f"chip{j}")[0::2]) < nx < min(st.coords(f"chip{j + 1}")[0::2])
-assert st.itemcget("num2", "font") != st.itemcget("num1", "font") and st.itemcget("join2", "fill") == PALETTE["accent"]
-st.set([3, 2, 4, 1, 0], current=None); assert st.itemcget("join2", "fill") == PALETTE["border"]
-st.show(False); st.set([5, 2, 4, 1, 0]); assert st.itemcget("num0", "state") == "hidden"   # stays hidden on redraw
-w0 = st.winfo_reqwidth(); body.configure(size=20); head.configure(size=22); st.refresh()
-assert st.winfo_reqwidth() > w0; body.configure(size=12); head.configure(size=14)
 # Conflicts: one number on a soft card
 title = tkfont.Font(root=root, family="TkDefaultFont", size=20)
 cc = ConflictCard(root, title, body); cc.pack(); root.update()
@@ -103,5 +92,106 @@ assert cc.itemcget("big", "text") == "None" and cc.itemcget("small", "text") == 
 cc.set(3); assert cc.itemcget("big", "text") == "3" and cc.itemcget("small", "text") == "to look at"
 cc.set(1234); assert cc.itemcget("big", "text") == "1,234"
 cc.show(False); cc.set(2); assert cc.itemcget("big", "state") == "hidden"
+# ---- the progress shelf (UI-14)
+assert [format_share(*x) for x in ((0, 10), (10, 10), (97, 100), (3, 1000), (1, 640000), (999, 1000), (0, 0))] == \
+    ["0%", "100%", "97%", "0.3%", "<0.001%", "99.9%", "0%"]
+assert [format_coverage(x) for x in (0.5, 0.93, 0.994, 0.9997, 0.99999, 1.0)] == \
+    ["50% of text", "93% of text", "99.4% of text", "99.97% of text", "99.999% of text", "100% of text"]
+assert format_coverage(0.99999999) != "100% of text"                              # never 100% until it is
+# the median, part way through its tier; the leaning tier; colours blended round the wheel stay bright
+assert soft_median([0, 0, 10, 0, 0, 0]) == 2.0 and soft_median([0] * 6) is None
+assert soft_median([0, 0, 5, 5, 0, 0]) == 2.5 and soft_median([10, 0, 0, 0, 0, 0]) == 0.0      # between C and D
+assert abs(soft_median([0, 0, 3, 7, 0, 0]) - (3 - 0.5 + 2 / 7)) < 1e-9                 # 2/7 of the way into D
+assert leaning([5, 1, 1, 1, 1, 1], [10, 30, 30, 30, 30, 30]) == 0 and leaning([0] * 6, [1] * 6) is None
+assert [tier_blend(k) for k in range(6)] == TIER_COLORS                           # whole tiers: exactly their pastel
+import colorsys
+def sat(h):
+    return colorsys.rgb_to_hsv(*(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)))[1]
+for k in range(5):                                                                 # half-way: as bright as the two ends
+    assert sat(tier_blend(k + 0.5)) >= min(sat(TIER_COLORS[k]), sat(TIER_COLORS[k + 1])) - 0.02
+sh = Bookshelf(root, body); sh.pack(); root.update()
+data = {"zones": [("page", 2), ("chapter", 3)], "coverage": 0.952,
+        "spines": [{"zone": "page", "words": 10, "placed": 10, "tiers": [10, 0, 0, 0, 0, 0]},
+                   {"zone": "page", "words": 20, "placed": 10, "tiers": [0, 0, 5, 5, 0, 0]},
+                   {"zone": "chapter", "words": 40, "placed": 0, "tiers": [0] * 6},
+                   {"zone": "chapter", "words": 50, "placed": 5, "tiers": [0, 5, 0, 0, 0, 0]},
+                   {"zone": "chapter", "words": 60, "placed": 60, "tiers": [0, 0, 0, 0, 0, 60]}]}
+sh.set(data)
+def fh(i):
+    ys = sh.coords(f"fill{i}")[1::2]; return max(ys) - min(ys)
+def full(i):
+    ys = sh.coords(f"spine{i}")[1::2]; return max(ys) - min(ys)
+assert abs(fh(0) - full(0)) < 1 and abs(fh(1) - full(1) / 2) < 1 and not sh.find_withtag("fill2")   # height = share
+assert sh.itemcget("fill0", "fill") == TIER_COLORS[0] and sh.itemcget("fill4", "fill") == TIER_COLORS[5]
+assert sh.itemcget("fill1", "fill") == tier_blend(soft_median([0, 0, 5, 5, 0, 0]))
+gap = sh.coords("spine2")[0] - sh.coords("spine1")[2]
+assert gap > 2 * (sh.coords("spine1")[0] - sh.coords("spine0")[2])                # a gap between zones
+assert [sh.itemcget(f"zone{i}", "text") for i in (0, 1)] == ["page", "chapter"] and sh.itemcget("tag", "text") == "95% of text"
+x = lambda i: (sh.coords(f"spine{i}")[0] + sh.coords(f"spine{i}")[2]) / 2
+# hover: the spine lifts and its outline darkens; its neighbours lift less; leaving puts them all back
+top = lambda i: sh.coords(f"spine{i}")[1]
+rest = [top(i) for i in range(5)]
+edge0 = sh.itemcget("spine1", "outline")
+sh.hover(1)
+assert rest[1] - top(1) > rest[0] - top(0) > 0 and rest[2] - top(2) == rest[0] - top(0)       # neighbours: less
+assert top(3) == rest[3] and top(4) == rest[4]
+assert sh.coords("fill1")[3] < sh.coords("spine1")[3] + 1 and sh.coords("fill1")[3] == sh.coords("spine1")[3]
+assert sh.itemcget("spine1", "outline") != edge0 and sh.itemcget("spine0", "outline") == edge0
+sh.set(dict(data, coverage=0.9)); assert top(1) < rest[1]                         # a redraw keeps the lift
+sh.hover(None)
+assert [top(i) for i in range(5)] == rest and sh.itemcget("spine1", "outline") == edge0
+# UI-55: marks over the spines the words on screen come from; one for two words in the same spine
+sh.mark([1, 3, 3, None, 99]); assert sh._marks == [1, 3]                         # repeats / unknowns ignored
+m1, m3 = sh.find_withtag("mark1"), sh.find_withtag("mark3")
+assert len(sh.find_withtag("mark")) == 2 and m1 and m3
+mx = sh.coords("mark1")[0] + sh.triangle_image(*sh._mark_size(), "#B19BD9").width() / 2
+assert sh.coords("spine1")[0] <= mx <= sh.coords("spine1")[2] + 1                # centred over its spine
+assert sh.bbox("mark1")[3] <= min(sh.coords(f"spine{i}")[1] for i in range(5)) + 1  # above every spine
+y = sh.coords("mark1")[1]; sh.hover(1); assert sh.coords("mark1")[1] < y            # it rises with its spine...
+assert y - sh.MARK_ROOM <= sh.coords("mark1")[1] and sh.bbox("mark1")[1] >= 0        # ...a hair: never cut off (M-3)
+sh._set_lift(1, 100); assert sh.bbox("mark1")[1] >= 0; sh._set_lift(1, sh._rise())  # (however far the spine goes)
+sh.hover(None); assert sh.coords("mark1")[1] == y
+sh.set(dict(data, coverage=0.5)); assert len(sh.find_withtag("mark")) == 2         # kept through a redraw
+sh.mark([]); assert not sh.find_withtag("mark")
+# M-4: a mark wears its word's tier colour (deepened); two tiers in one spine split one triangle down the middle
+import ui_chart as UC
+from theme import TIER_COLORS
+assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC.MARK_COLOR
+sh.mark([1, 3], [0, 4]); assert sh._mark_colors == {1: (UC.mark_color(0),), 3: (UC.mark_color(4),)}
+sh.mark([2, 2], [1, 3]); assert sh._marks == [2] and sh._mark_colors[2] == (UC.mark_color(1), UC.mark_color(3))
+img = sh.itemcget("mark2", "image")
+mw, mh = sh._mark_size()
+left, right = root.tk.call(img, "get", mw // 4, 1), root.tk.call(img, "get", mw - 1 - mw // 4, 1)
+rgb = lambda c: tuple(int(c[k:k + 2], 16) for k in (1, 3, 5))
+near = lambda px, c: max(abs(int(a) - b) for a, b in zip(px, rgb(c))) <= 12
+assert near(left, UC.mark_color(1)) and near(right, UC.mark_color(3)), (left, right)   # left word left, right word right
+sh.mark([2, 2], [3, 3]); assert sh._mark_colors[2] == (UC.mark_color(3),)          # same tier: one plain colour
+sh.mark([])
+# with an animator: eased, and moving on mid-way never snaps (a replaced lift does nothing more)
+from ui_motion import Animator
+sha = Bookshelf(root, body, animator=Animator(root)); sha.pack(); sha.set(data); root.update()
+r2, r3 = sha.coords("spine2")[1], sha.coords("spine3")[1]
+sha.hover(2); root.after(40, root.quit); root.mainloop()
+mid = r2 - sha.coords("spine2")[1]
+assert 0 < mid < sha._rise()                                                        # on its way up
+sha.hover(4); now = r2 - sha.coords("spine2")[1]
+assert abs(now - mid) < 0.01                                                        # no jump when the pointer moves on
+sha._anim.finish_all()
+assert abs(sha.coords("spine2")[1] - r2) < 0.01                                     # back down: not a neighbour
+assert abs(r3 - sha.coords("spine3")[1] - round(sha._rise() * sha.NEIGHBOUR_LIFT)) < 0.01
+sha.destroy()
+# zone names stay whole: never cut off at the left edge, never overlapping, even for a one-spine zone
+narrow = {"zones": [("page", 1), ("chapter", 1), ("book", 30)], "coverage": None,
+          "spines": [{"zone": "page", "words": 3, "placed": 0, "tiers": [0] * 6},
+                     {"zone": "chapter", "words": 9, "placed": 0, "tiers": [0] * 6}]
+          + [{"zone": "book", "words": 50, "placed": 0, "tiers": [0] * 6}] * 30}
+sh2 = Bookshelf(root, body); sh2.pack(); sh2.set(narrow); root.update()
+boxes = [sh2.bbox(f"zone{i}") for i in range(3)]
+assert boxes[0][0] >= 0 and all(b[2] <= int(sh2.cget("width")) for b in boxes), boxes
+assert boxes[0][2] <= boxes[1][0] and boxes[1][2] <= boxes[2][0], boxes            # no overlaps
+sh2.destroy()
+assert sh.note(x(0)) == "page \u00b7 10 words \u00b7 100% placed \u00b7 mostly S, leans S".replace(", leans S", "")
+assert sh.note(x(2)) == "chapter \u00b7 40 words \u00b7 none placed yet"
+assert sh.note(x(3)).startswith("chapter \u00b7 50 words \u00b7 10% placed \u00b7 mostly A") and sh.note(-5) is None
 root.destroy()
 print("CHART OK")

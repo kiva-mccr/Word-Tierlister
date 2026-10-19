@@ -1,6 +1,7 @@
 """Colour palette for the word tier list (UI-1). Pure data + tiny helpers: no tkinter import,
 so it can be tested anywhere. Light theme only; a dark theme can be added later as a second
 dict with the same keys."""
+import colorsys
 
 PALETTE = {
     "bg":       "#FBF7F4",   # warm cream window background
@@ -51,15 +52,24 @@ def tint(h, amount):
 TIER_ROW = [tint(c, 0.55) for c in TIER_COLORS]
 
 
-def _lum(h):
-    """Relative luminance of a #RRGGBB colour (WCAG definition)."""
-    h = h.lstrip("#")
-    c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
-    c = [v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4 for v in c]
-    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+def tier_blend(x):
+    """The tier colour at x in 0..5 (S..F), blended between neighbouring tiers round the colour wheel (hue,
+    saturation and value each go part way), so in-between colours stay as bright as the pastels; mixing the RGB
+    channels instead turns them grey. Used by the progress shelf (UI-14)."""
+    x = max(0.0, min(float(len(TIER_COLORS) - 1), x))
+    lo = int(x)
+    hi = min(len(TIER_COLORS) - 1, lo + 1)
+    t = x - lo
+    (h1, s1, v1), (h2, s2, v2) = _hsv(TIER_COLORS[lo], lo), _hsv(TIER_COLORS[hi], hi)
+    r, g, b = colorsys.hsv_to_rgb((h1 + (h2 - h1) * t) % 1.0, s1 + (s2 - s1) * t, v1 + (v2 - v1) * t)
+    return "#%02X%02X%02X" % (round(r * 255), round(g * 255), round(b * 255))
 
 
-def contrast(a, b):
-    """WCAG contrast ratio between two #RRGGBB colours."""
-    la, lb = sorted((_lum(a), _lum(b)), reverse=True)
-    return (la + 0.05) / (lb + 0.05)
+def _hsv(hexc, tier):
+    h = hexc.lstrip("#")
+    hue, sat, val = colorsys.rgb_to_hsv(*(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)))
+    if tier == 0 and hue > 0.5:          # S's pink sits just before A's peach on the wheel, not after F's lilac
+        hue -= 1.0
+    return hue, sat, val
+
+
