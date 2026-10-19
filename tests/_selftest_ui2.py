@@ -157,23 +157,28 @@ for i in range(2, len(ws)):                                                     
         app.store.record_comparison(ws[i], ws[1], "a", "within")
 bw.reload(); pump(2)
 rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
-assert bw.tree.heading("tier", "text").endswith(_B.Browser.ARROWS[0])                # Default: S..F, arrow up
-bw.tree.tk.call(bw.tree.heading("games", "command")); pump(2)                       # (what a click runs)
+arrow = lambda: bw.arrow[:2]
+assert arrow() == ("tier", "up") and bw.tree.heading("tier", "image")                # Default: S..F, arrow up
+bw.tree.tk.call(bw.tree.heading("games", "command"))                                # (what a click runs)
+root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # at once: the arrow starts filling
+pump(8)                                                                             # ...and is full once loaded
 duels = [int(v) for v in rows("games")]
 assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0
-assert bw.tree.heading("games", "text").endswith(_B.Browser.ARROWS[1]) and bw.tree.heading("tier", "text") == "Tier"
-bw.tree.tk.call(bw.tree.heading("games", "command")); pump(2)                       # same heading: turned round
+assert bw.arrow == ("games", "down", 1.0) and not bw.tree.heading("tier", "image") and bw.tree.heading("tier", "text") == "Tier"
+bw.tree.tk.call(bw.tree.heading("games", "command")); pump(8)                       # same heading: turned round
 duels = [int(v) for v in rows("games")]
-assert bw.reverse and duels == sorted(duels) and bw.tree.heading("games", "text").endswith(_B.Browser.ARROWS[0])
-bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
+assert bw.reverse and duels == sorted(duels) and arrow() == ("games", "up")
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
 assert bw.sort_var.get() == "A-Z" and not bw.reverse and rows("word") == sorted(rows("word"))
-assert bw.tree.heading("word", "text") == "Word  \u25b4  (A\u2013Z)"                  # says which way, in words
-bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
-assert rows("word") == sorted(rows("word"), reverse=True) and bw.tree.heading("word", "text").endswith("(Z\u2013A)")
+assert bw.tree.heading("word", "text").strip() == "Word  (A\u2013Z)" and arrow() == ("word", "up")   # in words too
+bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
+assert rows("word") == sorted(rows("word"), reverse=True) and "(Z\u2013A)" in bw.tree.heading("word", "text")
+assert arrow() == ("word", "down")
 bw.close(); app.open_browser(); pump(4); bw = app.browsers[0]                       # remembered, either way round
 assert bw.sort_var.get() == "A-Z" and bw.reverse and rows("word") == sorted(rows("word"), reverse=True)
-bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(2)                            # the drop-down: its usual order
-assert not bw.reverse and bw.tree.heading("rating", "text").endswith(_B.Browser.ARROWS[1])
+assert bw.arrow == ("word", "down", 1.0)                                             # (no fill on opening)
+bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(8)                            # the drop-down: its usual order
+assert not bw.reverse and arrow() == ("rating", "down")
 bw.close(); app.browse_state = None
 app.on_close()
 

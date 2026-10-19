@@ -163,7 +163,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: Tier = Default (S..F, by rating), Word = A-Z, Rating, Duels (new Sorts: highest first),
 #           Freq # = Frequency (Browser.COLUMNS, sort_by); Store.list_words(reverse=) turns the whole order round;
 #           the arrow points up when the values rise down the list; the direction is kept with the view (UI-38).
-#           Then (asked for): the Word heading also says "(A-Z)" or "(Z-A)" beside its arrow.
+#           Then (asked for): the Word heading also says "(A-Z)" or "(Z-A)" beside its arrow; and the arrow fills
+#           like a loading bar the moment a heading (or the Sort drop-down) is clicked, top down for a down arrow,
+#           bottom up for an up arrow, over 260 ms while the rows load (whole at once with Reduce motion). It is a
+#           soft image now (smooth.arrow_image), set just after the heading's text (Browser._show_sort; the
+#           heading style uses a Label element, as the theme's own put an image at the far right of the column).
 #           300k words: Rating / Duels ~50 ms a page (Default is ~85 ms).
 # [x] M-8  Import / Export dialogs (UI-42, Linux): the Places icons (Home, Documents, Downloads, Next to your
 #           save) sit too close to their words and are mixed styles. Drawn icons in one style, with room.

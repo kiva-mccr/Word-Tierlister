@@ -640,6 +640,28 @@ def _outline_points(x1, y1, x2, y2):
     return [x1, y1, x2, y1, x2, y2, x1, y2]
 
 
+# ---------------------------------------------------------------- a sort arrow that fills like a loading bar
+def arrow_image(widget, w, h, fill, track, reveal=1.0, up=False):
+    """A small soft-edged triangle pointing up or down (w x h, see-through around it), filled with `fill` for
+    `reveal` (0..1) of its height and `track` (a paler colour, like an empty bar) for the rest. A down arrow
+    fills from the top, an up arrow from the bottom: Browse's sort arrow fills as a sort loads. Cached per
+    pixel row of fill."""
+    rows_lit = round(max(0.0, min(1.0, reveal)) * h * 4) / 4.0
+    key = ("photo", "arrow", w, h, fill, track, rows_lit, up)
+
+    def make():
+        tip, base = (0.5, h - 0.5) if up else (h - 0.5, 0.5)
+        mask = coverage_mask([(0.5, base), (w - 0.5, base), (w / 2.0, tip)], w, h, 0)
+        f, t = _rgb(fill), _rgb(track)
+        rows = []
+        for j, runs in enumerate(mask):
+            k = _clamp01(rows_lit - (h - 1 - j if up else j))       # how much of this pixel row is filled
+            colour = tuple(int(t[c] + (f[c] - t[c]) * k + 0.5) for c in range(3))
+            rows.append(paint_mask([runs], colour, None)[0])
+        return _photo(widget, w, h, rows)
+    return _cached(widget, key, make)
+
+
 # ---------------------------------------------------------------- the area under a curve
 def curve_rows(w, h, ys, fill, line, line_width):
     """RGBA rows for the area under a curve and its line: ys[i] is the curve's height (pixels from the top,

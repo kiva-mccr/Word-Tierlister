@@ -92,5 +92,14 @@ for name in SM.ICONS:
     alpha = [img.transparency_get(x, y) for y in range(16) for x in range(16)]
     assert alpha.count(True) > 40 and alpha.count(False) > 40, name                 # some shape, some clear
     assert img.transparency_get(0, 0) and img is ic.icon_image(name, 16, "#8A8499")  # clear corner; cached
+# Browse's sort arrow fills like a loading bar: a down arrow from the top, an up arrow from the bottom
+dark, pale = "#606070", "#E0E0E8"
+px = lambda img, y: img.get(img.width() // 2, y)
+half_down = SM.arrow_image(ic, 11, 6, dark, pale, 0.5)
+assert px(half_down, 1)[0] < 120 and px(half_down, 4)[0] > 180                    # top filled, bottom still pale
+half_up = SM.arrow_image(ic, 11, 6, dark, pale, 0.5, up=True)
+assert px(half_up, 4)[0] < 120 and px(half_up, 1)[0] > 180
+full = SM.arrow_image(ic, 11, 6, dark, pale, 1.0)
+assert px(full, 4)[0] < 120 and full.transparency_get(0, 5)                       # full; clear beside its tip
 root.destroy()
 print("SMOOTH OK")

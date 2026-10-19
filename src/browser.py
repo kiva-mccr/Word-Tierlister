@@ -18,8 +18,10 @@ from constants import TIERS
 from errors import show_message
 from fonts import family, font
 from sizing import center_geometry, fit_size, ui_factor, usable_area
+from smooth import arrow_image
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
+from ui_motion import lerp_color
 from widgets import ChoiceButton, RoundButton, Toast, refresh_widgets
 
 
@@ -34,7 +36,7 @@ class Browser:
                ("games", "Duels", "Duels", "e"), ("freq", "Freq #", "Frequency", "e"))
     RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
                                                  # first: rank 1, 2...); Rating and Duels start with the highest
-    ARROWS = ("\u25b4", "\u25be")                # up, down: which way the values go down the list
+    SORT_MS = 260                                # the sort arrow fills like a loading bar as the rows load
     OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
     # ...except on Linux (X11), where each step of the ease re-lays out the whole window under a window manager
     # that redraws its frame a beat later, and the rows popped in afterwards: it read as a bounce (M-5). There
@@ -74,7 +76,12 @@ class Browser:
         self.style = ttk.Style(self.win)
         self.tstyle = f"{self.sid}.Treeview"
         self.style.configure(self.tstyle, font=self.f_body)
-        self.style.configure(self.tstyle + ".Heading", font=self.f_bold)
+        self.style.configure(self.tstyle + ".Heading", font=self.f_bold, compound="right")
+        # the heading's text and the sort arrow (an image) drawn together, the arrow just after the text: the
+        # theme's own layout puts a heading image at the far right of the column, away from its name
+        self.style.layout(self.tstyle + ".Heading", [("Treeheading.cell", {"sticky": "nswe"}), ("Treeheading.border", {
+            "sticky": "nswe", "children": [("Treeheading.padding", {"sticky": "nswe", "children": [
+                ("Label.label", {"sticky": "nswe"})]})]})])
         self.style.configure(f"{self.sid}.TLabel", font=self.f_body)
         self.style.configure(f"{self.sid}.Bar.TLabel", font=self.f_body, background=PALETTE["surface"])
         self.style.configure(f"{self.sid}.Muted.TLabel", font=self.f_body, foreground=PALETTE["muted"])
@@ -293,7 +300,7 @@ class Browser:
         """Column widths in pixels, measured from the current fonts so headings and numbers never clip."""
         m, b = self.f_body.measure, self.f_bold.measure
         pad = m("0") * 2
-        arrow = b("  " + self.ARROWS[1])                # (room for the sort arrow on any heading)
+        arrow = b("  ") + self._arrow_size()[0]         # (room for the sort arrow on any heading)
         return {
             "tier": max(b("Tier") + arrow, m("S")) + pad * 2,
             "word": m("0") * 22,
@@ -390,20 +397,36 @@ class Browser:
         self.reverse = (not self.reverse) if toggle and sort == self.sort_var.get() else False
         if self.sort_var.get() != sort:
             self.sort_var.set(sort)
-        self._show_sort()
-        self.reload()
+        # the arrow fills like a loading bar (top down for a down arrow, bottom up for an up arrow), starting at
+        # once so the click shows it worked; the rows load just after its first frame is drawn
+        self.app.anim.run(f"sortarrow{id(self)}", self.SORT_MS, self._show_sort, ease=lambda t: t)
+        self.win.after(15, lambda: self.alive() and self.reload())
 
-    def _show_sort(self):
-        """The headings, with a small arrow on the one the list is sorted by: up when its values rise down the
-        list (a..z, S..F, commonest first), down when they fall. The Word column also says which way round in
-        words, "(A-Z)" or "(Z-A)" (asked for)."""
-        sort = self.sort_var.get()
-        for col, text, srt, _anchor in self.COLUMNS:
-            if srt == sort:
-                text += "  " + self.ARROWS[(sort in self.RISING) == self.reverse]
+    def _arrow_size(self):
+        h = max(6, round(self.f_bold.metrics("linespace") * 0.5))
+        return 2 * h - 1, h
+
+    def _show_sort(self, reveal=1.0):
+        """The headings, with a small arrow (an image, after the text) on the one the list is sorted by: up when
+        its values rise down the list (a..z, S..F, commonest first), down when they fall; filled `reveal` of
+        the way, the rest pale. The Word column also says which way round in words, "(A-Z)" or "(Z-A)"."""
+        try:
+            sort = self.sort_var.get()
+            up = (sort in self.RISING) != self.reverse
+            fill = PALETTE["muted"]
+            w, h = self._arrow_size()
+            img = arrow_image(self.tree, w, h, fill, lerp_color(fill, PALETTE["surface2"], 0.7), reveal, up)
+            for col, text, srt, _anchor in self.COLUMNS:
+                if srt != sort:
+                    self.tree.heading(col, text=text, image="")
+                    continue
                 if col == "word":
                     text += "  (Z\u2013A)" if self.reverse else "  (A\u2013Z)"
-            self.tree.heading(col, text=text)
+                self.tree.heading(col, text=text + "  ", image=img)
+            self._arrow_img = img                         # (keeps the image alive)
+            self.arrow = (next(c for c, _t, srt, _a in self.COLUMNS if srt == sort), "up" if up else "down", reveal)
+        except tk.TclError:
+            pass                                          # closed meanwhile
 
     def _add_rows(self, rows):
         """Append rows to the table, colouring placed words by tier. The word itself is the row id."""
