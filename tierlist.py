@@ -160,6 +160,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (reported: it opened unlike the other windows, really fast): no fade of its own either. A
 #           see-through window gets no system opening animation (Windows 11 has one for every window), so Browse
 #           now simply appears, complete and placed, the way the dialogs do.
+#           Then (reported: it showed while its text was still settling to the right size): the text size is
+#           worked out from the size it is about to open at (Tk reports 1x1 until a window is shown, so the
+#           standard size was used), the first size after it appears is taken at once instead of 80 ms later,
+#           and every pending layout and redraw finishes while it is still hidden.
 # [x] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
 #           Built: App._say_zoom also when nothing changed (any zoom key: zoom out at the smallest says 60%);
 #           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows

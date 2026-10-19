@@ -132,7 +132,7 @@ mapped = []
 real_init = _B.Browser._open
 def spy(self):
     self.win.bind("<Map>", lambda e, w=self.win: e.widget is w and mapped.append(
-        (w.winfo_width(), w.winfo_height(), len(self.tree.get_children()))), add="+")
+        (w.winfo_width(), w.winfo_height(), len(self.tree.get_children()), self.fsize)), add="+")
     real_init(self)
 _B.Browser._open = spy
 app.open_browser(); bw = app.browsers[0]
@@ -141,6 +141,7 @@ for _ in range(12):
     pump(1); geos.add(bw.win.geometry())
 assert mapped and mapped[0][2] > 0, mapped                        # rows already in when it first shows
 assert len(geos) == 1, geos                                       # never resized or moved while opening
+assert mapped[0][3] == bw.fsize                                   # its text size already final when it first shows
 assert float(bw.win.attributes("-alpha")) == 1.0 and bw.search_var.get() == ""   # never see-through
 w_full = bw.win.winfo_width()
 bw.close()

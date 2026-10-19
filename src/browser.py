@@ -59,6 +59,8 @@ class Browser:
         self._seen_version = -1
         self._loading = False
         self._toast = None                         # the zoom message (_say_zoom)
+        self._shown_size = False                   # the first size it is shown at was taken (_on_configure)
+        self._open_size = None                     # the size it opens at (_fit_to_contents), for the text size
         self.fsize = 0
         try:
             self.zoom = max(-4, min(30, int(app.store.get_meta("browse_zoom", "0"))))
@@ -212,16 +214,25 @@ class Browser:
         """Show the window, already built, sized, placed and filled with its rows, the way every other window
         appears: the system's own opening (Windows 11 animates it). It once grew from 94% round its centre and
         filled its rows afterwards, which read as a bounce (M-5); a fade of our own then made it open faster
-        and differently from the rest (a see-through window gets no system animation)."""
+        and differently from the rest (a see-through window gets no system animation). Every pending layout and
+        redraw is finished first, while it is still hidden, so it never appears half-settled."""
+        self.win.update_idletasks()
         self.win.deiconify()
 
     # ---- scaling ------------------------------------------------------------------------------------
     def _on_configure(self, e):
-        """Window resized: re-scale the text, but only after resizing pauses for 80 ms."""
+        """Window resized: re-scale the text, but only after resizing pauses for 80 ms. The first size after it
+        appears is taken at once: should the system open it a little differently from what was asked (display
+        scaling on Windows), the text settles before the first paint instead of changing in view."""
         if e.widget is not self.win:
             return
         if self._scale_job:
             self.win.after_cancel(self._scale_job)
+            self._scale_job = None
+        if not self._shown_size:
+            self._shown_size = True
+            self._apply_scale()
+            return
         self._scale_job = self.win.after(80, self._apply_scale)
 
     def _apply_scale(self):
@@ -231,8 +242,8 @@ class Browser:
             w, h = self.win.winfo_width(), self.win.winfo_height()
         except tk.TclError:
             return
-        if w < 100 or h < 100:  # not mapped yet
-            w, h = self.base_w, self.base_h
+        if w < 100 or h < 100:  # not shown yet: the size it is about to open at (Tk says 1x1 until then)
+            w, h = self._open_size or (self.base_w, self.base_h)
         size = max(8, min(64, int(round(12 * min(w / self.base_w, h / self.base_h))) + self.zoom))
         if size == self.fsize:
             return
@@ -294,6 +305,7 @@ class Browser:
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
         w, h = fit_size((min(nw, area[2]), min(nh, area[3])), (self.base_w, self.base_h), (area[2], area[3]))
         self.win.geometry(center_geometry(w, h, area))
+        self._open_size = (w, h)
         self._update_minsize()
         self.fsize = 0                                         # force the first _apply_scale to run
 
