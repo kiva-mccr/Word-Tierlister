@@ -154,6 +154,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           redraws its frame a beat behind, and the rows popped in after it. Fixed: on X11 Browse loads its
 #           rows before it is first drawn and opens complete and still (Browser.EASE_OPEN, automatic); Windows
 #           and macOS keep the ease. Checked under openbox: the first frame is the full window, ~100 ms.
+#           Then (reported on Windows too: "it bounces weird"): no size ease anywhere. Browse stays hidden while
+#           it is built, placed and filled, then appears complete in its place and only fades in (150 ms, where
+#           the system can fade a window; at once with Reduce motion). Browser._open; the window never resizes.
 # [x] M-6  Ctrl+0 always says "Zoom 100%", even when the zoom is already 100% (the main window and Browse).
 #           Built: App._say_zoom also when nothing changed (any zoom key: zoom out at the smallest says 60%);
 #           Ctrl 0 is paced like Ctrl + / - (App._zoom_key). Browse had no zoom message at all: it now shows

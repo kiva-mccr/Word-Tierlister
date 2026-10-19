@@ -38,16 +38,13 @@ class Browser:
     RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
                                                  # first: rank 1, 2...); Rating and Duels start with the highest
     SORT_MS = 260                                # the sort arrow fills like a loading bar as the rows load
-    OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
-    # ...except on Linux (X11), where each step of the ease re-lays out the whole window under a window manager
-    # that redraws its frame a beat later, and the rows popped in afterwards: it read as a bounce (M-5). There
-    # it opens complete and still. None = automatic; True / False force it (tests).
-    EASE_OPEN = None
+    OPEN_MS = 150                # opening: it fades in, complete and in its place (UI-38)
 
     def __init__(self, app):
         """Build the window and load the first page of rows. `app` is the main App (store, fonts, definitions)."""
         self.app = app
         self.win = tk.Toplevel(app.root)
+        self.win.withdraw()                      # (shown once built, placed and filled: _open)
         self.win.title("Browse & edit tier list")
         # base_w/base_h: the window size at which the text is 12 pt (the reference scaled for dpi, then
         # raised to what the contents need in _fit_to_contents). On a small screen the window opens
@@ -63,7 +60,6 @@ class Browser:
         self._seen_version = -1
         self._loading = False
         self._toast = None                         # the zoom message (_say_zoom)
-        self._opening = True                       # easing open; the list fills when it ends (_open_animation)
         self.fsize = 0
         try:
             self.zoom = max(-4, min(30, int(app.store.get_meta("browse_zoom", "0"))))
@@ -168,9 +164,8 @@ class Browser:
         self._apply_scale()
         entry.focus_set()
         state = getattr(app, "browse_state", None)
-        # the rows load once the window has eased open: re-laying out a full list on every frame of the ease
-        # made it stutter (40-60 ms a frame)
-        self._open_animation(lambda: self._restore(state) if state else self.reload())
+        self._restore(state) if state else self.reload()
+        self._open()
 
     # ---- window lifecycle ---------------------------------------------------------------------
     @property
@@ -214,48 +209,28 @@ class Browser:
         if self.current and self.tree.exists(self.current):
             self.render_def()
 
-    def _open_animation(self, then):
-        """Ease the window out from slightly smaller round its centre (about 150 ms; none with Reduce motion),
-        then call then() (which fills the list). The text is not re-scaled meanwhile: that waits for the size
-        to settle (_on_configure)."""
+    def _open(self):
+        """Show the window, already built, sized, placed and filled with its rows, fading in (about 150 ms) where
+        the system can fade a window; at once with Reduce motion or where it cannot. It used to grow from 94%
+        round its centre and fill its rows afterwards: every step re-laid out the whole window and the window
+        manager redrew its frame behind it, which read as a bounce (reported on Linux, M-5, then on Windows)."""
         anim = self.app.anim
-        try:
-            w, h, x, y = (int(v) for v in self.win.geometry().replace("x", "+").split("+"))
-        except ValueError:
-            w = 0
-        ease = self.EASE_OPEN
-        if ease is None:
-            ease = self.win.tk.call("tk", "windowingsystem") != "x11"
-        if anim.reduce_motion or not w or not ease:
-            self._opening = False
-            then()                                   # (before the window is first drawn: it appears full)
-            return
-        cx, cy = x + w / 2, y + h / 2
+        fade = not anim.reduce_motion
+        if fade:
+            try:
+                self.win.attributes("-alpha", 0.0)
+            except tk.TclError:
+                fade = False
+        self.win.deiconify()
 
         def frame(p):
-            k = self.OPEN_FROM + (1 - self.OPEN_FROM) * p
-            ww, hh = int(round(w * k)), int(round(h * k))
             try:
-                self.win.geometry(f"{ww}x{hh}+{int(round(cx - ww / 2))}+{int(round(cy - hh / 2))}")
+                self.win.attributes("-alpha", p)
             except tk.TclError:
-                pass                                 # closed while opening
-        frame(0.0)                                   # it first appears at the small size...
-
-        def start(e=None):
-            self.win.unbind("<Map>")
-            # ...and the clock starts once it is on screen and drawn: the first draw of a full list takes a
-            # while, and an ease timed from before it was over before anyone saw it
-            self.win.after_idle(lambda: self.win.after(0, lambda: anim.run(f"browse-open{id(self)}",
-                                                                          self.OPEN_MS, frame, done)))
-
-        def done():
-            self._opening = False
-            if self.alive():
-                then()
-        if self.win.winfo_ismapped():
-            start()
-        else:
-            self.win.bind("<Map>", start)
+                pass                                 # closed meanwhile
+        if fade:
+            anim.run(f"browse-open{id(self)}", self.OPEN_MS, frame)
+            self.win.after(self.OPEN_MS + 400, lambda: frame(1.0))      # (never left see-through)
 
     # ---- scaling ------------------------------------------------------------------------------------
     def _on_configure(self, e):
@@ -390,10 +365,7 @@ class Browser:
         self._job = self.win.after(200, self.reload)
 
     def _maybe_refresh(self):
-        """Reload (keeping the scroll position) if anything changed in the save since the last load. Not while
-        the window is still opening: the list fills when the ease ends (a load mid-ease made it stutter)."""
-        if self._opening:
-            return
+        """Reload (keeping the scroll position) if anything changed in the save since the last load."""
         if self.store.version != self._seen_version:
             self.reload(keep_view=True)
 

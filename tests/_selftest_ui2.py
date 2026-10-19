@@ -126,25 +126,28 @@ app.center.event_generate("<ButtonPress-1>", x=2, y=2); pump(2)
 assert not bw.alive() and not app.browsers
 app.browse_state = None
 import browser as _B
-_B.Browser.EASE_OPEN = True                                      # (Windows / macOS)
+# it opens complete (its rows in) and in its place, then only fades in: no growing, nothing moves (reported as a
+# bounce on Linux, then on Windows)
+mapped = []
+real_init = _B.Browser._open
+def spy(self):
+    self.win.bind("<Map>", lambda e, w=self.win: e.widget is w and mapped.append(
+        (w.winfo_width(), w.winfo_height(), len(self.tree.get_children()))), add="+")
+    real_init(self)
+_B.Browser._open = spy
 app.open_browser(); bw = app.browsers[0]
-assert bw._opening and not bw.tree.get_children()                # it eases open first; the rows come after
-pump(8)
-assert not bw._opening and bw.tree.get_children() and bw.search_var.get() == ""
+geos = set()
+for _ in range(12):
+    pump(1); geos.add(bw.win.geometry())
+assert mapped and mapped[0][2] > 0, mapped                        # rows already in when it first shows
+assert len(geos) == 1, geos                                       # never resized or moved while opening
+assert float(bw.win.attributes("-alpha")) == 1.0 and bw.search_var.get() == ""
 w_full = bw.win.winfo_width()
 bw.close()
-_B.Browser.EASE_OPEN = None                                      # automatic: on X11 (M-5) it opens complete, still
+_B.Browser._open = real_init
+app.anim.reduce_motion = True                                    # Reduce motion: no fade
 app.open_browser(); bw = app.browsers[0]
-if bw.win.tk.call("tk", "windowingsystem") == "x11":
-    assert not bw._opening and bw.tree.get_children()
-    sizes = set()
-    for _ in range(8):
-        pump(1); sizes.add((bw.win.winfo_width(), bw.win.winfo_height()))
-    assert len(sizes) == 1 and abs(bw.win.winfo_width() - w_full) <= 2, sizes   # no size change at all
-bw.close()
-app.anim.reduce_motion = True                                    # Reduce motion: no ease, rows at once
-app.open_browser(); bw = app.browsers[0]
-assert not bw._opening and bw.tree.get_children()
+assert bw.tree.get_children() and float(bw.win.attributes("-alpha")) == 1.0
 pump(4); assert abs(bw.win.winfo_width() - w_full) <= 2
 bw.close()
 app.anim.reduce_motion = False
