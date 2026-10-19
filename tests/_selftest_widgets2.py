@@ -477,11 +477,18 @@ from widgets import StyledDialog
 init_fonts(root)
 got = []
 dlg = StyledDialog(root, "T", "A headline", "Some intro text", animator=anim)
+# hidden until show() has centred it: first seen where it ends up (it appeared at the parent's top left, then
+# jumped, reported on the keyboard shortcuts dialog)
+mapped = []
+dlg.win.bind("<Map>", lambda e: e.widget is dlg.win and mapped.append((dlg.win.winfo_rootx(), dlg.win.winfo_rooty())))
 tk.Label(dlg.body, text="body").pack()
+dlg.win.update_idletasks(); update()
+assert dlg.win.state() == "withdrawn" and not mapped
 dlg.button("Details", lambda: got.append("details"), side="left")
 dlg.button("Cancel", dlg.close)
 dlg.button("Go", lambda: got.append("go"), default=True)
 dlg.show(); update()
+assert mapped and abs(mapped[0][0] - dlg.win.winfo_rootx()) <= 1 and abs(mapped[0][1] - dlg.win.winfo_rooty()) <= 1
 assert dlg.win.cget("bg") == PALETTE["bg"] and all(isinstance(b, RoundButton) for b in dlg.buttons.values())
 xs = {k: b.winfo_rootx() for k, b in dlg.buttons.items()}
 assert xs["Details"] < xs["Cancel"] < xs["Go"]                                 # default rightmost, extras far left

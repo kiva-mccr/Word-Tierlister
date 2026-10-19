@@ -828,6 +828,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           rebuilt all the rows, emptying the dialog for a moment (Windows paints that at once), and re-fitted
 #           its size. Now the rows are built once; a change refills only its own keycaps, new ones in before the
 #           old go, and the window only grows when a row needs it.
+#           Fixed (reported: the dialog opened at the main window's top left, then flickered down to the middle):
+#           building it showed the window before it was placed. Every StyledDialog now stays hidden until show()
+#           has sized and centred it, so it first appears where it stays (all dialogs, not just this one).
 # [x] UI-49 Bug (reported): holding a tier key kept placing words, and lagged on after the key was released
 #           (auto-repeat sends ~30 presses a second, faster than placing, so they queued). Fixed: a held key
 #           repeats like a keyboard's own defaults: nothing for 500 ms after the first press, then at most
