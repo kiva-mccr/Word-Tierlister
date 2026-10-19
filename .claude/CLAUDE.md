@@ -23,7 +23,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Layering (a file only imports from files earlier in this list)
 constants, problems, deps, keymap -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts -> app -> tierlist.
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -75,6 +75,9 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
+- Censored (obscene) words: the medium horizontal smear on the cards (`smooth.smear_image`, `widgets.Unsmear`;
+  un-smears under the pointer), `constants.mask_word` (b•••••d) wherever only text fits (messages, Browse's list);
+  route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
 
 ## Before handing a round over
@@ -101,7 +104,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse opens complete, like the other windows: no animation of its own; remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), UI-51 (look up a word from the card), UI-26 (final pass: smoke test, 1M check), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-5 (Linux / macOS: the terminal handed back; applications-menu launcher), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse opens complete, like the other windows: no animation of its own; remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), UI-51 (look up a word from the card), UI-26 (final pass: smoke test, 1M check), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-5 (Linux / macOS: the terminal handed back; applications-menu launcher), ST-6 (How words are dealt: order, kinds of words, censoring), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: T-1..T-3, T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.
 Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
@@ -115,6 +118,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   its size when moved to a monitor with a different scaling.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
+- ST-6's obscene-word lookup for older saves (Wiktionary's categories via its API) could not reach Wiktionary from
+  here (proxy); tested with a faked reply only. New Wiktionary builds take them from the dump's sense labels.
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
   hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).

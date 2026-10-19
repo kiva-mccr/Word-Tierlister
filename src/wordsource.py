@@ -3,7 +3,9 @@
 Flow on a first run (driven by main() in tierlist.py):
     build_word_list() or build_wiktionary()   fill the `words` table, most common first
     prepare_queue()                           look up word frequencies once (fill_frequencies), flag
-                                              compounds (compute_penalties), then give every
+                                              compounds (compute_penalties), sort words into kinds and
+                                              find the obscene ones (fill_kinds, fill_obscene: ST-6; a
+                                              Wiktionary build records both itself), then give every
                                               unplaced word a seeded queue key (Store.reshuffle)
 
 The Wiktionary path is resumable at every stage: the 3 GB download continues from its .part file,
@@ -18,8 +20,10 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
+from constants import kind_bits
 from problems import SetupError
 
 
@@ -85,6 +89,12 @@ SKIP_POS = {"name", "symbol", "character", "punct", "romanization", "prefix", "s
             "interfix", "affix", "circumfix", "proverb", "phrase", "prep_phrase"}
 # Senses carrying only these labels count as "dead": such words are pushed further back.
 DEAD_TAGS = {"obsolete", "archaic", "rare", "dialectal"}
+# A sense with any of these labels makes the word obscene (ST-6: "Obscene words", "Censor obscene words").
+OBSCENE_TAGS = {"vulgar", "offensive", "derogatory", "slur", "ethnic-slur"}
+# The same words for a save built before ST-6, from Wiktionary's own categories (the labels file words there)
+OBSCENE_CATEGORIES = ("English vulgarities", "English offensive terms", "English derogatory terms",
+                      "English ethnic slurs", "English swear words")
+WIKT_API = "https://en.wiktionary.org/w/api.php"
 # A word is letters, optionally joined by single hyphens/apostrophes ("well-known", "don't").
 # _PHRASE_RE additionally allows spaces ("ice cream"); it is used only with --include-phrases.
 _WORD_RE = re.compile(r"^[^\W\d_]+(?:[-'’][^\W\d_]+)*$")
@@ -92,9 +102,10 @@ _PHRASE_RE = re.compile(r"^[^\W\d_]+(?:[-' ’][^\W\d_]+)*$")
 # Insert a parsed entry into the staging table, or merge it with an earlier entry for the same word
 # (a word often has several parts of speech): add the senses, keep the definition text (capped).
 _WK_UPSERT = (
-    "INSERT INTO wk(word, senses, lemma, live, text) VALUES(?,?,?,?,?) "
+    "INSERT INTO wk(word, senses, lemma, live, text, kinds, rude) VALUES(?,?,?,?,?,?,?) "
     "ON CONFLICT(word) DO UPDATE SET senses=senses+excluded.senses, "
     "lemma=MAX(lemma, excluded.lemma), live=MAX(live, excluded.live), "
+    "kinds=kinds | excluded.kinds, rude=MAX(rude, excluded.rude), "
     "text=CASE WHEN length(text) < 800 THEN text || char(10) || excluded.text ELSE text END"
 )
 
@@ -156,9 +167,9 @@ def _open_text(path):
 
 
 def _summarize(entry):
-    """-> (sense count, has_lemma_sense, has_live_sense, up to 4 definition lines)."""
+    """-> (sense count, has_lemma_sense, has_live_sense, up to 4 definition lines, any obscene sense)."""
     pos = entry.get("pos", "")
-    lines, n, lemma, live = [], 0, False, False
+    lines, n, lemma, live, rude = [], 0, False, False, False
     for s in entry.get("senses", []):
         glosses = s.get("glosses") or []
         if not glosses:
@@ -166,13 +177,15 @@ def _summarize(entry):
         n += 1
         if not (s.get("form_of") or s.get("alt_of")):
             lemma = True
-        dead = set(s.get("tags", [])) & DEAD_TAGS
+        tags = set(s.get("tags", []))
+        rude = rude or bool(tags & OBSCENE_TAGS)
+        dead = tags & DEAD_TAGS
         if not dead:
             live = True
         if len(lines) < 4:
             label = f"({', '.join(sorted(dead))}) " if dead else ""
             lines.append(f"• ({pos}) {label}{str(glosses[-1])[:220]}")
-    return n, lemma, live, "\n".join(lines)
+    return n, lemma, live, "\n".join(lines), rude
 
 
 def _parse_wiktionary(db, path, include_phrases, log):
@@ -205,10 +218,10 @@ def _parse_wiktionary(db, path, include_phrases, log):
             if (not word or entry.get("pos") in SKIP_POS or word != word.lower()
                     or not shape.match(word)):
                 continue
-            n, lemma, live, text = _summarize(entry)
+            n, lemma, live, text, rude = _summarize(entry)
             if n == 0:
                 continue
-            batch.append((word, n, int(lemma), int(live), text))
+            batch.append((word, n, int(lemma), int(live), text, kind_bits(entry.get("pos")), int(rude)))
             kept += 1
             if len(batch) >= 20000:
                 db.executemany(_WK_UPSERT, batch)
@@ -235,9 +248,12 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     default_path = os.path.join(os.path.dirname(os.path.abspath(store.path)), WIKT_FILENAME)
     ours = path is None
     path = path or default_path
-    db.execute("CREATE TABLE IF NOT EXISTS wk("
-               "word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT)")
+    if store.get_meta("wk_done") == "1" and not {"kinds", "rude"} <= {r[1] for r in db.execute("PRAGMA table_info(wk)")}:
+        store.set_meta("wk_done", "0")          # a half-done build from before ST-6 has no kinds: read the file again
     if store.get_meta("wk_done") != "1":
+        db.execute("DROP TABLE IF EXISTS wk")
+        db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT, "
+                   "kinds INTEGER, rude INTEGER)")
         db.execute("DELETE FROM wk")
         db.commit()
         if ours and not os.path.exists(path):
@@ -277,6 +293,10 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     log(f"  saving {len(ordered):,} words and their definitions to your save file...")
     store.insert_words(ordered)
     db.execute("INSERT OR REPLACE INTO defs(word, text) SELECT word, text FROM wk")
+    db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word), "
+               "obscene=COALESCE((SELECT rude FROM wk WHERE wk.word=words.word), 0)")
+    store.set_meta("kinds_done", "1")
+    store.set_meta("obscene_done", "1")
     db.execute("DROP TABLE wk")
     db.commit()
     store.set_meta("source", "wiktionary")
@@ -349,6 +369,85 @@ def fill_frequencies(store, log=print):
     store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
 
 
+# --------------------------------------------------------------------------
+# Kinds of words and obscene words for a save made before ST-6 (a Wiktionary build records them itself)
+# --------------------------------------------------------------------------
+_DEF_POS = re.compile(r"^\s*(?:\u2022|\d+\.)\s*\(([a-z ]+)\)", re.M)
+
+
+def fill_kinds(store, log=print):
+    """Each word's kinds from its stored definition (every source writes "(noun) ..." lines: the Wiktionary
+    build's, WordNet's, dictionaryapi.dev's), else from WordNet (nltk) if it is installed, else "other"."""
+    log("  reading the parts of speech from the stored definitions...")
+    kinds = {}
+    for word, text in store.db.execute("SELECT word, text FROM defs"):
+        bits = 0
+        for pos in _DEF_POS.findall(text or ""):
+            bits |= kind_bits(pos)
+        if bits:
+            kinds[word] = bits
+    rest = [r[0] for r in store.db.execute("SELECT word FROM words WHERE kinds IS NULL") if r[0] not in kinds]
+    wn = None
+    if rest:
+        try:
+            from nltk.corpus import wordnet as wn
+            wn.synsets("dog")
+        except Exception:               # nltk or its data missing: those words count as "other"
+            wn = None
+    if wn is not None:
+        log(f"  asking WordNet about {len(rest):,} more words...")
+        letters = {"n": 1, "v": 2, "a": 4, "s": 4, "r": 8}
+        for w in rest:
+            bits = 0
+            for syn in wn.synsets(w.replace(" ", "_")):
+                bits |= letters.get(syn.pos(), 16)
+            if bits:
+                kinds[w] = bits
+    store.set_kinds(kinds.items())
+    store.db.execute("UPDATE words SET kinds=16 WHERE kinds IS NULL")
+    store.db.commit()
+    log(f"  sorted {len(kinds):,} words into kinds.")
+
+
+def _category_members(title, fetch, limit=60):
+    """Every page title in one Wiktionary category (500 per request)."""
+    out, cont = [], None
+    for _ in range(limit):
+        q = {"action": "query", "list": "categorymembers", "cmtitle": "Category:" + title, "cmnamespace": "0",
+             "cmlimit": "500", "format": "json"}
+        if cont:
+            q["cmcontinue"] = cont
+        data = fetch(WIKT_API + "?" + urllib.parse.urlencode(q))
+        out += [m["title"] for m in data.get("query", {}).get("categorymembers", [])]
+        cont = data.get("continue", {}).get("cmcontinue")
+        if not cont:
+            break
+    return out
+
+
+def _fetch_json(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "word-tierlist/1.0"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.load(r)
+
+
+def fill_obscene(store, log=print, fetch=None):
+    """Find the obscene words of a save made before ST-6 from Wiktionary's categories of vulgar, offensive and
+    derogatory terms and slurs (a few requests, needs the internet). Returns False when it could not (tried
+    again on a later start)."""
+    words, fetch = set(), fetch or _fetch_json
+    try:
+        for title in OBSCENE_CATEGORIES:
+            log(f"  {title}...")
+            words.update(_category_members(title, fetch))
+    except (OSError, ValueError, http.client.HTTPException) as exc:
+        log(f"  could not reach Wiktionary ({exc}); trying again next time.")
+        return False
+    store.set_obscene(w for w in words if w == w.lower())
+    log(f"  found {len(store.obscene_words()):,} obscene words in your list.")
+    return True
+
+
 def wiktionary_steps(store, path=None):
     """The main steps build_wiktionary will report, for the progress window's "Step 2 of 5" (plan_line)."""
     steps = []
@@ -360,17 +459,36 @@ def wiktionary_steps(store, path=None):
     return steps + ["Ranking words"]
 
 
-def queue_steps(store, adds_words=False):
+def queue_steps(store, adds_words=False, records_kinds=False):
     """The main steps prepare_queue will report (see wiktionary_steps). `adds_words`: words are about to be
-    added first, which makes it redo all three (adding words resets pen_done and freq_done)."""
+    added first, which makes it redo all three (adding words resets pen_done and freq_done); `records_kinds`:
+    by a Wiktionary build, which records the kinds and obscene words itself."""
     if not adds_words and not store.count_words():
         return []
     pen = adds_words or store.get_meta("pen_done") != "1"
     freq = adds_words or store.get_meta("freq_done") != store.FREQ_VERSION
+    kinds = not records_kinds and store.get_meta("kinds_done") != "1"
+    obscene = not records_kinds and _wants_obscene(store)
     shuffle = pen or store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
     return ((["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
+            + (["Sorting words into kinds"] if kinds else [])
+            + (["Finding obscene words"] if obscene else [])
             + (["Shuffling the queue"] if shuffle else []))
+
+
+OBSCENE_RETRY_S = 6 * 3600          # offline: ask Wiktionary again after this long (each start would wait on it)
+
+
+def _wants_obscene(store):
+    """True if the obscene words still need finding online (a save from before ST-6, not tried lately)."""
+    if store.get_meta("obscene_done") == "1":
+        return False
+    try:
+        last = float(store.get_meta("obscene_tried", "0"))
+    except ValueError:
+        last = 0.0
+    return time.time() - last > OBSCENE_RETRY_S
 
 
 def prepare_queue(store, log=print):
@@ -386,6 +504,21 @@ def prepare_queue(store, log=print):
     if store.get_meta("freq_done") != store.FREQ_VERSION:
         log("Looking up how common each word is (one time, a few seconds)...")
         fill_frequencies(store, log)
+    dealt = False
+    if store.get_meta("kinds_done") != "1":
+        log("Sorting words into kinds (nouns, verbs...; one time, a few seconds)...")
+        fill_kinds(store, log)
+        store.set_meta("kinds_done", "1")
+        dealt = True
+    if _wants_obscene(store):
+        log("Finding obscene words (one time, asks Wiktionary)...")
+        store.set_meta("obscene_tried", time.time())
+        if fill_obscene(store, log):
+            store.set_meta("obscene_done", "1")
+            dealt = True
+    if dealt or store.get_meta("deal_done") != "1":     # the words left out follow the new kinds
+        store.set_deal()
+        store.set_meta("deal_done", "1")
     stale = store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone()
     if stale or changed:

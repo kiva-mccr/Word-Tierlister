@@ -18,8 +18,12 @@ How it works
 * The queue is a seeded random order, not a strict frequency order: a word's odds
   of coming up early fall off exponentially (or gaussianly) with its frequency
   rank, and compound words ("bookshelf", "well-known") are pushed further back.
-  Same seed = same order. Change it under Settings > Queue randomness & seed (or
-  --seed N). (--source wordnet gives a smaller ~77k list instead.)
+  Same seed = same order. Change it under Settings > How words are dealt (or
+  --seed N), where "Most common first" is a strict frequency order instead, and
+  kinds of words (nouns, verbs, ..., obscene words) can be left out of the queue.
+  Censor obscene words there smears them sideways until the pointer is over them.
+  The first start asks these in three short steps. (--source wordnet gives a
+  smaller ~77k list instead.)
 * Your progress lives in a save file (tierlist.db) that is written after every action.
   When you replace tierlist.py with a newer version, even in a different folder, the
   new one finds your earlier save automatically (the one used last time, or the one with
@@ -85,11 +89,12 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
+    dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     app.py          App: the main window and all modes.
 
 Layers: constants, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts -> app ->
-tierlist. Nothing lower imports anything higher, and
+sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing ->
+app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
 # ==========================================================================================
@@ -125,7 +130,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Suggested order: the start-up phase (ST-1..ST-4; all done) came first by request, then the new look
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
-# Added later, in this order after the UI steps: ST-5 (Linux terminal, done), ST-6 (how words are dealt), then
+# Added later, in this order after the UI steps: ST-5 (Linux terminal, done), ST-6 (how words are dealt, done), then
 # T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon).
 #
 # --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
@@ -309,7 +314,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ~/.local/share/applications/word-tierlist.desktop (Terminal=false; again: "updated"). Checked in a
 #           real pseudo-terminal: the prompt is back after ~1.7 s, the program runs on in its own session. macOS
 #           gets the terminal hand-back the same way (not tried on a Mac here); no launcher there.
-# [ ] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
+# [x] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
 #           (UI-41). On the first start (and any time from Settings > How words are dealt...), one friendly
 #           page asks how new words should come:
 #           - Order: "Most common first" (strictly by frequency, no randomness), or "Mostly common, a little
@@ -327,6 +332,32 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           rebuild (which keeps all progress). Applying reshuffles only the unplaced words, as today.
 #           Browse (decided): the kinds appear in its Show drop-down only ("Nouns", "Verbs", "Obscene
 #           words"...), so Browse lists just those words; no extra sort.
+#           Changed on the way (the user's choices from the mock-ups): page A for Settings, and on the first
+#           start its three parts one at a time (Order, Which words, Obscene words; Back / Next / Done, "Step 1
+#           of 3"); "Obscene words" is one more tick box among the kinds (an obscene word is dealt only while it
+#           is ticked, any other word while one of its kinds is: untick the rest to sort only obscene words);
+#           "Censor obscene words" is a tick box ("smeared, except while the pointer is over them"), and a
+#           censored word is not f***ed but smeared sideways (the user tried blurs, offset copies and smudged
+#           letters, and picked the medium horizontal smear). Tk cannot blur text, so smooth.smear_image draws
+#           the word's shape (a band per letter, stems above for b d k, below for g p y), blurred sideways, as
+#           an image; with the pointer over it, it un-smears (widgets.Unsmear: SMEAR_LEVELS narrower, paler
+#           smears while the word itself fades in over them; 260 ms; back again on leaving). On the word card
+#           and the duel cards; the outgoing word of a placement leaves as its smear. Everywhere text only can
+#           go (messages, the anchor question, the focus line, the definitions drawer, Browse's list) it reads
+#           b•••••d (constants.mask_word); Browse's definition pane and exports keep the real word.
+#           "Other" covers pronouns, prepositions, conjunctions, interjections, numbers, abbreviations,
+#           contractions and the like (prefixes and suffixes are not in the list at all).
+#           Built: words.kinds (bits), words.obscene and words.out (left out of the queue; index
+#           idx_words_q3 on tier, out, skips, qkey, so the next word is instant even with all but a few
+#           thousand left out of a million). The Wiktionary parse records each entry's part of speech and any
+#           sense labelled vulgar / offensive / derogatory / slur. A save made before this: its kinds come from
+#           the stored definitions' "(noun)" lines (every source writes them; WordNet for the rest, else
+#           "other"), its obscene words from Wiktionary's own categories of them (a few requests; offline it
+#           tries again after 6 hours), both as start-up steps ("Sorting words into kinds", "Finding obscene
+#           words"). Order "Most common first" is the queue shape "rank". Browse's Show lists the placed words
+#           of a kind. With everything chosen placed, Place says how many are left out. Measured with a
+#           million words: re-dealing ~3.5 s (worker thread, moving bar), the dialog's counts ~0.4 s. The
+#           first start's steps show once per save (main(): App(ask_dealing=...)). _selftest_dealing.py.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
@@ -924,7 +955,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #                        clicking a column (M-7)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
 #   Keyboard shortcuts . new dialog (UI-48, done)
-#   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
+#   How words are dealt  diagrams (UI-41), shared dialog look (UI-24), grew out of Queue randomness (ST-6,
+#                        done; also the first start's three steps)
 #   Import / Export .... file dialog (UI-42), spacing and icons (M-8..M-10)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)
 #   Install packages ... tick boxes + sizes (ST-4, done), a web link per package (UI-30)
@@ -1176,7 +1208,7 @@ def main():
                 steps, adds = wiktionary_steps(store, args.wiktionary_file), True
             elif args.source == "wordnet" and existing == 0:
                 steps, adds = ["First run: building the word list"], True
-            steps += queue_steps(store, adds_words=adds)
+            steps += queue_steps(store, adds_words=adds, records_kinds=builds_wiktionary)
             if args.seed is not None and args.seed != store.queue_settings()["seed"]:
                 steps.append("Reshuffling the queue")
             log(plan_line(steps))
@@ -1239,7 +1271,8 @@ def main():
             print(f"{store.count_words():,} words ready.")
             # --- 5. show the main window; App runs until it is closed
             root.deiconify()
-            App(root, store, Definitions(store), note=note, other_saves=others)
+            App(root, store, Definitions(store), note=note, other_saves=others,
+                ask_dealing=store.get_meta("dealt_asked") != "1")       # (ST-6: once per save)
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

@@ -30,10 +30,10 @@ replacing the other folders never loses your list.
 | File | Job |
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
-| `src/constants.py` | Tier names, modes, ranking defaults. No dependencies. |
+| `src/constants.py` | Tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, conflicts, boundary swaps, the progress shelf's tallies, merging. |
-| `src/wordsource.py` | Building the word list (WordNet, Wiktionary), compound detection, word frequencies (for the coverage tag), queue prep. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds, obscene words, the ones left out; ST-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech and whether it is obscene), compound detection, word frequencies (for the coverage tag), kinds and obscene words for an older save (from its definitions and Wiktionary's categories), queue prep. |
 | `src/saves.py` | Finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
@@ -45,18 +45,19 @@ replacing the other folders never loses your list.
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
-| `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows). |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in Queue randomness), `StyledDialog` (the shared dialog frame), `DefinitionDrawer`, `FileList` (the file picker's list) and other small widgets. |
+| `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows). Also a censored word's sideways smear (`smear_image`). |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now; a censored word is smeared and un-smears under the pointer, `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `DefinitionDrawer`, `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
+| `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
-| `src/browser.py` | The Browse / edit window: search, Show / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours, Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
+| `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts` -> `app` -> `tierlist`. A file only imports from files
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts`, `dealing` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Where to change things
@@ -65,6 +66,8 @@ earlier in that list. Only the UI files import `tkinter`.
 - Colours: `theme.py`. Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_key_target`, `next_tab` for Tab, `_show_place`, `_show_pair`).
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
+- The order words come in, which kinds, censoring: Settings > How words are dealt (`dealing.py`; the data in
+  `Store.deal_settings` / `set_deal`, `Store.reshuffle`).
 - Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved;
   what fits the screen: `App._fit_window`). Browse has its own (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
@@ -75,6 +78,21 @@ earlier in that list. Only the UI files import `tkinter`.
 `sh tests/run_tests.sh` runs everything (`tests/_selftest*.py`), from any folder. Window tests need
 tkinter and run headless under `xvfb-run` when there is no display. A single test runs on its own too:
 `python tests/_selftest_ui.py`. Before handing work over: `python tools/check_release.py --tests`.
+
+## How words are dealt
+
+The first start asks three short questions (any time later: Settings > How words are dealt...):
+
+- **Order:** "Most common first" (strictly by how common a word is) or "Mostly common, a little shuffled"
+  (the default: its shape, spread and seed decide how much).
+- **Which words:** nouns, verbs, adjectives, adverbs, other, obscene words, each a tick box with how many
+  words it holds. Unticked ones are left out of the queue, never deleted; untick everything but "Obscene
+  words" to sort only those.
+- **Censor obscene words:** they are smeared sideways on the cards until the pointer is over them, and read
+  b•••••d in messages and Browse. Exports keep the real words.
+
+A save from before this learns each word's kinds from its stored definitions, and which words are obscene
+from Wiktionary (once, on a start with the internet).
 
 ## Windows notes
 

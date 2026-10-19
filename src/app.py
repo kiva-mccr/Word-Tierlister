@@ -6,14 +6,12 @@ bottom in the order things happen:
     construction (header, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
     undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
 """
-import gc
 import json
 import math
 import os
 import random
 import sqlite3
 import sys
-import threading
 import time
 
 import tkinter as tk
@@ -21,8 +19,9 @@ from tkinter import filedialog, ttk
 
 import deps
 from browser import Browser
+from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, TIERS, mask_word
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, event_spec
 from saves import write_export
@@ -33,7 +32,7 @@ from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, ShapeCard, StyledDialog, TabBar, TierChip, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
@@ -77,11 +76,13 @@ class App:
     buttons) are two frames in self.center; refresh() shows the one matching the mode.
     """
 
-    def __init__(self, root, store, defs, note=None, other_saves=()):
+    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False):
         """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
-        extra saves with progress that _startup() offers to merge. `defs` is a Definitions.
+        extra saves with progress that _startup() offers to merge. `defs` is a Definitions. `ask_dealing`: show
+        the first start's "How words are dealt" steps (ST-6; main() asks once per save).
         """
         self.root, self.store, self.defs = root, store, defs
+        self.ask_dealing = ask_dealing
         self.note, self.other_saves = note, list(other_saves)
         self.mode = store.get_meta("mode", "place")
         if self.mode not in self.modes_with_work(store.stats()):
@@ -146,13 +147,20 @@ class App:
         root.after(300, self._startup)
 
     def _startup(self):
-        """One-time prompts after the window opens: which save was resumed, merge offers, anchors."""
+        """One-time prompts after the window opens: which save was resumed, merge offers, how words are dealt
+        (ST-6: once per save, then in Settings), anchors."""
         if self.note:
             self.flash(self.note, ms=12000)
         if self.other_saves:
             self.offer_merge(self.other_saves)
-        if not all(self.anchors):
-            self.edit_anchors()
+
+        def anchors():
+            if not all(self.anchors):
+                self.edit_anchors()
+        if self.ask_dealing and self.store.get_meta("dealt_asked") != "1":
+            self.edit_dealing(first=True, on_done=anchors)
+        else:
+            anchors()
 
     # ---- construction ------------------------------------------------------------------
     def _menu_items(self):
@@ -178,7 +186,7 @@ class App:
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
                       ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
-                          ("command", "Queue randomness & seed...", self.edit_queue, None),
+                          ("command", "How words are dealt...", self.edit_dealing, None),
                           ("command", "Keyboard shortcuts...", self.edit_keys, None),
                           ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
         ]
@@ -275,6 +283,7 @@ class App:
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
         self.word_card.on_find, self.word_card.on_enter = self.start_lookup, self.lookup_word   # (UI-51)
+        self.word_card.animator = self.anim                       # (a censored word un-smears under the pointer)
         Tooltip(self.word_card, self._card_note, font=font("body"))
         self.place_empty = EmptyCard(inner, font("title"), font("body"))     # every word placed (UI-20)
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
@@ -684,7 +693,7 @@ class App:
     def _update_focus_label(self):
         """Show 'Focus: word (N duels left)' and the Clear button while a refine session is running."""
         if self.mode == "refine" and self.focus:
-            self.focus_lbl.config(text=f"Focus: {self.focus} ({self.focus_left} duels left)")
+            self.focus_lbl.config(text=f"Focus: {self.shown(self.focus)} ({self.focus_left} duels left)")
             self.focus_clear.pack(side="left")
         else:
             self.focus_lbl.config(text="")
@@ -855,8 +864,14 @@ class App:
         if row is None:
             self.cur_word = None
             self.word_card.grid_remove()
-            self.place_empty.set("Every word is placed",
-                                 "Refine within tier and Boundary check can keep polishing the order.")
+            out = self.store.left_out()
+            if out:
+                self.place_empty.set("Every word you chose is placed",
+                                     f"{out:,} more are left out (Settings > How words are dealt). Refine within "
+                                     "tier and Boundary check can keep polishing the order.")
+            else:
+                self.place_empty.set("Every word is placed",
+                                     "Refine within tier and Boundary check can keep polishing the order.")
             self.place_empty.grid(row=0, column=0)
             self._set_question("")
             self.tier_row.grid_remove()
@@ -871,7 +886,8 @@ class App:
         notes = (" - looked up" if row["word"] == self.looked_up else "") + \
                 (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
-        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")   # (it fits the word itself)
+        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}",   # (it fits the word itself)
+                           censor=self.store.censored(row["word"]))
         anchors_ok = all(self.anchors)
         self.compare_btn.set_enabled(anchors_ok)
         if self.cmp is None and self.auto_compare and anchors_ok:
@@ -886,7 +902,7 @@ class App:
         if self.cmp:
             mid = self.cmp["mid"]
             anchor = self.anchors[mid]
-            self._set_question(f"Is it better or worse than  \"{anchor}\"  ?\n(anchor for tier {TIERS[mid]})")
+            self._set_question(f"Is it better or worse than  \"{self.shown(anchor)}\"  ?\n(anchor for tier {TIERS[mid]})")
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
@@ -931,7 +947,7 @@ class App:
         self.store.skip(word)
         self._count_action()
         old_sub = self.word_card.sub
-        self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.flash(f"'{self.shown(word)}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
         self.refresh()
         f = ui_factor(self.root)               # "later": it drifts back (up and away) instead of toward a tier
         self.word_card.transition_from(word, old_sub, dx=0, dy=-int(10 * f), animator=self.anim)
@@ -946,7 +962,7 @@ class App:
         f = ui_factor(self.root)
         self.word_card.transition_from(word, old_sub, dx=int((tier - 2.5) * 5 * f), dy=int(12 * f),
                                        animator=self.anim)
-        self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
+        self._fling_toast(f"{self.shown(word)}  \u2192  {TIERS[tier]}", tier)
 
     def _fling_toast(self, text, tier):
         """The placement message rises out of the word card's top edge, rests above it, then flies into its
@@ -1044,7 +1060,7 @@ class App:
             a, b, t = res
             ctx = f"Refining tier {TIERS[t]}"
             if self.focus:
-                ctx += f"   -   focus word: {self.focus}"
+                ctx += f"   -   focus word: {self.shown(self.focus)}"
         elif self.mode == "boundary":
             sel = self.filter_var.get()
             bnd = TIERS.index(sel.split("|")[0].strip()) if "|" in sel else None
@@ -1079,7 +1095,7 @@ class App:
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:
-                self.flash(f"No fresh opponents left for '{self.focus}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+                self.flash(f"No fresh opponents left for '{self.shown(self.focus)}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
                 self.focus = None
                 self._update_focus_label()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
@@ -1096,7 +1112,8 @@ class App:
             words = [self.pair["left"], self.pair["right"]]
             tiers = [self.store.get_word(w)["tier"] for w in words]
             # the duel cards wear their word's tier colour (a neutral pastel without a tier)
-            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers])
+            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers],
+                           censor=[self.store.censored(w) for w in words])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
             self._render_defs(words)
@@ -1116,7 +1133,7 @@ class App:
         self._count_action()
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
-            self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.flash(f"Swapped: {self.shown(w)} \u2192 {TIERS[wt]},  {self.shown(l)} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
             self.note_anchor_changes(info["anchors"])
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
@@ -1244,8 +1261,13 @@ class App:
             return
         self.session_count = max(0, self.session_count - 1)
         self.cmp = None
-        self.flash(f"Undid last action ({word})", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.flash(f"Undid last action ({self.shown(word)})", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
         self.refresh()
+
+    def shown(self, word):
+        """How `word` is written in messages and labels: masked (b\u2022\u2022\u2022\u2022\u2022d) when Censor obscene words
+        is on and it is one (ST-6); the big cards smear it instead."""
+        return mask_word(word) if self.store.censored(word) else word
 
     # ---- keys --------------------------------------------------------------------------------------------------------------
     # A held key repeats like a keyboard does (the usual defaults): nothing for REPEAT_DELAY_MS after the first
@@ -1365,7 +1387,7 @@ class App:
             self.def_words = words
         if not self.show_defs:
             return
-        self.def_frame.show_words(self.def_words, self.get_def)
+        self.def_frame.show_words(self.def_words, self.get_def, self.shown)
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
@@ -1395,9 +1417,9 @@ class App:
         """A short message for each anchor that moved and handed its tier's anchor on (UI-40)."""
         for word, old, new_tier, new in changes:
             where = f"moved to {TIERS[new_tier]}" if new_tier is not None else "left its tier"
-            then = (f"the {TIERS[old]} anchor is now {new}" if new else
+            then = (f"the {TIERS[old]} anchor is now {self.shown(new)}" if new else
                     f"tier {TIERS[old]} has no anchor until you pick one (Settings)")
-            self.flash(f"{word} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
+            self.flash(f"{self.shown(word)} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
 
     # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
     def _click_background(self, e):
@@ -1475,7 +1497,7 @@ class App:
 
     @staticmethod
     def parse_queue_settings(seed_text, spread_text, shape, compound_text):
-        """Check the Queue randomness fields. Returns (settings for Store.reshuffle, None) or (None, error)."""
+        """Check the order fields of How words are dealt (seed, spread, shape, compound strength). Returns (settings for Store.reshuffle, None) or (None, error)."""
         try:
             seed = int(seed_text.strip())
             spread = float(spread_text.strip().replace(",", ""))
@@ -1486,7 +1508,7 @@ class App:
             return None, "Spread must be at least 100 (it is measured in frequency ranks)."
         if not 0 <= compound <= 10:
             return None, "Compound strength must be between 0 (off) and 10."
-        if shape not in ("exp", "gauss"):
+        if shape not in QUEUE_SHAPES:
             return None, "Pick a shape."
         return {"seed": seed, "spread": spread, "shape": shape, "compound": compound}, None
 
@@ -1513,118 +1535,11 @@ class App:
         """Settings > Keyboard shortcuts... (UI-48)."""
         return ShortcutsDialog(self)
 
-    def edit_queue(self):
-        """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words
-        in the background (a moving bar while it runs: with ~1M words it takes a while), or says that
-        nothing changed."""
-        cfg = self.store.queue_settings()
-        dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
-                           "New words come up at random, commoner ones sooner. The same seed, the same order.",
-                           animator=self.anim, wrap_chars=84)                     # one line
-        box = dlg.body
-        seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
-        comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
-        ttk.Label(box, text="Seed:").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=seed_v, width=14).grid(row=0, column=1, sticky="w")
-        new_seed = RoundButton(box, "New random seed",
-                               lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31))),
-                               bg=PALETTE["surface"], font=font("body"), padx=12, pady=3, radius=10,
-                               animator=self.anim)
-        new_seed.grid(row=0, column=2, sticky="w", padx=12)
-        ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
-        # the shape: a card per choice with its curve (UI-41); clicking a card picks it
-        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="ne", padx=(0, 8), pady=(10, 4))
-        sh = ttk.Frame(box)
-        sh.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 4))
-        cards = {}
-        for shape, name, colour in (("exp", "Exponential", TIER_COLORS[1]), ("gauss", "Gaussian", TIER_COLORS[4])):
-            cards[shape] = ShapeCard(sh, shape, name, colour, on_pick=shape_v.set)
-            cards[shape].pack(side="left", padx=(0, 10))
-        ttk.Label(box, text="Compound strength:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
-        ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
-                  foreground=PALETTE["muted"]).grid(row=3, column=2, sticky="w", padx=12)
-        # shown only when there is something to say: a problem, "no settings changed", or the shuffle running
-        status = ttk.Label(box, text="", foreground=PALETTE["bad"][1])
-        bar = ttk.Progressbar(box, mode="indeterminate")
-        for v in (seed_v, spread_v, comp_v, shape_v):
-            v.trace_add("write", lambda *_: status.grid_remove())       # an edit clears the last note
-
-        def redraw(*_):  # live: the curves follow the spread as it is typed (an unreadable one keeps the last)
-            try:
-                spread = float(spread_v.get().replace(",", ""))
-            except ValueError:
-                spread = None
-            if spread is not None and spread <= 0:
-                spread = None
-            for shape, card in cards.items():
-                card.set(spread=spread, chosen=shape == shape_v.get())
-
-        spread_v.trace_add("write", redraw)
-        shape_v.trace_add("write", redraw)
-        redraw()
-
-        def say(text, colour):
-            status.config(text=text, foreground=colour)
-            status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
-            dlg.refit()
-
-        def apply():
-            new, err = self.parse_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
-            if err:
-                say(err, PALETTE["bad"][1])
-                return
-            if self.queue_unchanged(new):
-                say("No settings changed, so there is nothing to reshuffle.", PALETTE["muted"])
-                return
-            for b in (*dlg.buttons.values(), new_seed):
-                b.set_enabled(False)
-            dlg.on_cancel = lambda: None             # it cannot be stopped halfway: wait for it
-            say("Shuffling the words you haven't placed yet...", PALETTE["muted"])
-            bar.grid(row=5, column=0, columnspan=3, sticky="we", pady=(6, 0))
-            if not self.reduce_motion:
-                bar.start(12)                        # the back-and-forth bar: no percentage to show
-            dlg.refit()
-            self.busy = True                         # nothing else writes to the save meanwhile (_poll_defs)
-            gc.collect()                             # tk objects may only be freed on this thread: tidy up now and
-            gc.disable()                             # pause the collector, so it never runs inside the worker
-            result = {}
-            worker = threading.Thread(target=lambda: result.update(error=self._reshuffle_quietly(new)), daemon=True)
-            worker.start()
-
-            def wait():
-                if worker.is_alive():
-                    dlg.win.after(50, wait)
-                    return
-                self.busy = False
-                gc.enable()
-                bar.stop()
-                if result.get("error"):
-                    for b in (*dlg.buttons.values(), new_seed):
-                        b.set_enabled(True)
-                    dlg.on_cancel = dlg.close
-                    bar.grid_remove()
-                    say(f"Could not reshuffle: {result['error']}", PALETTE["bad"][1])
-                    return
-                self.cmp = None
-                dlg.close()
-                self.after_external_change()
-                self.flash("Queue reshuffled", ms=2000)
-            wait()
-
-        dlg.button("Cancel", dlg.close)
-        dlg.button("Apply & reshuffle", apply, default=True)
-        dlg.show()
-        return dlg
-
-    def _reshuffle_quietly(self, cfg):
-        """Worker thread: reshuffle, and return the error instead of raising (no tkinter here)."""
-        try:
-            self.store.reshuffle(**cfg)
-        except (sqlite3.Error, OSError, ValueError) as exc:
-            return str(exc)
-        return None
+    def edit_dealing(self, first=False, on_done=None):
+        """Settings > How words are dealt... (ST-6; it grew out of Queue randomness): the order new words come in,
+        which kinds of words, censoring obscene ones. `first`: the three-step version for the first start."""
+        self._dealing = DealDialog(self, first=first, on_done=on_done)
+        return self._dealing
 
     # ---- earlier progress ------------------------------------------------------------------------
     def show_save_location(self):

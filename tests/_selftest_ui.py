@@ -18,7 +18,6 @@ for i in range(6500):
 root = tk.Tk()
 shown = []
 import app as A, browser as B
-from widgets import ShapeCard
 A.show_message = B.show_message = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
 A.show_error = lambda *a, **k: shown.append(a)
 app = T.App(root, s, T.Definitions(s))
@@ -96,43 +95,46 @@ assert err is None and cfg == {"seed": 77, "spread": 8000, "shape": "gauss", "co
 s.reshuffle(**cfg); assert app.queue_unchanged(cfg)
 s.reshuffle(**app.parse_queue_settings("11", "3000", "exp", "1")[0])
 # the dialogs (UI-24): the shared StyledDialog, problems shown inline, the default button on Enter
-qd = app.edit_queue(); pump(3)
-assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply & reshuffle"]
-assert qd.buttons["Apply & reshuffle"].cget("bg") == T.PALETTE["select_bg"]
-spread = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
-spread.delete(0, "end"); spread.insert(0, "5")
-qd.win.event_generate("<Return>"); pump(2)
-assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
-qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
-labels = lambda d: " ".join(str(w.cget("text")) for w in d.body.winfo_children() if w.winfo_class() == "TLabel" and w.winfo_manager())
-qd = app.edit_queue(); pump(3)
+qd = app.edit_dealing(); pump(3)
+assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply"]
+assert qd.buttons["Apply"].cget("bg") == T.PALETTE["select_bg"]
+qd.order_v.set("shuffled"); pump(1)
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "5")
+qd.dlg.win.event_generate("<Return>"); pump(2)
+assert qd.alive() and "at least 100" in str(qd.status.cget("text")) and qd.status.winfo_manager()
+qd.dlg.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
+labels = lambda d: str(d.status.cget("text")) if d.status.winfo_manager() else ""
+qd = app.edit_dealing(); pump(3)
 # UI-41: a card per shape instead of radio buttons; a click picks it, the curves follow the spread as it is typed
-cards = {c.shape: c for f in qd.body.winfo_children() for c in f.winfo_children() if isinstance(c, ShapeCard)}
+cards = qd.cards
 assert set(cards) == {"exp", "gauss"} and cards[s.queue_settings()["shape"]].chosen
 other = "gauss" if cards["exp"].chosen else "exp"
 cards[other].event_generate("<Button-1>", x=5, y=5); pump(1)
 assert cards[other].chosen and not cards["gauss" if other == "exp" else "exp"].chosen
-spread_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
 before = cards["exp"].coords("curve")
-spread_e.delete(0, "end"); spread_e.insert(0, "5000"); pump(1)
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "5000"); pump(1)
 assert cards["exp"].coords("curve") != before and cards["exp"].spread == 5000
-spread_e.delete(0, "end"); spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+# ST-6: "Most common first" hides the shuffle's settings (and an unreadable spread there no longer matters)
+assert qd.shuffle_f.winfo_manager()
+qd.order_btns["rank"].invoke(); pump(1)
+assert qd.order_v.get() == "rank" and not qd.shuffle_f.winfo_manager()
+assert qd.order_btns["rank"].cget("bg") == T.PALETTE["select_bg"] != qd.order_btns["shuffled"].cget("bg")
+qd.order_btns["shuffled"].invoke(); pump(1); assert qd.shuffle_f.winfo_manager()
 qd.close(); pump(2)
-qd = app.edit_queue(); pump(3)
-qd.buttons["Apply & reshuffle"].invoke(); pump(2)                               # nothing changed: says so, stays open
+qd = app.edit_dealing(); pump(3)
+qd.buttons["Apply"].invoke(); pump(2)                                           # nothing changed: says so, stays open
 assert qd.alive() and "No settings changed" in labels(qd)
-seed_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][0]
-seed_e.delete(0, "end"); seed_e.insert(0, "424242"); pump(1)
+qd.seed_e.delete(0, "end"); qd.seed_e.insert(0, "424242"); pump(1)
 assert "No settings changed" not in labels(qd)                                  # an edit clears the note
 real_reshuffle, gate = s.reshuffle, []
 s.reshuffle = lambda **k: (gate.append(1), time.sleep(0.6), real_reshuffle(**k))
 v0 = s.version
-qd.buttons["Apply & reshuffle"].invoke(); pump(2, 0.05)
+qd.buttons["Apply"].invoke(); pump(2, 0.05)
 assert qd.alive() and app.busy and "Shuffling" in labels(qd)                    # runs in the background ...
-assert not qd.buttons["Apply & reshuffle"].enabled and not qd.buttons["Cancel"].enabled
-bars = [w for w in qd.body.winfo_children() if w.winfo_class() == "TProgressbar"]
-assert bars and bars[0].winfo_manager() and str(bars[0].cget("mode")) == "indeterminate"   # the back-and-forth bar
-qd.win.event_generate("<Escape>"); pump(1); assert qd.alive()                    # ... and cannot be cancelled halfway
+assert not qd.buttons["Apply"].enabled and not qd.buttons["Cancel"].enabled
+assert qd.bar.winfo_manager() and str(qd.bar.cget("mode")) == "indeterminate"   # the back-and-forth bar
+qd.dlg.win.event_generate("<Escape>"); pump(1); assert qd.alive()                # ... and cannot be cancelled halfway
 t_end = time.time() + 30
 while qd.alive() and time.time() < t_end:
     pump(2, 0.05)

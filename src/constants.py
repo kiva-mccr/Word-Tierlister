@@ -32,7 +32,9 @@ def tier_base(t):
 
 # Queue order (see Store.reshuffle). "spread" is in frequency ranks: with the exponential shape a
 # word `spread` ranks further down the list is e times (about 2.7x) less likely to come up early.
+# qshape "rank" is "Most common first" (ST-6): strictly by frequency, no randomness.
 QUEUE_DEFAULTS = {"qspread": "20000", "qshape": "exp", "qcompound": "1.0"}
+QUEUE_SHAPES = ("exp", "gauss", "rank")
 # Push-back for compound words, in multiples of `spread` x the compound-strength setting:
 # 0 = normal word, 1 = closed compound ("bookshelf"), 2 = hyphenated / multi-word ("well-known").
 PEN_UNITS = {0: 0.0, 1: 1.0, 2: 1.5}
@@ -47,6 +49,28 @@ def queue_weight(shape, z):
 # half of the early words come from above rank median x spread (exponential: ln 2; gaussian: the half-normal's)
 QUEUE_MEDIAN = {"exp": math.log(2), "gauss": 0.6745}
 QUEUE_AXIS = 100_000             # the queue dialog's diagrams (UI-41) always run from rank #1 to this
+
+
+# Kinds of words (ST-6): (key, label, bit in words.kinds). A word can be several kinds ("run": noun and verb);
+# "other" is every other part of speech. words.kinds is NULL until known (counted as "other").
+KINDS = [("noun", "Nouns", 1), ("verb", "Verbs", 2), ("adj", "Adjectives", 4), ("adv", "Adverbs", 8),
+         ("other", "Other", 16)]
+ALL_KINDS = 31
+KIND_OF_POS = {"noun": 1, "verb": 2, "adj": 4, "adjective": 4, "adv": 8, "adverb": 8}
+OTHER_KINDS_NOTE = ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, "
+                    "contractions and the like.")
+
+
+def kind_bits(pos):
+    """The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it."""
+    return KIND_OF_POS.get((pos or "").strip().lower(), 16)
+
+
+def mask_word(word):
+    """A censored word as text (ST-6), where a smear cannot be drawn (Browse's list, messages): b•••••d."""
+    if len(word) <= 2:
+        return "•" * len(word)
+    return word[0] + "•" * (len(word) - 2) + word[-1]
 
 
 # A long job can tell its progress window the main steps it will go through, up front: log(plan_line([...]))

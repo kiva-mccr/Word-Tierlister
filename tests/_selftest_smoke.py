@@ -95,7 +95,7 @@ first = bw.tree.get_children()[0]; bw.tree.selection_set(first); pump(3)
 shot("browse", bw.win)
 bw.close()
 # ---- the dialogs: anchors, queue randomness, keyboard shortcuts
-for name, opener in (("anchors", app.edit_anchors), ("queue", app.edit_queue), ("shortcuts", app.edit_keys)):
+for name, opener in (("anchors", app.edit_anchors), ("dealing", app.edit_dealing), ("shortcuts", app.edit_keys)):
     d = opener(); pump(6)
     dlg = getattr(d, "dlg", d)
     shot(name, dlg.win)

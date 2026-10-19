@@ -1,4 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
+import urllib.parse
 import gzip, json, os, subprocess, sys, tempfile, threading, time
 import tkinter as tk
 import startup as S
@@ -260,7 +261,8 @@ with open(big, "w", encoding="utf-8") as f:
     for i in range(120000):
         f.write(json.dumps(entry(f"word{chr(97 + i % 26)}{'abcdefghij'[i % 10]}{'klmnopqrst'[(i // 10) % 10]}{'uvwxyzabcd'[(i // 100) % 10]}x")) + "\n")
 st2 = T.Store(os.path.join(tmp, "p.db"))
-st2.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT)")
+st2.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT,"
+               " kinds INTEGER, rude INTEGER)")
 lines = []
 W._parse_wiktionary(st2.db, big, False, lines.append)
 assert lines[0].strip().startswith("opening the file") and S.parse_progress(lines[0]) == 1
@@ -285,7 +287,7 @@ assert "checking every word for compounds" in text and "giving every unplaced wo
 
 # ---- the main steps planned up front ("Step i of n") are exactly the stages a build then reports, in order
 st4 = T.Store(os.path.join(tmp, "plan.db"))
-plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True)
+plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True, records_kinds=True)
 assert plan == ["Reading entries", "Ranking words", "Detecting compound words", "Looking up how common",
                 "Shuffling the queue"], plan                    # (src given: nothing to download)
 lines = []
@@ -295,6 +297,36 @@ hits = [next(i for i, st in enumerate(stages) if st.startswith(name)) for name i
 assert hits == sorted(hits), (plan, stages)
 assert W.queue_steps(st4) == []                                 # all done: a later start has no steps
 assert W.wiktionary_steps(T.Store(os.path.join(tmp, "plan2.db")))[0] == "Downloading English Wiktionary"
+# a save from before ST-6: its kinds come from the stored definitions, its obscene words from Wiktionary (faked here)
+old = T.Store(os.path.join(tmp, "old.db")); old.insert_words(["run", "bastard", "zorp"]); W.prepare_queue(old, log=lambda *_: None)
+for k in ("kinds_done", "obscene_done", "obscene_tried", "deal_done"):
+    old.db.execute("DELETE FROM meta WHERE key=?", (k,))
+old.db.execute("UPDATE words SET kinds=NULL, obscene=0"); old.db.commit()
+old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running"); old.set_def("bastard", "1. (noun) a mean person")
+plan = W.queue_steps(old)
+assert plan == ["Sorting words into kinds", "Finding obscene words"], plan
+pages = {"English vulgarities": [{"query": {"categorymembers": [{"title": "Bastard"}, {"title": "bastard"}]},
+                                  "continue": {"cmcontinue": "x"}}, {"query": {"categorymembers": [{"title": "notinlist"}]}}]}
+asked = []
+def fake(url):
+    asked.append(url)
+    title = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)["cmtitle"][0][9:]
+    got = pages.get(title, [{"query": {"categorymembers": []}}])
+    return got.pop(0) if len(got) > 1 else got[0]
+W._fetch_json = fake
+lines = []; W.prepare_queue(old, log=lines.append)
+stages = [l for l in lines if l and not l.startswith(" ")]
+assert [next(i for i, st in enumerate(stages) if st.startswith(n)) for n in plan] == [0, 1], stages
+assert old.get_word("run")["kinds"] == 3 and old.get_word("bastard")["kinds"] == 1 and old.get_word("zorp")["kinds"] == 16
+assert old.obscene_words() == {"bastard"} and any("cmcontinue=x" in u for u in asked) and W.queue_steps(old) == []
+# offline: it says so, carries on, and asks again only after a while
+def offline(url):
+    raise OSError("no network")
+W._fetch_json = offline
+old.db.execute("DELETE FROM meta WHERE key IN ('obscene_done', 'obscene_tried')"); old.db.commit()
+lines = []; W.prepare_queue(old, log=lines.append)
+assert any("could not reach Wiktionary" in l for l in lines) and old.get_meta("obscene_done") != "1"
+assert W.queue_steps(old) == []                                 # (tried just now)
 
 # ---- main() end to end in a subprocess: first run builds, then the main window opens
 words = os.path.join(tmp, "words.txt")

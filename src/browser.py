@@ -14,7 +14,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from constants import TIERS
+from constants import KINDS, TIERS, mask_word
 from errors import show_message
 from fonts import family, font
 from keymap import event_spec
@@ -96,7 +96,8 @@ class Browser:
         self.search_var.trace_add("write", lambda *_: self._debounce())
         ttk.Label(top, text="Show:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.filter_var = tk.StringVar(value="All placed")
-        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
+        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"]
+                     + [label for _, label, _ in KINDS] + ["Obscene words"],      # (ST-6: placed words of a kind)
                      on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
         ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.sort_var = tk.StringVar(value="Default")
@@ -411,13 +412,15 @@ class Browser:
             pass                                          # closed meanwhile
 
     def _add_rows(self, rows):
-        """Append rows to the table, colouring placed words by tier. The word itself is the row id."""
+        """Append rows to the table, colouring placed words by tier. The word itself is the row id; a censored one
+        (ST-6) reads b\u2022\u2022\u2022\u2022\u2022d in the list (its definition pane shows it whole)."""
+        hide = self.app.store.obscene_words() if self.app.store.deal_settings()["censor"] else ()
         for r in rows:
             tier = "-" if r["tier"] is None else TIERS[r["tier"]]
             tags = () if r["tier"] is None else (f"t{r['tier']}",)
             try:
                 self.tree.insert("", "end", iid=r["word"], tags=tags, values=(
-                    tier, r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
+                    tier, mask_word(r["word"]) if r["word"] in hide else r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
                     r["games"], f"{r['rank'] + 1:,}"))
             except tk.TclError:  # the same word arriving twice because the list changed under us
                 pass

@@ -11,13 +11,89 @@ import tkinter.font as tkfont
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
 from sizing import clamp_to_monitor, monitor_at, place_dialog
-from smooth import ICONS, SmoothCanvas, curve_image
+from smooth import ICONS, SMEAR_LEVELS, SmoothCanvas, curve_image, smear_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
 DIP = 2                 # pixels the button sinks while pressed
-_CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg")
+_CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg", "censor")
+UNSMEAR_MS = 260        # a censored word un-smears this fast under the pointer (ST-6), and smears again as fast
+
+
+class Unsmear:
+    """A censored word (ST-6) on one of our canvases: its text item is hidden behind a sideways smear
+    (smooth.smear_image); `clear` (0 = smeared, 1 = the word itself) eases toward 1 while the pointer is over it,
+    the smear narrowing and fading as the word comes through, and back when it leaves. The canvas calls
+    place(text item, ink, paper) after drawing the word, and hover(on, animator) from its pointer events."""
+
+    def __init__(self, canvas, tag):
+        self.canvas, self.tag = canvas, tag
+        self.word, self.font = None, None
+        self.clear, self._target = 0.0, 0.0
+        self._item, self._ink, self._paper = None, None, None
+
+    def place(self, item, word, font_, ink, paper):
+        """Draw the smear over text `item` (its word in `font_`), or nothing when `word` is None."""
+        c = self.canvas
+        c.delete(self.tag)
+        self._item, self.word, self.font, self._ink, self._paper = item, word, font_, ink, paper
+        if word is None:
+            self.clear = self._target = 0.0
+            return
+        self.paint()
+        idle = [SMEAR_LEVELS - 1]
+
+        def warm():                          # the un-smearing steps, made ahead one at a time while idle
+            if self.word == word and idle[0] > 0 and c.winfo_exists():
+                smear_image(c, word, font_, ink, idle[0] / SMEAR_LEVELS)
+                idle[0] -= 1
+                c.after_idle(warm)
+        c.after_idle(warm)
+
+    def paint(self):
+        c = self.canvas
+        if self.word is None or self._item is None:
+            return
+        try:
+            box = c.bbox(self._item) if c.itemcget(self._item, "state") != "hidden" else None
+            if box is None:                  # (a hidden item has no box: show it a moment to measure it)
+                c.itemconfigure(self._item, state="normal")
+                box = c.bbox(self._item)
+            amount = 1.0 - self.clear
+            c.delete(self.tag)
+            if amount > 0.02 and box:
+                img, pad = smear_image(c, self.word, self.font, self._ink, amount)
+                c.create_image(box[0] - pad, box[1] - 3, image=img, anchor="nw",
+                               tags=(self.tag,) + tuple(t for t in c.gettags(self._item) if t not in ("word", "label")))
+                c.tag_raise(self.tag, self._item)
+            if self.clear <= 0.0:
+                c.itemconfigure(self._item, state="hidden")
+            else:
+                c.itemconfigure(self._item, state="normal",
+                                fill=lerp_color(self._paper, self._ink, min(1.0, self.clear ** 1.4)))
+        except tk.TclError:
+            pass
+
+    def hover(self, on, animator=None):
+        """Un-smear (on) or smear again, easing from where it is now."""
+        target = 1.0 if on else 0.0
+        if self.word is None or target == self._target:
+            return
+        self._target = target
+        if animator is None or animator.reduce_motion:
+            self.clear = target
+            self.paint()
+            return
+        start = self.clear
+
+        def frame(p):
+            self.clear = start + (target - start) * p
+            self.paint()
+        try:
+            animator.run(f"unsmear{id(self)}", int(UNSMEAR_MS * abs(target - start)) or 1, frame)
+        except tk.TclError:
+            pass
 
 
 class RoundButton(SmoothCanvas):
@@ -37,6 +113,7 @@ class RoundButton(SmoothCanvas):
     * `hint_font`: a Font for the caption (default: 72% of the label font, which is too big on big cards).
     * `flat=True` is a quiet text button: no fill or outline until hovered (UI-8). `ring` is the
       width of the accent outline on hover (2; the duel cards use 3).
+    * config(censor=True): the text is smeared sideways until hovered (ST-6, the duel cards; see Unsmear).
     """
 
     def __init__(self, parent, text, command, bg=PALETTE["neutral"], fg=PALETTE["text"], font=None,
@@ -57,10 +134,13 @@ class RoundButton(SmoothCanvas):
         self._own_hint_font = hint_font is None          # else a shared font: never resize it here
         self._hint_font = hint_font if hint_font is not None else tkfont.Font(root=self, font=self._font)
         self._enabled, self._hover, self._pressed = True, False, False
+        self._censor, self.smear = False, Unsmear(self, "smear")
         self._look = self._target()          # the colours currently drawn: (fill, outline, outline width, text colour)
         self._draw()
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
+        # (a censored word that came up under a resting pointer un-smears when the pointer moves)
+        self.bind("<Motion>", lambda e: self._censor and self._hover and self.smear.hover(True, self._anim))
         self.bind("<ButtonPress-1>", self._on_press)
         self.bind("<ButtonRelease-1>", self._on_release)
         self.bind("<Configure>", lambda e: self._draw())
@@ -83,6 +163,11 @@ class RoundButton(SmoothCanvas):
                 self._fill = mine["bg"]
             if "fg" in mine:
                 self._fg = mine["fg"]
+            if "censor" in mine or "text" in mine:
+                censor = bool(mine.get("censor", self._censor))
+                if censor != self._censor or "text" in mine:     # a new word starts smeared
+                    self.smear.clear = self.smear._target = 0.0
+                self._censor = censor
             if "font" in mine:
                 f = mine["font"]
                 self._font = f if isinstance(f, tkfont.Font) else tkfont.Font(root=self, font=f)
@@ -93,7 +178,7 @@ class RoundButton(SmoothCanvas):
 
     def cget(self, key):
         return {"text": self._text, "hint": self._hint, "wraplength": self._wrap, "bg": self._fill,
-                "fg": self._fg, "font": self._font}[key] if key in _CUSTOM else super().cget(key)
+                "fg": self._fg, "font": self._font, "censor": self._censor}[key] if key in _CUSTOM else super().cget(key)
 
     def set_enabled(self, enabled):
         """Grey out / re-enable (a disabled button stays visible but ignores clicks)."""
@@ -163,8 +248,12 @@ class RoundButton(SmoothCanvas):
         fill, edge, width, fg = self._look
         try:
             self.itemconfigure("shape", fill=fill, outline=edge, width=width)
-            self.itemconfigure("label", fill=fg)
             self.itemconfigure("hint", fill=lerp_color(fg, fill, 0.3))
+            if self._censor:
+                self.smear._paper = fill
+                self.smear.paint()
+            else:
+                self.itemconfigure("label", fill=fg)
         except tk.TclError:
             pass
 
@@ -205,6 +294,7 @@ class RoundButton(SmoothCanvas):
         self.tag_raise("label")
         self.tag_raise("hint")
         self._lifted = False
+        self.smear.place(label, self._text if self._censor else None, self._font, self._look[3], self._look[0])
         self._paint()
         if self._pressed:
             self.move("body", 0, DIP)
@@ -222,6 +312,8 @@ class RoundButton(SmoothCanvas):
     # ---- mouse ----------------------------------------------------------------------------------
     def _set_hover(self, on):
         self._hover = on and self._enabled
+        if self._censor:
+            self.smear.hover(on, self._anim)
         if not self._pressed:
             self._go(self._target())
             self._set_lift(self._hover)
@@ -369,12 +461,13 @@ class DuelCards(tk.Frame):
         """The Animator key of the result animation (a key press finishes it: the next pair waits on it)."""
         return f"duel{id(self)}"
 
-    def show(self, left, right, colors=None):
+    def show(self, left, right, colors=None, censor=(False, False)):
         """Show a new pair (and enable everything). `colors` = (left fill, right fill), e.g. each word's tier
-        colour; without it the cards keep their own pastel blue / peach."""
+        colour; without it the cards keep their own pastel blue / peach. `censor`: each word smeared until
+        hovered (ST-6)."""
         left_bg, right_bg = colors or (PALETTE["left"], PALETTE["right"])
-        self.left.config(text=left, bg=left_bg)
-        self.right.config(text=right, bg=right_bg)
+        self.left.config(text=left, bg=left_bg, censor=censor[0])
+        self.right.config(text=right, bg=right_bg, censor=censor[1])
         self.set_enabled(True)
 
     def set_enabled(self, enabled):
@@ -1202,9 +1295,9 @@ class DefinitionDrawer(tk.Frame):
         t.tag_configure("wait", foreground=PALETTE["muted"])
         self._shown = False
 
-    def show_words(self, words, get_def):
-        """Fill the pane: for each word, its name and its senses (get_def(word) -> text, or None while
-        it is still being looked up)."""
+    def show_words(self, words, get_def, name=None):
+        """Fill the pane: for each word, its name (name(word): what to call it, the masked text for a censored
+        word) and its senses (get_def(word) -> text, or None while it is still being looked up)."""
         from definitions import parse_definition
         t = self.text
         italic = (self._body.cget("family"), self._body.cget("size"), "italic")   # follows the body size
@@ -1215,7 +1308,7 @@ class DefinitionDrawer(tk.Frame):
         for i, w in enumerate(words):
             if i:
                 t.insert("end", "\n")
-            t.insert("end", w + "\n", "head")
+            t.insert("end", (name(w) if name else w) + "\n", "head")
             text = get_def(w)
             if text is None:
                 t.insert("end", "Looking up definition...\n", "wait")
@@ -1586,6 +1679,8 @@ class WordCard(SmoothCanvas):
     * UI-51: a little magnifier in the top-right corner (on_find() when clicked). begin_typing() turns the card
       into the place to type a word: type_key(event) takes the keys, Enter calls on_enter(text), Escape (or the
       magnifier again) puts the word back; note(text, animator) says something under it and shakes the card.
+    * ST-6: set(word, sub, censor=True) shows the word smeared sideways (Censor obscene words); with the pointer
+      over it, it un-smears (Unsmear; `animator` is the App's, for the easing).
     """
     TYPE_HINT = "Enter: sort it  \u00b7  Esc: back"
     PLACEHOLDER = "type a word"
@@ -1607,6 +1702,11 @@ class WordCard(SmoothCanvas):
         self.on_find = self.on_enter = None
         self.typing, self._typed, self._saved = False, "", None
         self._find_hover = False
+        self._censor = self._old_censor = False
+        self.smear = Unsmear(self, "smear")
+        self.animator = None
+        self.bind("<Motion>", self._on_motion, add="+")
+        self.bind("<Leave>", lambda e: self.smear.hover(False, self.animator), add="+")
         self.tag_bind("find", "<Button-1>", lambda e: self.on_find and self.on_find())
         self.tag_bind("find", "<Enter>", lambda e: self._hover_find(True))
         self.tag_bind("find", "<Leave>", lambda e: self._hover_find(False))
@@ -1641,12 +1741,27 @@ class WordCard(SmoothCanvas):
     def sub(self):
         return self._sub
 
-    def set(self, word, sub=""):
-        """Show `word` with the muted line `sub` under it."""
+    @property
+    def censored(self):
+        return self._censor
+
+    def set(self, word, sub="", censor=False):
+        """Show `word` with the muted line `sub` under it; `censor`: smeared until the pointer is over it."""
         self._old_font.configure(**self._fit.actual())      # (transition_from draws the outgoing word as it was)
-        self._old_wrap = self._fit_wrap
-        self._word, self._sub = word, sub
+        self._old_wrap, self._old_censor = self._fit_wrap, self._censor
+        if word != self._word or censor != self._censor:
+            self.smear.clear = self.smear._target = 0.0      # a new word starts smeared, even under the pointer
+        self._word, self._sub, self._censor = word, sub, censor
         self._draw()
+
+    def _on_motion(self, e):
+        """The pointer over the word (its line, a little wider than the text) un-smears a censored one."""
+        if not self._censor:
+            return
+        box = self.bbox(self.smear.tag) or self.bbox("word")
+        pad = self._sfont.metrics("linespace") // 2
+        self.smear.hover(bool(box) and box[0] - pad <= e.x <= box[2] + pad and box[1] <= e.y <= box[3],
+                         self.animator)
 
     def configure(self, cnf=None, **kw):
         kw = dict(cnf or {}, **kw)
@@ -1687,6 +1802,13 @@ class WordCard(SmoothCanvas):
         ob = self.bbox(old)
         ow = [cx, top + (self._wfont.metrics("linespace") - (ob[3] - ob[1] if ob else 0)) / 2]
         self.coords(old, *ow)
+        smeared = None
+        if self._old_censor and self.smear.clear < 1:   # a censored word leaves as its smear, never readable
+            ob = self.bbox(old)
+            img, pad = smear_image(self, old_word, self._old_font, PALETTE["text"], 1.0 - self.smear.clear)
+            smeared = [ob[0] - pad, ob[1] - 3]
+            self.create_image(*smeared, image=img, anchor="nw", tags=("old", "oldsmear"))
+            self.itemconfigure(old, state="hidden")
         osub = None
         if old_sub and sub_y is not None:
             osub = [cx, sub_y]
@@ -1699,6 +1821,9 @@ class WordCard(SmoothCanvas):
         def frame(p):
             self._p = p
             self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
+            if smeared:
+                self.coords("oldsmear", smeared[0] + dx * p, smeared[1] + dy * p)
+                self.itemconfigure("oldsmear", state="normal" if p < 0.4 else "hidden")
             if osub:
                 self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
             # a crossfade: the new word comes in exactly as the old one goes, so between them there is always one
@@ -1722,6 +1847,8 @@ class WordCard(SmoothCanvas):
             self.itemconfigure("oldsub", fill=lerp_color(PALETTE["muted"], card, gone))
             self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
             self.itemconfigure("sub", fill=lerp_color(card, PALETTE["muted"], q))
+            if self._censor:                      # (the smear rises with its word)
+                self.smear.paint()
 
         def done():
             if self._frame is frame:              # (a newer transition, started over this one, cleans up itself)
@@ -1817,9 +1944,12 @@ class WordCard(SmoothCanvas):
             self.create_text(bw / 2, sub_y, text=self._fit_subline(avail), font=self._fit_sub,
                              fill=PALETTE["muted"], justify="center", anchor="n", tags="sub")
         self._layout = (bw / 2, top, sub_y)          # (transition_from: the word's line and the sub-line)
+        self.smear.place(word, self._word if self._censor and not self.typing else None, self._fit,
+                         PALETTE["text"], PALETTE["surface"])
         if self.find_withtag("old"):
             self.tag_raise("old", "card")        # on the card (not under it), below the new word
         self.tag_raise("word")
+        self.tag_raise(self.smear.tag)
         self.tag_raise("sub")
         if self._frame is not None:           # mid-transition: put the moving words back where they were
             self._frame(self._p)
@@ -1858,7 +1988,7 @@ class WordCard(SmoothCanvas):
         """The card becomes the place to type a word (the word it showed comes back with end_typing)."""
         if self.typing:
             return
-        self.typing, self._typed, self._saved = True, "", (self._word, self._sub)
+        self.typing, self._typed, self._saved = True, "", (self._word, self._sub, self._censor)
         self._show_typed(self.TYPE_HINT)
 
     def end_typing(self, restore=True):
@@ -2119,6 +2249,13 @@ class StyledDialog:
         if default:
             self._default = b
         return b
+
+    def clear_buttons(self):
+        """Take every button (and anything else in the button row) away, to put others there (a page of steps)."""
+        for w in (*self.button_row.winfo_children(), *self._right.winfo_children()):
+            if w is not self._right:
+                w.destroy()
+        self.buttons, self._default = {}, None
 
     def show(self, wait=False):
         """Size to the contents, centre over the parent, then appear there; take the input (and with wait, block
