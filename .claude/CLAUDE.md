@@ -22,8 +22,8 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
   `tests/run_tests.sh`.
 
 ## Layering (a file only imports from files earlier in this list)
-constants, problems, deps -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> app -> tierlist.
+constants, problems, deps, keymap -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -42,7 +42,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> 
   other shapes its edge stays see-through. Pop-ups are kept on their monitor with `sizing.clamp_to_monitor`.
 - New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever.
-- The bottom-right hint lists only keys no on-screen button already shows.
+- The bottom-right hint lists only keys no on-screen button already shows. Every key comes from `keymap.py`
+  (App.keys; UI-48): never hard-code a key or its name in a hint, button or menu; App.apply_keys refreshes them.
 - Placing uses the number keys 1-6, not tier letters (the user dropped UI-29). A held key repeats after
   500 ms, then every 250 ms (App._repeat_allowed); tests' key() helper sends a press and a release.
 - No ttk.Combobox or tk.Menu popups: they grab input and float over other programs on Linux. Use
@@ -100,7 +101,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, not on X11 (M-5); remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: UI-48, UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse eases open, not on X11 (M-5); remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-7 (download speed, Step i of n), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: UI-51 (look up any unsorted word: icon placement to discuss), then UI-26 (final pass), then
 ST-5, ST-6 (how words are dealt: order, kinds of words, hide obscene), T-1..T-3, T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.

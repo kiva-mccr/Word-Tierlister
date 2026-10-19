@@ -37,7 +37,7 @@ def key(ks):                                       # a press and its release (a 
 
 pump()
 # ---------------------------------------------------------------- place mode
-assert app.hint_lbl.cget("text") == "Backspace or Ctrl+Z undo   \u00b7   Tab next tab"   # 1-6, Space, U, D are on their buttons
+assert app.hint_lbl.cget("text") == "Backspace or Ctrl Z undo   \u00b7   Tab next tab"   # 1-6, Space, U, D are on their buttons
 first = s.next_unplaced()["word"]
 assert app.word_card.word == first, (app.word_card.word, first)
 assert "frequency rank" in app.word_card.sub
@@ -47,7 +47,7 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
-assert app.hint_lbl.cget("text") == "Space stop comparing"        # only keys no button shows
+assert app.hint_lbl.cget("text") == "Space or Esc stop comparing"   # only keys no button shows
 assert not app.cmp_btns["back"].enabled                            # nothing to step back to yet...
 key("BackSpace"); assert app.cmp is not None                       # ...so Backspace does not leave (UI-37)
 key("space"); assert app.cmp is None and app.tier_row.winfo_manager()       # Space again leaves
@@ -396,11 +396,11 @@ time.monotonic = lambda: clock["t"]
 calls = []
 real_apply = app._apply_zoom
 app._apply_zoom = lambda z: (calls.append(z), real_apply(z))
-ev = lambda t: types.SimpleNamespace(keysym="plus", time=t)
-app._zoom_key(ev(1), 1)                                                         # first press: one step
+ev = lambda t: types.SimpleNamespace(keysym="plus", time=t, state=0x4)          # Ctrl +
+app.on_key(ev(1))                                                               # first press: one step
 for i in range(40):                                                            # held: 30 repeats a second
     clock["t"] += 0.033
-    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app._zoom_key(ev(100 + i), 1)
+    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app.on_key(ev(100 + i))
 assert len(calls) <= 1 + (40 * 33 - 500) // 250 + 1, calls                     # paced, not 40 refits
 app._zoom_cap[app._layout_key()] = round(app.zoom * app.grow + app.ZOOM_STEP, 2)   # the next step is known not to fit
 n_calls = len(calls)

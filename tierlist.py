@@ -62,6 +62,7 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
+    keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
@@ -80,10 +81,11 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
     ui_chart.py     each tab's view at the top right (the tier chart...) and the progress shelf.
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
+    shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
     app.py          App: the main window and all modes.
 
-Layers: constants, problems, deps -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker -> app ->
+Layers: constants, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts -> app ->
 tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
@@ -800,7 +802,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: Bookshelf.mark(spines) draws a small soft lilac triangle over each (a band above the shelf
 #           holds them; a mark rises with its spine on hover); Store.spine_of(word) finds the spine from the
 #           word's rank. Cleared in Place new words and when a tab has no duel.
-# [ ] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
+# [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by
 #           view, each with its current key(s). Click a key, press the new one, done; a key already used
@@ -810,6 +812,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           U, Up / B...), the bottom-right hint and the menus' shortcut column. Builds on UI-18's single
 #           key map (App._key_target), which becomes a table the dialog edits. Reserved keys that cannot be
 #           rebound: Escape (cancel / close) and the Alt+letter menu keys.
+#           Built (layout C chosen: cards side by side; decided: the 1-6 placing keys are one row that moves as
+#           a set, and every key can be changed, Ctrl ones and Escape too; only Alt+F / E / V / S and F10, which
+#           open the menus, are refused): keymap.py (no tkinter) holds every action, its view and default keys,
+#           the user's changes (meta keymap, only what changed), event_spec (a key press -> "Ctrl+z", keypad =
+#           main keys, Command = Ctrl on macOS), lookup (a view's own keys first, then the Everywhere ones, so
+#           Backspace is Back while comparing and Undo otherwise) and clash. App.on_key and Browser._on_key go
+#           through it (the separate Ctrl+Z / zoom bindings are gone); App.apply_keys puts the keys in the button
+#           hints, the Definition button, the menus and the bottom-right hint. shortcuts.ShortcutsDialog: click a
+#           key, press the new one ("+" adds one, up to 3; Remove; "↺ default" per row; Reset all); a key used in
+#           the same view offers a swap ("W is already Worse. Swap them: Worse gets ↑?"); the placing set takes
+#           its first key and the five after it on that keyboard row (1, Q, A, Z, F1...). In Browse, plain keys
+#           type in the search box as usual. _selftest_keymap.py, _selftest_shortcuts.py.
 # [x] UI-49 Bug (reported): holding a tier key kept placing words, and lagged on after the key was released
 #           (auto-repeat sends ~30 presses a second, faster than placing, so they queued). Fixed: a held key
 #           repeats like a keyboard's own defaults: nothing for 500 ms after the first press, then at most
@@ -863,7 +877,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #   Browse / edit ...... restyle (UI-23), open / close (UI-38, M-5), Delete unplaces (UI-39), sort by
 #                        clicking a column (M-7)
 #   Anchor words ....... clean-up (UI-28), anchors follow their tier (UI-40)
-#   Keyboard shortcuts . new dialog (UI-48)
+#   Keyboard shortcuts . new dialog (UI-48, done)
 #   Queue randomness ... diagrams (UI-41), shared dialog look (UI-24), grows into "How words are dealt" (ST-6)
 #   Import / Export .... file dialog (UI-42), spacing and icons (M-8..M-10)
 #   Merge offer, "Where is my save file?" ... shared dialog look (UI-24, done)

@@ -17,6 +17,7 @@ from tkinter import ttk
 from constants import TIERS
 from errors import show_message
 from fonts import family, font
+from keymap import event_spec
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from smooth import arrow_image
 from store import Store
@@ -153,23 +154,13 @@ class Browser:
         self.def_text.tag_configure("head", font=self.f_bold)
         self.def_text.pack(fill="x", padx=10, pady=(2, 10))
 
-        # Ctrl + / Ctrl - / Ctrl 0 and Ctrl+mouse wheel zoom the text.
-        for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1), ("<Control-KP_Add>", 1),
-                           ("<Control-minus>", -1), ("<Control-KP_Subtract>", -1), ("<Control-0>", 0),
-                           ("<Control-KP_0>", 0)):
-            self.win.bind(seq, lambda e, d=delta: self.zoom_by(d))
-        for widget in (self.win, self.tree):
+        # the keys come from the keymap (UI-48): zoom, undo, and Unplace (Delete) for the selected word
+        self._ws = self.win.tk.call("tk", "windowingsystem")
+        self.win.bind("<Key>", self._on_key)
+        for widget in (self.win, self.tree):            # Ctrl+mouse wheel zooms the text
             widget.bind("<Control-MouseWheel>", self._wheel_zoom)
             widget.bind("<Control-Button-4>", lambda e: self._wheel_zoom(e, 1))
             widget.bind("<Control-Button-5>", lambda e: self._wheel_zoom(e, -1))
-        # Delete unplaces the selected word, like the Unplace button (UI-39; Backspace too on macOS, where the
-        # key marked delete sends it); Ctrl+Z undoes it from here. Not while typing in the search box.
-        keys = ["<Delete>", "<KP_Delete>"] + (["<BackSpace>"] if self.win.tk.call("tk", "windowingsystem") == "aqua"
-                                                 else [])
-        for seq in keys:
-            self.tree.bind(seq, lambda e: (self.unplace(), "break")[1])
-        for seq in ("<Control-z>", "<Command-z>"):
-            self.win.bind(seq, lambda e: self.undo())
         self.win.bind("<Configure>", self._on_configure)
         self.win.bind("<FocusIn>", lambda e: self._maybe_refresh() if e.widget is self.win else None)
         self.win.protocol("WM_DELETE_WINDOW", self.close)
@@ -347,6 +338,26 @@ class Browser:
         self.win.geometry(center_geometry(w, h, area))
         self._update_minsize()
         self.fsize = 0                                         # force the first _apply_scale to run
+
+    def _on_key(self, e):
+        """A key in this window, through the app's keymap: Browse's own keys (Unplace), then Undo and zoom from
+        the Everywhere ones. While typing in the search box only Ctrl / Alt keys act, so Backspace still edits
+        the text; on macOS the key marked delete (Backspace) unplaces too (UI-39)."""
+        spec = event_spec(e.keysym, getattr(e, "state", 0), self._ws)
+        if spec is None:
+            return None
+        typing = isinstance(e.widget, (ttk.Entry, tk.Entry))
+        if typing and not spec.startswith(("Ctrl+", "Alt+")):
+            return None
+        if self._ws == "aqua" and spec == "BackSpace":
+            spec = "Delete"
+        action = self.app.keys.lookup("browse", spec)
+        do = {"unplace": self.unplace, "undo": self.undo, "zoom_in": lambda: self.zoom_by(1),
+              "zoom_out": lambda: self.zoom_by(-1), "zoom_reset": lambda: self.zoom_by(0)}.get(action)
+        if do is None:
+            return None
+        do()
+        return "break"
 
     def zoom_by(self, delta):
         """Manual text zoom on top of the automatic scaling (0 resets). Saved with the save file."""

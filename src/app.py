@@ -22,7 +22,9 @@ from browser import Browser
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
 from fonts import ROLES, init_fonts, font, scale_fonts
+from keymap import Keymap, display, event_spec
 from saves import write_export
+from shortcuts import ShortcutsDialog
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
@@ -85,6 +87,8 @@ class App:
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
+        self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
+        self._ws = root.tk.call("tk", "windowingsystem")
         self.cur_word = None
         self.cmp = None
         self.pair = None
@@ -122,19 +126,13 @@ class App:
         self.filter_var = tk.StringVar()
         self._build_header()
         self._build_ui()
+        self.apply_keys()
+        # every key goes through on_key and the keymap (UI-48), Ctrl ones too
         root.bind("<Key>", self.on_key)
         root.bind("<KeyRelease>", self.on_key_release)
         self._held = {}                            # keysym -> held-key state (_repeat_allowed)
-        for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
-            root.bind(seq, lambda e: self._zoom_key(e, 1))
-        for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
-            root.bind(seq, lambda e: self._zoom_key(e, -1))
-        for seq in ("<Control-0>", "<Control-KP_0>"):
-            root.bind(seq, lambda e: self._zoom_key(e, 0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
-        root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<ButtonPress-1>", self._click_background, add="+")
-        root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._update_options()
         self._layout_defs()
@@ -156,24 +154,26 @@ class App:
     def _menu_items(self):
         """The header menus (UI-10): File (import/export), Edit (undo), View (browse, definitions, motion),
         Settings (anchors, queue). Each item is a DropMenu row: ("command", label, command, shortcut)
-        or ("check", label, variable, command)."""
+        or ("check", label, variable, command). Shortcuts come from the keymap (UI-48)."""
+        key = lambda a: (self.keys.display(a) or [None])[0]
         return [
             ("File", [("command", "Import earlier progress...", self.import_progress, None),
                       ("command", "Export tier list...", self.export, None),
                       ("command", "Where is my save file?", self.show_save_location, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
-            ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
+            ("Edit", [("command", "Undo", self.undo, key("undo"))]),
             ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
                       ("separator",),
-                      ("command", "Zoom in", lambda: self.zoom_step(1), "Ctrl +"),
-                      ("command", "Zoom out", lambda: self.zoom_step(-1), "Ctrl \u2212"),
-                      ("command", "Actual size", lambda: self.set_zoom(1.0), "Ctrl 0"),
+                      ("command", "Zoom in", lambda: self.zoom_step(1), key("zoom_in")),
+                      ("command", "Zoom out", lambda: self.zoom_step(-1), key("zoom_out")),
+                      ("command", "Actual size", lambda: self.set_zoom(1.0), key("zoom_reset")),
                       ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
                       ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
                           ("command", "Queue randomness & seed...", self.edit_queue, None),
+                          ("command", "Keyboard shortcuts...", self.edit_keys, None),
                           ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
         ]
 
@@ -248,7 +248,8 @@ class App:
         bottom.pack(side="bottom", fill="x")
         ttk.Button(bottom, text="Undo", command=self.undo, takefocus=0).pack(side="left")
         ttk.Button(bottom, text="Browse / edit...", command=self.open_browser, takefocus=0).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0).pack(side="left")
+        self.def_btn = ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0)
+        self.def_btn.pack(side="left")
         self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
@@ -367,14 +368,6 @@ class App:
         note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
         self.flash(f"Zoom {round(z * 100)}%{note}", bg=PALETTE["info"][0], fg=PALETTE["info"][1],
                    ms=900 if not note else 1600)
-
-    def _zoom_key(self, e, d):
-        """Ctrl + / Ctrl - (d = 1 / -1) or Ctrl 0 (d = 0, actual size) pressed: paced like every other held key
-        (500 ms, then every 250 ms after the last step finished), so holding it never queues up refits."""
-        if self._repeat_allowed(e):
-            self.set_zoom(1.0) if d == 0 else self.zoom_step(d)
-            self._action_done(e)
-        return "break"
 
     def zoom_step(self, d):
         """Ctrl + / Ctrl - (and the View menu): one step bigger or smaller than what is on screen now, which in a
@@ -804,14 +797,39 @@ class App:
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
         compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
-        their own key hints, and the Definition (D) button names its key."""
+        their own key hints, and the Definition button names its key. All from the keymap (UI-48)."""
+        keys = lambda a: " or ".join(self.keys.display(a))
         if self.mode == "place" and self.cmp:
-            h = "Space stop comparing"           # (the Compare button that shows Space is hidden meanwhile)
-        else:
-            h = "Backspace or Ctrl+Z undo"
-            if len(self.mode_switch.visible) > 1:
-                h += "   \u00b7   Tab next tab"
+            h = f"{keys('stop')} stop comparing" if self.keys.keys_of("stop") else ""
+        else:                                    # (the Compare button that shows Space is hidden meanwhile)
+            h = f"{keys('undo')} undo" if self.keys.keys_of("undo") else ""
+            if len(self.mode_switch.visible) > 1 and self.keys.keys_of("next_tab"):
+                h += ("   \u00b7   " if h else "") + f"{keys('next_tab')} next tab"
         self.hint_lbl.config(text=h)
+
+    def apply_keys(self):
+        """Show the keymap's keys everywhere a key is named (UI-48): the buttons' little hints, the Definition
+        button, the menus' shortcut column and the bottom-right hint."""
+        km = self.keys
+        hint = lambda a, sep=" / ", short=True: sep.join(km.display(a, short=short))
+        tiers = km.keys_of("place")
+        for t, b in enumerate(self.tier_btns):
+            b.config(hint=display(tiers[t]) if t < len(tiers) else "")
+        for a in ("better", "same", "worse", "back"):
+            self.cmp_btns[a].config(hint=hint(a))
+        self.compare_btn.config(hint=hint("compare"))
+        self.later_btn.config(hint=hint("later"))
+        d = self.duel
+        d.left.config(hint="  ".join(km.display("left")))
+        d.right.config(hint="  ".join(reversed(km.display("right"))))
+        d.tie.config(hint="  ".join(km.display("tie")))
+        d.skip.config(hint=hint("skip"))
+        first = km.display("defs")
+        self.def_btn.config(text=f"Definition ({first[0]})" if first else "Definition")
+        for name, items in self._menu_items():
+            self.header.menus[name] = items
+            self.header.drops[name].items = items
+        self._hint()
 
     # ---- place mode ------------------------------------------------------------------------------------------
     def _show_place(self):
@@ -1194,42 +1212,41 @@ class App:
             h["down"], h["release"] = False, getattr(e, "time", None)
 
     def on_key(self, e):
-        """Every key press. D and Backspace work everywhere; the rest depends on mode and comparison state
-        (see _hint for the full list of keys).
-        """
+        """Every key press: the keymap (UI-48) says what it does in the current view (its own keys first, then the
+        Everywhere ones: Backspace is Back while comparing, Undo otherwise)."""
         if not self._repeat_allowed(e):
             return
         # a key press never waits for an animation: running ones speed out of the way (the new one starts on
         # top), except the duel result, which the next pair waits for
         self.anim.hurry_all(HURRY_MS, finish=(self.duel.anim_key,))
-        ks = e.keysym
         if self.header.open_name is not None:      # a header menu is open: Escape closes it, nothing else runs
-            if ks == "Escape":
+            if e.keysym == "Escape":
                 self.header.close()
             return
-        if ks in ("Tab", "ISO_Left_Tab"):         # Tab / Shift+Tab: the next / previous tab (UI-47)
-            self.next_tab(-1 if ks == "ISO_Left_Tab" or getattr(e, "state", 0) & 0x1 else 1)
-            return "break"                         # (and no focus traversal in the main window)
-        low = ks.lower()
-        if low == "d":
-            self.toggle_defs()
+        spec = event_spec(e.keysym, getattr(e, "state", 0), self._ws)
+        if spec is None:
             return
-        if ks == "BackSpace" and not (self.mode == "place" and self.cmp):
-            self.undo()
-            return
-        if self.mode == "place" and not self.cmp and ks == "Escape":
-            return
-        target = self._key_target(ks, low)
-        if target is None:
-            return
-        button, action = target
+        view = ("compare" if self.cmp else "place") if self.mode == "place" else "duel"
+        action = self.keys.lookup(view, spec)
+        tab = action in ("next_tab", "prev_tab") or e.keysym in ("Tab", "ISO_Left_Tab")
+        if action is None:
+            return "break" if tab else None        # (no focus traversal in the main window)
+        everywhere = {"next_tab": lambda: self.next_tab(1), "prev_tab": lambda: self.next_tab(-1),
+                      "defs": self.toggle_defs, "undo": self.undo, "zoom_in": lambda: self.zoom_step(1),
+                      "zoom_out": lambda: self.zoom_step(-1), "zoom_reset": lambda: self.set_zoom(1.0)}
+        if action in everywhere:
+            everywhere[action]()
+            self._action_done(e)
+            return "break" if tab or action.startswith("zoom") else None
+        button, act = self._key_target(action, spec)
         if button is not None and not button.enabled:
             return                                 # a greyed-out button's key is off too
-        action()                                   # the action first: input is never delayed (UI-18) ...
+        act()                                      # the action first: input is never delayed (UI-18) ...
         self._action_done(e)
         if button is not None:
             button.flash()                         # ... then the button it stands for dips (not when disabled,
                                                    # not with Reduce motion: RoundButton.flash checks both)
+        return "break" if tab else None
 
     def next_tab(self, d):
         """Go to the next (d=1) or previous (d=-1) tab, wrapping round and skipping hidden ones (UI-47); the
@@ -1240,36 +1257,18 @@ class App:
         if key != self.mode:
             self._on_mode_switch(key)
 
-    def _key_target(self, ks, low):
-        """The one key -> (button, action) map (UI-18), for the current view; None if the key does nothing here.
-        Every hotkey that has a button on screen names it, so pressing the key looks like pressing it."""
-        if self.mode == "place":
-            if self.cmp:
-                b = self.cmp_btns
-                if ks == "Up" or low == "b":
-                    return b["better"], lambda: self.cmp_answer("better")
-                if ks == "Down" or low == "w":
-                    return b["worse"], lambda: self.cmp_answer("worse")
-                if low == "e" or ks in ("equal", "Return"):
-                    return b["same"], lambda: self.cmp_answer("same")
-                if ks == "BackSpace":
-                    return b["back"], self.cmp_back
-                if ks in ("space", "Escape"):              # Space toggles comparing (UI-37); Escape still works
-                    return None, self._cancel_compare
-                return None
-            if ks in ("1", "2", "3", "4", "5", "6"):
-                t = int(ks) - 1
-                return self.tier_btns[t], lambda: self.place_word(t)
-            if ks == "space":
-                return self.compare_btn, self.start_compare
-            if low == "u" or ks == "question":
-                return self.later_btn, self.skip_word
-            return None
-        sides = {"Left": "left", "a": "left", "Right": "right", "l": "right", "Down": "tie", "t": "tie", "s": "skip"}
-        side = sides.get(ks) or sides.get(low)
-        if side is None:
-            return None
-        return self.duel.buttons[side], lambda: self._on_duel(side)
+    def _key_target(self, action, spec):
+        """(button, action) for a view's own key (UI-18): every hotkey that has a button on screen names it, so
+        pressing the key looks like pressing it."""
+        if action == "place":
+            t = self.keys.place_tier(spec)
+            return self.tier_btns[t], lambda: self.place_word(t)
+        if action in ("better", "same", "worse"):
+            return self.cmp_btns[action], lambda: self.cmp_answer(action)
+        if action in ("left", "right", "tie", "skip"):
+            return self.duel.buttons[action], lambda: self._on_duel(action)
+        return {"compare": (self.compare_btn, self.start_compare), "later": (self.later_btn, self.skip_word),
+                "back": (self.cmp_btns["back"], self.cmp_back), "stop": (None, self._cancel_compare)}[action]
 
     def _cancel_compare(self):
         self.cmp = None
@@ -1421,6 +1420,10 @@ class App:
         cur = self.store.queue_settings()
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
+
+    def edit_keys(self):
+        """Settings > Keyboard shortcuts... (UI-48)."""
+        return ShortcutsDialog(self)
 
     def edit_queue(self):
         """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words

@@ -278,7 +278,7 @@ class TierRow(tk.Frame):
         row = TierRow(parent, ["S", "A", "B", "C", "D", "F"], on_pick, font("tier"), animator=app.anim)
 
     `buttons` are the RoundButtons (App.tier_btns), in tier order; on_pick(tier) runs on a click. The 1-6
-    keys are wired in App._key_target (UI-18), which runs the action and then the pill's flash().
+    keys come from the keymap (App.on_key, UI-48), which runs the action and then the pill's flash().
     """
 
     def __init__(self, parent, tiers, on_pick, font=None, animator=None, colors=TIER_COLORS, gap=5):
@@ -323,7 +323,7 @@ class DuelCards(tk.Frame):
         duel = DuelCards(parent, on_answer, font("pair"), font("body"), animator=app.anim)
         duel.show("apple", "pear")
 
-    on_answer(side) gets "left", "right", "tie" or "skip" on a click; the keys are wired in App._key_target.
+    on_answer(side) gets "left", "right", "tie" or "skip" on a click; the keys come from the keymap (App.on_key).
     `left`, `right`, `tie` and `skip` are the RoundButtons (also App.left_btn and friends).
     """
 
