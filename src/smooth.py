@@ -618,6 +618,14 @@ class SmoothCanvas(tk.Canvas):
         return self._rr[rr[0]]["img"] if rr else None
 
 
+def _ring(cx, cy, outer, inner, n=24):
+    """A ring as one polygon: round the outer circle, then back round the inner one (the even-odd fill leaves the
+    middle clear)."""
+    pts = [(cx + outer * math.cos(2 * math.pi * k / n), cy + outer * math.sin(2 * math.pi * k / n)) for k in range(n + 1)]
+    return pts + [(cx + inner * math.cos(2 * math.pi * k / n), cy + inner * math.sin(2 * math.pi * k / n))
+                  for k in range(n, -1, -1)]
+
+
 # little filled icons on a 16 x 16 grid, one style (UI-42's file picker, M-8); each is a list of polygons that
 # do not overlap
 ICONS = {
@@ -632,6 +640,9 @@ ICONS = {
                    (1.5, 14.5)]],
     "folder": [[(1, 3), (6.2, 3), (7.8, 4.8), (15, 4.8), (15, 13.5), (1, 13.5)]],
     "book": [[(2.5, 1.5), (4.6, 1.5), (4.6, 14.5), (2.5, 14.5)], [(5.6, 1.5), (13.5, 1.5), (13.5, 14.5), (5.6, 14.5)]],
+    # a magnifier (UI-51): a ring, its hole made by tracing the inner circle back the other way, and a handle
+    "search": [_ring(6.5, 6.5, 5.0, 3.0),
+               [(9.6, 11.0), (11.0, 9.6), (15.0, 13.6), (13.6, 15.0)]],
 }
 
 

@@ -30,6 +30,7 @@ ACTIONS = (
     ("place", "place", "Place in S … F", ["1"]),
     ("compare", "place", "Compare to anchors", ["space"]),
     ("later", "place", "Don't know / later", ["u", "question"]),
+    ("find", "place", "Look up a word", ["slash"]),
     ("better", "compare", "Better", ["Up", "b"]),
     ("same", "compare", "Same tier", ["e", "Return", "equal"]),
     ("worse", "compare", "Worse", ["Down", "w"]),

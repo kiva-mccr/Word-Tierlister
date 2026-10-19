@@ -90,6 +90,8 @@ class App:
         self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
         self._ws = root.tk.call("tk", "windowingsystem")
         self.cur_word = None
+        self.looked_up = None        # a word looked up from the card (UI-51): shown until it is placed or skipped
+        self._to_add = None          # a word not in the list: Enter again adds it
         self.cmp = None
         self.pair = None
         self.focus = None
@@ -268,6 +270,8 @@ class App:
         inner.place(relx=0.5, rely=0.5, anchor="center")
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
+        self.word_card.on_find, self.word_card.on_enter = self.start_lookup, self.lookup_word   # (UI-51)
+        Tooltip(self.word_card, self._card_note, font=font("body"))
         self.place_empty = EmptyCard(inner, font("title"), font("body"))     # every word placed (UI-20)
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
         self.ladder.grid(row=1, column=0)
@@ -837,7 +841,13 @@ class App:
         self.progress_bar.mark([])                    # (the shelf marks only the duel tabs' words, UI-55)
         self.pair_frame.pack_forget()
         self.place_frame.pack(fill="both", expand=True)
-        row = self.store.next_unplaced()
+        row = None
+        if self.looked_up:                            # a looked-up word comes first, until placed or skipped
+            row = self.store.get_word(self.looked_up)
+            if row is None or row["tier"] is not None:
+                row, self.looked_up = None, None
+        if row is None:
+            row = self.store.next_unplaced()
         if row is None:
             self.cur_word = None
             self.word_card.grid_remove()
@@ -854,7 +864,8 @@ class App:
         self.cur_word = row["word"]
         self.place_empty.grid_remove()
         self.word_card.grid()
-        notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
+        notes = (" - looked up" if row["word"] == self.looked_up else "") + \
+                (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
         self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")   # (it fits the word itself)
         anchors_ok = all(self.anchors)
@@ -900,6 +911,7 @@ class App:
         """Put the current word straight into `tier` (keys 1-6 or the tier buttons)."""
         if not self.cur_word or self.cmp:
             return
+        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
         word = self.cur_word
         self.store.place(word, tier)
         self._after_place(word, tier)
@@ -908,7 +920,10 @@ class App:
         """'Don't know / later': move the current word behind every fresh word."""
         if not self.cur_word or self.cmp:
             return
+        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
         word = self.cur_word
+        if word == self.looked_up:
+            self.looked_up = None
         self.store.skip(word)
         self._count_action()
         old_sub = self.word_card.sub
@@ -959,6 +974,7 @@ class App:
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
         if not self.cur_word or self.mode != "place" or self.cmp:
             return
+        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
         if not all(self.anchors):
             self.flash("Set all six anchor words first (Settings > Anchor words...)", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
             return
@@ -1147,11 +1163,61 @@ class App:
         self.focus = None
         self.refresh()
 
+    # ---- looking up a word to sort it now (UI-51) --------------------------------------------------------------
+    def start_lookup(self):
+        """The magnifier on the card (or its key): type a word on the card, Enter brings it up to sort now (the
+        queue order of the rest does not change). The magnifier again, or Escape, goes back."""
+        card = self.word_card
+        if card.typing:
+            card.end_typing()
+            return
+        if self.mode != "place" or not self.cur_word or self.busy:
+            return
+        if self.cmp:
+            self._cancel_compare()
+        self._to_add = None
+        card.begin_typing()
+
+    def lookup_word(self, text):
+        """Enter on the card: an unplaced word comes up to sort; a placed one, or one not in the list, shakes the
+        card and says so (Enter again adds a word the list does not have)."""
+        card = self.word_card
+        if not text:
+            card.end_typing()
+            return
+        row = self.store.get_word(text) or self.store.get_word(text.lower())
+        if row is not None and row["tier"] is not None:
+            card.note(f"Already placed in {TIERS[row['tier']]}  \u00b7  Browse to change it", self.anim)
+            return
+        if row is None:
+            if self._to_add != text:
+                self._to_add = text
+                card.note("Not in the word list  \u00b7  Enter again to add it", self.anim)
+                return
+            self.store.add_word(text)
+            row = self.store.get_word(text)
+            self.flash(f"'{text}' added to the word list", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self._to_add = None
+        self.looked_up = row["word"]
+        card.end_typing(restore=False)
+        self.refresh()
+
+    def _card_note(self, e):
+        """The magnifier's hover note."""
+        x, y, size = self.word_card.find_box()
+        if not (x - 4 <= e.x <= x + size + 4 and y - 4 <= e.y <= y + size + 4):
+            return None
+        if self.word_card.typing:
+            return "Back to the word"
+        keys = self.keys.display("find")
+        return "Look up a word" + (f" ({keys[0]})" if keys else "")
+
     def on_mode_change(self):
         """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
         comparison, pair or focus."""
         self.anim.finish(self.duel.anim_key)   # a duel result still showing finishes first (it loads a pair)
         self.mode = self.mode_var.get()
+        self.word_card.end_typing()            # (a word half typed on the card is dropped)
         self.mode_switch.set(self.mode)
         self.store.set_meta("mode", self.mode)
         self.cmp = None
@@ -1213,7 +1279,11 @@ class App:
 
     def on_key(self, e):
         """Every key press: the keymap (UI-48) says what it does in the current view (its own keys first, then the
-        Everywhere ones: Backspace is Back while comparing, Undo otherwise)."""
+        Everywhere ones: Backspace is Back while comparing, Undo otherwise). While a word is being typed on the
+        card (UI-51) every key is the card's."""
+        if self.word_card.typing and self.mode == "place":
+            self.word_card.type_key(e)
+            return "break"
         if not self._repeat_allowed(e):
             return
         # a key press never waits for an animation: running ones speed out of the way (the new one starts on
@@ -1268,6 +1338,7 @@ class App:
         if action in ("left", "right", "tie", "skip"):
             return self.duel.buttons[action], lambda: self._on_duel(action)
         return {"compare": (self.compare_btn, self.start_compare), "later": (self.later_btn, self.skip_word),
+                "find": (None, self.start_lookup),
                 "back": (self.cmp_btns["back"], self.cmp_back), "stop": (None, self._cancel_compare)}[action]
 
     def _cancel_compare(self):

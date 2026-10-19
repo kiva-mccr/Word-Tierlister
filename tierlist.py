@@ -776,11 +776,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and Escape waiting, so the window keeps drawing (the buttons were clipped while it blocked); it
 #           closes itself when done. App.busy holds back the definition cache's writes meanwhile. With
 #           Reduce motion the bar stands still.
-# [ ] UI-51 Look up a word to sort it (asked for): a little search icon opens a search over the whole unsorted
+# [x] UI-51 Look up a word to sort it (asked for): a little search icon opens a search over the whole unsorted
 #           list (as you type, like Browse's search, but over words not placed yet); picking one makes it the
 #           word on the card in Place new words, to sort now, without changing the queue order for the rest.
 #           Where the icon goes is to be talked over first (beside the word card, in the header, or the tab
 #           row). (Browse can already find placed words; W-1 looks words up from inside a definition.)
+#           Built (decided: the icon at the top right of the word card, typing on the card itself): a magnifier
+#           (smooth.ICONS "search") in the card's corner, darker on hover, its note "Look up a word (/)"; it or
+#           the / key (keymap action "find", changeable) turns the card into the place to type (a pale "type a
+#           word", a thin lilac caret, "Enter: sort it · Esc: back"). Enter: an unplaced word comes up to sort now
+#           ("- looked up"; the rest of the queue keeps its order, App.looked_up until placed or skipped); a placed
+#           one shakes the card ("Already placed in B · Browse to change it"); one not in the list shakes it
+#           ("Not in the word list · Enter again to add it") and Enter again adds it (Store.add_word: the last
+#           rank, the back of the queue, nothing else redone) and brings it up. While typing every key is the
+#           card's; a tab switch, Escape or the magnifier again puts the word back. _selftest_lookup.py.
 # [x] UI-52 Shelf hover (asked for): hovering a spine darkens its outline and lifts it a little off the
 #           shelf, its left and right neighbours less (Bookshelf.hover; eased 140 ms, at once with Reduce
 #           motion; moving along the shelf never snaps). The shelf has that much room above it.

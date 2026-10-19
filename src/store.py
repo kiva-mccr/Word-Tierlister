@@ -164,6 +164,16 @@ class Store:
         self._prog = None
         self.version += 1
 
+    def add_word(self, word):
+        """Add one word the list did not have (UI-51: looked up and added by hand), at the very end of it: the
+        rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
+        rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
+        self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
+        self.db.commit()
+        self._total = None
+        self._prog = None
+        self.version += 1
+
     def has_word(self, word):
         """True if `word` is in the list."""
         return self.db.execute("SELECT 1 FROM words WHERE word=?", (word,)).fetchone() is not None

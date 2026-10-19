@@ -1583,7 +1583,12 @@ class WordCard(SmoothCanvas):
       MIN_SCALE of the size it wraps, still inside the one line's height. A sub-line too wide shrinks the same
       way, then is cut short with "...".
     * `word` / `sub` read the current text; refresh() re-measures after the shared fonts were resized.
+    * UI-51: a little magnifier in the top-right corner (on_find() when clicked). begin_typing() turns the card
+      into the place to type a word: type_key(event) takes the keys, Enter calls on_enter(text), Escape (or the
+      magnifier again) puts the word back; note(text, animator) says something under it and shakes the card.
     """
+    TYPE_HINT = "Enter: sort it  \u00b7  Esc: back"
+    PLACEHOLDER = "type a word"
     SHADOW = 4
     CARD_CHARS = 12
     MIN_SCALE = 0.35
@@ -1599,6 +1604,12 @@ class WordCard(SmoothCanvas):
         self._radius = radius
         self._frame, self._p = None, 0.0   # the running transition's frame (re-applied after a redraw) and its stage
         self._box = None                   # (width, height) last given to the canvas
+        self.on_find = self.on_enter = None
+        self.typing, self._typed, self._saved = False, "", None
+        self._find_hover = False
+        self.tag_bind("find", "<Button-1>", lambda e: self.on_find and self.on_find())
+        self.tag_bind("find", "<Enter>", lambda e: self._hover_find(True))
+        self.tag_bind("find", "<Leave>", lambda e: self._hover_find(False))
         self.bind("<Configure>", lambda e: self._draw())
         self._draw()
 
@@ -1812,6 +1823,99 @@ class WordCard(SmoothCanvas):
         self.tag_raise("sub")
         if self._frame is not None:           # mid-transition: put the moving words back where they were
             self._frame(self._p)
+        self._draw_find(bw, r)
+        if self.typing:                       # a thin lilac caret after the typed word (before the pale prompt)
+            wb = self.bbox("word")
+            if wb:
+                empty = not self._typed
+                if empty:
+                    self.itemconfigure("word", fill=PALETTE["disabled"])
+                cx = (wb[0] - 3) if empty else (wb[2] + 3)
+                self.create_line(cx, top + line * 0.18, cx, top + line * 0.86, fill=PALETTE["accent"],
+                                 width=max(2, line // 20), tags="caret")
+
+    # ---- looking up a word (UI-51) ------------------------------------------------------------------------
+    def find_box(self):
+        """Where the magnifier is: (x, y, size) in the card."""
+        bw = (self._box or self.box())[0] - self.SHADOW
+        size = max(12, round(self._sfont.metrics("linespace") * 0.95))
+        inset = max(8, round(min(self._radius, (self._box or self.box())[1] // 2) * 0.5))
+        return bw - inset - size, inset, size
+
+    def _draw_find(self, bw, r):
+        self.delete("find")
+        x, y, size = self.find_box()
+        ink = PALETTE["accent"] if self.typing else (PALETTE["text"] if self._find_hover else PALETTE["muted"])
+        self.create_image(x, y, image=self.icon_image("search", size, ink), anchor="nw", tags="find")
+
+    def _hover_find(self, on):
+        self._find_hover = on
+        self.configure(cursor="hand2" if on else "")
+        if self._box:
+            self._draw_find(self._box[0] - self.SHADOW, self._radius)
+
+    def begin_typing(self):
+        """The card becomes the place to type a word (the word it showed comes back with end_typing)."""
+        if self.typing:
+            return
+        self.typing, self._typed, self._saved = True, "", (self._word, self._sub)
+        self._show_typed(self.TYPE_HINT)
+
+    def end_typing(self, restore=True):
+        if not self.typing:
+            return
+        self.typing = False
+        if restore and self._saved is not None:
+            self.set(*self._saved)
+        self._saved = None
+
+    @property
+    def typed(self):
+        return self._typed
+
+    def _show_typed(self, sub):
+        self.set(self._typed or self.PLACEHOLDER, sub)
+
+    def type_key(self, e):
+        """A key while typing: letters and the like add to the word, Backspace takes one off, Enter asks
+        on_enter(text), Escape goes back to the word."""
+        ks, ch = e.keysym, getattr(e, "char", "") or ""
+        if ks in ("Return", "KP_Enter"):
+            if self.on_enter:
+                self.on_enter(self._typed.strip())
+            return
+        if ks == "Escape":
+            self.end_typing()
+            return
+        if ks == "BackSpace":
+            self._typed = self._typed[:-1]
+        elif len(ch) == 1 and ch.isprintable() and len(self._typed) < 60 and (ch != " " or self._typed):
+            self._typed += ch
+        else:
+            return
+        self._show_typed(self.TYPE_HINT)
+
+    SHAKE_MS = 320
+
+    def note(self, text, animator=None):
+        """Say `text` under the typed word and give the card a little side-to-side "no" shake (none with Reduce
+        motion: the words say it)."""
+        self._show_typed(text)
+        if animator is None or animator.reduce_motion:
+            return
+        moved = [0]
+
+        def frame(p):
+            dx = round(7 * math.sin(p * 3 * 2 * math.pi) * (1 - p))
+            if dx != moved[0]:
+                self.move("all", dx - moved[0], 0)
+                moved[0] = dx
+
+        def done():
+            if moved[0]:
+                self.move("all", -moved[0], 0)
+                moved[0] = 0
+        animator.run(f"cardshake{id(self)}", self.SHAKE_MS, frame, done, ease=lambda t: t)
 
 
 class Tooltip:
