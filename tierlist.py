@@ -30,13 +30,15 @@ How it works
   word card, pills, buttons and text grow too (up to 1.75x); View > Zoom sets the
   size you start from.
 * Browse window (View menu): text and rows scale with the window; Ctrl +/-/0 or
-  Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit.
+  Ctrl+mouse-wheel zoom; rows load as you scroll, so there is no row limit. Click a column
+  heading to sort by it (again: the other way round); Delete unplaces the selected word.
 * Tab / Shift+Tab move to the next / previous tab.
 * PLACE mode: type 1-6 to drop a word straight into a tier, or press Space to
   place it by comparing against one anchor word per tier (about 3 questions);
   Space again stops comparing, Backspace steps back one answer.
   "Don't know / later" (U) sends a word to the back of the queue; skipped
-  words come back after every fresh word has been handled.
+  words come back after every fresh word has been handled. The magnifier on the
+  word card (or /) looks up any word to sort it now, and adds one the list lacks.
 * REFINE mode: head-to-head duels between words in the same tier (Elo ratings,
   fewest-duels-first, nearest-rating opponents) to order words within a tier.
 * BOUNDARY mode: duels between the weakest word of one tier and the strongest of
@@ -54,6 +56,7 @@ How it works
 * Every action is committed to SQLite immediately: close the window or lose
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
+* Every key can be changed under Settings > Keyboard shortcuts (the keys above are the defaults).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, check_release.py and layout_trace.py in tools/, the Claude notes in
@@ -891,9 +894,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: a choice in errors.ask_choices can carry (link text, url); the tick box, the name as the
 #           link (darker on hover, opens with errors.open_link = webbrowser.open), then the rest of the
 #           label, which still ticks the box. terminal_setup prints "More about it: <address>".
-# [ ] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
+# [x] UI-26 Final pass.  Performance check on a ~1M-word save (no animation frame touches the
 #           database), refresh the module docstring, and add a UI smoke test that drives every
 #           mode and saves screenshots.
+#           Done: _selftest_smoke.py drives Place (keys, Don't know, comparing, a looked-up word,
+#           definitions), Refine, Boundary, a conflict, zoom, Tab, undo, Browse (sorting both ways), the
+#           Anchor / Queue / Keyboard shortcuts dialogs and every header menu, fails on any error raised in a
+#           callback, and saves a screenshot per stage (SMOKE_SHOTS, else a temporary folder; Pillow). On a
+#           1M-word save (5,000 placed): placing ~26 ms, a duel 15-23 ms, a tab switch ~17 ms, Browse ~95 ms;
+#           animation frames median 0.6 ms, worst 7 ms, no queries at all; opening ~0.8-1.1 s (0.25 s of it the
+#           shelf's tallies, counted once). The docstring's "How it works" names the newer features.
 #
 # --- Window by window (asked for: every window's planned changes in one place) -------------------------
 #   Main window ........ header + tabs (UI-10, UI-27), status line (UI-15, UI-34), tier chart (UI-13,
