@@ -395,11 +395,14 @@ class Browser:
 
     def _show_sort(self):
         """The headings, with a small arrow on the one the list is sorted by: up when its values rise down the
-        list (a..z, S..F, commonest first), down when they fall."""
+        list (a..z, S..F, commonest first), down when they fall. The Word column also says which way round in
+        words, "(A-Z)" or "(Z-A)" (asked for)."""
         sort = self.sort_var.get()
         for col, text, srt, _anchor in self.COLUMNS:
             if srt == sort:
                 text += "  " + self.ARROWS[(sort in self.RISING) == self.reverse]
+                if col == "word":
+                    text += "  (Z\u2013A)" if self.reverse else "  (A\u2013Z)"
             self.tree.heading(col, text=text)
 
     def _add_rows(self, rows):

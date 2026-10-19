@@ -167,8 +167,9 @@ duels = [int(v) for v in rows("games")]
 assert bw.reverse and duels == sorted(duels) and bw.tree.heading("games", "text").endswith(_B.Browser.ARROWS[0])
 bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
 assert bw.sort_var.get() == "A-Z" and not bw.reverse and rows("word") == sorted(rows("word"))
+assert bw.tree.heading("word", "text") == "Word  \u25b4  (A\u2013Z)"                  # says which way, in words
 bw.tree.tk.call(bw.tree.heading("word", "command")); pump(2)
-assert rows("word") == sorted(rows("word"), reverse=True)
+assert rows("word") == sorted(rows("word"), reverse=True) and bw.tree.heading("word", "text").endswith("(Z\u2013A)")
 bw.close(); app.open_browser(); pump(4); bw = app.browsers[0]                       # remembered, either way round
 assert bw.sort_var.get() == "A-Z" and bw.reverse and rows("word") == sorted(rows("word"), reverse=True)
 bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(2)                            # the drop-down: its usual order
