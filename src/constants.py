@@ -65,10 +65,9 @@ KIND_NOTES = {
     "adv": "Adverbs: words that say how, when or where (quickly, soon, here).",
     "other": ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, contractions "
               "and the like (she, under, because, wow, seven, etc., don't)."),
-    "obscene": ("Obscene words: vulgar, offensive or derogatory words and slurs, as Wiktionary labels them, of any "
-                "kind. They come up only while this is ticked."),
+    "obscene": "Obscene words: vulgar, offensive or derogatory words and slurs.",
 }
-KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of them is ticked."
+KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of its kinds are ticked."
 
 
 def kind_bits(pos):
