@@ -118,9 +118,10 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   its size when moved to a monitor with a different scaling.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- Obscene words come from `src/obscene.py`'s hand-picked list (the user rejected Wiktionary's labels: "most
-  of these bad words are not bad words"). Run a change past wordfreq's commonest words for false hits. A way
-  to mark a word by hand was offered to the user, not built.
+- Obscene words (the user's rule): most or the first of a word's meanings rude by Wiktionary's labels
+  (`obscene.decide`); any-one-sense rules caught "bureaucracy", "box". Older saves read the rude categories'
+  pages from Wiktionary (untested against the real site from here: proxy); offline, `obscene.py`'s
+  hand-picked list stands in. Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
   hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).

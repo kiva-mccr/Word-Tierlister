@@ -1,4 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
+import urllib.parse
 import gzip, json, os, subprocess, sys, tempfile, threading, time
 import tkinter as tk
 import startup as S
@@ -261,7 +262,7 @@ with open(big, "w", encoding="utf-8") as f:
         f.write(json.dumps(entry(f"word{chr(97 + i % 26)}{'abcdefghij'[i % 10]}{'klmnopqrst'[(i // 10) % 10]}{'uvwxyzabcd'[(i // 100) % 10]}x")) + "\n")
 st2 = T.Store(os.path.join(tmp, "p.db"))
 st2.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT,"
-               " kinds INTEGER, rude INTEGER)")
+               " kinds INTEGER, marks TEXT)")
 lines = []
 W._parse_wiktionary(st2.db, big, False, lines.append)
 assert lines[0].strip().startswith("opening the file") and S.parse_progress(lines[0]) == 1
@@ -288,7 +289,7 @@ assert "checking every word for compounds" in text and "giving every unplaced wo
 st4 = T.Store(os.path.join(tmp, "plan.db"))
 plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True, records_kinds=True)
 assert plan == ["Reading entries", "Ranking words", "Detecting compound words", "Looking up how common",
-                "Finding obscene words", "Shuffling the queue"], plan                    # (src given: nothing to download)
+                "Shuffling the queue"], plan                    # (src given: nothing to download)
 lines = []
 W.build_wiktionary(st4, src, log=lines.append); W.prepare_queue(st4, log=lines.append)
 stages = [l for l in lines if l and not l.startswith(" ")]
@@ -296,26 +297,54 @@ hits = [next(i for i, st in enumerate(stages) if st.startswith(name)) for name i
 assert hits == sorted(hits), (plan, stages)
 assert W.queue_steps(st4) == []                                 # all done: a later start has no steps
 assert W.wiktionary_steps(T.Store(os.path.join(tmp, "plan2.db")))[0] == "Downloading English Wiktionary"
-# a save from before ST-6: its kinds come from the stored definitions, its obscene words from obscene.py's list
-old = T.Store(os.path.join(tmp, "old.db")); old.insert_words(["run", "bastard", "zorp", "come", "shit", "bureaucracy", "class"])
+# a save from before ST-6: its kinds come from the stored definitions, its obscene words from Wiktionary's pages
+# of the words it files as rude (faked here): most or the first of their meanings rude; their forms by the save's
+# definitions ("plural of bitch")
+old = T.Store(os.path.join(tmp, "old.db"))
+old.insert_words(["run", "bitch", "bitches", "zorp", "come", "shit", "bureaucracy", "class"])
+W._fetch_json = lambda url: (_ for _ in ()).throw(OSError("offline for now"))
 W.prepare_queue(old, log=lambda *_: None)
-for k in ("kinds_done", "obscene_done", "deal_done"):
+assert old.get_meta("obscene_done") == "list" and old.obscene_words() == {"bitch", "bitches", "shit"}  # (the stand-in)
+for k in ("kinds_done", "obscene_done", "obscene_tried", "deal_done"):
     old.db.execute("DELETE FROM meta WHERE key=?", (k,))
 old.db.execute("UPDATE words SET kinds=NULL, obscene=0"); old.db.commit()
-old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running"); old.set_def("bastard", "1. (noun) a mean person")
+old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running"); old.set_def("bitch", "1. (noun) a female dog")
+old.set_def("bitches", "\u2022 (noun) plural of bitch\n\u2022 (verb) third-person singular simple present indicative of bitch")
 plan = W.queue_steps(old)
 assert plan == ["Sorting words into kinds", "Finding obscene words"], plan
+CATS = {"English vulgarities": [["bitch", "Bitch", "come"], ["shit", "notinlist"]], "English derogatory terms": [["bureaucracy"]]}
+PAGES = {"bitch": "==English==\n# {{lb|en|now|rare}} A female dog.\n# {{lb|en|vulgar|derogatory}} A woman.\n"
+                  "# {{lb|en|vulgar|slang}} A complaint.\n",                        # most meanings rude
+         "shit": "==English==\n===Noun===\n# {{lb|en|vulgar}} Faeces.\n# Nonsense.\n# Stuff.\n",   # the first one rude
+         "come": "==English==\n# To move nearer.\n# To arrive.\n# {{lb|en|vulgar|slang}} To orgasm.\n",
+         "bureaucracy": "==English==\n# Government by officials.\n# Officials.\n# {{lb|en|pejorative}} Red tape.\n"}
+asked = []
+def fake(url):
+    asked.append(url)
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    if "list" in q:                                             # a category, in pages of members
+        pages = CATS.get(q["cmtitle"][0][9:], [[]])
+        k = int(q.get("cmcontinue", ["0"])[0])
+        return {"query": {"categorymembers": [{"title": t} for t in pages[k]]},
+                **({"continue": {"cmcontinue": str(k + 1)}} if k + 1 < len(pages) else {})}
+    titles = q["titles"][0].split("|")                           # page texts: one per answer, then "continue"
+    k = int(q.get("rvcontinue", ["0"])[0])
+    page = {"title": titles[k], "revisions": [{"slots": {"main": {"content": PAGES.get(titles[k], "")}}}]}
+    return {"query": {"pages": [page]}, **({"continue": {"rvcontinue": str(k + 1)}} if k + 1 < len(titles) else {})}
+W._fetch_json = fake
 lines = []; W.prepare_queue(old, log=lines.append)
 stages = [l for l in lines if l and not l.startswith(" ")]
 assert [next(i for i, st in enumerate(stages) if st.startswith(n)) for n in plan] == [0, 1], stages
-assert old.get_word("run")["kinds"] == 3 and old.get_word("bastard")["kinds"] == 1 and old.get_word("zorp")["kinds"] == 16
-assert old.obscene_words() == {"bastard", "shit"} and W.queue_steps(old) == []
-# a save that found them the old way (Wiktionary's labels: "bureaucracy" too) finds them again, and only these
-old.set_obscene(["bureaucracy", "come"]); old.set_meta("obscene_done", "2")
+assert old.get_word("run")["kinds"] == 3 and old.get_word("bitch")["kinds"] == 1 and old.get_word("zorp")["kinds"] == 16
+assert old.obscene_words() == {"bitch", "bitches", "shit"}, old.obscene_words()       # not "come", not "bureaucracy"
+assert old.get_meta("obscene_done") == old.OBSCENE_VERSION and W.queue_steps(old) == []
+assert any("(0%)" in l for l in lines)                          # (a real percentage: the progress window's time left)
+# offline later: nothing changes; a save that only had the stand-in list asks again after a while
+old.set_meta("obscene_done", "list"); old.set_meta("obscene_tried", time.time())
+assert W.queue_steps(old) == []
+old.set_meta("obscene_tried", time.time() - W.OBSCENE_RETRY_S - 1)
 assert W.queue_steps(old) == ["Finding obscene words"]
-W.prepare_queue(old, log=lambda *_: None)
-assert old.obscene_words() == {"bastard", "shit"} and old.get_meta("obscene_done") == old.OBSCENE_VERSION
-# a word added by hand (UI-51) is checked as it comes in
+# a word added by hand (UI-51) has no meanings to read: the hand-picked list decides
 old.add_word("dipshits"); old.add_word("glass")
 assert "dipshits" in old.obscene_words() and "glass" not in old.obscene_words()
 

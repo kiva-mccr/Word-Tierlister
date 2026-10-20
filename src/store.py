@@ -34,7 +34,7 @@ import re
 import sqlite3
 import time
 
-from obscene import is_obscene
+from obscene import on_list
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
@@ -185,7 +185,7 @@ class Store:
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        rude = int(is_obscene(word))
+        rude = int(on_list(word))                  # (no meanings to read for it: the hand-picked list)
         self.db.execute("UPDATE words SET obscene=?, out=? WHERE word=?", (rude, self._out_value(None, rude), word))
         self._obscene = None
         self.db.commit()
@@ -316,7 +316,7 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    OBSCENE_VERSION = "3"   # bumped when what counts as obscene changes (3: obscene.py's list), to look again
+    OBSCENE_VERSION = "4"   # bumped when what counts as obscene changes (4: most or the first meaning rude), to look again
 
     def set_obscene(self, words, replace=False):
         """Mark `words` (those in the list) obscene; `replace`: and only those."""

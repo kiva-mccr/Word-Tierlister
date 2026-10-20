@@ -367,8 +367,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           used: obscene.py holds a short list chosen by hand (swear words, vulgar words for sex and the body,
 #           slurs; ROOTS also inside longer words, WORDS with the usual endings; words whose usual meaning is
 #           innocent left out, NOT_INSIDE / NOT_OBSCENE for "snigger", "spicy", "saltwater"). Checked against
-#           wordfreq's 400,000 commonest words. Offline, ~1.4 s for a million words; Store.OBSCENE_VERSION 3
-#           redoes a save marked the old way. _selftest_obscene.py.
+#           wordfreq's 400,000 commonest words. _selftest_obscene.py.
+#           Then the user's rule (asked for, "both most and first"): a word is obscene if MOST of its meanings
+#           are rude or its FIRST one is (vulgar, offensive, derogatory / pejorative, a slur; not "sometimes
+#           offensive"); a meaning that is a form of another word ("plural of bitch") is rude when that word is
+#           (obscene.decide, tag_marks, page_marks). A Wiktionary build reads each sense's tags as it goes; a save
+#           whose download is gone reads the pages of the words in Wiktionary's rude categories (50 a request,
+#           with a percentage and time left) and their forms from its own definitions. Until it can (offline),
+#           the hand-picked list stands in (obscene_done "list"; asked again after 6 hours). Store.OBSCENE_VERSION
+#           4. The self-tests never go online (WORD_TIERLIST_OFFLINE, set by tests/_paths.py).
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing

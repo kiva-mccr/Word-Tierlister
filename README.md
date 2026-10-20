@@ -31,10 +31,10 @@ replacing the other folders never loses your list.
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
-| `src/obscene.py` | Which words are obscene (ST-6): a short list chosen by hand (swear words, vulgar words, slurs), with the innocent look-alikes it must not catch ("snigger", "spicy"). No tkinter. |
+| `src/obscene.py` | Which words are obscene (ST-6): most or the first of a word's meanings rude, read from Wiktionary's labels (the download's tags or a page's wikitext); a short list chosen by hand stands in until a save has them. No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds, obscene words, the ones left out; ST-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
-| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), marking the obscene words, queue prep. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the obscene words (from the download's labels, or Wiktionary's pages for an older save), queue prep. |
 | `src/saves.py` | Finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
@@ -92,9 +92,11 @@ The first start asks three short questions (any time later: Settings > How words
 - **Censor obscene words** ("blurred, except on hover"): they are smeared sideways on the cards until the pointer is over them, and read
   b•••••d in messages and Browse. Exports keep the real words.
 
-A save from before this learns each word's kinds from its stored definitions. Which words are obscene comes
-from a short list chosen by hand in `src/obscene.py` (swear words, vulgar words, slurs; edit it to change what
-counts), not from Wiktionary's labels, which marked any word with one rude sense ("box", "bureaucracy").
+A word counts as obscene if most of its meanings, or its first one, are labelled vulgar, offensive, derogatory
+or a slur on Wiktionary (so "fuck" does, "bureaucracy" with one pejorative meaning of three does not); its
+plural and other forms follow it. A save from before this learns each word's kinds from its stored definitions,
+and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
+internet; until then a short list chosen by hand in `src/obscene.py` stands in).
 
 ## Windows notes
 

@@ -1,16 +1,56 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""ST-6: which words are obscene (obscene.py's list chosen by hand, not Wiktionary's labels, which caught
-"bureaucracy", "box" and "screw")."""
-from obscene import is_obscene, obscene_in
+"""ST-6: which words are obscene. The user's rule: most of a word's meanings rude, or its first one (Wiktionary's
+labels per meaning), forms of an obscene word too; the hand-picked list stands in until a save has the labels."""
+from obscene import decide, obscene_in, on_list, page_marks, tag_marks
 
+# ---- the rule -------------------------------------------------------------------------------------------------
+got = decide({"fuck": ["r", "r", "p"], "cunt": ["r"], "slur": ["r", "p", "p"],        # first meaning rude
+              "bitch": ["p", "r", "r"],                                              # most meanings rude
+              "bureaucracy": ["p", "p", "r"], "come": ["p", "r"], "box": ["p", "p", "p", "r"],   # neither
+              "bitches": ["f:bitch"], "fucking": ["f:fuck", "r"], "boxes": ["f:box"],            # forms follow
+              "bitchesses": ["f:bitches"]})                                          # (forms of forms too)
+assert got == {"fuck", "cunt", "slur", "bitch", "bitches", "fucking", "bitchesses"}, got
+# the Wiktionary download's tags (kaikki.org): rude labels, hedged ones, forms
+assert tag_marks({"tags": ["vulgar", "slang"]}) == "r" and tag_marks({"tags": ["derogatory"]}) == "r"
+assert tag_marks({"tags": ["ethnic", "slur"]}) == "r" and tag_marks({"raw_tags": ["pejorative"]}) == "r"
+assert tag_marks({"tags": ["offensive", "sometimes"]}) == "p"                        # "sometimes offensive"
+assert tag_marks({"tags": ["slang"]}) == "p" and tag_marks({"form_of": [{"word": "bitch"}], "tags": ["plural"]}) == "f:bitch"
+# a page's wikitext (a save whose download is gone): the English section's sense lines, in order
+page = """==English==
+===Etymology 1===
+====Noun====
+{{en-noun}}
+
+# {{lb|en|now|rare}} A female [[dog]].
+#: {{ux|en|The bitch had a litter.}}
+# {{lb|en|vulgar|derogatory}} A [[malicious]] woman.
+#* {{quote-book|en|year=1999|passage=...}}
+## {{lb|en|vulgar|slang}} A [[complaint]].
+# {{lb|en|sometimes|offensive}} A man who is weak.
+
+====Verb====
+# {{lb|en|vulgar|intransitive}} To [[complain]].
+
+==French==
+===Noun===
+# {{lb|fr|vulgar}} not English: never read
+"""
+assert page_marks(page) == ["p", "r", "r", "p", "r"], page_marks(page)              # three of five: obscene
+forms = "==English==\n===Noun===\n# {{plural of|en|bitch}}\n\n===Verb===\n# {{en-third-person singular of|bitch}}\n"
+assert page_marks(forms) == ["f:bitch", "f:bitch"]
+assert page_marks("==German==\n# {{lb|de|vulgar}} x\n") == [] and page_marks("") == []
+assert page_marks("==English==\n# {{lb|en|pejorative}} red tape\n") == ["r"]
+assert page_marks("==English==\n# {{lb|en|mildly vulgar}} x\n# {{lb|en|potentially|offensive}} y\n") == ["p", "p"]
+
+# ---- the hand-picked list (until the labels are in) --------------------------------------------------------
 for w in ("fuck", "motherfuckers", "mother-fucker", "bullshit", "dipshit", "bitch", "bitchy", "bitches", "bitch's",
           "asshole", "ass", "asses", "slutty", "sluttish", "pissed", "crapping", "titties", "twat", "twats", "cunt",
           "dumbass", "wanker", "fuck'em"):
-    assert is_obscene(w), w
+    assert on_list(w), w
 for w in ("bureaucracy", "class", "bass", "assassin", "assume", "cocktail", "cock", "tit", "dyke", "scrap",
           "piston", "title", "button", "therapist", "dickens", "spicy", "spices", "snigger", "sniggering", "niggardly",
           "swanky", "saltwater", "wristwatch", "shiitake", "shitake", "mishit", "who're", "craps", "dicker",
           "crappie", "beanery", "come", "screw", "box", "ball", "head", "hole", "prick", "damning", "glass"):
-    assert not is_obscene(w), w
+    assert not on_list(w), w
 assert obscene_in(["table", "shit", "glass", "fucking"]) == ["shit", "fucking"]
 print("OBSCENE OK")

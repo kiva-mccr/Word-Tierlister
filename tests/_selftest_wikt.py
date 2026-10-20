@@ -33,12 +33,20 @@ lines = [
     entry("un-", "prefix", ["not"]),                          # affix -> excluded
     entry("bonjour", "intj", ["hello"], lang="fr"),           # wrong language -> excluded
     entry("empty", "noun", []),                               # no glosses -> excluded
+    # ST-6: obscene when most of its meanings are rude ...
     entry("bastard", "noun", ["a child born out of wedlock"]),
-    entry("bastard", "noun", ["a mean person"], tags=["vulgar", "derogatory"]),   # ST-6: one obscene sense is enough
-    entry("bureaucracy", "noun", ["excessive red tape"], tags=["derogatory"]),   # ... but "pejorative" is not obscene
-    entry("come", "verb", ["to move nearer"]),
-    entry("come", "verb", ["to orgasm"], tags=["vulgar"]),         # ... and a very common word is not ...
-    entry("shit", "noun", ["faeces"], tags=["vulgar"], categories=[{"name": "English swear words"}]),  # ... unless a swear word
+    entry("bastard", "noun", ["a mean person"], tags=["vulgar", "derogatory"]),
+    entry("bastard", "adj", ["inferior"], tags=["derogatory"]),
+    entry("bastards", "noun", ["plural of bastard"], form_of="bastard"),         # (and its forms)
+    entry("shit", "noun", ["faeces"], tags=["vulgar"]),                           # ... or its first one
+    entry("shit", "verb", ["to defecate"]),
+    entry("shit", "verb", ["to fool"]),
+    entry("bureaucracy", "noun", ["government by officials"]),                   # not: one pejorative meaning of three
+    entry("bureaucracy", "noun", ["the officials"]),
+    entry("bureaucracy", "noun", ["excessive red tape"], tags=["derogatory"]),
+    entry("come", "verb", ["to move nearer"]),                                   # not: half is not most
+    entry("come", "verb", ["to orgasm"], tags=["vulgar"]),
+    entry("gyp", "verb", ["to cheat"], tags=["offensive", "sometimes"]),         # not: only "sometimes offensive"
 ]
 tmp = tempfile.mkdtemp()
 src = os.path.join(tmp, "sample.jsonl.gz")
@@ -67,15 +75,14 @@ assert "(obsolete)" in s.get_def("qwertyish")
 assert s.get_meta("source") == "wiktionary" and s.get_meta("wk_done") == "0"
 assert not s.db.execute("SELECT name FROM sqlite_master WHERE name='wk'").fetchone()
 assert s.stats()["total"] == n == len(words)
-# ST-6: the kinds come from the same pass; the obscene words from obscene.py's list, as the queue is prepared
+# ST-6: the kinds and the obscene words come from the same pass
 kinds = {r[0]: r[1] for r in s.db.execute("SELECT word, kinds FROM words")}
 assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"] == 4 and kinds["the"] == 16, kinds
 assert kinds["don't"] == 16 and kinds["of"] == 16
 assert s.get_meta("kinds_done") == "1"
-assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Finding obscene words",
-                            "Shuffling the queue"]
+assert s.obscene_words() == {"bastard", "bastards", "shit"} and s.get_meta("obscene_done") == s.OBSCENE_VERSION
+assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Shuffling the queue"]
 T.prepare_queue(s, log=lambda *_: None)
-assert s.obscene_words() == {"bastard", "shit"} and s.get_meta("obscene_done") == s.OBSCENE_VERSION   # not "come"
 assert not T.queue_steps(s)
 
 # ---- phrases flag --------------------------------------------------------------
@@ -103,8 +110,8 @@ assert s3.stats()["total"] == s3.count_words() == n + 1
 # ---- interrupted parse resumes from the parsed table ------------------------------
 s4 = T.Store(os.path.join(tmp, "d.db"))
 s4.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT,"
-              " kinds INTEGER, rude INTEGER)")
-s4.db.execute("INSERT INTO wk VALUES('the',1,1,1,'x',16,0),('cat',1,1,1,'y',1,0)")
+              " kinds INTEGER, marks TEXT)")
+s4.db.execute("INSERT INTO wk VALUES('the',1,1,1,'x',16,'p'),('cat',1,1,1,'y',1,'p')")
 s4.db.commit()
 s4.set_meta("wk_done", "1")
 T.build_wiktionary(s4, os.path.join(tmp, "missing-file-never-read.jsonl"), log=quiet)

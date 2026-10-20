@@ -167,6 +167,9 @@ class DealDialog:
             self.kind_tips[label] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap) for w in (tick, count)]
             self.kind_ticks[label] = tick
         note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
+        if self.store.get_meta("obscene_done") != self.store.OBSCENE_VERSION:
+            note += (" For now the obscene words come from a short list: their meanings are read from Wiktionary"
+                     " the next time the program starts with the internet.")
         wrap = self.dlg.wrap if self.first else font("body").measure("n") * 44
         ttk.Label(f, text=note, foreground=PALETTE["muted"], wraplength=wrap, justify="left").grid(
             row=10, column=0, columnspan=4, sticky="w", pady=(8, 0))
