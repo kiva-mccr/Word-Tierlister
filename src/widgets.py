@@ -11,7 +11,7 @@ import tkinter.font as tkfont
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from fonts import font
 from sizing import clamp_to_monitor, monitor_at, place_dialog
-from smooth import ICONS, SMEAR_LEVELS, SmoothCanvas, curve_image, smear_image
+from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
 
@@ -19,59 +19,68 @@ HOVER_MS = 120          # colour fade when the pointer enters or leaves
 DIP = 2                 # pixels the button sinks while pressed
 _CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg", "censor")
 UNSMEAR_MS = 260        # a censored word un-smears this fast under the pointer (ST-6), and smears again as fast
+SMEAR_SPREAD = 0.625    # how far a censored word is smeared sideways, in letter widths (the user's pick)
+SMEAR_TONE = 0.55       # how pale the smear is (0 = the text colour, 1 = the card)
+_TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
+
+
+def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
+    """Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one
+    pale tone (so none of them stays crisp on top), cut off straight at its first and last letter by strips in the
+    `paper` colour. `amount` (0..1) narrows it and darkens it toward `ink` (un-smearing). Tk cannot blur, so the
+    copies are plain canvas text: cheap enough to redraw every frame. Returns nothing; the items carry `tags`."""
+    c = canvas
+    box = c.bbox(item)
+    if not box:
+        return
+    x, y = c.coords(item)[:2]
+    opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
+    half = SMEAR_SPREAD * float(c.tk.call("font", "measure", opts["font"], "n")) / 2 * amount
+    col = lerp_color(ink, paper, SMEAR_TONE * amount)
+    steps = max(1, int(2 * half / 1.5))
+    for k in range(steps + 1):
+        c.create_text(x - half + 2 * half * k / steps, y, fill=col, tags=tags, **opts)
+    room = int(half) + 3
+    for x0, x1 in ((box[0] - room, box[0]), (box[2], box[2] + room)):
+        c.create_rectangle(x0, box[1], x1, box[3], fill=paper, outline="", tags=tags)
 
 
 class Unsmear:
     """A censored word (ST-6) on one of our canvases: its text item is hidden behind a sideways smear
-    (smooth.smear_image); `clear` (0 = smeared, 1 = the word itself) eases toward 1 while the pointer is over it,
-    the smear narrowing and fading as the word comes through, and back when it leaves. The canvas calls
-    place(text item, ink, paper) after drawing the word, and hover(on, animator) from its pointer events."""
+    (smear_items); `clear` (0 = smeared, 1 = the word itself) eases toward 1 while the pointer is over it, the
+    smear narrowing and darkening into the word, and back when it leaves. The canvas calls place(text item, word,
+    ink, paper) after drawing the word, paint() after moving or recolouring it, and hover(on, animator) from its
+    pointer events."""
 
     def __init__(self, canvas, tag):
         self.canvas, self.tag = canvas, tag
-        self.word, self.font = None, None
+        self.word = None
         self.clear, self._target = 0.0, 0.0
         self._item, self._ink, self._paper = None, None, None
 
-    def place(self, item, word, font_, ink, paper):
-        """Draw the smear over text `item` (its word in `font_`), or nothing when `word` is None."""
-        c = self.canvas
-        c.delete(self.tag)
-        self._item, self.word, self.font, self._ink, self._paper = item, word, font_, ink, paper
+    def place(self, item, word, ink, paper):
+        """Smear text `item` (showing `word`), or nothing when `word` is None."""
+        self.canvas.delete(self.tag)
+        self._item, self.word, self._ink, self._paper = item, word, ink, paper
         if word is None:
             self.clear = self._target = 0.0
             return
         self.paint()
-        idle = [SMEAR_LEVELS - 1]
-
-        def warm():                          # the un-smearing steps, made ahead one at a time while idle
-            if self.word == word and idle[0] > 0 and c.winfo_exists():
-                smear_image(c, word, font_, ink, idle[0] / SMEAR_LEVELS)
-                idle[0] -= 1
-                c.after_idle(warm)
-        c.after_idle(warm)
 
     def paint(self):
         c = self.canvas
         if self.word is None or self._item is None:
             return
         try:
-            box = c.bbox(self._item) if c.itemcget(self._item, "state") != "hidden" else None
-            if box is None:                  # (a hidden item has no box: show it a moment to measure it)
-                c.itemconfigure(self._item, state="normal")
-                box = c.bbox(self._item)
-            amount = 1.0 - self.clear
             c.delete(self.tag)
-            if amount > 0.02 and box:
-                img, pad = smear_image(c, self.word, self.font, self._ink, amount)
-                c.create_image(box[0] - pad, box[1] - 3, image=img, anchor="nw",
-                               tags=(self.tag,) + tuple(t for t in c.gettags(self._item) if t not in ("word", "label")))
-                c.tag_raise(self.tag, self._item)
-            if self.clear <= 0.0:
-                c.itemconfigure(self._item, state="hidden")
-            else:
-                c.itemconfigure(self._item, state="normal",
-                                fill=lerp_color(self._paper, self._ink, min(1.0, self.clear ** 1.4)))
+            if self.clear >= 1.0:
+                c.itemconfigure(self._item, state="normal", fill=self._ink)
+                return
+            c.itemconfigure(self._item, state="normal")         # (a hidden item has no box to measure)
+            tags = (self.tag,) + tuple(t for t in c.gettags(self._item) if t not in ("word", "label"))
+            smear_items(c, self._item, self._ink, self._paper, 1.0 - self.clear, tags)
+            c.itemconfigure(self._item, state="hidden")
+            c.tag_raise(self.tag, self._item)
         except tk.TclError:
             pass
 
@@ -249,8 +258,8 @@ class RoundButton(SmoothCanvas):
         try:
             self.itemconfigure("shape", fill=fill, outline=edge, width=width)
             self.itemconfigure("hint", fill=lerp_color(fg, fill, 0.3))
-            if self._censor:
-                self.smear._paper = fill
+            if self._censor:                       # (the smear follows the button's colours as they fade)
+                self.smear._paper, self.smear._ink = fill, fg
                 self.smear.paint()
             else:
                 self.itemconfigure("label", fill=fg)
@@ -294,7 +303,7 @@ class RoundButton(SmoothCanvas):
         self.tag_raise("label")
         self.tag_raise("hint")
         self._lifted = False
-        self.smear.place(label, self._text if self._censor else None, self._font, self._look[3], self._look[0])
+        self.smear.place(label, self._text if self._censor else None, self._look[3], self._look[0])
         self._paint()
         if self._pressed:
             self.move("body", 0, DIP)
@@ -1804,11 +1813,9 @@ class WordCard(SmoothCanvas):
         self.coords(old, *ow)
         smeared = None
         if self._old_censor and self.smear.clear < 1:   # a censored word leaves as its smear, never readable
-            ob = self.bbox(old)
-            img, pad = smear_image(self, old_word, self._old_font, PALETTE["text"], 1.0 - self.smear.clear)
-            smeared = [ob[0] - pad, ob[1] - 3]
-            self.create_image(*smeared, image=img, anchor="nw", tags=("old", "oldsmear"))
+            smear_items(self, old, PALETTE["text"], PALETTE["surface"], 1.0 - self.smear.clear, ("old", "oldsmear"))
             self.itemconfigure(old, state="hidden")
+            smeared = [0, 0]                            # (how far it has moved so far)
         osub = None
         if old_sub and sub_y is not None:
             osub = [cx, sub_y]
@@ -1822,7 +1829,8 @@ class WordCard(SmoothCanvas):
             self._p = p
             self.coords("oldword", ow[0] + dx * p, ow[1] + dy * p)
             if smeared:
-                self.coords("oldsmear", smeared[0] + dx * p, smeared[1] + dy * p)
+                self.move("oldsmear", round(dx * p) - smeared[0], round(dy * p) - smeared[1])
+                smeared[:] = [round(dx * p), round(dy * p)]
                 self.itemconfigure("oldsmear", state="normal" if p < 0.4 else "hidden")
             if osub:
                 self.coords("oldsub", osub[0] + dx * p, osub[1] + dy * p)
@@ -1944,8 +1952,8 @@ class WordCard(SmoothCanvas):
             self.create_text(bw / 2, sub_y, text=self._fit_subline(avail), font=self._fit_sub,
                              fill=PALETTE["muted"], justify="center", anchor="n", tags="sub")
         self._layout = (bw / 2, top, sub_y)          # (transition_from: the word's line and the sub-line)
-        self.smear.place(word, self._word if self._censor and not self.typing else None, self._fit,
-                         PALETTE["text"], PALETTE["surface"])
+        self.smear.place(word, self._word if self._censor and not self.typing else None, PALETTE["text"],
+                         PALETTE["surface"])
         if self.find_withtag("old"):
             self.tag_raise("old", "card")        # on the card (not under it), below the new word
         self.tag_raise("word")

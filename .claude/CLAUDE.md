@@ -75,8 +75,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
-- Censored (obscene) words: the medium horizontal smear on the cards (`smooth.smear_image`, `widgets.Unsmear`;
-  un-smears under the pointer), `constants.mask_word` (b•••••d) wherever only text fits (messages, Browse's list);
+- Censored (obscene) words: copies of the word side by side over 0.625 letter widths, cut straight at its ends
+  (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) wherever only text fits (messages, Browse's list);
   route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
 

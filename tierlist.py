@@ -338,10 +338,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           is ticked, any other word while one of its kinds is: untick the rest to sort only obscene words);
 #           "Censor obscene words" is a tick box ("blurred, except on hover": the user's words), and a
 #           censored word is not f***ed but smeared sideways (the user tried blurs, offset copies and smudged
-#           letters, and picked the medium horizontal smear). Tk cannot blur text, so smooth.smear_image draws
-#           the word's shape (a band per letter, stems above for b d k, below for g p y), blurred sideways, as
-#           an image; with the pointer over it, it un-smears (widgets.Unsmear: SMEAR_LEVELS narrower, paler
-#           smears while the word itself fades in over them; 260 ms; back again on leaving). On the word card
+#           letters, then a blurred band per letter, and after mock-ups of letter shapes blurred at many
+#           distances picked copies of the word itself, side by side over 0.625 letter widths, in one pale tone,
+#           cut off straight at the first and last letter, no fade, first and last letters smeared too).
+#           widgets.smear_items draws that (Tk cannot blur text: the copies are plain canvas text and two strips in
+#           the card's colour; SMEAR_SPREAD, SMEAR_TONE); with the pointer over it, it un-smears (widgets.Unsmear:
+#           the copies close in and darken into the word; 260 ms; back again on leaving). On the word card
 #           and the duel cards; the outgoing word of a placement leaves as its smear. Everywhere text only can
 #           go (messages, the anchor question, the focus line, the definitions drawer, Browse's list) it reads
 #           b•••••d (constants.mask_word); Browse's definition pane and exports keep the real word.
