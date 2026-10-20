@@ -86,6 +86,7 @@ app.on_key(types.SimpleNamespace(keysym="Escape", char="", time=None, state=0));
 assert card.censored and card.find_withtag("smear")
 # the duel cards: smeared until hovered
 app.mode_var.set("refine"); app.on_mode_change(); pump(4)
+root.event_generate("<Motion>", warp=True, x=2, y=2); pump(2)       # (a pointer resting on a card would un-smear it)
 app.duel.show("bastard", "table", censor=(True, False)); pump(2)
 left, right = app.duel.left, app.duel.right
 assert left.find_withtag("smear") and left.itemcget("label", "state") == "hidden" and not right.find_withtag("smear")
