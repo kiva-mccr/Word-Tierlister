@@ -21,14 +21,18 @@ _CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg", "censor")
 UNSMEAR_MS = 260        # a censored word un-smears this fast under the pointer (ST-6), and smears again as fast
 SMEAR_SPREAD = 0.625    # how far a censored word is smeared sideways, in letter widths (the user's pick)
 SMEAR_TONE = 0.55       # how pale the smear is (0 = the text colour, 1 = the card)
+SMEAR_BODY = 0.48       # the band filling the letters' body, in em up from the baseline (about the x-height of
+                        # the roundest fonts used; a more generous one would show a flat top over round letters)
 _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
 
 def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     """Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one
     pale tone (so none of them stays crisp on top), cut off straight at its first and last letter by strips in the
-    `paper` colour. `amount` (0..1) narrows it and darkens it toward `ink` (un-smearing). Tk cannot blur, so the
-    copies are plain canvas text: cheap enough to redraw every frame. Returns nothing; the items carry `tags`."""
+    `paper` colour. A band in the same tone fills the letters' body behind them (else the space inside an "e", the
+    gaps between the curves of "ss" and the open side of a last "c" show as white slivers and notches). `amount`
+    (0..1) narrows it and darkens it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies
+    are plain canvas text: cheap enough to redraw every frame. Returns nothing; the items carry `tags`."""
     c = canvas
     box = c.bbox(item)
     if not box:
@@ -37,6 +41,14 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
     half = SMEAR_SPREAD * float(c.tk.call("font", "measure", opts["font"], "n")) / 2 * amount
     col = lerp_color(ink, paper, SMEAR_TONE * amount)
+    size = float(c.tk.call("font", "actual", opts["font"], "-size"))
+    em = -size if size < 0 else size * float(c.tk.call("tk", "scaling"))
+    lines = max(1, round((box[3] - box[1]) / float(c.tk.call("font", "metrics", opts["font"], "-linespace"))))
+    band = max(0.0, (amount - 0.75) / 0.25)    # gone a quarter of the way into un-smearing (else a pale box shows
+    if lines == 1 and band > 0:                 # behind the letters closing in); not on a word wrapped over two lines
+        base = box[1] + float(c.tk.call("font", "metrics", opts["font"], "-ascent"))
+        c.create_rectangle(box[0], base - SMEAR_BODY * em, box[2], base - 0.02 * em, outline="",
+                           fill=lerp_color(paper, col, band), tags=tags)
     steps = max(1, int(2 * half / 1.5))
     for k in range(steps + 1):
         c.create_text(x - half + 2 * half * k / steps, y, fill=col, tags=tags, **opts)
