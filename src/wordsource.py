@@ -563,9 +563,9 @@ def prepare_queue(store, log=print):
             store.set_obscene(obscene_in(r[0] for r in store.db.execute("SELECT word FROM words")), replace=True)
             store.set_meta("obscene_done", "list")
         dealt = True
-    if dealt or store.get_meta("deal_done") != "1":     # the words left out follow the new kinds
-        store.set_deal()
-        store.set_meta("deal_done", "1")
+    if dealt or store.get_meta("deal_done") != "2":     # the words left out follow the new kinds (2: obscene words
+        store.set_deal()                                 # unticked by default)
+        store.set_meta("deal_done", "2")
     stale = store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone()
     if stale or changed:

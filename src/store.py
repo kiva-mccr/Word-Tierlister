@@ -275,12 +275,13 @@ class Store:
     # ---- how words are dealt (ST-6): kinds of words, obscene ones -------------------------------------------
     def deal_settings(self):
         """{"kinds": the ticked kinds (constants.KINDS bits), "obscene": obscene words ticked, "censor": shown
-        smeared}. Everything is ticked and nothing censored to start with."""
+        smeared}. Every kind is ticked to start with, obscene words are not (for now: what counts as obscene is
+        still being worked out), and nothing is censored."""
         try:
             kinds = int(self.get_meta("deal_kinds", ALL_KINDS)) & ALL_KINDS
         except ValueError:
             kinds = ALL_KINDS
-        return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "1") == "1",
+        return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "0") == "1",
                 "censor": self.get_meta("censor", "0") == "1"}
 
     def _out_value(self, kinds, obscene):

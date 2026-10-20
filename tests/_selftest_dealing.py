@@ -19,7 +19,7 @@ s.insert_words(WORDS)
 s.set_kinds([(w, 1) for w in WORDS] + [("run", 3), ("luminous", 4), ("moist", 4), ("quickly", 8), ("of", 16)])
 s.set_obscene(["bastard", "shit", "notinthelist"])
 assert s.obscene_words() == {"bastard", "shit"}
-assert s.deal_settings() == {"kinds": 31, "obscene": True, "censor": False}
+assert s.deal_settings() == {"kinds": 31, "obscene": False, "censor": False}     # (obscene words unticked, for now)
 c = s.kind_counts()
 assert c == {"noun": len(WORDS) - 6, "verb": 1, "adj": 2, "adv": 1, "other": 1, "obscene": 2}, c   # (run: noun + verb)
 s.set_deal(kinds=4, obscene=False)                                   # adjectives only
@@ -173,6 +173,6 @@ app.edit_anchors = lambda: asked.append("anchors 2")
 pump(30)
 app._dealing.dlg.win.event_generate("<Escape>"); pump(2)
 assert not app._dealing.alive() and s3.get_meta("dealt_asked") == "1" and asked[-1] == "anchors 2"
-assert s3.deal_settings() == {"kinds": 31, "obscene": True, "censor": False}
+assert s3.deal_settings() == {"kinds": 31, "obscene": False, "censor": False}
 app.on_close()
 print("DEALING OK")

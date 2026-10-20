@@ -122,6 +122,7 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   (`obscene.decide`); any-one-sense rules caught "bureaucracy", "box". Older saves read the rude categories'
   pages from Wiktionary (untested against the real site from here: proxy); offline, `obscene.py`'s
   hand-picked list stands in. Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
+  The user found it only "kinda worked": "Obscene words" starts unticked for now; to be worked on later.
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
   hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).

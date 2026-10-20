@@ -87,7 +87,8 @@ The first start asks three short questions (any time later: Settings > How words
 - **Order:** "Most common first" (strictly by how common a word is) or "Mostly common, a little shuffled"
   (the default: its shape, spread and seed decide how much).
 - **Which words:** nouns, verbs, adjectives, adverbs, other, obscene words, each a tick box with how many
-  words it holds (point at one to see what it covers). Unticked ones are left out of the queue, never deleted; untick everything but "Obscene
+  words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words" (for
+  now: telling which words are obscene is still being worked on). Unticked ones are left out of the queue, never deleted; untick everything but "Obscene
   words" to sort only those.
 - **Censor obscene words** ("blurred, except on hover"): they are smeared sideways on the cards until the pointer is over them, and read
   b•••••d in messages and Browse. Exports keep the real words.

@@ -380,6 +380,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           between the curves of "ss") and a last letter open on its right ("c", "z") left white slivers and
 #           notches; a band in the smear's tone now fills the letters' body behind the copies (SMEAR_BODY, about
 #           the x-height), fading out early in the hover so no pale box shows behind the letters closing in.
+#           For now (asked for: "it kinda worked"): "Obscene words" starts unticked, so the words marked obscene
+#           are left out until telling them apart is worked on again (deal_done 2 re-deals older saves).
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
