@@ -152,9 +152,8 @@ class DealDialog:
     def _kinds(self):
         f = self._section("kinds")
         counts = self.store.kind_counts()
-        known = self.store.get_meta("obscene_done") == self.store.OBSCENE_VERSION
         rows = [(key, label, self.kind_vs[key], f"{counts[key]:,}") for key, label, _ in KINDS]
-        rows.append(("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}" if known else "not known yet"))
+        rows.append(("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}"))
         self.kind_ticks, self.kind_tips = {}, {}
         wrap = font("body").measure("n") * 40
         for i, (key, label, var, n) in enumerate(rows):    # one column on the first start, two on the page
@@ -168,9 +167,6 @@ class DealDialog:
             self.kind_tips[label] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap) for w in (tick, count)]
             self.kind_ticks[label] = tick
         note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
-        if not known:
-            note += (" Which words are obscene is looked up on Wiktionary once, the next time the program starts "
-                     "with the internet.")
         wrap = self.dlg.wrap if self.first else font("body").measure("n") * 44
         ttk.Label(f, text=note, foreground=PALETTE["muted"], wraplength=wrap, justify="left").grid(
             row=10, column=0, columnspan=4, sticky="w", pady=(8, 0))

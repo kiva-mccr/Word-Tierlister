@@ -69,6 +69,7 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
+    obscene.py      which words are obscene: a short list chosen by hand (ST-6; no tkinter).
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
@@ -92,7 +93,7 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     app.py          App: the main window and all modes.
 
-Layers: constants, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+Layers: constants, obscene, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
 sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing ->
 app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
@@ -351,21 +352,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           contractions and the like (prefixes and suffixes are not in the list at all).
 #           Built: words.kinds (bits), words.obscene and words.out (left out of the queue; index
 #           idx_words_q3 on tier, out, skips, qkey, so the next word is instant even with all but a few
-#           thousand left out of a million). The Wiktionary parse records each entry's part of speech and any
-#           sense labelled vulgar / offensive / derogatory / slur. A save made before this: its kinds come from
-#           the stored definitions' "(noun)" lines (every source writes them; WordNet for the rest, else
-#           "other"), its obscene words from Wiktionary's own categories of them (a few requests; offline it
-#           tries again after 6 hours), both as start-up steps ("Sorting words into kinds", "Finding obscene
-#           words"). Order "Most common first" is the queue shape "rank". Browse's Show lists the placed words
+#           thousand left out of a million). The Wiktionary parse records each entry's part of speech; a
+#           save made before this gets its kinds from the stored definitions' "(noun)" lines (every source
+#           writes them; WordNet for the rest, else "other"). Obscene words: obscene.py's list (see the fix
+#           below). Both are start-up steps ("Sorting words into kinds", "Finding obscene words"). Order "Most common first" is the queue shape "rank". Browse's Show lists the placed words
 #           of a kind. With everything chosen placed, Place says how many are left out. Measured with a
 #           million words: re-dealing ~3.5 s (worker thread, moving bar), the dialog's counts ~0.4 s. The
 #           first start's steps show once per save (main(): App(ask_dealing=...)). _selftest_dealing.py.
 #           Then (asked for): each kind's tick box says what it holds on hover (constants.KIND_NOTES: a
 #           definition and examples; Other's list moved there from under the boxes).
-#           Fixed (reported): "bureaucracy" came out obscene: Wiktionary files every "pejorative" sense under its
-#           derogatory terms, so those no longer count; and a very common word (Zipf 5+, "come", "head", "ball")
-#           counts only as one of Wiktionary's swear words ("shit", "fuck" are as common). Store.OBSCENE_VERSION
-#           makes a save that looked them up the old way look again (online; until then the old ones stay).
+#           Fixed (reported): "bureaucracy" came out obscene, and then "most of these bad words are not bad
+#           words". Wiktionary's labels (any sense vulgar / offensive / derogatory, or its categories of them)
+#           catch every word with one rude sense among many ("box", "screw", "head"), so they are no longer
+#           used: obscene.py holds a short list chosen by hand (swear words, vulgar words for sex and the body,
+#           slurs; ROOTS also inside longer words, WORDS with the usual endings; words whose usual meaning is
+#           innocent left out, NOT_INSIDE / NOT_OBSCENE for "snigger", "spicy", "saltwater"). Checked against
+#           wordfreq's 400,000 commonest words. Offline, ~1.4 s for a million words; Store.OBSCENE_VERSION 3
+#           redoes a save marked the old way. _selftest_obscene.py.
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing

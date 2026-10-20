@@ -67,12 +67,16 @@ assert "(obsolete)" in s.get_def("qwertyish")
 assert s.get_meta("source") == "wiktionary" and s.get_meta("wk_done") == "0"
 assert not s.db.execute("SELECT name FROM sqlite_master WHERE name='wk'").fetchone()
 assert s.stats()["total"] == n == len(words)
-# ST-6: kinds and obscene words come from the same pass
+# ST-6: the kinds come from the same pass; the obscene words from obscene.py's list, as the queue is prepared
 kinds = {r[0]: r[1] for r in s.db.execute("SELECT word, kinds FROM words")}
 assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"] == 4 and kinds["the"] == 16, kinds
 assert kinds["don't"] == 16 and kinds["of"] == 16
-assert s.obscene_words() == {"bastard", "shit"} and s.get_meta("kinds_done") == "1" and s.get_meta("obscene_done") == s.OBSCENE_VERSION
-assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Shuffling the queue"]
+assert s.get_meta("kinds_done") == "1"
+assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Finding obscene words",
+                            "Shuffling the queue"]
+T.prepare_queue(s, log=lambda *_: None)
+assert s.obscene_words() == {"bastard", "shit"} and s.get_meta("obscene_done") == s.OBSCENE_VERSION   # not "come"
+assert not T.queue_steps(s)
 
 # ---- phrases flag --------------------------------------------------------------
 s2 = T.Store(os.path.join(tmp, "b.db"))

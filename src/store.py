@@ -34,6 +34,7 @@ import re
 import sqlite3
 import time
 
+from obscene import is_obscene
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
@@ -173,6 +174,7 @@ class Store:
         )
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '0')")
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('obscene_done', '0')")   # (new words: ST-6)
         self.db.commit()
         self._total = None
         self._prog = None
@@ -183,7 +185,9 @@ class Store:
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        self.db.execute("UPDATE words SET out=? WHERE word=?", (self._out_value(None, 0), word))
+        rude = int(is_obscene(word))
+        self.db.execute("UPDATE words SET obscene=?, out=? WHERE word=?", (rude, self._out_value(None, rude), word))
+        self._obscene = None
         self.db.commit()
         self._total = None
         self._prog = None
@@ -312,23 +316,13 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    OBSCENE_VERSION = "2"   # bumped when what counts as obscene changes (2: no longer "derogatory"), to look again
-    COMMON_ZIPF = 5.0       # the ~3,000 commonest words ("come", "head", "ball") are obscene only as swear words
+    OBSCENE_VERSION = "3"   # bumped when what counts as obscene changes (3: obscene.py's list), to look again
 
-    def set_obscene(self, words, swear=(), replace=False, zipf=None):
-        """Mark `words` (those in the list) obscene; `replace`: and only those. A common word (Zipf COMMON_ZIPF and
-        up: by `zipf` {word: value}, else the stored frequency) only if it is in `swear` too: one vulgar sense
-        does not make "come" or "head" an obscene word, while "shit" and "fuck" are as common."""
-        swear = set(swear)
-        if zipf is not None:
-            words = [w for w in words if w in swear or zipf.get(w, 0.0) < self.COMMON_ZIPF]
+    def set_obscene(self, words, replace=False):
+        """Mark `words` (those in the list) obscene; `replace`: and only those."""
         if replace:
             self.db.execute("UPDATE words SET obscene=0 WHERE obscene=1")
         self.db.executemany("UPDATE words SET obscene=1 WHERE word=? AND obscene=0", ((w,) for w in words))
-        if zipf is None:
-            common = [r[0] for r in self.db.execute("SELECT word FROM words WHERE obscene=1 AND freq >= ?",
-                                                    (10 ** (self.COMMON_ZIPF - 9),))]
-            self.db.executemany("UPDATE words SET obscene=0 WHERE word=?", ((w,) for w in common if w not in swear))
         self.db.commit()
         self._obscene = None
         self.version += 1
