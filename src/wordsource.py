@@ -90,10 +90,12 @@ SKIP_POS = {"name", "symbol", "character", "punct", "romanization", "prefix", "s
 # Senses carrying only these labels count as "dead": such words are pushed further back.
 DEAD_TAGS = {"obsolete", "archaic", "rare", "dialectal"}
 # A sense with any of these labels makes the word obscene (ST-6: "Obscene words", "Censor obscene words").
-OBSCENE_TAGS = {"vulgar", "offensive", "derogatory", "slur", "ethnic-slur"}
+OBSCENE_TAGS = {"vulgar", "offensive", "slur", "ethnic-slur"}
+# ("derogatory" is not one: Wiktionary files every "pejorative" sense there too, so "bureaucracy" and "politician"
+# came out obscene)
 # The same words for a save built before ST-6, from Wiktionary's own categories (the labels file words there)
-OBSCENE_CATEGORIES = ("English vulgarities", "English offensive terms", "English derogatory terms",
-                      "English ethnic slurs", "English swear words")
+OBSCENE_CATEGORIES = ("English vulgarities", "English offensive terms", "English ethnic slurs",
+                      "English swear words")
 WIKT_API = "https://en.wiktionary.org/w/api.php"
 # A word is letters, optionally joined by single hyphens/apostrophes ("well-known", "don't").
 # _PHRASE_RE additionally allows spaces ("ice cream"); it is used only with --include-phrases.
@@ -167,9 +169,10 @@ def _open_text(path):
 
 
 def _summarize(entry):
-    """-> (sense count, has_lemma_sense, has_live_sense, up to 4 definition lines, any obscene sense)."""
+    """-> (sense count, has_lemma_sense, has_live_sense, up to 4 definition lines, obscene: 0 no, 1 a sense is
+    vulgar / offensive / a slur, 2 the word is one of Wiktionary's swear words)."""
     pos = entry.get("pos", "")
-    lines, n, lemma, live, rude = [], 0, False, False, False
+    lines, n, lemma, live, rude = [], 0, False, False, 0
     for s in entry.get("senses", []):
         glosses = s.get("glosses") or []
         if not glosses:
@@ -178,7 +181,10 @@ def _summarize(entry):
         if not (s.get("form_of") or s.get("alt_of")):
             lemma = True
         tags = set(s.get("tags", []))
-        rude = rude or bool(tags & OBSCENE_TAGS)
+        if tags & OBSCENE_TAGS:
+            rude = max(rude, 1)
+        if any("swear words" in (c.get("name", "") if isinstance(c, dict) else str(c)) for c in s.get("categories", [])):
+            rude = 2
         dead = tags & DEAD_TAGS
         if not dead:
             live = True
@@ -293,10 +299,12 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     log(f"  saving {len(ordered):,} words and their definitions to your save file...")
     store.insert_words(ordered)
     db.execute("INSERT OR REPLACE INTO defs(word, text) SELECT word, text FROM wk")
-    db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word), "
-               "obscene=COALESCE((SELECT rude FROM wk WHERE wk.word=words.word), 0)")
+    db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word)")
+    rude = db.execute("SELECT word, rude FROM wk WHERE rude > 0").fetchall()
+    store.set_obscene([w for w, _ in rude], swear=[w for w, r in rude if r == 2], replace=True,
+                      zipf={w: zipf(w) for w, _ in rude})
     store.set_meta("kinds_done", "1")
-    store.set_meta("obscene_done", "1")
+    store.set_meta("obscene_done", store.OBSCENE_VERSION)
     db.execute("DROP TABLE wk")
     db.commit()
     store.set_meta("source", "wiktionary")
@@ -432,18 +440,21 @@ def _fetch_json(url):
 
 
 def fill_obscene(store, log=print, fetch=None):
-    """Find the obscene words of a save made before ST-6 from Wiktionary's categories of vulgar, offensive and
-    derogatory terms and slurs (a few requests, needs the internet). Returns False when it could not (tried
-    again on a later start)."""
-    words, fetch = set(), fetch or _fetch_json
+    """Find the obscene words of a save made before ST-6 (or before OBSCENE_VERSION) from Wiktionary's categories
+    of vulgarities, offensive terms, slurs and swear words (a few requests, needs the internet). They replace the
+    ones found before. Returns False when it could not (tried again on a later start; the old ones stay)."""
+    words, swear, fetch = set(), set(), fetch or _fetch_json
     try:
         for title in OBSCENE_CATEGORIES:
             log(f"  {title}...")
-            words.update(_category_members(title, fetch))
+            got = _category_members(title, fetch)
+            words.update(got)
+            if title == "English swear words":
+                swear.update(got)
     except (OSError, ValueError, http.client.HTTPException) as exc:
         log(f"  could not reach Wiktionary ({exc}); trying again next time.")
         return False
-    store.set_obscene(w for w in words if w == w.lower())
+    store.set_obscene([w for w in words if w == w.lower()], swear=swear, replace=True)
     log(f"  found {len(store.obscene_words()):,} obscene words in your list.")
     return True
 
@@ -482,10 +493,10 @@ OBSCENE_RETRY_S = 6 * 3600          # offline: ask Wiktionary again after this l
 
 def _wants_obscene(store):
     """True if the obscene words still need finding online (a save from before ST-6, not tried lately)."""
-    if store.get_meta("obscene_done") == "1":
+    if store.get_meta("obscene_done") == store.OBSCENE_VERSION:
         return False
     try:
-        last = float(store.get_meta("obscene_tried", "0"))
+        last = float(store.get_meta(f"obscene_tried{store.OBSCENE_VERSION}", "0"))
     except ValueError:
         last = 0.0
     return time.time() - last > OBSCENE_RETRY_S
@@ -512,9 +523,9 @@ def prepare_queue(store, log=print):
         dealt = True
     if _wants_obscene(store):
         log("Finding obscene words (one time, asks Wiktionary)...")
-        store.set_meta("obscene_tried", time.time())
+        store.set_meta(f"obscene_tried{store.OBSCENE_VERSION}", time.time())
         if fill_obscene(store, log):
-            store.set_meta("obscene_done", "1")
+            store.set_meta("obscene_done", store.OBSCENE_VERSION)
             dealt = True
     if dealt or store.get_meta("deal_done") != "1":     # the words left out follow the new kinds
         store.set_deal()

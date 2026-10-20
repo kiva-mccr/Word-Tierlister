@@ -119,7 +119,10 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
 - ST-6's obscene-word lookup for older saves (Wiktionary's categories via its API) could not reach Wiktionary from
-  here (proxy); tested with a faked reply only. New Wiktionary builds take them from the dump's sense labels.
+  here (proxy); tested with a faked reply only. New Wiktionary builds take them from the dump's sense labels
+  (and a sense's "swear words" category, read from kaikki's "categories": the field's shape is assumed).
+  What counts: vulgar / offensive / slur senses, not "derogatory" (that made "bureaucracy" obscene); words of
+  Zipf 5+ only as swear words. If a wrong word turns up again, a way to mark one by hand was offered to the user.
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
   hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).

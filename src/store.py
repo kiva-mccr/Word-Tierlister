@@ -312,9 +312,23 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    def set_obscene(self, words):
-        """Mark `words` (those in the list) obscene; the rest keep what they had."""
+    OBSCENE_VERSION = "2"   # bumped when what counts as obscene changes (2: no longer "derogatory"), to look again
+    COMMON_ZIPF = 5.0       # the ~3,000 commonest words ("come", "head", "ball") are obscene only as swear words
+
+    def set_obscene(self, words, swear=(), replace=False, zipf=None):
+        """Mark `words` (those in the list) obscene; `replace`: and only those. A common word (Zipf COMMON_ZIPF and
+        up: by `zipf` {word: value}, else the stored frequency) only if it is in `swear` too: one vulgar sense
+        does not make "come" or "head" an obscene word, while "shit" and "fuck" are as common."""
+        swear = set(swear)
+        if zipf is not None:
+            words = [w for w in words if w in swear or zipf.get(w, 0.0) < self.COMMON_ZIPF]
+        if replace:
+            self.db.execute("UPDATE words SET obscene=0 WHERE obscene=1")
         self.db.executemany("UPDATE words SET obscene=1 WHERE word=? AND obscene=0", ((w,) for w in words))
+        if zipf is None:
+            common = [r[0] for r in self.db.execute("SELECT word FROM words WHERE obscene=1 AND freq >= ?",
+                                                    (10 ** (self.COMMON_ZIPF - 9),))]
+            self.db.executemany("UPDATE words SET obscene=0 WHERE word=?", ((w,) for w in common if w not in swear))
         self.db.commit()
         self._obscene = None
         self.version += 1

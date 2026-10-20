@@ -3,8 +3,10 @@ import gzip, json, os, tempfile
 import tierlist as T
 
 
-def entry(word, pos="noun", glosses=("a thing",), tags=(), form_of=None, lang="en"):
+def entry(word, pos="noun", glosses=("a thing",), tags=(), form_of=None, lang="en", categories=()):
     s = {"glosses": list(glosses)}
+    if categories:
+        s["categories"] = list(categories)
     if tags:
         s["tags"] = list(tags)
     if form_of:
@@ -33,6 +35,10 @@ lines = [
     entry("empty", "noun", []),                               # no glosses -> excluded
     entry("bastard", "noun", ["a child born out of wedlock"]),
     entry("bastard", "noun", ["a mean person"], tags=["vulgar", "derogatory"]),   # ST-6: one obscene sense is enough
+    entry("bureaucracy", "noun", ["excessive red tape"], tags=["derogatory"]),   # ... but "pejorative" is not obscene
+    entry("come", "verb", ["to move nearer"]),
+    entry("come", "verb", ["to orgasm"], tags=["vulgar"]),         # ... and a very common word is not ...
+    entry("shit", "noun", ["faeces"], tags=["vulgar"], categories=[{"name": "English swear words"}]),  # ... unless a swear word
 ]
 tmp = tempfile.mkdtemp()
 src = os.path.join(tmp, "sample.jsonl.gz")
@@ -65,7 +71,7 @@ assert s.stats()["total"] == n == len(words)
 kinds = {r[0]: r[1] for r in s.db.execute("SELECT word, kinds FROM words")}
 assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"] == 4 and kinds["the"] == 16, kinds
 assert kinds["don't"] == 16 and kinds["of"] == 16
-assert s.obscene_words() == {"bastard"} and s.get_meta("kinds_done") == "1" and s.get_meta("obscene_done") == "1"
+assert s.obscene_words() == {"bastard", "shit"} and s.get_meta("kinds_done") == "1" and s.get_meta("obscene_done") == s.OBSCENE_VERSION
 assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Shuffling the queue"]
 
 # ---- phrases flag --------------------------------------------------------------

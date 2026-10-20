@@ -25,6 +25,15 @@ m = tk.Menu(root); assert str(m.cget("bg")) == P["surface"]
 top = tk.Toplevel(root); assert top.cget("bg") == P["bg"]
 # a styled widget builds without TclError
 ttk.Button(root, text="x").pack(); ttk.Treeview(root).pack()
+# styled twice on the same window (start-up, then the main window): the tick boxes keep their images (a second
+# call used to make new ones, which freed the ones the tick-box element still drew: every box went blank)
+import gc
+first = {k: tuple(map(str, v)) for k, v in root._tick_images.items()}
+ui_style.apply_ttk_style(root); gc.collect()
+alive = set(root.tk.call("image", "names"))
+assert all(set(imgs) <= alive for imgs in first.values()), (first, alive)
+tick = [e for e in st.element_names() if e.startswith("Tick")][0]
+assert tick in first and tick in str(st.layout("TCheckbutton"))
 root.update(); root.destroy()
 # idempotent on a second root
 r2 = tk.Tk(); fonts.init_fonts(r2); ui_style.apply_ttk_style(r2); r2.destroy()

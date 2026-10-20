@@ -362,6 +362,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           first start's steps show once per save (main(): App(ask_dealing=...)). _selftest_dealing.py.
 #           Then (asked for): each kind's tick box says what it holds on hover (constants.KIND_NOTES: a
 #           definition and examples; Other's list moved there from under the boxes).
+#           Fixed (reported): "bureaucracy" came out obscene: Wiktionary files every "pejorative" sense under its
+#           derogatory terms, so those no longer count; and a very common word (Zipf 5+, "come", "head", "ball")
+#           counts only as one of Wiktionary's swear words ("shit", "fuck" are as common). Store.OBSCENE_VERSION
+#           makes a save that looked them up the old way look again (online; until then the old ones stay).
+#           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
+#           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the

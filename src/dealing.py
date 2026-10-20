@@ -152,7 +152,7 @@ class DealDialog:
     def _kinds(self):
         f = self._section("kinds")
         counts = self.store.kind_counts()
-        known = self.store.get_meta("obscene_done") == "1"
+        known = self.store.get_meta("obscene_done") == self.store.OBSCENE_VERSION
         rows = [(key, label, self.kind_vs[key], f"{counts[key]:,}") for key, label, _ in KINDS]
         rows.append(("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}" if known else "not known yet"))
         self.kind_ticks, self.kind_tips = {}, {}
