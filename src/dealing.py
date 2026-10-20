@@ -17,12 +17,12 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from constants import KINDS, OTHER_KINDS_NOTE
+from constants import KIND_NOTE_EXTRA, KIND_NOTES, KINDS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
-from widgets import RoundButton, ShapeCard, StyledDialog
+from widgets import RoundButton, ShapeCard, StyledDialog, Tooltip
 
-CENSOR_NOTE = "smeared, except while the pointer is over them"
+CENSOR_NOTE = "blurred, except on hover"
 
 
 class DealDialog:
@@ -153,17 +153,21 @@ class DealDialog:
         f = self._section("kinds")
         counts = self.store.kind_counts()
         known = self.store.get_meta("obscene_done") == "1"
-        rows = [(label, self.kind_vs[key], f"{counts[key]:,}") for key, label, _ in KINDS]
-        rows.append(("Obscene words", self.obscene_v, f"{counts['obscene']:,}" if known else "not known yet"))
-        self.kind_ticks = {}
-        for i, (label, var, n) in enumerate(rows):         # one column on the first start, two on the page
+        rows = [(key, label, self.kind_vs[key], f"{counts[key]:,}") for key, label, _ in KINDS]
+        rows.append(("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}" if known else "not known yet"))
+        self.kind_ticks, self.kind_tips = {}, {}
+        wrap = font("body").measure("n") * 40
+        for i, (key, label, var, n) in enumerate(rows):    # one column on the first start, two on the page
             r, c = (i, 0) if self.first else (i // 2, (i % 2) * 2)
             tick = ttk.Checkbutton(f, text=label, variable=var, takefocus=1)
             tick.grid(row=1 + r, column=c, sticky="w", padx=(0, 18))
-            ttk.Label(f, text=n, foreground=PALETTE["muted"]).grid(row=1 + r, column=c + 1, sticky="e",
-                                                                    padx=(0, 40 if self.first else 24))
+            count = ttk.Label(f, text=n, foreground=PALETTE["muted"])
+            count.grid(row=1 + r, column=c + 1, sticky="e", padx=(0, 40 if self.first else 24))
+            # what the kind holds, on hover (over its tick box or its count)
+            note = KIND_NOTES[key] + ("" if key == "obscene" else "\n" + KIND_NOTE_EXTRA)
+            self.kind_tips[label] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap) for w in (tick, count)]
             self.kind_ticks[label] = tick
-        note = OTHER_KINDS_NOTE + " Untick the rest to sort only obscene words."
+        note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
         if not known:
             note += (" Which words are obscene is looked up on Wiktionary once, the next time the program starts "
                      "with the internet.")
@@ -176,10 +180,7 @@ class DealDialog:
         f = self._section("censor")
         ttk.Checkbutton(f, text="Censor obscene words", variable=self.censor_v, takefocus=1).grid(
             row=1, column=0, sticky="w")
-        if self.first:
-            ttk.Label(f, text=CENSOR_NOTE, foreground=PALETTE["muted"]).grid(row=1, column=1, sticky="w", padx=(12, 0))
-        else:                                    # (under it: the page's right-hand column is narrow)
-            ttk.Label(f, text=CENSOR_NOTE, foreground=PALETTE["muted"]).grid(row=2, column=0, sticky="w", padx=(26, 0))
+        ttk.Label(f, text=CENSOR_NOTE, foreground=PALETTE["muted"]).grid(row=1, column=1, sticky="w", padx=(12, 0))
         return f
 
     # ---- the first start, one step at a time ------------------------------------------------------------------

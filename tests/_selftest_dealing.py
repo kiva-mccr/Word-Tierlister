@@ -6,6 +6,7 @@ import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
 import tkinter as tk
 import tierlist as T
+from fonts import font
 from constants import mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"
@@ -103,8 +104,16 @@ bw.filter_var.set("Verbs"); bw.reload(); pump(4); assert list(bw.tree.get_childr
 bw.close(); pump(2)
 
 # ---- the settings page --------------------------------------------------------------------------------------
+font_px = font("body").measure("n")
 d = app.edit_dealing(); pump(4)
 assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {"Nouns", "Verbs", "Adjectives", "Adverbs", "Other", "Obscene words"}
+# what each kind holds is a hover note (over its tick box and its count), wrapped
+tip = d.kind_tips["Other"][0]
+assert "pronouns" in tip.text_fn(None) and "Nouns: names" in d.kind_tips["Nouns"][1].text_fn(None)
+tip.show_at(types.SimpleNamespace(x_root=200, y_root=200, x=5, y=5)); pump(2)
+assert "pronouns" in tip.text and tip._canvas.winfo_reqwidth() < font_px * 50
+tip.hide()
+assert "Point at a kind" in " ".join(str(w.cget("text")) for w in d.sections["kinds"].winfo_children() if w.winfo_class() == "TLabel")
 assert d.censor_v.get()
 d.censor_v.set(False); d.buttons["Apply"].invoke(); pump(4)                    # the censor tick alone: at once, no shuffle
 assert not d.alive() and not s.deal_settings()["censor"] and not card.censored

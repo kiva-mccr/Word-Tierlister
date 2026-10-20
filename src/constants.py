@@ -57,8 +57,18 @@ KINDS = [("noun", "Nouns", 1), ("verb", "Verbs", 2), ("adj", "Adjectives", 4), (
          ("other", "Other", 16)]
 ALL_KINDS = 31
 KIND_OF_POS = {"noun": 1, "verb": 2, "adj": 4, "adjective": 4, "adv": 8, "adverb": 8}
-OTHER_KINDS_NOTE = ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, "
-                    "contractions and the like.")
+# What each tick box of "Which words" holds, shown on hover (ST-6)
+KIND_NOTES = {
+    "noun": "Nouns: names of things, people, places and ideas (table, teacher, happiness).",
+    "verb": "Verbs: doing and being words (run, think, become).",
+    "adj": "Adjectives: words that describe a thing (blue, quick, enormous).",
+    "adv": "Adverbs: words that say how, when or where (quickly, soon, here).",
+    "other": ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, contractions "
+              "and the like (she, under, because, wow, seven, etc., don't)."),
+    "obscene": ("Obscene words: vulgar, offensive or derogatory words and slurs, as Wiktionary labels them, of any "
+                "kind. They come up only while this is ticked."),
+}
+KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of them is ticked."
 
 
 def kind_bits(pos):

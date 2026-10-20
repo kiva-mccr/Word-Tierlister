@@ -336,7 +336,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           start its three parts one at a time (Order, Which words, Obscene words; Back / Next / Done, "Step 1
 #           of 3"); "Obscene words" is one more tick box among the kinds (an obscene word is dealt only while it
 #           is ticked, any other word while one of its kinds is: untick the rest to sort only obscene words);
-#           "Censor obscene words" is a tick box ("smeared, except while the pointer is over them"), and a
+#           "Censor obscene words" is a tick box ("blurred, except on hover": the user's words), and a
 #           censored word is not f***ed but smeared sideways (the user tried blurs, offset copies and smudged
 #           letters, and picked the medium horizontal smear). Tk cannot blur text, so smooth.smear_image draws
 #           the word's shape (a band per letter, stems above for b d k, below for g p y), blurred sideways, as
@@ -358,6 +358,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           of a kind. With everything chosen placed, Place says how many are left out. Measured with a
 #           million words: re-dealing ~3.5 s (worker thread, moving bar), the dialog's counts ~0.4 s. The
 #           first start's steps show once per save (main(): App(ask_dealing=...)). _selftest_dealing.py.
+#           Then (asked for): each kind's tick box says what it holds on hover (constants.KIND_NOTES: a
+#           definition and examples; Other's list moved there from under the boxes).
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the

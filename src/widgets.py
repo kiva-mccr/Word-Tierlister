@@ -2055,6 +2055,7 @@ class Tooltip:
 
         Tooltip(widget, lambda e: "1,234 words")    # text_fn(event) -> text, or None for "nothing here"
         Tooltip(label, text_fn, side="right")        # beside it instead (when something sits below it)
+        Tooltip(tick, text_fn, wrap=360)             # a longer note: wrapped at 360 pixels
 
     text_fn gets the Motion event, so one tooltip can say different things over different parts of a canvas
     (each segment of the progress bar). It looks like the rest of the theme: a rounded card in the faint lilac
@@ -2063,8 +2064,8 @@ class Tooltip:
     """
     DELAY_MS = 350
 
-    def __init__(self, widget, text_fn, font=None, side="below"):
-        self.widget, self.text_fn, self.font, self.side = widget, text_fn, font, side
+    def __init__(self, widget, text_fn, font=None, side="below", wrap=0):
+        self.widget, self.text_fn, self.font, self.side, self.wrap = widget, text_fn, font, side, wrap
         self.win = self._canvas = None
         self._text = ""
         self._job = None
@@ -2114,7 +2115,7 @@ class Tooltip:
         line = f.metrics("linespace") if f else 16
         pad_x, pad_y = max(8, line // 2), max(4, line // 4)
         t = c.create_text(pad_x + 1, pad_y + 1, text=text, font=f, fill=PALETTE["text"], anchor="nw",
-                          justify="left", tags="text")
+                          justify="left", width=self.wrap, tags="text")
         x1, y1, x2, y2 = c.bbox(t)
         w, h = x2 + pad_x + 1, y2 + pad_y + 1
         c.configure(width=w + 1, height=h + 1)
