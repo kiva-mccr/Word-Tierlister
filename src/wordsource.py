@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from constants import kind_bits
+from constants import OFFLINE_ENV, kind_bits
 from obscene import RUDE, decide, label_lines, obscene_in, page_senses, tag_marks
 from problems import SetupError
 
@@ -419,8 +419,6 @@ _FORM_GLOSS = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|c
                          r"inflection|misspelling)\b.*\bof ([^\s,;:()]+)\s*$")
 
 
-OFFLINE_ENV = "WORD_TIERLIST_OFFLINE"   # set (the self-tests do): never ask Wiktionary, as if offline
-
 
 def _fetch_json(url):
     if os.environ.get(OFFLINE_ENV):
@@ -464,8 +462,8 @@ def _page_texts(titles, fetch):
 
 
 def fill_obscene(store, log=print, fetch=None):
-    """Mark the obscene words of a save whose Wiktionary download is gone (obscene.decide: any of a word's meanings
-    rude): the words Wiktionary files under rude categories are read from their pages (50 a request), and their
+    """Mark the obscene words of a save whose Wiktionary download is gone (obscene.decide: most or the first of a
+    word's meanings rude): the words Wiktionary files under rude categories are read from their pages (50 a request), and their
     plural / past tense ... forms from the save's own definitions ("plural of bitch"). Their stored definitions
     get the rude labels in front of the senses they belong to (obscene.label_lines; OB-2 smears those). Needs
     the internet; returns False when it could not (tried again on a later start; the words marked before stay)."""

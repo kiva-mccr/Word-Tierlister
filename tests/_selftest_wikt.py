@@ -82,7 +82,7 @@ kinds = {r[0]: r[1] for r in s.db.execute("SELECT word, kinds FROM words")}
 assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"] == 4 and kinds["the"] == 16, kinds
 assert kinds["don't"] == 16 and kinds["of"] == 16
 assert s.get_meta("kinds_done") == "1"
-assert s.obscene_words() == {"bastard", "bastards", "shit", "bureaucracy", "come"}, s.obscene_words()   # not "gyp"
+assert s.obscene_words() == {"bastard", "bastards", "shit"}, s.obscene_words()   # not "bureaucracy", "come", "gyp"
 assert s.get_meta("obscene_done") == s.OBSCENE_VERSION
 assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Shuffling the queue"]
 T.prepare_queue(s, log=lambda *_: None)
