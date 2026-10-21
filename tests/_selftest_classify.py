@@ -52,7 +52,7 @@ ans = C.read_answer(message([{"word": "box", "meanings": ["clean", "sexual"], "k
                               "note": "rude only\tin slang"},
                              {"word": "penis", "meanings": ["clinical"], "kind": "nonsense", "confidence": 99,
                               "note": ""}]), ["box", "penis", "idiot"])
-assert ans["box"] == ("double", 93, ["clean", "sexual"], "rude only in slang"), ans["box"]
+assert ans["box"] == ("double", 93, ["clean", "sexual"], "rude only in slang", ""), ans["box"]
 assert ans["penis"][1] == 0 and ans["idiot"][1] == 0                        # a bad kind or no answer: to check
 assert all(v[1] == 0 for v in C.read_answer(message([], stop="refusal"), ["box"]).values())
 assert "refusal" in C.read_answer(message([], stop="refusal"), ["box"])["box"][3]
@@ -84,8 +84,9 @@ class FakeBatches:
             if "idiot" in words:                                           # this request fails: sent again later
                 yield NS(custom_id=req["custom_id"], result=NS(type="errored"))
                 continue
+            cheap = req["params"]["model"] == "claude-haiku-5-5"            # (Haiku is unsure of bitch)
             items = [{"word": w, "meanings": ["sexual"], "kind": {"box": "double", "penis": "clinical"}.get(w, "swear"),
-                      "confidence": 60 if w == "bitch" else 95, "note": ""} for w in words]
+                      "confidence": 60 if w == "bitch" and cheap else 95, "note": ""} for w in words]
             yield NS(custom_id=req["custom_id"], result=NS(type="succeeded", message=message(items)))
 
 
@@ -93,19 +94,20 @@ fake = NS(messages=NS(batches=FakeBatches(), create=None, count_tokens=lambda **
 logs = []
 C.time.sleep = lambda s: None
 C.GROUP = 1                                                     # one word a request: only idiot's request fails
-args = ["run", "--db", db, "--no-lists"]
+args = ["run", "--db", db, "--no-lists", "--model", "claude-haiku-5-5"]
 assert C.main(args, client_factory=lambda: fake, log=logs.append, ask=lambda q: "n") == 1
 assert not fake.messages.batches.made and "Nothing sent." in logs                 # asked first; "n" sends nothing
 assert C.main(args, client_factory=lambda: fake, log=logs.append, ask=lambda q: "y") == 0
 out, state, _ = C.paths(db)
 got = C.read_results(out)
 assert got["box"][:2] == ("double", 95) and got["penis"][0] == "clinical" and got["fuck"][0] == "swear"
-assert got["fucking"] == ("swear", 95, [], "form of fuck") and got["bitches"][1] == 60   # forms follow their word
+assert got["fucking"] == ("swear", 95, [], "form of fuck", "claude-haiku-5-5")      # forms follow their word
+assert got["bitches"][1] == 60 and got["box"][4] == "claude-haiku-5-5"
 assert "idiot" not in got and not os.path.exists(state)
 assert any("1 words got no answer" in m for m in logs) and any("1 to check by hand" in m for m in logs), logs
 with open(out, encoding="utf-8") as f:
     lines = f.read().splitlines()
-assert lines[0].startswith("# word") and lines[1].startswith("fuck\tswear\t95")
+assert lines[0].startswith("# word") and lines[1].startswith("fuck\tswear\t95") and lines[1].endswith("\tclaude-haiku-5-5")
 
 # the next run sends only what is left (idiot), keeping the earlier answers
 fake.messages.batches.polls = 0
@@ -115,8 +117,24 @@ C.main(args + ["--yes"], client_factory=lambda: fake, log=logs.append)
 sent = fake.messages.batches.made[f"msgbatch_{before}"]
 assert len(sent) == 1 and "WORD: idiot" in sent[0]["params"]["messages"][0]["content"]
 assert C.read_results(out)["box"][0] == "double"
+
+# --recheck: only the words answered below --review go again, to the stronger model, and their answers replace
+before = len(fake.messages.batches.made)
+fake.messages.batches.polls = 0
+logs.clear()
+C.main(["run", "--db", db, "--no-lists", "--recheck", "--yes"], client_factory=lambda: fake, log=logs.append)
+sent = fake.messages.batches.made[f"msgbatch_{before}"]
+assert [r["params"]["messages"][0]["content"].split("WORD: ")[1].split("\n")[0] for r in sent] == ["bitch"], sent
+assert sent[0]["params"]["model"] == "claude-opus-5-5" and "1 to send again" in logs[0]
+got = C.read_results(out)
+assert got["bitch"][1:2] == (95,) and got["bitch"][4] == "claude-opus-5-5"
+assert got["bitches"][1] == 95 and got["bitches"][4] == "claude-opus-5-5"            # its form follows
+assert got["box"][4] == "claude-haiku-5-5"                                              # sure answers stay
 logs.clear()
 assert C.main(["status", "--db", db], log=logs.append) == 0 and "to check by hand" in logs[0]
+assert any("claude-opus-5-5: 2 words, 0 below" in m for m in logs) and any("claude-haiku-5-5:" in m for m in logs), logs
+assert C.main(["run", "--db", db, "--no-lists", "--recheck", "--yes"], client_factory=lambda: fake,
+              log=logs.append) == 0 and "Nothing to send." in logs                     # all sure now
 logs.clear()
 assert C.main(["estimate", "--db", os.path.join(tmp, "none.db")], log=logs.append) == 1 and "No save" in logs[0]
 logs.clear()

@@ -419,7 +419,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           or double: innocent main meaning, rude slang one) with a confidence 0-100, 20 words a request, through
 #           the Message Batches API (half price). It shows the cost and asks first; resumable (a state file);
 #           writes word_categories.tsv next to the save (word, kind, confidence, meaning kinds, note); below 80
-#           is for checking by hand. Reads the save only. Never run against the real API here (no key):
+#           is for checking by hand. Reads the save only. --recheck (asked for: "run through haiku and then
+#           only the low confidence ones through opus") sends only the words answered below --review again,
+#           replacing their answers; each answer notes its model (a sixth column; status counts by model). Never run against the real API here (no key):
 #           _selftest_classify.py uses a stand-in.
 # [ ] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab: Clean, Double
 #           meaning, Clinical, Crude, Swear word, Sexual, Insult, Slur, Not sure; keys 1-9), answers back into

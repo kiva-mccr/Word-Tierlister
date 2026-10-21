@@ -134,7 +134,9 @@ For developers, `tools/classify_obscene.py` sorts the rude words into kinds with
 clinical, crude, swear word, sexual, insult, slur), judging each meaning, with a confidence for each word; the
 ones it is unsure of are for checking by hand. `estimate` shows which words would go and about what it costs,
 `try word ...` answers a few words at once, `run` sends them all through the Message Batches API (it asks first,
-and picks up where it was if stopped) and writes `word_categories.tsv` next to the save. It needs `pip install
+and picks up where it was if stopped) and writes `word_categories.tsv` next to the save. To save money, run it
+with `--model claude-haiku-5-5` first, then `run --recheck`: only the words answered with less than 80% confidence
+go again, to Opus, and their answers replace Haiku's (the file notes which model answered each word). It needs `pip install
 anthropic` and an Anthropic API key, and only reads the save.
 
 ## Building a program

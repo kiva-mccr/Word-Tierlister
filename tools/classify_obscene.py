@@ -3,11 +3,14 @@
     python tools/classify_obscene.py estimate [--db tierlist.db]    which words would go, and about what it costs
     python tools/classify_obscene.py try fuck box penis              classify a few words now and print the answers
     python tools/classify_obscene.py run [--db tierlist.db]          classify them all (asks first; resumable)
-    python tools/classify_obscene.py status                          how far a run has got
+    python tools/classify_obscene.py status                          how far a run has got (and by which model)
+
+Cheap first, then strong where unsure: run --model claude-haiku-5-5, then run --recheck (Opus, the default) sends
+only the words answered below --review again; their new answers replace the old ones.
 
 The kinds (CATEGORIES): clean, double (an innocent main meaning with a rude slang one), clinical, crude, swear,
 sexual, insult, slur. Every meaning is judged on its own and the word gets a kind and a confidence (0-100); the
-results go to word_categories.tsv next to the save (word, kind, confidence, each meaning's kind, where from, note).
+results go to word_categories.tsv next to the save (word, kind, confidence, each meaning's kind, note, model).
 Words below --review (80) are the ones to check by hand (OB-4).
 
 Which words go (candidates): the ones already marked obscene, any whose stored meanings Wiktionary labels rude,
@@ -199,9 +202,9 @@ def groups(words, size=None):
 
 
 # ---- the answers --------------------------------------------------------------------------------------------
-def read_answer(message, words):
-    """{word: (kind, confidence, [meaning kinds], note)} from one response; words it left out, or a refusal / cut
-    answer, come back with confidence 0 (to be checked by hand)."""
+def read_answer(message, words, model=""):
+    """{word: (kind, confidence, [meaning kinds], note, model)} from one response; words it left out, or a refusal /
+    cut answer, come back with confidence 0 (to be checked by hand)."""
     got = {}
     if getattr(message, "stop_reason", None) == "end_turn":
         text = next((b.text for b in message.content if b.type == "text"), "")
@@ -214,10 +217,10 @@ def read_answer(message, words):
             if w in words and item.get("kind") in CATEGORIES:
                 conf = max(0, min(100, int(item.get("confidence") or 0)))
                 senses = [m for m in item.get("meanings", []) if m in SENSE_CATEGORIES]
-                got[w] = (item["kind"], conf, senses, str(item.get("note", "")).replace("\t", " ").strip())
+                got[w] = (item["kind"], conf, senses, str(item.get("note", "")).replace("\t", " ").strip(), model)
     reason = getattr(message, "stop_reason", None) or "no answer"
     for w in words:
-        got.setdefault(w, ("clean", 0, [], f"not answered ({reason})"))
+        got.setdefault(w, ("clean", 0, [], f"not answered ({reason})", model))
     return got
 
 
@@ -226,19 +229,19 @@ def with_forms(results, forms):
     out = dict(results)
     for form, target in forms.items():
         if target in results:
-            kind, conf, _, _ = results[target]
-            out[form] = (kind, conf, [], f"form of {target}")
+            kind, conf, _, _, model = results[target]
+            out[form] = (kind, conf, [], f"form of {target}", model)
     return out
 
 
 def write_results(path, results, save):
-    """word_categories.tsv: word, kind, confidence, meaning kinds, note; commonest first."""
+    """word_categories.tsv: word, kind, confidence, meaning kinds, note, the model that answered; commonest first."""
     rank = {w: save[w][0] if w in save else 10 ** 9 for w in results}
     with open(path, "w", encoding="utf-8") as f:
-        f.write("# word\tkind\tconfidence\tmeanings\tnote\n")
+        f.write("# word\tkind\tconfidence\tmeanings\tnote\tmodel\n")
         for w in sorted(results, key=lambda x: (rank[x], x)):
-            kind, conf, senses, note = results[w]
-            f.write(f"{w}\t{kind}\t{conf}\t{','.join(senses)}\t{note}\n")
+            kind, conf, senses, note, model = results[w]
+            f.write(f"{w}\t{kind}\t{conf}\t{','.join(senses)}\t{note}\t{model}\n")
 
 
 def read_results(path):
@@ -248,8 +251,8 @@ def read_results(path):
             for line in f:
                 if line.startswith("#") or not line.strip():
                     continue
-                w, kind, conf, senses, note = (line.rstrip("\n").split("\t") + [""] * 5)[:5]
-                out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note)
+                w, kind, conf, senses, note, model = (line.rstrip("\n").split("\t") + [""] * 6)[:6]
+                out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note, model)
     return out
 
 
@@ -284,6 +287,7 @@ def make_client():
 
 def submit(client, word_groups, save, model, state, state_path, log=print):
     """Send the groups as batches (at most 10,000 requests each) and note them in the state file."""
+    state["model"] = model
     start = len(state["requests"])
     for b in range(0, len(word_groups), 10000):
         reqs = []
@@ -298,8 +302,8 @@ def submit(client, word_groups, save, model, state, state_path, log=print):
 
 
 def collect(client, state, state_path, poll=60, log=print):
-    """Wait for every batch to end, then read the answers: {word: (kind, confidence, meanings, note)}."""
-    results = {}
+    """Wait for every batch to end, then read the answers: {word: (kind, confidence, meanings, note, model)}."""
+    results, model = {}, state.get("model", "")
     for bid in state["batches"]:
         while True:
             batch = client.messages.batches.retrieve(bid)
@@ -310,7 +314,7 @@ def collect(client, state, state_path, poll=60, log=print):
             time.sleep(poll)
         for r in client.messages.batches.results(bid):             # (a failed request's words are left out:
             if r.result.type == "succeeded":                       # the next run sends them again)
-                results.update(read_answer(r.result.message, state["requests"].get(r.custom_id, [])))
+                results.update(read_answer(r.result.message, state["requests"].get(r.custom_id, []), model))
     return results
 
 
@@ -335,12 +339,16 @@ def paths(db):
 
 
 def plan(args, log=print):
-    """The words to send this time: candidates not answered yet (all of them with --redo)."""
+    """The words to send this time: candidates not answered yet (all of them with --redo; with --recheck, the ones
+    answered below the --review confidence, to be answered again, by a stronger model, say)."""
     out_path, _, cache = paths(args.db)
     save = read_save(args.db)
     cands, forms = candidates(save, {} if args.no_lists else list_words(cache, log))
     done = {} if args.redo else read_results(out_path)
-    todo = [w for w in cands if w not in done]
+    if args.recheck:
+        todo = [w for w in cands if w in done and done[w][1] < args.review]
+    else:
+        todo = [w for w in cands if w not in done]
     if args.limit:
         todo = todo[: args.limit]
     return save, cands, forms, done, todo
@@ -355,9 +363,14 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
     ap.add_argument("--no-lists", action="store_true", help="leave out the LDNOOBW and HurtLex words")
     ap.add_argument("--limit", type=int, default=0, help="send at most this many words (to try a small run first)")
     ap.add_argument("--redo", action="store_true", help="send again words already answered")
+    ap.add_argument("--recheck", action="store_true",
+                    help="send again only the words answered below the --review confidence (their new answers replace "
+                         "the old): run with a cheap --model first, then --recheck with a stronger one")
     ap.add_argument("--review", type=int, default=REVIEW_BELOW, help="confidence below which a word is to be checked")
     ap.add_argument("--yes", action="store_true", help="do not ask before sending")
     args = ap.parse_args(argv)
+    if args.recheck and args.redo:
+        ap.error("--recheck and --redo do not go together")
     out_path, state_path, _ = paths(args.db)
 
     if args.command == "try":
@@ -368,7 +381,7 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
         client = client_factory()
         for g in groups(words):
             msg = client.messages.create(**request_params(g, save, args.model))
-            for w, (kind, conf, senses, note) in read_answer(msg, g).items():
+            for w, (kind, conf, senses, note, _m) in read_answer(msg, g, args.model).items():
                 log(f"{w:20} {kind:9} {conf:3}  {','.join(senses)}  {note}")
         return 0
 
@@ -377,6 +390,12 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
         low = sum(1 for v in done.values() if v[1] < args.review)
         log(f"{len(done):,} words answered ({low:,} to check by hand); "
             f"{len(state['batches'])} batch(es) still to collect.")
+        by = {}
+        for v in done.values():
+            n, n_low = by.get(v[4] or "?", (0, 0))
+            by[v[4] or "?"] = (n + 1, n_low + (v[1] < args.review))
+        for model, (n, n_low) in sorted(by.items()):
+            log(f"  {model}: {n:,} words, {n_low:,} below {args.review}")
         return 0
 
     if not os.path.exists(args.db):
@@ -388,7 +407,8 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
         for r in reasons:
             sources[r] = sources.get(r, 0) + 1
     log(f"{len(cands):,} words to classify (" + ", ".join(f"{n:,} {r}" for r, n in sorted(sources.items())) +
-        f"), {len(forms):,} forms that follow their word; {len(done):,} already answered, {len(todo):,} to send.")
+        f"), {len(forms):,} forms that follow their word; {len(done):,} already answered, {len(todo):,} to send"
+        + (f" again (answered below {args.review})." if args.recheck else "."))
     client = client_factory() if args.command == "run" else None
     t_in, t_out, cost = estimate(groups(todo), save, args.model, client)
     log(f"About {t_in:,} tokens in and {t_out:,} out with {args.model} at the batch price: about ${cost:,.2f}.")
@@ -396,7 +416,11 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
         return 0
 
     state = load_state(state_path)
-    if not state["batches"]:
+    earlier = bool(state["batches"])
+    if earlier and state.get("model") and state["model"] != args.model:
+        log(f"An earlier run with {state['model']} is still to collect: collecting it first. Run this command again "
+            "afterwards to send what it asks for.")
+    if not earlier:
         if not todo:
             log("Nothing to send.")
         else:
