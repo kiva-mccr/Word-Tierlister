@@ -13,6 +13,7 @@
 
 The plain-language text itself comes from problems.py (no tkinter there).
 """
+import contextlib
 import sys
 import threading
 import time
@@ -39,28 +40,36 @@ def _stderr(text):
         print(text, file=sys.stderr)
 
 
-def show_error(title, message, details=None, parent=None, headline=None):
-    """Show a modal error dialog and wait for it to close (stderr if no window can be made).
-
-    `headline` is the short bold line; `message` the explanation; `details` (optional) the technical
-    text kept behind "Show details" and copied by "Copy details".
-    """
+@contextlib.contextmanager
+def _window_for(parent):
+    """`parent`, or (when None) a hidden, styled window of our own for a dialog, destroyed afterwards."""
     own_root = None
+    if parent is None:
+        own_root = parent = tk.Tk()
+        own_root.withdraw()
+        init_fonts(own_root)
+        apply_ttk_style(own_root)
     try:
-        if parent is None:
-            own_root = parent = tk.Tk()
-            own_root.withdraw()
-            init_fonts(own_root)
-            apply_ttk_style(own_root)
-        _dialog(parent, title, headline or title, message, details)
-    except Exception:
-        _stderr(f"{title}: {headline or ''} {message}\n{details or ''}")
+        yield parent
     finally:
         if own_root is not None:
             try:
                 own_root.destroy()
             except tk.TclError:
                 pass
+
+
+def show_error(title, message, details=None, parent=None, headline=None):
+    """Show a modal error dialog and wait for it to close (stderr if no window can be made).
+
+    `headline` is the short bold line; `message` the explanation; `details` (optional) the technical
+    text kept behind "Show details" and copied by "Copy details".
+    """
+    try:
+        with _window_for(parent) as win:
+            _dialog(win, title, headline or title, message, details)
+    except Exception:
+        _stderr(f"{title}: {headline or ''} {message}\n{details or ''}")
 
 
 def show_message(title, headline, message, parent=None):
@@ -72,24 +81,13 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None, wra
     """A small styled question dialog. Returns True for the `yes` button, False for `no`, Escape or close.
 
     Falls back to False (the safe answer) when no window can be shown."""
-    own_root = None
     answer = {"yes": False}
     try:
-        if parent is None:
-            own_root = parent = tk.Tk()
-            own_root.withdraw()
-            init_fonts(own_root)
-            apply_ttk_style(own_root)
-        _dialog(parent, title, headline, message, None, buttons=((yes, True), (no, False)), answer=answer,
-                wrap_chars=wrap_chars)
+        with _window_for(parent) as win:
+            _dialog(win, title, headline, message, None, buttons=((yes, True), (no, False)), answer=answer,
+                    wrap_chars=wrap_chars)
     except Exception:
         _stderr(f"{title}: {headline} {message}")
-    finally:
-        if own_root is not None:
-            try:
-                own_root.destroy()
-            except tk.TclError:
-                pass
     return answer["yes"]
 
 

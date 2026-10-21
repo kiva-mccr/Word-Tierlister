@@ -34,7 +34,7 @@ ROOT = os.path.dirname(TOOLS)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from constants import OFFLINE_ENV  # noqa: E402
 from definitions import parse_definition  # noqa: E402
-from obscene import on_list  # noqa: E402
+from obscene import FORM_GLOSS, on_list  # noqa: E402
 
 CATEGORIES = ("clean", "double", "clinical", "crude", "swear", "sexual", "insult", "slur")
 SENSE_CATEGORIES = tuple(c for c in CATEGORIES if c != "double")      # (a single meaning is never "double")
@@ -55,8 +55,6 @@ SENSITIVE = re.compile(
     r"prostitut\w*|brothel|pornograph\w*|erotic\w*|homosexual\w*|lesbian\w*|effeminate|excrement|fec(es|al)|"
     r"faec(es|al)|urinat\w*|urine|defecat\w*|flatulen\w*|fart\w*|stupid|idiot\w*|contemptible|despicable|"
     r"worthless|ethnic|racial|person of \w+ descent)\b", re.I)
-FORM_OF = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|comparative|superlative|gerund|inflection|"
-                     r"misspelling|third-person)\b.*\bof ([^\s,;:()]+)\s*$", re.I)
 
 SYSTEM = """You sort English words for a word-ranking game by how rude they are. The player can hide or blur some \
 kinds of rude words, so each word needs a kind, judged meaning by meaning.
@@ -141,7 +139,7 @@ def form_target(text):
     senses = parse_definition(text)
     targets = set()
     for s in senses:
-        m = FORM_OF.search(s["text"])
+        m = FORM_GLOSS.search(s["text"])
         if not m:
             return None
         targets.add(m.group(1).lower().strip(".'\""))

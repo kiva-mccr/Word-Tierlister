@@ -2081,6 +2081,7 @@ class WordCard(SmoothCanvas):
 
     @property
     def typed(self):
+        """What has been typed so far (tests)."""
         return self._typed
 
     def _show_typed(self, sub):
@@ -2203,7 +2204,7 @@ class Tooltip:
         c.tag_raise("text")
 
     def show_at(self, e):
-        """Show now for this event (tests, and keyboard focus later)."""
+        """Show now for this event (tests)."""
         self._last = e
         self._show()
 

@@ -4,8 +4,8 @@ Word Tier List
 ==============
 Tier-list every word in the English dictionary (S / A / B / C / D / F).
 
-Setup (once):
-    pip install wordfreq nltk
+Setup (once; the first start also offers to do it):
+    pip install -r requirements.txt
 Run:
     python tierlist.py
     python tierlist.py --db mylist.db            # use a different save file
@@ -63,13 +63,14 @@ How it works
 * Every key can be changed under Settings > Keyboard shortcuts (the keys above are the defaults).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
-live in src/, the self-tests in tests/, check_release.py and layout_trace.py in tools/, the Claude notes in
-.claude/; the README has the same map with more detail)
+live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, bundle,
+build, classify_obscene), the Claude notes in .claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
-    obscene.py      which words are obscene: a short list chosen by hand (ST-6; no tkinter).
+    obscene.py      which words are obscene: most or the first meaning rude by Wiktionary's labels; a hand list
+                    while offline (ST-6, OB-1; no tkinter).
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
@@ -371,7 +372,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then the user's rule (asked for, "both most and first"): a word is obscene if MOST of its meanings
 #           are rude or its FIRST one is (vulgar, offensive, derogatory / pejorative, a slur; not "sometimes
 #           offensive"); a meaning that is a form of another word ("plural of bitch") is rude when that word is
-#           (obscene.decide, tag_marks, page_marks). A Wiktionary build reads each sense's tags as it goes; a save
+#           (obscene.decide, tag_marks, page_senses). A Wiktionary build reads each sense's tags as it goes; a save
 #           whose download is gone reads the pages of the words in Wiktionary's rude categories (50 a request,
 #           with a percentage and time left) and their forms from its own definitions. Until it can (offline),
 #           the hand-picked list stands in (obscene_done "list"; asked again after 6 hours). Store.OBSCENE_VERSION
@@ -382,6 +383,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the x-height), fading out early in the hover so no pale box shows behind the letters closing in.
 #           For now (asked for: "it kinda worked"): "Obscene words" starts unticked, so the words marked obscene
 #           are left out until telling them apart is worked on again (deal_done 2 re-deals older saves).
+#           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
+#           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] OB-1  Review the flagged obscene words by hand (asked for: "a dev option booted via the terminal", "a new
 #           tab with a simple % progress bar"). Flagging was made loose for it (any meaning rude), then put back
 #           ("too loose, go back"): most or the first meaning rude (obscene.decide; Store.OBSCENE_VERSION 7).
@@ -424,8 +427,6 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
-#           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
-#           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the

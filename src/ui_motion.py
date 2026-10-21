@@ -98,6 +98,7 @@ class Animator:
             anim["done"]()
 
     def is_running(self, key):
+        """True while the animation `key` runs (tests)."""
         return key in self._running
 
     def hurry(self, key, ms):

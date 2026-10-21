@@ -11,6 +11,23 @@ first: `pip install -r requirements.txt`.
 See the docstring at the top of `tierlist.py` for how it works and the full code map; the roadmap
 (UI, start-up and packaging steps, ticked as built) is the comment block right under it.
 
+## Options
+
+All optional; `python tierlist.py --help` explains each.
+
+| Option | What it does |
+|---|---|
+| `--db FILE` | Use this save. Without it, the save you used last (or the one with the most progress) is found by itself. |
+| `--wordlist FILE` | Start a new save from your own list, one word per line, in that order. |
+| `--source wiktionary` / `wordnet` | Where a new save's words come from: all of English Wiktionary (default, about 1M) or WordNet's ~77k base forms. |
+| `--wiktionary-file FILE` | Build from a kaikki.org English download you already have (`.jsonl` or `.jsonl.gz`). |
+| `--include-phrases` | Also take multi-word entries such as "ice cream" (Wiktionary). |
+| `--keep-download` | Keep the 3 GB Wiktionary download after building. |
+| `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
+| `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
+| `--no-install` | Never offer to install missing packages. |
+| `--review-obscene` | (Developers) a tab for checking the words flagged as obscene, one by one. |
+
 ## Folders
 
 ```
@@ -19,12 +36,13 @@ requirements.txt   the Python packages (the program offers to install them itsel
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
-                   bundle.py (the data a built program carries), build.py + hooks/ (build it as a program)
+                   bundle.py (the data a built program carries), build.py + hooks/ (build it as a program),
+                   classify_obscene.py (sorts the rude words into kinds with Claude; developers only)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
 `tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
-replacing the other folders never loses your list. A built program (once packaging lands) keeps it next to
+replacing the other folders never loses your list. A built program (`tools/build.py`) keeps it next to
 the program instead (on macOS next to the .app), or, if that folder is read-only, in your user data folder
 (`%APPDATA%\Word Tier List`, `~/Library/Application Support/Word Tier List`, `~/.local/share/word-tierlist`);
 either way the save you used last is found again, so switching between the two loses nothing.

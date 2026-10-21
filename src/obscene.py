@@ -11,7 +11,7 @@ not. (A looser rule, any meaning rude, was tried and caught far too much.) The u
 
 Each word's meanings come in as marks, in Wiktionary's order: "r" rude, "p" plain, "f:<word>" a form of <word>.
 They are read from the Wiktionary download (tag_marks, for each sense's tags) or from a page's wikitext
-(page_marks, for a save whose download is gone). Until a save has them (offline), the short list chosen by hand
+(page_senses, for a save whose download is gone). Until a save has them (offline), the short list chosen by hand
 below stands in (on_list). No tkinter, no internet.
 """
 
@@ -110,11 +110,9 @@ def page_senses(wikitext):
     return out
 
 
-def page_marks(wikitext):
-    """The marks of a word from its Wiktionary page's wikitext (see page_senses)."""
-    return [mark for mark, _r, _g in page_senses(wikitext)]
-
-
+# a gloss that only says which word this is a form of ("plural of bitch", "present participle of fuck")
+FORM_GLOSS = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|comparative|superlative|gerund|"
+                        r"inflection|misspelling)\b.*\bof ([^\s,;:()]+)\s*$", re.I)
 _TOKEN = re.compile(r"[a-z0-9]+")
 
 

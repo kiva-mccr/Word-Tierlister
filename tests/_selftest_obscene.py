@@ -2,7 +2,12 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """ST-6: which words are flagged as obscene. The user's rule: most of a word's meanings rude, or its first one
 (Wiktionary's labels per meaning), forms of a flagged word too; the hand-picked list stands in until a save has
 the labels."""
-from obscene import decide, label_lines, obscene_in, on_list, page_marks, page_senses, tag_marks
+from obscene import decide, label_lines, obscene_in, on_list, page_senses, tag_marks
+
+
+def page_marks(wikitext):
+    return [mark for mark, _r, _g in page_senses(wikitext)]
+
 
 # ---- the rule -------------------------------------------------------------------------------------------------
 got = decide({"fuck": ["r", "r", "p"], "cunt": ["r"], "slur": ["r", "p", "p"],        # first meaning rude

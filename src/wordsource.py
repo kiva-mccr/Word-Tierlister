@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 
 from constants import OFFLINE_ENV, kind_bits
-from obscene import RUDE, decide, label_lines, obscene_in, page_senses, tag_marks
+from obscene import FORM_GLOSS, RUDE, decide, label_lines, obscene_in, page_senses, tag_marks
 from problems import SetupError
 
 
@@ -415,9 +415,6 @@ OBSCENE_CATEGORIES = ("English vulgarities", "English offensive terms", "English
                       "English ethnic slurs", "English swear words")
 WIKT_API = "https://en.wiktionary.org/w/api.php"
 OBSCENE_RETRY_S = 6 * 3600          # offline: ask Wiktionary again after this long (each start would wait on it)
-_FORM_GLOSS = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|comparative|superlative|gerund|"
-                         r"inflection|misspelling)\b.*\bof ([^\s,;:()]+)\s*$")
-
 
 
 def _fetch_json(url):
@@ -490,7 +487,7 @@ def fill_obscene(store, log=print, fetch=None):
     for word, text in store.db.execute("SELECT word, text FROM defs WHERE text LIKE '% of %'"):
         if word not in marks:                       # (forms of the rude words: "bitches", "fucking")
             lines = [ln.split(") ", 1)[-1] for ln in (text or "").splitlines() if ln.strip()]
-            m = [("f:" + g.group(1)) if (g := _FORM_GLOSS.search(ln)) else "p" for ln in lines]
+            m = [("f:" + g.group(1)) if (g := FORM_GLOSS.search(ln)) else "p" for ln in lines]
             if any(x.startswith("f:") for x in m):
                 marks[word] = m
     store.set_obscene(decide(marks), replace=True)

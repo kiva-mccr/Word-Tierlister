@@ -347,7 +347,6 @@ class App:
         self.duel = DuelCards(pi, self._on_duel, font("pair"), font("body"), animator=self.anim)
         self.duel.grid(row=2, column=0, sticky="nsew")
         self.left_btn, self.right_btn = self.duel.left, self.duel.right
-        self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self._build_review()
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))

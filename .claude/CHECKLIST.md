@@ -7,7 +7,8 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
 - [ ] New code lives in the right layer (README, "Layers") and folder (modules in src/, tests in tests/,
       tierlist.py stays at the top); only UI files import tkinter.
 - [ ] Every new third-party import is in `requirements.txt` AND `deps.PACKAGES` (auto). Optional ones are
-      listed in requirements.txt too (commented), and the code works without them.
+      listed in requirements.txt too (commented), and the code works without them. Packages only tests or
+      tools import (pillow, anthropic) go in requirements.txt commented, never in deps.PACKAGES.
 - [ ] Every new module is in the README file map and the code map in `tierlist.py` (auto for the README).
 - [ ] Anything that can fail for a user raises `SetupError` or uses `errors.show_exception`, with a
       plain-language message (no bare `sys.exit("...")`, no raw tracebacks).

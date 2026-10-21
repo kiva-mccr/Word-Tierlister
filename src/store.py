@@ -8,14 +8,17 @@ Data model (see SCHEMA below)
                  skips counts "don't know / later" presses. qkey is the seeded queue key (lower =
                  comes up sooner); rank is the frequency rank (1 = most common); pen is the
                  compound-word class (0 normal, 1 closed compound, 2 hyphenated / multi-word).
-                 kinds: its parts of speech (constants.KINDS bits; NULL = not known), obscene: 1 if any
-                 sense is vulgar / offensive / derogatory / a slur, out: 1 if "How words are dealt" leaves
+                 kinds: its parts of speech (constants.KINDS bits; NULL = not known), obscene: 1 if most
+                 of its senses, or its first, are vulgar / offensive / derogatory / a slur (obscene.decide;
+                 the review's answers win), out: 1 if "How words are dealt" leaves
                  it out of the queue (ST-6; kept up to date by set_deal).
     comparisons  every answer ever given (winner, loser, tie, kind). Used to avoid repeating a
                  duel and to detect contradictions.
     conflicts    pairs whose answers contradict each other, waiting to be re-judged.
+    swaps        boundary checks that swapped their two words (per boundary; still counted, UI-31).
     anchors      the one reference word per tier used by "compare to anchors".
     defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
+    obscene_review  the developer's answers for flagged words (--review-obscene); they always win.
     history      one JSON row per action, so Undo works and survives restarts.
 
 Conventions
