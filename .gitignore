@@ -227,3 +227,6 @@ __marimo__/
 tierlist.txt
 tierlist.csv
 tierlist.md
+word_categories.tsv
+word_categories.state.json*
+.word_lists/

@@ -403,8 +403,27 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           stored line takes the labels of the page sense sharing most of its words, at least half; a loose
 #           match labels nothing). Store.OBSCENE_VERSION 6 looks again. WordNet / dictionaryapi.dev definitions
 #           carry no such labels, so they are never smeared.
-# [ ] OB-3  Swear words as a choice of their own, apart from obscene words (asked for, later); the review
-#           already records "swear" separately.
+# [x] OB-3  Sort the rude words into kinds with Claude (asked for: "a separate tool that does semantic analysis on
+#           the word and definition ... not available through the UI", "take into account individual
+#           definitions", then "check the ones with low confidence"). No public list covers it: LDNOOBW (403
+#           words, no kinds), HurtLex (8,228 entries in 17 categories, noisy: "idiot" filed under female body
+#           parts) and surge-ai/profanity (could not be reached from here) only feed the candidates.
+#           tools/classify_obscene.py (estimate / try / run / status): candidates are the words marked obscene,
+#           any meaning Wiktionary labels rude, meanings that speak of sex, bodies, excretion or insults
+#           (SENSITIVE), the hand list and the two lists' words in the save; a word that is only a form of a
+#           candidate takes its answer. Claude (claude-opus-5-5, --model to change; low effort; structured
+#           output) judges each meaning (clean, clinical, crude, swear, sexual, insult, slur) and the word (those,
+#           or double: innocent main meaning, rude slang one) with a confidence 0-100, 20 words a request, through
+#           the Message Batches API (half price). It shows the cost and asks first; resumable (a state file);
+#           writes word_categories.tsv next to the save (word, kind, confidence, meaning kinds, note); below 80
+#           is for checking by hand. Reads the save only. Never run against the real API here (no key):
+#           _selftest_classify.py uses a stand-in.
+# [ ] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab: Clean, Double
+#           meaning, Clinical, Crude, Swear word, Sexual, Insult, Slur, Not sure; keys 1-9), answers back into
+#           the list. Then the list goes inside the program, out of sight.
+# [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
+#           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
+#           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing

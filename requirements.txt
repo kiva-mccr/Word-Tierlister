@@ -7,4 +7,7 @@ nltk
 # Pillow is optional too: only the tests use it, to save screenshots (they skip it if missing)
 # pillow
 
+# The anthropic package is only for a developer's tool (tools/classify_obscene.py), never the program
+# anthropic
+
 # tkinter is also needed but comes with Python, not pip. On Debian/Ubuntu: sudo apt install python3-tk

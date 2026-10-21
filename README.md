@@ -60,6 +60,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
+| `tools/classify_obscene.py` | Sorts the rude words into kinds with Claude, meaning by meaning, with a confidence (OB-3; developers only, not part of the program): `estimate`, `try`, `run`, `status`; writes `word_categories.tsv` next to the save. |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
@@ -110,6 +111,13 @@ With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, der
 inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
 internet; until then a short list chosen by hand in `src/obscene.py` stands in).
+
+For developers, `tools/classify_obscene.py` sorts the rude words into kinds with Claude (clean, double meaning,
+clinical, crude, swear word, sexual, insult, slur), judging each meaning, with a confidence for each word; the
+ones it is unsure of are for checking by hand. `estimate` shows which words would go and about what it costs,
+`try word ...` answers a few words at once, `run` sends them all through the Message Batches API (it asks first,
+and picks up where it was if stopped) and writes `word_categories.tsv` next to the save. It needs `pip install
+anthropic` and an Anthropic API key, and only reads the save.
 
 ## Building a program
 
