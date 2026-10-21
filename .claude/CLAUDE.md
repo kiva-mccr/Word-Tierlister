@@ -127,8 +127,10 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   (`--review-obscene`; answers in table obscene_review, always win; obscene_review.txt to hand over).
   OB-2 done: rude senses smeared in definition panes (widgets.fill_definitions; labels in the stored text).
   OB-3 done: tools/classify_obscene.py (Claude, Batches API, per-meaning kinds + confidence; never run against
-  the real API here: no key). Next OB-4 (review low-confidence words, 9 kinds), OB-5 (kinds in How words are
-  dealt; defaults: swear, crude, clinical, double, insult ticked; sexual, slur not). Mock-ups first.
+  the real API here: no key). Next OB-4 (review low-confidence words, 9 kinds; only to_check's: unsure and a 25%+
+  second choice that changes the outcome), OB-5 (kinds in How words are dealt; defaults: swear, crude, clinical,
+  double, insult ticked; sexual, slur not; double words never smeared as words, only their rude meanings).
+  Mock-ups first. The user's run: 20,643 words (Haiku, then Opus --recheck and --second), 1,635 to check.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).
 - A read-only save file's dialog could not be verified (the test machine ran as root).

@@ -125,24 +125,29 @@ SCHEMA_SECOND = {
 }
 OUT_PER_WORD_SECOND = 50    # its answer is short
 
-# What a kind leads to with the default choices (OB-5: Sexual and Slur left out, the other rude kinds shown and
-# smeared while censoring, clean words shown as they are). A doubt between two kinds with the same outcome changes
-# nothing, so such a word need not be checked by hand.
-OUTCOME = {"clean": "shown", "sexual": "left out", "slur": "left out"}
+# What a kind leads to with the default choices (OB-5: Sexual and Slur left out; Crude, Swear, Insult and Clinical
+# words smeared while censoring; clean and Double meaning words shown as they are, a double word's rude meanings
+# smeared only inside its definitions: the user's choice, "last" and "john" are double). A doubt between two kinds
+# with the same outcome changes nothing, so such a word need not be checked by hand; nor one whose second choice
+# is unlikely (below SECOND_MIN, the user's choice).
+OUTCOME = {"clean": "shown", "double": "shown", "sexual": "left out", "slur": "left out"}
+SECOND_MIN = 25
 
 
 def outcome(kind):
     return OUTCOME.get(kind, "smeared")
 
 
-def to_check(answer, below):
+def to_check(answer, below, second_min=SECOND_MIN):
     """True if a word's answer is for checking by hand: unsure (confidence below `below`) and either no second
-    choice asked yet, or a second choice that would lead somewhere else."""
+    choice asked yet, or a second choice at least `second_min`% likely that would lead somewhere else."""
     kind, conf, _s, _n, _m, second = answer
     if conf >= below:
         return False
-    other = second.split(":")[0]
-    return not other or outcome(other) != outcome(kind)
+    if not second:
+        return True
+    other, chance = second.split(":")
+    return int(chance) >= second_min and outcome(other) != outcome(kind)
 
 
 # ---- which words go -------------------------------------------------------------------------------------------
