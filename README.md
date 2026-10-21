@@ -103,7 +103,9 @@ Wiktionary (loose on purpose: "box" and "bureaucracy" are flagged too), and its 
 Going through the flagged words by hand decides: `python tierlist.py --review-obscene` adds a "Review obscene
 words" tab (developers; it is not shown otherwise) with each flagged word, commonest first, its definitions, and
 Not obscene / Obscene / Swear word (keys 1, 2, 3; Backspace goes back one), a percentage bar, and "Save answers to
-a file" (`obscene_review.txt` next to the save). Your answers are kept in the save and always win. A save from before this learns each word's kinds from its stored definitions,
+a file" (`obscene_review.txt` next to the save). Your answers are kept in the save and always win.
+With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, derogatory or a slur is also smeared
+inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
 internet; until then a short list chosen by hand in `src/obscene.py` stands in).
 

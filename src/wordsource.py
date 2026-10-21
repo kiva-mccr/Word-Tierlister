@@ -24,7 +24,7 @@ import urllib.parse
 import urllib.request
 
 from constants import kind_bits
-from obscene import decide, obscene_in, page_marks, tag_marks
+from obscene import RUDE, decide, label_lines, obscene_in, page_senses, tag_marks
 from problems import SetupError
 
 
@@ -170,14 +170,18 @@ def _summarize(entry):
         if not glosses:
             continue
         n += 1
-        marks.append(tag_marks(s))
+        mark = tag_marks(s)
+        marks.append(mark)
         if not (s.get("form_of") or s.get("alt_of")):
             lemma = True
         dead = set(s.get("tags", [])) & DEAD_TAGS
         if not dead:
             live = True
         if len(lines) < 4:
-            label = f"({', '.join(sorted(dead))}) " if dead else ""
+            # its labels as the drawer shows them: rude ones first (a censored pane smears that sense, OB-2)
+            rude = [t.replace("-", " ") for t in s.get("tags", []) if t.replace("-", " ") in RUDE] if mark == "r" else []
+            shown = rude + sorted(dead)
+            label = f"({', '.join(shown)}) " if shown else ""
             lines.append(f"• ({pos}) {label}{str(glosses[-1])[:220]}")
     return n, lemma, live, "\n".join(lines), " ".join(m.replace(" ", "_") for m in marks)
 
@@ -460,9 +464,10 @@ def _page_texts(titles, fetch):
 
 
 def fill_obscene(store, log=print, fetch=None):
-    """Mark the obscene words of a save whose Wiktionary download is gone (obscene.decide: most or the first of a
-    word's meanings rude): the words Wiktionary files under rude categories are read from their pages (50 a
-    request), and their plural / past tense ... forms from the save's own definitions ("plural of bitch"). Needs
+    """Mark the obscene words of a save whose Wiktionary download is gone (obscene.decide: any of a word's meanings
+    rude): the words Wiktionary files under rude categories are read from their pages (50 a request), and their
+    plural / past tense ... forms from the save's own definitions ("plural of bitch"). Their stored definitions
+    get the rude labels in front of the senses they belong to (obscene.label_lines; OB-2 smears those). Needs
     the internet; returns False when it could not (tried again on a later start; the words marked before stay)."""
     fetch = fetch or _fetch_json
     have = {r[0] for r in store.db.execute("SELECT word FROM words")}
@@ -476,7 +481,11 @@ def fill_obscene(store, log=print, fetch=None):
         for i in range(0, len(cands), 50):
             log(f"  reading their meanings: {i:,} of {len(cands):,} words ({100 * i // max(1, len(cands))}%)")
             for title, text in _page_texts(cands[i:i + 50], fetch).items():
-                marks[title] = page_marks(text)
+                senses = page_senses(text)
+                marks[title] = [m for m, _r, _g in senses]
+                labelled = label_lines(store.get_def(title), senses)     # (OB-2: its rude senses labelled)
+                if labelled:
+                    store.set_def(title, labelled)
     except (OSError, ValueError, http.client.HTTPException) as exc:
         log(f"  could not reach Wiktionary ({exc}); trying again next time.")
         return False

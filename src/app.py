@@ -1509,7 +1509,8 @@ class App:
             self.def_words = words
         if not self.show_defs:
             return
-        self.def_frame.show_words(self.def_words, self.get_def, self.shown)
+        self.def_frame.show_words(self.def_words, self.get_def, self.shown,
+                                  censor=self.mode != "review" and self.store.deal_settings()["censor"])
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""

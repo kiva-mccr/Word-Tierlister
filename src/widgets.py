@@ -49,7 +49,7 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
         base = box[1] + float(c.tk.call("font", "metrics", opts["font"], "-ascent"))
         c.create_rectangle(box[0], base - SMEAR_BODY * em, box[2], base - 0.02 * em, outline="",
                            fill=lerp_color(paper, col, band), tags=tags)
-    steps = max(1, int(2 * half / 1.5))
+    steps = max(4, int(2 * half))              # (a pixel apart at most: wider gaps show as combs on small text)
     for k in range(steps + 1):
         c.create_text(x - half + 2 * half * k / steps, y, fill=col, tags=tags, **opts)
     room = int(half) + 3
@@ -1284,6 +1284,77 @@ class Toast(SmoothCanvas):
         self._anim.run(self._key, ms, lambda p: self._paint(a + (b - a) * p), done)
 
 
+def definition_tags(t, body):
+    """The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of
+    speech and examples in italics, senses indented."""
+    italic = (body.cget("family"), body.cget("size"), "italic")   # follows the body size
+    t.tag_configure("num", foreground=PALETTE["muted"])
+    t.tag_configure("pos", foreground=PALETTE["muted"], font=italic)
+    t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
+    t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26, font=italic)
+    t.tag_configure("wait", foreground=PALETTE["muted"])
+
+
+def fill_definitions(t, entries, body, censor=False, animator=None):
+    """Fill the definition pane `t` (a tk.Text) with [(heading, definition text or None while it is being looked
+    up)]: the heading in bold, then each sense numbered, its part of speech, its text and example. `censor`
+    (OB-2): a sense Wiktionary labels rude (vulgar, offensive, derogatory, a slur) shows its label, and its text
+    smeared sideways like a censored word, un-smearing under the pointer."""
+    from definitions import parse_definition
+    for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
+        c.destroy()
+    t._smears = []
+    definition_tags(t, body)
+    t.config(state="normal")
+    t.delete("1.0", "end")
+    for i, (heading, text) in enumerate(entries):
+        if i:
+            t.insert("end", "\n")
+        t.insert("end", heading + "\n", "head")
+        if text is None:
+            t.insert("end", "Looking up definition...\n", "wait")
+            continue
+        for sense in parse_definition(text):
+            prefix = ""
+            if sense["num"]:
+                t.insert("end", sense["num"] + ".  ", ("num", "sense"))
+                prefix += sense["num"] + ".  "
+            if sense["pos"]:
+                t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
+                prefix += sense["pos"] + "  "
+            if censor and sense["rude"]:
+                label = "(" + ", ".join(sense["labels"]) + ") "
+                gloss = sense["text"][sense["text"].index(")") + 1:].strip()
+                t.insert("end", label, ("pos", "sense"))
+                c = _smeared_text(t, gloss, body, animator, body.measure(prefix + label))
+                t.window_create("end", window=c, align="top")
+                t.insert("end", "\n", "sense")
+                t._smears.append(c)
+            else:
+                t.insert("end", sense["text"] + "\n", "sense")
+            if sense["example"]:
+                t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
+    t.config(state="disabled")
+
+
+def _smeared_text(t, text, body, animator, used):
+    """A little canvas inside the pane `t` with `text` smeared (smear_items), wrapped to the room left on its
+    line (`used` pixels are taken), un-smearing while the pointer is over it."""
+    bg = t.cget("bg")
+    pad = int(t.cget("padx") or 0)
+    room = (t.winfo_width() if t.winfo_ismapped() else int(t.cget("width")) * body.measure("0")) - 2 * pad - 30
+    width = max(body.measure("n" * 12), room - used)
+    c = tk.Canvas(t, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
+    item = c.create_text(0, 0, text=text, font=body, width=width, anchor="nw", fill=PALETTE["text"], tags="gloss")
+    x0, y0, x1, y1 = c.bbox(item)
+    c.configure(width=x1 + 1, height=y1 + 1)
+    smear = c.unsmear = Unsmear(c, "smear")
+    smear.place(item, text, PALETTE["text"], bg)
+    c.bind("<Enter>", lambda e: smear.hover(True, animator))
+    c.bind("<Leave>", lambda e: smear.hover(False, animator))
+    return c
+
+
 class DefinitionDrawer(tk.Frame):
     """The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold
     with its senses numbered, the part of speech in italics and examples muted.
@@ -1309,40 +1380,15 @@ class DefinitionDrawer(tk.Frame):
         self.text.pack(fill="x")
         t = self.text
         t.tag_configure("head", font=head, spacing1=2, spacing3=4)
-        t.tag_configure("num", foreground=PALETTE["muted"])
-        t.tag_configure("pos", foreground=PALETTE["muted"])
-        t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
-        t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26)
-        t.tag_configure("wait", foreground=PALETTE["muted"])
+        definition_tags(t, body)
         self._shown = False
 
-    def show_words(self, words, get_def, name=None):
+    def show_words(self, words, get_def, name=None, censor=False):
         """Fill the pane: for each word, its name (name(word): what to call it, the masked text for a censored
-        word) and its senses (get_def(word) -> text, or None while it is still being looked up)."""
-        from definitions import parse_definition
-        t = self.text
-        italic = (self._body.cget("family"), self._body.cget("size"), "italic")   # follows the body size
-        t.tag_configure("pos", font=italic)
-        t.tag_configure("ex", font=italic)
-        t.config(state="normal")
-        t.delete("1.0", "end")
-        for i, w in enumerate(words):
-            if i:
-                t.insert("end", "\n")
-            t.insert("end", (name(w) if name else w) + "\n", "head")
-            text = get_def(w)
-            if text is None:
-                t.insert("end", "Looking up definition...\n", "wait")
-                continue
-            for sense in parse_definition(text):
-                if sense["num"]:
-                    t.insert("end", sense["num"] + ".  ", ("num", "sense"))
-                if sense["pos"]:
-                    t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
-                t.insert("end", sense["text"] + "\n", "sense")
-                if sense["example"]:
-                    t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
-        t.config(state="disabled")
+        word) and its senses (get_def(word) -> text, or None while it is still being looked up). `censor`: the
+        senses Wiktionary labels rude are smeared until hovered (OB-2)."""
+        fill_definitions(self.text, [(name(w) if name else w, get_def(w)) for w in words], self._body,
+                         censor=censor, animator=self._anim)
 
     @property
     def is_open(self):

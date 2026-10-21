@@ -392,8 +392,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           a file (obscene_review.txt next to the save: word<Tab>answer, commonest first). The answers live in
 #           the save (table obscene_review) and win over every later finding (Store.set_obscene re-applies them);
 #           "swear" counts as obscene until OB-3. _selftest_review.py.
-# [ ] OB-2  Censor the obscene meanings inside definitions (asked for; not designed yet: what is shown in their
-#           place, whether by Wiktionary's labels or by hand, and where: the drawer, Browse's pane).
+# [x] OB-2  Censor the obscene meanings inside definitions (asked for: "only when Censor obscene words is on, by
+#           Wiktionary labels, and the smear"). In the definitions drawer and Browse's pane (both now filled by
+#           widgets.fill_definitions, one sense a line: the Wiktionary build's lines used to run together into one
+#           paragraph), a sense labelled vulgar / offensive / derogatory / a slur (not "sometimes offensive")
+#           shows its label and its text smeared like a censored word (a small canvas in the text, smear_items),
+#           un-smearing under the pointer. The review tab never censors. The labels: a new Wiktionary build keeps
+#           them in the stored definition ("\u2022 (noun) (vulgar) ...", as "(obsolete)" already was); an older save
+#           gets them from the same Wiktionary pages the flagging reads (obscene.page_senses, label_lines: each
+#           stored line takes the labels of the page sense sharing most of its words, at least half; a loose
+#           match labels nothing). Store.OBSCENE_VERSION 6 looks again. WordNet / dictionaryapi.dev definitions
+#           carry no such labels, so they are never smeared.
 # [ ] OB-3  Swear words as a choice of their own, apart from obscene words (asked for, later); the review
 #           already records "swear" separately.
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()

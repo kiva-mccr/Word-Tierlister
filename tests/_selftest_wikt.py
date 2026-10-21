@@ -72,6 +72,8 @@ assert words.index("zymolytic") < words.index("zzzform")
 d = s.get_def("run")
 assert "(verb) to move fast" in d and "(noun) an act of running" in d, d
 assert "(obsolete)" in s.get_def("qwertyish")
+assert "\u2022 (noun) (vulgar, derogatory) a mean person" in s.get_def("bastard")    # OB-2: rude senses labelled
+assert "(derogatory) excessive red tape" in s.get_def("bureaucracy") and "(offensive" not in s.get_def("gyp")
 assert s.get_meta("source") == "wiktionary" and s.get_meta("wk_done") == "0"
 assert not s.db.execute("SELECT name FROM sqlite_master WHERE name='wk'").fetchone()
 assert s.stats()["total"] == n == len(words)

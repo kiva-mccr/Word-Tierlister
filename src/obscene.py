@@ -37,7 +37,7 @@ def decide(marks):
     return obscene
 
 
-def _rude_labels(labels):
+def rude_labels(labels):
     """True if a list of labels says rude ("vulgar", "derogatory"), not hedged ("sometimes", "offensive")."""
     hedge = False
     for lab in (x.strip().lower().replace("_", " ") for x in labels):
@@ -67,29 +67,81 @@ _FORM_NAMES = ("alt form", "altform", "alt sp", "alt-sp", "alternative spelling"
                "standard spelling", "nonstandard spelling", "misspelling", "abbreviation", "clipping", "short for")
 
 
-def page_marks(wikitext):
-    """The marks of a word from its Wiktionary page's wikitext: each sense line ("# ...") of its English section,
-    rude by its {{lb|en|...}} labels, or a form of another word ({{plural of|en|bitch}}, {{en-past of|fuck}})."""
+_TEXT_TEMPLATES = {"l", "m", "ll", "w", "link", "mention", "taxlink", "vern", "gloss", "gl", "n-g", "ng",
+                   "non-gloss", "non-gloss definition", "q", "qualifier", "i", "sense", "s"}
+_LINK = re.compile(r"\[\[(?:[^\]|]*\|)?([^\]]*)\]\]")
+_MARKUP = re.compile(r"<ref[^>]*>.*?</ref>|<[^>]+>|'{2,}", re.S)
+
+
+def page_senses(wikitext):
+    """Each sense line ("# ...") of a Wiktionary page's English section, in order: (mark, its rude labels, its gloss
+    as plain text). The mark is "r" by its {{lb|en|...}} labels, "f:<word>" for a form of another word
+    ({{plural of|en|bitch}}, {{en-past of|fuck}}), else "p"."""
     m = _SECTION.search(wikitext or "")
     if not m:
         return []
-    marks = []
+    out = []
     for line in _SENSE.findall(m.group(1)):
-        mark = "p"
-        for t in _TEMPLATE.findall(line):
-            parts = [x.strip() for x in t.split("|")]
+        mark, rude = "p", []
+
+        def text_of(t):
+            nonlocal mark, rude
+            parts = [x.strip() for x in t.group(1).split("|")]
             name = parts[0].lower()
             args = [x for x in parts[1:] if "=" not in x]
             if name in ("lb", "lbl", "label") and args[:1] == ["en"]:
-                if _rude_labels(args[1:]):
+                if rude_labels(args[1:]):
                     mark = "r"
-                    break
-            elif name.endswith(" of") or name in _FORM_NAMES:
+                    rude = [a.replace("_", " ") for a in args[1:] if a.lower().replace("_", " ").split()[-1:] and
+                            a.lower().replace("_", " ").split()[-1] in RUDE]
+                return ""
+            if name.endswith(" of") or name in _FORM_NAMES:
                 target = args[0] if name.startswith("en-") else (args[1] if args[:1] == ["en"] and len(args) > 1 else None)
                 if target and mark == "p":
                     mark = "f:" + target
-        marks.append(mark)
-    return marks
+                return f"{name} {target}" if target else ""
+            if name in _TEXT_TEMPLATES and args:
+                return args[-1]
+            return ""
+        gloss = _TEMPLATE.sub(text_of, line)
+        gloss = _MARKUP.sub("", _LINK.sub(lambda g: g.group(1), gloss))
+        out.append((mark, rude, " ".join(gloss.split())))
+    return out
+
+
+def page_marks(wikitext):
+    """The marks of a word from its Wiktionary page's wikitext (see page_senses)."""
+    return [mark for mark, _r, _g in page_senses(wikitext)]
+
+
+_TOKEN = re.compile(r"[a-z0-9]+")
+
+
+def label_lines(text, senses, cutoff=0.5):
+    """A stored definition (the Wiktionary build's "\u2022 (noun) gloss" lines) with Wiktionary's rude labels put
+    in front of the senses they belong to: each line goes with the page sense whose gloss shares most of its
+    words (at least `cutoff` of them, so a loose match labels nothing). Lines already labelled rude stay as
+    they are. Returns the new text, or None if nothing changed."""
+    page = [(set(_TOKEN.findall(g.lower())), rude) for mark, rude, g in senses if mark == "r" and rude]
+    if not page:
+        return None
+    out, changed = [], False
+    for line in (text or "").splitlines():
+        m = re.match(r"^(\s*\u2022\s*(?:\([^)]*\)\s*)?)(?:\(([^()]*)\)\s*)?(.*)$", line)
+        if not m or not m.group(3):
+            out.append(line)
+            continue
+        head, labels, gloss = m.group(1), m.group(2), m.group(3)
+        have = [x.strip() for x in labels.split(",")] if labels else []
+        words = set(_TOKEN.findall(gloss.lower()))
+        best = max(page, key=lambda p: len(words & p[0]) / max(1, len(words | p[0])))
+        score = len(words & best[0]) / max(1, len(words | best[0]))
+        if words and score >= cutoff and not rude_labels(have):
+            have = list(best[1]) + have
+            line = f"{head}({', '.join(have)}) {gloss}"
+            changed = True
+        out.append(line)
+    return "\n".join(out) if changed else None
 
 
 # ---- the short list chosen by hand: used until a save has Wiktionary's labels (offline) ------------------------

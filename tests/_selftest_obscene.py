@@ -2,7 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """ST-6: which words are flagged as obscene. The user's (loose) rule: any of a word's meanings rude by Wiktionary's
 labels, forms of a flagged word too (the review by hand then decides); the hand-picked list stands in until a
 save has the labels."""
-from obscene import decide, obscene_in, on_list, page_marks, tag_marks
+from obscene import decide, label_lines, obscene_in, on_list, page_marks, page_senses, tag_marks
 
 # ---- the rule -------------------------------------------------------------------------------------------------
 got = decide({"fuck": ["r", "r", "p"], "cunt": ["r"], "bitch": ["p", "r", "r"],
@@ -41,6 +41,19 @@ assert page_marks(forms) == ["f:bitch", "f:bitch"]
 assert page_marks("==German==\n# {{lb|de|vulgar}} x\n") == [] and page_marks("") == []
 assert page_marks("==English==\n# {{lb|en|pejorative}} red tape\n") == ["r"]
 assert page_marks("==English==\n# {{lb|en|mildly vulgar}} x\n# {{lb|en|potentially|offensive}} y\n") == ["p", "p"]
+# OB-2: the senses' glosses as plain text, and the rude labels put on the stored definition's matching lines
+senses = page_senses("==English==\n# A [[container]] with flat sides.\n# {{lb|en|vulgar|slang}} The [[vagina|vagina]]"
+                     "; also {{l|en|a woman}} considered sexually.<ref>x</ref>\n# {{lb|en|sometimes|offensive}} To hit.\n")
+assert senses[0] == ("p", [], "A container with flat sides.")
+assert senses[1] == ("r", ["vulgar"], "The vagina; also a woman considered sexually."), senses[1]
+assert senses[2][0] == "p"
+stored = ("\u2022 (noun) A box: a container with flat sides.\n\u2022 (noun) The vagina; also, a woman considered "
+          "sexually.\n\u2022 (verb) To hit someone.")
+assert label_lines(stored, senses).splitlines() == ["\u2022 (noun) A box: a container with flat sides.",
+    "\u2022 (noun) (vulgar) The vagina; also, a woman considered sexually.", "\u2022 (verb) To hit someone."]
+assert label_lines(stored, senses[:1]) is None and label_lines(None, senses) is None      # nothing rude / no text
+assert label_lines("\u2022 (noun) Something else entirely.", senses) is None               # a loose match labels nothing
+assert label_lines(label_lines(stored, senses), senses) is None                            # (already labelled)
 
 # ---- the hand-picked list (until the labels are in) --------------------------------------------------------
 for w in ("fuck", "motherfuckers", "mother-fucker", "bullshit", "dipshit", "bitch", "bitchy", "bitches", "bitch's",

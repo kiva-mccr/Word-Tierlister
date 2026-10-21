@@ -12,22 +12,35 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from obscene import rude_labels
+
 
 # --------------------------------------------------------------------------
 # Definitions (WordNet offline, dictionaryapi.dev online fallback, cached)
 # --------------------------------------------------------------------------
 POS_NAMES = {"n": "noun", "v": "verb", "a": "adj", "s": "adj", "r": "adv"}
 _SENSE = re.compile(r"^\s*(\d+)\.\s*(?:\(([^)]*)\)\s*)?(.*)$")
+_BULLET = re.compile(r"^\s*\u2022\s*(?:\(([^)]*)\)\s*)?(.*)$")          # the Wiktionary build's "• (noun) text"
+_LABELS = re.compile(r"^\(([^()]*)\)\s*")                                # "(vulgar, slang) text"
 _EXAMPLE = re.compile(r'^\s*e\.g\.\s*"?(.*?)"?\s*$')
+
+
+def _sense(num, pos, text, bullet=False):
+    """One sense: its labels are the parenthesis it starts with ("(vulgar, slang) ..."); `rude` if they say so
+    (obscene: vulgar, offensive, derogatory, a slur, not hedged), so a censored pane can smear it (OB-2)."""
+    m = _LABELS.match(text)
+    labels = [x.strip() for x in m.group(1).split(",")] if m else []
+    return {"num": num, "pos": pos, "text": text, "example": None, "labels": labels,
+            "rude": rude_labels(labels), "bullet": bullet}
 
 
 def parse_definition(text):
     """Split stored definition text into senses for display (UI-12):
-    [{"num": "1", "pos": "noun", "text": "...", "example": "..." or None}, ...].
+    [{"num": "1", "pos": "noun", "text": "...", "example": "..." or None, "labels": [...], "rude": bool}, ...].
 
-    Understands the format written by _wordnet / _online ('1. (noun) text' lines, each optionally followed
-    by an indented 'e.g. "..."' line). Anything else becomes one sense with no number or part of speech,
-    so odd or old cached text still shows.
+    Understands the formats written by _wordnet / _online ('1. (noun) text' lines, each optionally followed
+    by an indented 'e.g. "..."' line) and by the Wiktionary build ('\u2022 (noun) (vulgar) text' lines, one sense
+    each). Anything else becomes one sense with no number or part of speech, so odd or old cached text still shows.
     """
     senses = []
     for line in (text or "").splitlines():
@@ -37,13 +50,15 @@ def parse_definition(text):
         if ex and senses and senses[-1]["example"] is None:
             senses[-1]["example"] = ex.group(1)
             continue
-        m = _SENSE.match(line)
+        m, b = _SENSE.match(line), _BULLET.match(line)
         if m:
-            senses.append({"num": m.group(1), "pos": m.group(2) or "", "text": m.group(3).strip(), "example": None})
-        elif senses and not senses[-1]["num"]:
+            senses.append(_sense(m.group(1), m.group(2) or "", m.group(3).strip()))
+        elif b:
+            senses.append(_sense("", b.group(1) or "", b.group(2).strip(), bullet=True))
+        elif senses and not senses[-1]["num"] and not senses[-1]["bullet"]:
             senses[-1]["text"] += " " + line.strip()
         else:
-            senses.append({"num": "", "pos": "", "text": line.strip(), "example": None})
+            senses.append(_sense("", "", line.strip()))
     return senses
 
 

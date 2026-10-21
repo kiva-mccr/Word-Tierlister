@@ -23,7 +23,7 @@ from smooth import arrow_image
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
 from ui_motion import lerp_color
-from widgets import ChoiceButton, RoundButton, Toast, refresh_widgets
+from widgets import ChoiceButton, RoundButton, Toast, fill_definitions, refresh_widgets
 
 
 class Browser:
@@ -529,12 +529,10 @@ class Browser:
     def render_def(self):
         """Fill the definition pane for the selected word (shows 'Looking up...' until the lookup finishes)."""
         w = self.current
-        self.def_text.config(state="normal")
-        self.def_text.delete("1.0", "end")
-        if w:
-            self.def_text.insert("end", w + "\n", "head")
-            self.def_text.insert("end", self.app.get_def(w) or "Looking up definition...")
-        self.def_text.config(state="disabled")
+        # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2); the
+        # word itself is shown whole here (you picked it)
+        fill_definitions(self.def_text, [(w, self.app.get_def(w))] if w else [], self.f_body,
+                         censor=self.app.store.deal_settings()["censor"], animator=self.app.anim)
 
     def move(self, tier):
         """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's

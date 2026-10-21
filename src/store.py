@@ -318,7 +318,8 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    OBSCENE_VERSION = "5"   # bumped when what counts as obscene changes (5: any meaning rude), to look again
+    OBSCENE_VERSION = "6"   # bumped when what counts as obscene changes (5: any meaning rude; 6: and label the
+                            # rude senses in the stored definitions, OB-2), to look again
     REVIEW = ("not", "obscene", "swear")     # the answers of the review (--review-obscene); "swear" counts as obscene
 
     def set_obscene(self, words, replace=False):

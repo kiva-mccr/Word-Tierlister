@@ -308,7 +308,7 @@ assert old.get_meta("obscene_done") == "list" and old.obscene_words() == {"bitch
 for k in ("kinds_done", "obscene_done", "obscene_tried", "deal_done"):
     old.db.execute("DELETE FROM meta WHERE key=?", (k,))
 old.db.execute("UPDATE words SET kinds=NULL, obscene=0"); old.db.commit()
-old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running"); old.set_def("bitch", "1. (noun) a female dog")
+old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running"); old.set_def("bitch", "\u2022 (noun) A female dog.\n\u2022 (noun) A woman.")
 old.set_def("bitches", "\u2022 (noun) plural of bitch\n\u2022 (verb) third-person singular simple present indicative of bitch")
 plan = W.queue_steps(old)
 assert plan == ["Sorting words into kinds", "Finding obscene words"], plan
@@ -338,6 +338,7 @@ assert [next(i for i, st in enumerate(stages) if st.startswith(n)) for n in plan
 assert old.get_word("run")["kinds"] == 3 and old.get_word("bitch")["kinds"] == 1 and old.get_word("zorp")["kinds"] == 16
 assert old.obscene_words() == {"bitch", "bitches", "shit", "come", "bureaucracy"}, old.obscene_words()   # any meaning
 assert old.get_meta("obscene_done") == old.OBSCENE_VERSION and W.queue_steps(old) == []
+assert old.get_def("bitch") == "\u2022 (noun) A female dog.\n\u2022 (noun) (vulgar, derogatory) A woman."   # OB-2
 assert any("(0%)" in l for l in lines)                          # (a real percentage: the progress window's time left)
 # offline later: nothing changes; a save that only had the stand-in list asks again after a while
 old.set_meta("obscene_done", "list"); old.set_meta("obscene_tried", time.time())

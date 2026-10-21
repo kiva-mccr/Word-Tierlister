@@ -104,6 +104,22 @@ assert bw.def_text.get("1.0", "2.0").strip() == "bastard"
 bw.filter_var.set("Verbs"); bw.reload(); pump(4); assert list(bw.tree.get_children()) == ["run"]
 bw.close(); pump(2)
 
+# ---- OB-2: a sense Wiktionary labels rude is smeared in the definitions while censoring, in both panes
+s.set_def("table", "\u2022 (noun) A flat surface.\n\u2022 (noun) (vulgar) Something rude.")
+app.def_words = ["table"]; app.show_defs = True; app._render_defs(); pump(2)
+smears = app.def_text._smears
+assert len(smears) == 1 and smears[0].find_withtag("smear") and "Something rude" not in app.def_text.get("1.0", "end")
+assert "(vulgar)" in app.def_text.get("1.0", "end") and "A flat surface." in app.def_text.get("1.0", "end")
+assert smears[0].bind("<Enter>") and smears[0].bind("<Leave>")                # (the pointer un-smears it)
+smears[0].unsmear.hover(True, app.anim); app.anim.finish_all(); pump(1)
+assert smears[0].unsmear.clear == 1 and not smears[0].find_withtag("smear")      # un-smeared under the pointer
+s.set_censor(False); app._render_defs(); pump(1)
+assert not app.def_text._smears and "Something rude" in app.def_text.get("1.0", "end") and not smears[0].winfo_exists()
+s.set_censor(True)
+app.open_browser(); pump(4); bw = app.browsers[0]; bw.current = "table"; bw.render_def(); pump(1)
+assert len(bw.def_text._smears) == 1 and bw.def_text.get("1.0", "2.0").strip() == "table"
+bw.close(); pump(1)
+
 # ---- the settings page --------------------------------------------------------------------------------------
 font_px = font("body").measure("n")
 d = app.edit_dealing(); pump(4)

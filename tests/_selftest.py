@@ -236,7 +236,15 @@ senses = parse_definition('1. (noun) a round fruit\n      e.g. "an apple a day"\
 assert [x["num"] for x in senses] == ["1", "2", "3"] and senses[0]["pos"] == "noun"
 assert senses[0]["text"] == "a round fruit" and senses[0]["example"] == "an apple a day"
 assert senses[1]["example"] is None and senses[2]["pos"] == "adj"
-assert parse_definition("(No definition found.)") == [{"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
+keys = lambda d: {k: d[k] for k in ("num", "pos", "text", "example")}
+assert [keys(x) for x in parse_definition("(No definition found.)")] == [
+    {"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
 assert parse_definition("") == [] and parse_definition(None) == []
-assert parse_definition("1. no part of speech")[0] == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
+assert keys(parse_definition("1. no part of speech")[0]) == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
+# the Wiktionary build's lines: one sense each (they used to run together), its labels, rude ones marked (OB-2)
+senses = parse_definition("\u2022 (noun) A container.\n\u2022 (noun) (vulgar, slang) The vagina.\n"
+                          "\u2022 (verb) (sometimes, offensive) To hit.\n\u2022 (noun) (obsolete) An old box.")
+assert [x["pos"] for x in senses] == ["noun", "noun", "verb", "noun"] and senses[0]["text"] == "A container."
+assert [x["rude"] for x in senses] == [False, True, False, False] and senses[1]["labels"] == ["vulgar", "slang"]
+assert senses[1]["text"] == "(vulgar, slang) The vagina."
 print("CORE OK")
