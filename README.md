@@ -19,7 +19,7 @@ requirements.txt   the Python packages (the program offers to install them itsel
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
-                   bundle.py (the data a built program carries)
+                   bundle.py (the data a built program carries), build.py + hooks/ (build it as a program)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -60,6 +60,8 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
+| `tools/build.py` | Builds the program for this system with PyInstaller (T-3): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
+| `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `obscene`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
@@ -108,6 +110,15 @@ With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, der
 inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
 internet; until then a short list chosen by hand in `src/obscene.py` stands in).
+
+## Building a program
+
+`python tools/build.py` turns the source into a program for the system it runs on (`dist/word-tierlist` on
+Linux, `dist/word-tierlist.exe` on Windows, `dist/Word Tier List.app` on macOS; about 22 MB). It installs
+PyInstaller first if it is missing. Add `--check` to start the new program for a moment afterwards. The program
+keeps its save next to itself (or in your user data folder when that folder is read-only) and finds the save you
+used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one
+(or see the roadmap's T-8 for building on GitHub).
 
 ## Windows notes
 

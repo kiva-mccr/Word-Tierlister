@@ -51,7 +51,9 @@ for _ in range(30):
     assert not s._faced(x, y)
     s.record_comparison(x, y, random.choice(["a", "b", "tie"]), "within")
 
-# conflict detection: a>b, b>c, then c>a
+# conflict detection: a>b, b>c, then c>a. (The random answers above now and then contradict each other too,
+# depending on the order Python's sets come out in that run: start from no conflicts, so only this one counts.)
+s.db.execute("DELETE FROM conflicts"); s.db.commit()
 c = "wxyz1"; d = "wxyz2"; e = "wxyz3"
 s.insert_words([c, d, e])
 for w in (c, d, e):

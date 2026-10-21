@@ -1051,8 +1051,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          and nltk from it with nothing else on the path; it found the packages needed by trying: wordfreq,
 #          msgpack, langcodes, regex, ftfy, wcwidth, locate, nltk, defusedxml. To check in T-3: PyInstaller's
 #          own nltk hook may pull in the build machine's ~/nltk_data (WordNet, ~30 MB); keep it out.
-# [ ] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
+# [x] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
 #          Depends on ST-1 and ST-2 (a windowed program has no console for messages).
+#          Built: tools/build.py (python tools/build.py [--check] [--dist]): installs PyInstaller if missing (pip,
+#          then --break-system-packages for a Python that refuses plain installs), builds from tierlist.py with
+#          src/ on the path, tools/bundle.py's data and exclusions, --windowed; one file on Linux / Windows,
+#          an app bundle on macOS (one-file .app bundles are discouraged there). tools/hooks/hook-nltk.py
+#          replaces PyInstaller's nltk hook, which packs the build machine's ~/nltk_data (checked: a planted
+#          folder went in with PyInstaller's hook and stayed out with ours). --check starts the new program from
+#          a folder of its own with a short word list and no internet and checks it stays open and keeps its
+#          save beside itself. Linux build here: 22 MB, about 25 s; the window opens (first-start steps). Windows
+#          and macOS builds are untried (need those machines). _selftest_build.py (a real build when PyInstaller
+#          is installed).
 # [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
 #          dependencies once and start the program. Roughly ten lines each, nothing to sign.
 # [ ] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running

@@ -131,7 +131,8 @@ def _walk(d):
     """Files under d (relative to the top), skipping version control, environments and caches."""
     out = []
     for base, dirs, files in os.walk(os.path.join(HERE, d) if d else HERE):
-        dirs[:] = sorted(x for x in dirs if x not in SKIP and (d or x in SHIP_DIRS))
+        top = os.path.abspath(base) == HERE        # (SHIP_DIRS names the top's folders; all of theirs go: tools/hooks)
+        dirs[:] = sorted(x for x in dirs if x not in SKIP and (d or not top or x in SHIP_DIRS))
         rel = os.path.relpath(base, HERE)
         out += [f if rel == "." else os.path.join(rel, f) for f in sorted(files)]
     return out
