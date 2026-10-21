@@ -225,11 +225,16 @@ def read_answer(message, words, model=""):
 
 
 def with_forms(results, forms):
-    """Add each form with its word's answer."""
-    out = dict(results)
+    """Add each form with its word's answer, following a form of a form ("cock-tips" -> "cock-tip" -> "cocktip") to
+    the word at the end. A form's earlier answer (in `results`) is never kept: it may be out of date."""
+    out = {w: v for w, v in results.items() if w not in forms}
     for form, target in forms.items():
-        if target in results:
-            kind, conf, _, _, model = results[target]
+        word, seen = target, {form}
+        while word in forms and word not in seen:
+            seen.add(word)
+            word = forms[word]
+        if word in out:
+            kind, conf, _, _, model = out[word]
             out[form] = (kind, conf, [], f"form of {target}", model)
     return out
 

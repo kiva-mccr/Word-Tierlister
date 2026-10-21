@@ -57,6 +57,12 @@ assert ans["penis"][1] == 0 and ans["idiot"][1] == 0                        # a 
 assert all(v[1] == 0 for v in C.read_answer(message([], stop="refusal"), ["box"]).values())
 assert "refusal" in C.read_answer(message([], stop="refusal"), ["box"])["box"][3]
 
+# forms of forms take the answer at the end of the chain, never an out-of-date one of their own
+chain = C.with_forms({"cocktip": ("sexual", 88, [], "", "opus"), "cock-tip": ("sexual", 70, [], "form of cocktip", "haiku"),
+                      "cock-tips": ("sexual", 70, [], "form of cock-tip", "haiku")},
+                     {"cock-tip": "cocktip", "cock-tips": "cock-tip"})
+assert chain["cock-tips"] == ("sexual", 88, [], "form of cock-tip", "opus") and chain["cock-tip"][1] == 88, chain
+
 # ---- the estimate (offline: guessed from the text)
 t_in, t_out, cost = C.estimate(C.groups(cands), save, C.MODEL)
 assert t_in > 300 and t_out == 5 * C.OUT_PER_WORD and 0 < cost < 1, (t_in, t_out, cost)
