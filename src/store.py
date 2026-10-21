@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS conflicts(a TEXT NOT NULL, b TEXT NOT NULL, PRIMARY K
 CREATE TABLE IF NOT EXISTS swaps(comp_id INTEGER PRIMARY KEY, boundary INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS obscene_review(word TEXT PRIMARY KEY, verdict TEXT NOT NULL, ts REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -317,16 +318,68 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    OBSCENE_VERSION = "4"   # bumped when what counts as obscene changes (4: most or the first meaning rude), to look again
+    OBSCENE_VERSION = "5"   # bumped when what counts as obscene changes (5: any meaning rude), to look again
+    REVIEW = ("not", "obscene", "swear")     # the answers of the review (--review-obscene); "swear" counts as obscene
 
     def set_obscene(self, words, replace=False):
         """Mark `words` (those in the list) obscene; `replace`: and only those."""
         if replace:
             self.db.execute("UPDATE words SET obscene=0 WHERE obscene=1")
         self.db.executemany("UPDATE words SET obscene=1 WHERE word=? AND obscene=0", ((w,) for w in words))
+        # the user's own answers (the review) always win over what was found
+        self.db.execute("UPDATE words SET obscene = (SELECT verdict != 'not' FROM obscene_review r WHERE r.word = words.word)"
+                        " WHERE word IN (SELECT word FROM obscene_review)")
         self.db.commit()
         self._obscene = None
         self.version += 1
+
+    # ---- the review of the flagged words (python tierlist.py --review-obscene) --------------------------------
+    def review_next(self):
+        """The commonest flagged word not reviewed yet (its row), or None."""
+        return self.db.execute("SELECT * FROM words WHERE obscene=1 AND word NOT IN (SELECT word FROM obscene_review)"
+                               " ORDER BY rank LIMIT 1").fetchone()
+
+    def review_progress(self):
+        """(words reviewed, words still to review)."""
+        done = self.db.execute("SELECT COUNT(*) FROM obscene_review").fetchone()[0]
+        left = self.db.execute("SELECT COUNT(*) FROM words WHERE obscene=1 AND word NOT IN "
+                               "(SELECT word FROM obscene_review)").fetchone()[0]
+        return done, left
+
+    def review(self, word, verdict):
+        """The user's answer for a flagged word ("not", "obscene" or "swear"): it counts from now on, and a later
+        look at Wiktionary never changes it."""
+        if verdict not in self.REVIEW:
+            raise ValueError(verdict)
+        rude = int(verdict != "not")
+        self.db.execute("INSERT OR REPLACE INTO obscene_review(word, verdict, ts) VALUES(?, ?, ?)",
+                        (word, verdict, time.time()))
+        row = self.get_word(word)
+        self.db.execute("UPDATE words SET obscene=?, out=? WHERE word=?",
+                        (rude, self._out_value(row["kinds"] if row else None, rude), word))
+        self.db.commit()
+        self._obscene = None
+        self.version += 1
+
+    def review_back(self):
+        """Take back the last answer (the word is flagged again, to be reviewed next); returns it, or None."""
+        r = self.db.execute("SELECT word FROM obscene_review ORDER BY ts DESC, rowid DESC LIMIT 1").fetchone()
+        if r is None:
+            return None
+        word = r[0]
+        self.db.execute("DELETE FROM obscene_review WHERE word=?", (word,))
+        row = self.get_word(word)
+        self.db.execute("UPDATE words SET obscene=1, out=? WHERE word=?",
+                        (self._out_value(row["kinds"] if row else None, 1), word))
+        self.db.commit()
+        self._obscene = None
+        self.version += 1
+        return word
+
+    def review_rows(self):
+        """Every answer so far: [(word, verdict)], commonest first."""
+        return [tuple(r) for r in self.db.execute(
+            "SELECT r.word, r.verdict FROM obscene_review r LEFT JOIN words w ON w.word = r.word ORDER BY w.rank")]
 
     def obscene_words(self):
         """The set of obscene words (a few thousand), read once (partial index)."""

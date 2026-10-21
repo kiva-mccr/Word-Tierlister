@@ -1,11 +1,13 @@
 """Which words are obscene (ST-6: the "Obscene words" tick box and "Censor obscene words").
 
-The rule (the user's): a word is obscene if MOST of its meanings are rude, or its FIRST meaning is. A meaning is
-rude when Wiktionary labels it vulgar, offensive, derogatory / pejorative or a slur ("sometimes offensive" is not);
-a meaning that is only a form of another word ("plural of bitch", "present participle of fuck") is rude when that
-word is obscene. So "fuck" and "cunt" are, "bureaucracy" (one pejorative meaning of three), "box" and "screw" are not.
+The rule (the user's, loose on purpose so nothing falls through the cracks): a word is flagged if ANY of its
+meanings is rude. A meaning is rude when Wiktionary labels it vulgar, offensive, derogatory / pejorative or a slur
+("sometimes offensive" is not); a meaning that is only a form of another word ("plural of bitch", "present
+participle of fuck") is rude when that word is flagged. That catches "box" and "bureaucracy" too: the user then
+reviews every flagged word by hand (python tierlist.py --review-obscene), and their answer is what counts.
 
-    decide({"bitch": ["p", "r", "r"], "bitches": ["f:bitch"], "box": ["p", "p", "r", "p"]})  ->  {"bitch", "bitches"}
+    decide({"bitch": ["p", "r", "r"], "bitches": ["f:bitch"], "box": ["p", "p", "r", "p"], "table": ["p"]})
+        ->  {"bitch", "bitches", "box"}
 
 Each word's meanings come in as marks, in Wiktionary's order: "r" rude, "p" plain, "f:<word>" a form of <word>.
 They are read from the Wiktionary download (tag_marks, for each sense's tags) or from a page's wikitext
@@ -21,8 +23,7 @@ HEDGES = {"sometimes", "possibly", "potentially", "occasionally", "may", "can", 
 
 
 def _verdict(marks, obscene):
-    kinds = [m == "r" or (m.startswith("f:") and m[2:] in obscene) for m in marks]
-    return bool(kinds) and (kinds[0] or 2 * sum(kinds) > len(kinds))
+    return any(m == "r" or (m.startswith("f:") and m[2:] in obscene) for m in marks)
 
 
 def decide(marks):

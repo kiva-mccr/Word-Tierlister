@@ -15,7 +15,8 @@ F1...), and the other five follow (place_keys()).
 import json
 
 GROUPS = (("all", "Everywhere"), ("place", "Place new words"), ("compare", "While comparing"),
-          ("duel", "Duels (Refine, Boundary, Conflicts)"), ("browse", "Browse / edit"))
+          ("duel", "Duels (Refine, Boundary, Conflicts)"), ("browse", "Browse / edit"),
+          ("review", "Review obscene words (--review-obscene)"))
 GROUP_NAMES = dict(GROUPS)
 
 # id, group, label, default keys (at most MAX_KEYS)
@@ -41,6 +42,10 @@ ACTIONS = (
     ("tie", "duel", "Tie", ["Down", "t"]),
     ("skip", "duel", "Skip pair", ["s"]),
     ("unplace", "browse", "Unplace the selected word", ["Delete"]),
+    ("review_not", "review", "Not obscene", ["1"]),
+    ("review_obscene", "review", "Obscene", ["2"]),
+    ("review_swear", "review", "Swear word", ["3"]),
+    ("review_back", "review", "Back one word", ["BackSpace"]),
 )
 MAX_KEYS = 3
 GROUP_OF = {a: g for a, g, _l, _k in ACTIONS}

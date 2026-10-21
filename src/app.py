@@ -76,18 +76,22 @@ class App:
     buttons) are two frames in self.center; refresh() shows the one matching the mode.
     """
 
-    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False):
+    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False, review=False):
         """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
         extra saves with progress that _startup() offers to merge. `defs` is a Definitions. `ask_dealing`: show
-        the first start's "How words are dealt" steps (ST-6; main() asks once per save).
+        the first start's "How words are dealt" steps (ST-6; main() asks once per save). `review`: the developer
+        tab for going through the flagged obscene words (python tierlist.py --review-obscene), opened first.
         """
         self.root, self.store, self.defs = root, store, defs
         self.ask_dealing = ask_dealing
+        self.review = review
+        self.review_word = None          # the flagged word on the review tab's card
         self.note, self.other_saves = note, list(other_saves)
-        self.mode = store.get_meta("mode", "place")
-        if self.mode not in self.modes_with_work(store.stats()):
+        self.mode = "review" if review else store.get_meta("mode", "place")
+        if self.mode not in self._tabs(store.stats()):
             self.mode = "place"              # unknown, or its tab is hidden (UI-46)
-        self.show_defs = store.get_meta("show_defs", "0") == "1"
+        # (the review tab starts with the definitions on, since its answers rest on them; your setting is kept)
+        self.show_defs = review or store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
         self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
@@ -210,7 +214,7 @@ class App:
         self.mode_switch = TabBar(head, MODES, self._on_mode_switch, font("label"), animator=self.anim,
                                   page_bg=PALETTE["bg"])
         self.mode_switch.set(self.mode)
-        self.mode_switch.show_only(self.modes_with_work(self.store.stats()), animate=False)
+        self.mode_switch.show_only(self._tabs(self.store.stats()), animate=False)
         self.mode_switch.pack(side="top", fill="x")
         tk.Frame(r, height=6, bg=PALETTE["bg"]).pack(side="top", fill="x")
 
@@ -343,6 +347,7 @@ class App:
         self.duel.grid(row=2, column=0, sticky="nsew")
         self.left_btn, self.right_btn = self.duel.left, self.duel.right
         self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
+        self._build_review()
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.pair_empty = EmptyCard(pi, font("title"), font("body"))         # nothing to duel here (UI-20)
@@ -443,7 +448,7 @@ class App:
         free space allows, so it never runs into the stats on a small window."""
         band = self.status_band.winfo_height()
         ch = self.center.winfo_height()
-        for inner in (self.place_inner, self.pair_inner):
+        for inner in (self.place_inner, self.pair_inner, self.review_inner):
             free = (ch - inner.winfo_reqheight()) / 2
             inner.place_configure(y=-int(max(0, min(band / 2, free))))
 
@@ -486,8 +491,11 @@ class App:
         f = ui_factor(r) * self.font_scale * self.zoom * self.grow
         rows = [w for w in r.pack_slaves() if w is not self.center]
         extra = 0 if self.opt_frame.winfo_manager() else self.opt_frame.winfo_reqheight() + 16  # refine/boundary row
-        inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
-        inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight() + extra)
+        review = [self.review_inner] if self.review else []      # (measured only when its tab is there)
+        inner_w = max([self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth()]
+                      + [i.winfo_reqwidth() for i in review])
+        inner_h = max([self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight() + extra]
+                      + [i.winfo_reqheight() for i in review])
         width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
         height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
         return width, height
@@ -740,6 +748,8 @@ class App:
         self._update_focus_label()
         if self.mode == "place":
             self._show_place()
+        elif self.mode == "review":
+            self._show_review()
         else:
             self._show_pair()
         self.root.after_idle(self._recenter)     # the content's height may have changed
@@ -755,7 +765,7 @@ class App:
         s = self.store.stats()
         self.stats_lbl.config(text=format_stats(s))
         self.today_lbl.config(text=f"+{self.store.actions_since(local_midnight()):,} today")
-        self.mode_switch.show_only(self.modes_with_work(s))
+        self.mode_switch.show_only(self._tabs(s))
         self.progress_bar.set(self.store.shelf())
         # each tab shows its own view in the chart's spot (UI-31); the others keep their space, hidden
         for mode, view in self.tab_views.items():
@@ -793,6 +803,10 @@ class App:
         if s["conflicts"]:
             modes.add("conflict")
         return modes
+
+    def _tabs(self, s):
+        """The tabs to show: those with work, and the review tab when started for it (--review-obscene)."""
+        return self.modes_with_work(s) | ({"review"} if self.review else set())
 
     PACE_GAP_S = 120     # a longer pause between two actions is a break: it adds only this much to the pace
 
@@ -834,6 +848,8 @@ class App:
             b.config(hint=display(tiers[t]) if t < len(tiers) else "")
         for a in ("better", "same", "worse", "back"):
             self.cmp_btns[a].config(hint=hint(a))
+        for a, b in self.review_btns.items():
+            b.config(hint=hint(a))
         self.compare_btn.config(hint=hint("compare"))
         self.later_btn.config(hint=hint("later"))
         d = self.duel
@@ -848,12 +864,112 @@ class App:
             self.header.drops[name].items = items
         self._hint()
 
+    def _show_frame(self, frame):
+        """Show one of the centre's views (place, pair, review) and hide the others."""
+        for f in (self.place_frame, self.pair_frame, self.review_frame):
+            if f is not frame:
+                f.pack_forget()
+        frame.pack(fill="both", expand=True)
+
+    # ---- the review of the flagged obscene words (developer tab: --review-obscene) ----------------------------
+    REVIEW_BUTTONS = (("review_not", "Not obscene", "not", 3), ("review_obscene", "Obscene", "obscene", 0),
+                      ("review_swear", "Swear word", "swear", 1))     # (action, label, answer, tier colour)
+
+    def _build_review(self):
+        """The review tab's view: the flagged word on its card (never censored), its definitions in the drawer,
+        Not obscene / Obscene / Swear word and Back, a plain percentage bar, and Save answers to a file."""
+        self.review_frame = ttk.Frame(self.center)
+        ri = self.review_inner = ttk.Frame(self.review_frame)
+        ri.place(relx=0.5, rely=0.5, anchor="center")
+        self.review_title = ttk.Label(ri, text="Is this word obscene?", font=font("title"))
+        self.review_title.grid(row=0, column=0, pady=(0, 12))
+        self.review_card = WordCard(ri, font("word"), font("body"))
+        self.review_card.finds = False
+        self.review_card.grid(row=1, column=0, pady=(0, 18))
+        self.review_empty = EmptyCard(ri, font("title"), font("body"))
+        row = ttk.Frame(ri)
+        row.grid(row=2, column=0)
+        self.review_btns = {}
+        for i, (action, label, answer, tier) in enumerate(self.REVIEW_BUTTONS):
+            b = RoundButton(row, label, lambda a=answer: self.review_answer(a), bg=TIER_COLORS[tier],
+                            font=font("choice"), padx=22, pady=12, animator=self.anim)
+            b.grid(row=0, column=i, padx=8)
+            self.review_btns[action] = b
+        self.review_btns["review_back"] = RoundButton(row, "Back", self.review_back, font=font("body"), padx=14,
+                                                      pady=8, animator=self.anim)
+        self.review_btns["review_back"].grid(row=0, column=3, padx=(24, 0))
+        self.review_bar = ttk.Progressbar(ri, mode="determinate", maximum=100, length=420)
+        self.review_bar.grid(row=3, column=0, pady=(26, 4))
+        line = ttk.Frame(ri)
+        line.grid(row=4, column=0)
+        self.review_lbl = ttk.Label(line, foreground=PALETTE["muted"])
+        self.review_lbl.pack(side="left")
+        RoundButton(line, "Save answers to a file", self.save_review, font=font("body"), flat=True,
+                    animator=self.anim).pack(side="left", padx=(16, 0))
+
+    def _show_review(self):
+        """The next flagged word (commonest first), or "all reviewed"; the bar shows how far along."""
+        self.progress_bar.mark([])
+        self._show_frame(self.review_frame)
+        done, left = self.store.review_progress()
+        total = done + left
+        pct = 100.0 * done / total if total else 100.0
+        self.review_bar["value"] = pct
+        self.review_lbl.config(text=f"{done:,} of {total:,} reviewed ({pct:.0f}%)")
+        row = self.store.review_next()
+        for action, b in self.review_btns.items():
+            b.set_enabled(row is not None if action != "review_back" else done > 0)
+        if row is None:
+            self.review_word = None
+            self.review_card.grid_remove()
+            self.review_title.grid_remove()
+            self.review_empty.set("Every flagged word is reviewed",
+                                  "Your answers count from now on. Save answers to a file keeps a copy.")
+            self.review_empty.grid(row=1, column=0, pady=(0, 18))
+            self._render_defs([])
+        else:
+            self.review_word = row["word"]
+            self.review_empty.grid_remove()
+            self.review_title.grid()
+            self.review_card.grid()
+            self.review_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}")   # (never censored here)
+            self._render_defs([row["word"]])
+        self._hint()
+
+    def review_answer(self, verdict):
+        """Not obscene / Obscene / Swear word for the word on the card; the next one comes up."""
+        if not self.review_word:
+            return
+        self.store.review(self.review_word, verdict)
+        self.refresh()
+
+    def review_back(self):
+        """Back one word: the last answer is taken back and that word comes up again."""
+        word = self.store.review_back()
+        if word is None:
+            self.flash("Nothing to go back to", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+            return
+        self.refresh()
+
+    def save_review(self):
+        """Write every answer to obscene_review.txt next to the save: one "word<Tab>answer" line each."""
+        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), "obscene_review.txt")
+        rows = self.store.review_rows()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("# Word Tier List: obscene words reviewed by hand (not / obscene / swear)\n")
+                f.writelines(f"{w}\t{v}\n" for w, v in rows)
+        except OSError as exc:
+            show_exception("Save answers", exc, self.root, "Could not save the answers.")
+            return None
+        self.flash(f"Saved {len(rows):,} answers to {path}", ms=4000)
+        return path
+
     # ---- place mode ------------------------------------------------------------------------------------------
     def _show_place(self):
         """Place view: show the next unplaced word (or the 'all placed' message) and set up its buttons."""
         self.progress_bar.mark([])                    # (the shelf marks only the duel tabs' words, UI-55)
-        self.pair_frame.pack_forget()
-        self.place_frame.pack(fill="both", expand=True)
+        self._show_frame(self.place_frame)
         row = None
         if self.looked_up:                            # a looked-up word comes first, until placed or skipped
             row = self.store.get_word(self.looked_up)
@@ -1089,8 +1205,7 @@ class App:
 
     def _show_pair(self):
         """Pair view: show the next duel, or a friendly message with the buttons disabled when none is available."""
-        self.place_frame.pack_forget()
-        self.pair_frame.pack(fill="both", expand=True)
+        self._show_frame(self.pair_frame)
         self.pair = self._pick_pair()
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
@@ -1255,6 +1370,9 @@ class App:
         if self.mode == "place" and self.cmp and not saved_only:
             self.cmp_back()
             return
+        if self.mode == "review" and not saved_only:
+            self.review_back()
+            return
         word = self.store.undo()
         if word is None:
             self.flash("Nothing to undo", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
@@ -1322,7 +1440,8 @@ class App:
         spec = event_spec(e.keysym, getattr(e, "state", 0), self._ws)
         if spec is None:
             return
-        view = ("compare" if self.cmp else "place") if self.mode == "place" else "duel"
+        view = (("compare" if self.cmp else "place") if self.mode == "place"
+                else "review" if self.mode == "review" else "duel")
         action = self.keys.lookup(view, spec)
         tab = action in ("next_tab", "prev_tab") or e.keysym in ("Tab", "ISO_Left_Tab")
         if action is None:
@@ -1363,6 +1482,9 @@ class App:
             return self.cmp_btns[action], lambda: self.cmp_answer(action)
         if action in ("left", "right", "tie", "skip"):
             return self.duel.buttons[action], lambda: self._on_duel(action)
+        if action in self.review_btns:
+            answer = {a: v for a, _l, v, _t in self.REVIEW_BUTTONS}.get(action)
+            return self.review_btns[action], ((lambda: self.review_answer(answer)) if answer else self.review_back)
         return {"compare": (self.compare_btn, self.start_compare), "later": (self.later_btn, self.skip_word),
                 "find": (None, self.start_lookup),
                 "back": (self.cmp_btns["back"], self.cmp_back), "stop": (None, self._cancel_compare)}[action]

@@ -382,6 +382,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the x-height), fading out early in the hover so no pale box shows behind the letters closing in.
 #           For now (asked for: "it kinda worked"): "Obscene words" starts unticked, so the words marked obscene
 #           are left out until telling them apart is worked on again (deal_done 2 re-deals older saves).
+# [x] OB-1  Review the flagged obscene words by hand (asked for: "a dev option booted via the terminal", "a new
+#           tab with a simple % progress bar"). Flagging is loose on purpose now, so nothing falls through the
+#           cracks: ANY meaning rude (obscene.decide; Store.OBSCENE_VERSION 5), forms of a flagged word too.
+#           python tierlist.py --review-obscene opens the "Review obscene words" tab (only then; App(review=True)):
+#           the commonest flagged word not yet answered, never censored, its definitions open (not saved as your
+#           setting), Not obscene / Obscene / Swear word (keys 1 / 2 / 3, the keymap's "review" group, changeable)
+#           and Back (Backspace, also Undo there), a determinate bar "N of M reviewed (P%)", and Save answers to
+#           a file (obscene_review.txt next to the save: word<Tab>answer, commonest first). The answers live in
+#           the save (table obscene_review) and win over every later finding (Store.set_obscene re-applies them);
+#           "swear" counts as obscene until OB-3. _selftest_review.py.
+# [ ] OB-2  Censor the obscene meanings inside definitions (asked for; not designed yet: what is shown in their
+#           place, whether by Wiktionary's labels or by hand, and where: the drawer, Browse's pane).
+# [ ] OB-3  Swear words as a choice of their own, apart from obscene words (asked for, later); the review
+#           already records "swear" separately.
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
@@ -1188,6 +1202,9 @@ def main():
                          "terminal gets its prompt back and messages go to tierlist.log next to the save file")
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt)")
+    ap.add_argument("--review-obscene", action="store_true",
+                    help="(developer) open a tab for going through every word flagged as obscene, one by one: "
+                         "not obscene / obscene / swear word. The answers are kept in the save and always win")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
@@ -1317,7 +1334,8 @@ def main():
             # --- 5. show the main window; App runs until it is closed
             root.deiconify()
             App(root, store, Definitions(store), note=note, other_saves=others,
-                ask_dealing=store.get_meta("dealt_asked") != "1")       # (ST-6: once per save)
+                ask_dealing=store.get_meta("dealt_asked") != "1" and not args.review_obscene,   # (ST-6: once a save)
+                review=args.review_obscene)
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

@@ -98,9 +98,12 @@ The first start asks three short questions (any time later: Settings > How words
 - **Censor obscene words** ("blurred, except on hover"): they are smeared sideways on the cards until the pointer is over them, and read
   b•••••d in messages and Browse. Exports keep the real words.
 
-A word counts as obscene if most of its meanings, or its first one, are labelled vulgar, offensive, derogatory
-or a slur on Wiktionary (so "fuck" does, "bureaucracy" with one pejorative meaning of three does not); its
-plural and other forms follow it. A save from before this learns each word's kinds from its stored definitions,
+A word is flagged as obscene if any of its meanings is labelled vulgar, offensive, derogatory or a slur on
+Wiktionary (loose on purpose: "box" and "bureaucracy" are flagged too), and its plural and other forms follow it.
+Going through the flagged words by hand decides: `python tierlist.py --review-obscene` adds a "Review obscene
+words" tab (developers; it is not shown otherwise) with each flagged word, commonest first, its definitions, and
+Not obscene / Obscene / Swear word (keys 1, 2, 3; Backspace goes back one), a percentage bar, and "Save answers to
+a file" (`obscene_review.txt` next to the save). Your answers are kept in the save and always win. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
 internet; until then a short list chosen by hand in `src/obscene.py` stands in).
 

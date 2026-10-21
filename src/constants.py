@@ -7,12 +7,14 @@ import math
 TIERS = ["S", "A", "B", "C", "D", "F"]
 DEFAULT_ANCHORS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
 FOCUS_ROUNDS = 8  # duels in one "Refine this word" session
-# (key, menu label) for the four sorting modes; the key is also what is saved in meta "mode".
+# (key, menu label) for the sorting modes; the key is also what is saved in meta "mode". "review" (going through
+# the flagged obscene words) is a developer tab: it shows only when started with --review-obscene.
 MODES = [
     ("place", "Place new words"),
     ("refine", "Refine within tier"),
     ("boundary", "Boundary check"),
     ("conflict", "Resolve conflicts"),
+    ("review", "Review obscene words"),
 ]
 
 # The progress shelf (UI-14): zones named for how often you would meet such a word in reading, by wordfreq's

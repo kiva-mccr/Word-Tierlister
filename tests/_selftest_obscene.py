@@ -1,15 +1,15 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""ST-6: which words are obscene. The user's rule: most of a word's meanings rude, or its first one (Wiktionary's
-labels per meaning), forms of an obscene word too; the hand-picked list stands in until a save has the labels."""
+"""ST-6: which words are flagged as obscene. The user's (loose) rule: any of a word's meanings rude by Wiktionary's
+labels, forms of a flagged word too (the review by hand then decides); the hand-picked list stands in until a
+save has the labels."""
 from obscene import decide, obscene_in, on_list, page_marks, tag_marks
 
 # ---- the rule -------------------------------------------------------------------------------------------------
-got = decide({"fuck": ["r", "r", "p"], "cunt": ["r"], "slur": ["r", "p", "p"],        # first meaning rude
-              "bitch": ["p", "r", "r"],                                              # most meanings rude
-              "bureaucracy": ["p", "p", "r"], "come": ["p", "r"], "box": ["p", "p", "p", "r"],   # neither
-              "bitches": ["f:bitch"], "fucking": ["f:fuck", "r"], "boxes": ["f:box"],            # forms follow
-              "bitchesses": ["f:bitches"]})                                          # (forms of forms too)
-assert got == {"fuck", "cunt", "slur", "bitch", "bitches", "fucking", "bitchesses"}, got
+got = decide({"fuck": ["r", "r", "p"], "cunt": ["r"], "bitch": ["p", "r", "r"],
+              "bureaucracy": ["p", "p", "r"], "box": ["p", "p", "p", "r"],           # one rude meaning is enough
+              "table": ["p", "p"], "tables": ["f:table"],                            # none: not flagged
+              "bitches": ["f:bitch"], "boxes": ["f:box"], "bitchesses": ["f:bitches"]})   # forms follow (of forms too)
+assert got == {"fuck", "cunt", "bitch", "bureaucracy", "box", "bitches", "boxes", "bitchesses"}, got
 # the Wiktionary download's tags (kaikki.org): rude labels, hedged ones, forms
 assert tag_marks({"tags": ["vulgar", "slang"]}) == "r" and tag_marks({"tags": ["derogatory"]}) == "r"
 assert tag_marks({"tags": ["ethnic", "slur"]}) == "r" and tag_marks({"raw_tags": ["pejorative"]}) == "r"
@@ -35,7 +35,7 @@ page = """==English==
 ===Noun===
 # {{lb|fr|vulgar}} not English: never read
 """
-assert page_marks(page) == ["p", "r", "r", "p", "r"], page_marks(page)              # three of five: obscene
+assert page_marks(page) == ["p", "r", "r", "p", "r"], page_marks(page)
 forms = "==English==\n===Noun===\n# {{plural of|en|bitch}}\n\n===Verb===\n# {{en-third-person singular of|bitch}}\n"
 assert page_marks(forms) == ["f:bitch", "f:bitch"]
 assert page_marks("==German==\n# {{lb|de|vulgar}} x\n") == [] and page_marks("") == []

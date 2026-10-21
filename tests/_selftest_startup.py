@@ -336,7 +336,7 @@ lines = []; W.prepare_queue(old, log=lines.append)
 stages = [l for l in lines if l and not l.startswith(" ")]
 assert [next(i for i, st in enumerate(stages) if st.startswith(n)) for n in plan] == [0, 1], stages
 assert old.get_word("run")["kinds"] == 3 and old.get_word("bitch")["kinds"] == 1 and old.get_word("zorp")["kinds"] == 16
-assert old.obscene_words() == {"bitch", "bitches", "shit"}, old.obscene_words()       # not "come", not "bureaucracy"
+assert old.obscene_words() == {"bitch", "bitches", "shit", "come", "bureaucracy"}, old.obscene_words()   # any meaning
 assert old.get_meta("obscene_done") == old.OBSCENE_VERSION and W.queue_steps(old) == []
 assert any("(0%)" in l for l in lines)                          # (a real percentage: the progress window's time left)
 # offline later: nothing changes; a save that only had the stand-in list asks again after a while

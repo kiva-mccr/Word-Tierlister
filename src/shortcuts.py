@@ -12,7 +12,8 @@ from keymap import (GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display,
 from theme import PALETTE
 from widgets import RoundButton, StyledDialog
 
-COLUMNS = (("all", "browse"), ("place", "compare"), ("duel",))     # the cards, left to right
+COLUMNS = (("all", "browse"), ("place", "compare"), ("duel", "review"))     # the cards, left to right
+DEV_GROUPS = ("review",)        # only while the program was started for them (--review-obscene)
 
 
 class ShortcutsDialog:
@@ -48,7 +49,7 @@ class ShortcutsDialog:
             # room for "↺ default" kept on every row, so nothing shifts when one appears
             col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
-            for gi, g in enumerate(groups):
+            for gi, g in enumerate(g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", False)):
                 tk.Label(col, text=GROUP_NAMES[g], bg=bg, fg=PALETTE["muted"], font=f).grid(
                     row=r, column=0, columnspan=3, sticky="w", pady=(0 if gi == 0 else round(line * 0.8), 2))
                 r += 1
