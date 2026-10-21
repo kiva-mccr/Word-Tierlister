@@ -18,7 +18,8 @@ tierlist.py        run this. Your save (tierlist.db), its log and exports stay n
 requirements.txt   the Python packages (the program offers to install them itself)
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
-tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder)
+tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
+                   bundle.py (the data a built program carries)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -58,6 +59,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
+| `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `obscene`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,

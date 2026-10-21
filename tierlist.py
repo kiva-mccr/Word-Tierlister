@@ -1017,8 +1017,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          saves.restart_args: a built program restarts itself with its options only (no script name).
 #          tierlist.main and App.SCRIPT_DIR use them. _selftest_appdir.py (with a stand-in built program in
 #          its own process; a real build is T-3).
-# [ ] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
+# [x] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
 #          stays an optional download as it is now.
+#          Built: tools/bundle.py: datas() [(file, folder in the program)] for PyInstaller's --add-data, and
+#          EXCLUDE (wordfreq's Chinese / Japanese / Korean tokenizers, test suites). wordfreq ships 60 MB in
+#          40 languages; only the English lists go in (large_en, small_en: 1.6 MB), plus langcodes' language
+#          registry (wordfreq looks "en" up in it) and nltk's VERSION file (read on import): 2.3 MB in all.
+#          Code and compiled parts (msgpack, regex) PyInstaller follows by itself. _selftest_bundle.py puts a
+#          folder together the way a build would (code without data, then only that list) and runs wordfreq
+#          and nltk from it with nothing else on the path; it found the packages needed by trying: wordfreq,
+#          msgpack, langcodes, regex, ftfy, wcwidth, locate, nltk, defusedxml. To check in T-3: PyInstaller's
+#          own nltk hook may pull in the build machine's ~/nltk_data (WordNet, ~30 MB); keep it out.
 # [ ] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
 #          Depends on ST-1 and ST-2 (a windowed program has no console for messages).
 # [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
