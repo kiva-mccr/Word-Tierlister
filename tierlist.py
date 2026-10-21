@@ -421,7 +421,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           writes word_categories.tsv next to the save (word, kind, confidence, meaning kinds, note); below 80
 #           is for checking by hand. Reads the save only. --recheck (asked for: "run through haiku and then
 #           only the low confidence ones through opus") sends only the words answered below --review again,
-#           replacing their answers; each answer notes its model (a sixth column; status counts by model). Never run against the real API here (no key):
+#           replacing their answers; each answer notes its model (a sixth column; status counts by model).
+#           --second (asked for, "using the already processed data"): asks only for the unsure base words'
+#           second choice (a seventh column, "insult:30"), the existing answer in the prompt; to_check leaves
+#           out a word whose two choices have the same outcome with the defaults (OUTCOME: clean shown, sexual /
+#           slur left out, the rest smeared). Fixed: a form of a form kept an out-of-date answer (with_forms). Never run against the real API here (no key):
 #           _selftest_classify.py uses a stand-in.
 # [ ] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab: Clean, Double
 #           meaning, Clinical, Crude, Swear word, Sexual, Insult, Slur, Not sure; keys 1-9), answers back into

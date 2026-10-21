@@ -6,11 +6,15 @@
     python tools/classify_obscene.py status                          how far a run has got (and by which model)
 
 Cheap first, then strong where unsure: run --model claude-haiku-5-5, then run --recheck (Opus, the default) sends
-only the words answered below --review again; their new answers replace the old ones.
+only the words answered below --review again; their new answers replace the old ones. Then run --second asks only
+for each unsure word's second choice (its likeliest other kind and the chance of it), giving Claude the answer it
+already has: a word whose two choices lead to the same outcome (OUTCOME: shown, smeared, or left out) need not be
+checked by hand (to_check). No word is ever classified twice by these, and forms never cost anything.
 
 The kinds (CATEGORIES): clean, double (an innocent main meaning with a rude slang one), clinical, crude, swear,
 sexual, insult, slur. Every meaning is judged on its own and the word gets a kind and a confidence (0-100); the
-results go to word_categories.tsv next to the save (word, kind, confidence, each meaning's kind, note, model).
+results go to word_categories.tsv next to the save (word, kind, confidence, each meaning's kind, note, model, second
+choice).
 Words below --review (80) are the ones to check by hand (OB-4).
 
 Which words go (candidates): the ones already marked obscene, any whose stored meanings Wiktionary labels rude,
@@ -96,6 +100,49 @@ SCHEMA = {
     "required": ["words"],
     "additionalProperties": False,
 }
+
+
+SYSTEM_SECOND = """Each English word below has already been sorted by how rude it is, but that answer was unsure. \
+The kinds are: clean (nothing rude), double (an innocent main meaning with a rude slang one), clinical (the proper \
+word for a body part, bodily function or sexual matter), crude (mild bathroom or playground rudeness), swear \
+(profanity), sexual (explicit sexual slang), insult (aimed at a person, not a group), slur (attacks a group).
+
+For each word, say which kind it most likely is IF the given answer is wrong (never the same kind as the given \
+answer), and the chance (0-100) that this other kind is in fact the right one. The meanings shown may be \
+incomplete: use your own knowledge of the word too."""
+
+SCHEMA_SECOND = {
+    "type": "object",
+    "properties": {"words": {"type": "array", "items": {
+        "type": "object",
+        "properties": {"word": {"type": "string"},
+                       "second": {"type": "string", "enum": list(CATEGORIES)},
+                       "chance": {"type": "integer"}},
+        "required": ["word", "second", "chance"],
+        "additionalProperties": False}}},
+    "required": ["words"],
+    "additionalProperties": False,
+}
+OUT_PER_WORD_SECOND = 50    # its answer is short
+
+# What a kind leads to with the default choices (OB-5: Sexual and Slur left out, the other rude kinds shown and
+# smeared while censoring, clean words shown as they are). A doubt between two kinds with the same outcome changes
+# nothing, so such a word need not be checked by hand.
+OUTCOME = {"clean": "shown", "sexual": "left out", "slur": "left out"}
+
+
+def outcome(kind):
+    return OUTCOME.get(kind, "smeared")
+
+
+def to_check(answer, below):
+    """True if a word's answer is for checking by hand: unsure (confidence below `below`) and either no second
+    choice asked yet, or a second choice that would lead somewhere else."""
+    kind, conf, _s, _n, _m, second = answer
+    if conf >= below:
+        return False
+    other = second.split(":")[0]
+    return not other or outcome(other) != outcome(kind)
 
 
 # ---- which words go -------------------------------------------------------------------------------------------
@@ -190,6 +237,26 @@ def prompt_for(words, save):
     return "Sort these words:\n\n" + "\n\n".join(parts)
 
 
+def prompt_second(words, save, done):
+    """The user message for the second choice: each word, its meanings and the unsure answer it already has."""
+    parts = []
+    for w in words:
+        kind, conf, senses, _n, _m, _s = done[w]
+        meanings = parse_definition(save[w][2] or "") if w in save else []
+        lines = [f"WORD: {w}   (answer given: {kind}, {conf}% sure)"]
+        for i, m in enumerate(meanings, 1):
+            mk = f"  [{senses[i - 1]}]" if i <= len(senses) else ""
+            lines.append(f"  {i}. {m['text'] if not m['pos'] else '(' + m['pos'] + ') ' + m['text']}{mk}")
+        parts.append("\n".join(lines))
+    return "Give the second choice for these words:\n\n" + "\n\n".join(parts)
+
+
+def request_second(words, save, model, done):
+    return {"model": model, "max_tokens": 8000, "system": SYSTEM_SECOND,
+            "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA_SECOND}},
+            "messages": [{"role": "user", "content": prompt_second(words, save, done)}]}
+
+
 def request_params(words, save, model):
     return {"model": model, "max_tokens": 16000, "system": SYSTEM,
             "output_config": {"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
@@ -203,8 +270,9 @@ def groups(words, size=None):
 
 # ---- the answers --------------------------------------------------------------------------------------------
 def read_answer(message, words, model=""):
-    """{word: (kind, confidence, [meaning kinds], note, model)} from one response; words it left out, or a refusal /
-    cut answer, come back with confidence 0 (to be checked by hand)."""
+    """{word: (kind, confidence, [meaning kinds], note, model, "")} from one response (the last field is the second
+    choice, asked for separately: read_second); words it left out, or a refusal / cut answer, come back with
+    confidence 0 (to be checked by hand)."""
     got = {}
     if getattr(message, "stop_reason", None) == "end_turn":
         text = next((b.text for b in message.content if b.type == "text"), "")
@@ -217,10 +285,27 @@ def read_answer(message, words, model=""):
             if w in words and item.get("kind") in CATEGORIES:
                 conf = max(0, min(100, int(item.get("confidence") or 0)))
                 senses = [m for m in item.get("meanings", []) if m in SENSE_CATEGORIES]
-                got[w] = (item["kind"], conf, senses, str(item.get("note", "")).replace("\t", " ").strip(), model)
+                got[w] = (item["kind"], conf, senses, str(item.get("note", "")).replace("\t", " ").strip(), model, "")
     reason = getattr(message, "stop_reason", None) or "no answer"
     for w in words:
-        got.setdefault(w, ("clean", 0, [], f"not answered ({reason})", model))
+        got.setdefault(w, ("clean", 0, [], f"not answered ({reason})", model, ""))
+    return got
+
+
+def read_second(message, words):
+    """{word: "kind:chance"} from one second-choice response (words it left out are simply missing: asked again
+    by the next run)."""
+    got = {}
+    if getattr(message, "stop_reason", None) == "end_turn":
+        text = next((b.text for b in message.content if b.type == "text"), "")
+        try:
+            items = json.loads(text)["words"]
+        except (ValueError, KeyError, TypeError):
+            items = []
+        for item in items:
+            w = str(item.get("word", "")).strip().lower()
+            if w in words and item.get("second") in CATEGORIES:
+                got[w] = f"{item['second']}:{max(0, min(100, int(item.get('chance') or 0)))}"
     return got
 
 
@@ -234,19 +319,20 @@ def with_forms(results, forms):
             seen.add(word)
             word = forms[word]
         if word in out:
-            kind, conf, _, _, model = out[word]
-            out[form] = (kind, conf, [], f"form of {target}", model)
+            kind, conf, _, _, model, second = out[word]
+            out[form] = (kind, conf, [], f"form of {target}", model, second)
     return out
 
 
 def write_results(path, results, save):
-    """word_categories.tsv: word, kind, confidence, meaning kinds, note, the model that answered; commonest first."""
+    """word_categories.tsv: word, kind, confidence, meaning kinds, note, the model that answered, the second choice
+    ("insult:30": the likeliest other kind and its chance, for unsure words; see `second`); commonest first."""
     rank = {w: save[w][0] if w in save else 10 ** 9 for w in results}
     with open(path, "w", encoding="utf-8") as f:
-        f.write("# word\tkind\tconfidence\tmeanings\tnote\tmodel\n")
+        f.write("# word\tkind\tconfidence\tmeanings\tnote\tmodel\tsecond\n")
         for w in sorted(results, key=lambda x: (rank[x], x)):
-            kind, conf, senses, note, model = results[w]
-            f.write(f"{w}\t{kind}\t{conf}\t{','.join(senses)}\t{note}\t{model}\n")
+            kind, conf, senses, note, model, second = results[w]
+            f.write(f"{w}\t{kind}\t{conf}\t{','.join(senses)}\t{note}\t{model}\t{second}\n")
 
 
 def read_results(path):
@@ -256,27 +342,28 @@ def read_results(path):
             for line in f:
                 if line.startswith("#") or not line.strip():
                     continue
-                w, kind, conf, senses, note, model = (line.rstrip("\n").split("\t") + [""] * 6)[:6]
-                out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note, model)
+                w, kind, conf, senses, note, model, second = (line.rstrip("\n").split("\t") + [""] * 7)[:7]
+                out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note, model, second)
     return out
 
 
 # ---- cost ---------------------------------------------------------------------------------------------------
-def estimate(word_groups, save, model, client=None):
+def estimate(word_groups, save, model, client=None, params=None, out_per_word=OUT_PER_WORD):
     """(input tokens, output tokens, dollars at the batch price). Counts a sample with the API when a client is
     given, else guesses from the length of the text (about 4 characters a token)."""
     if not word_groups:
         return 0, 0, 0.0
     sample = word_groups[: min(5, len(word_groups))]
+    params = params or (lambda g: request_params(g, save, model))
     if client is not None:
-        per = [client.messages.count_tokens(**{k: v for k, v in request_params(g, save, model).items()
+        per = [client.messages.count_tokens(**{k: v for k, v in params(g).items()
                                                if k in ("model", "system", "messages")}).input_tokens
-               + len(json.dumps(SCHEMA)) // 4 for g in sample]
+               + len(json.dumps(params(g)["output_config"]["format"]["schema"])) // 4 for g in sample]
     else:
-        per = [(len(SYSTEM) + len(json.dumps(SCHEMA)) + len(request_params(g, save, model)["messages"][0]["content"]))
-               // 4 for g in sample]
+        per = [len(json.dumps({k: params(g)[k] for k in ("system", "messages", "output_config")})) // 4
+               for g in sample]
     tokens_in = int(sum(per) / len(sample) * len(word_groups))
-    tokens_out = OUT_PER_WORD * sum(len(g) for g in word_groups)
+    tokens_out = out_per_word * sum(len(g) for g in word_groups)
     p_in, p_out = PRICES.get(model, PRICES[MODEL])
     return tokens_in, tokens_out, (tokens_in * p_in + tokens_out * p_out) / 2e6
 
@@ -290,8 +377,9 @@ def make_client():
     return anthropic.Anthropic()
 
 
-def submit(client, word_groups, save, model, state, state_path, log=print):
-    """Send the groups as batches (at most 10,000 requests each) and note them in the state file."""
+def submit(client, word_groups, params, model, state, state_path, log=print):
+    """Send the groups as batches (at most 10,000 requests each; params(group) -> a request) and note them in the
+    state file."""
     state["model"] = model
     start = len(state["requests"])
     for b in range(0, len(word_groups), 10000):
@@ -299,16 +387,18 @@ def submit(client, word_groups, save, model, state, state_path, log=print):
         for i, g in enumerate(word_groups[b:b + 10000], start + b):
             cid = f"g{i:06d}"
             state["requests"][cid] = g
-            reqs.append({"custom_id": cid, "params": request_params(g, save, model)})
+            reqs.append({"custom_id": cid, "params": params(g)})
         batch = client.messages.batches.create(requests=reqs)
         state["batches"].append(batch.id)
         save_state(state_path, state)
         log(f"Sent batch {batch.id} ({len(reqs)} requests).")
 
 
-def collect(client, state, state_path, poll=60, log=print):
-    """Wait for every batch to end, then read the answers: {word: (kind, confidence, meanings, note, model)}."""
+def collect(client, state, poll=60, log=print, read=None):
+    """Wait for every batch to end, then read the answers (read(message, words), by default read_answer with the
+    run's model): {word: answer}."""
     results, model = {}, state.get("model", "")
+    read = read or (lambda message, words: read_answer(message, words, model))
     for bid in state["batches"]:
         while True:
             batch = client.messages.batches.retrieve(bid)
@@ -319,7 +409,7 @@ def collect(client, state, state_path, poll=60, log=print):
             time.sleep(poll)
         for r in client.messages.batches.results(bid):             # (a failed request's words are left out:
             if r.result.type == "succeeded":                       # the next run sends them again)
-                results.update(read_answer(r.result.message, state["requests"].get(r.custom_id, []), model))
+                results.update(read(r.result.message, state["requests"].get(r.custom_id, [])))
     return results
 
 
@@ -337,20 +427,26 @@ def save_state(path, state):
     os.replace(tmp, path)
 
 
-def paths(db):
+def paths(db, second=False):
+    """(the results file, the state file of a run: one for the second choices, so both can be under way, the
+    folder of the downloaded lists)."""
     folder = os.path.dirname(os.path.abspath(db))
-    return (os.path.join(folder, "word_categories.tsv"), os.path.join(folder, "word_categories.state.json"),
+    state = "word_categories.second.state.json" if second else "word_categories.state.json"
+    return (os.path.join(folder, "word_categories.tsv"), os.path.join(folder, state),
             os.path.join(folder, ".word_lists"))
 
 
 def plan(args, log=print):
     """The words to send this time: candidates not answered yet (all of them with --redo; with --recheck, the ones
-    answered below the --review confidence, to be answered again, by a stronger model, say)."""
+    answered below the --review confidence, to be answered again, by a stronger model, say; with --second, those
+    unsure words that have no second choice yet). Forms are never sent: they follow their word."""
     out_path, _, cache = paths(args.db)
     save = read_save(args.db)
     cands, forms = candidates(save, {} if args.no_lists else list_words(cache, log))
     done = {} if args.redo else read_results(out_path)
-    if args.recheck:
+    if args.second:                # the unsure words' second choice, from the answers already there
+        todo = [w for w in cands if w in done and done[w][1] < args.review and not done[w][5]]
+    elif args.recheck:
         todo = [w for w in cands if w in done and done[w][1] < args.review]
     else:
         todo = [w for w in cands if w not in done]
@@ -371,12 +467,16 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
     ap.add_argument("--recheck", action="store_true",
                     help="send again only the words answered below the --review confidence (their new answers replace "
                          "the old): run with a cheap --model first, then --recheck with a stronger one")
+    ap.add_argument("--second", action="store_true",
+                    help="ask only for the unsure words' second choice (the likeliest other kind), giving Claude the "
+                         "answer they already have; a word whose second choice leads to the same outcome (shown, "
+                         "smeared, or left out) need not be checked by hand. Nothing is classified again")
     ap.add_argument("--review", type=int, default=REVIEW_BELOW, help="confidence below which a word is to be checked")
     ap.add_argument("--yes", action="store_true", help="do not ask before sending")
     args = ap.parse_args(argv)
-    if args.recheck and args.redo:
-        ap.error("--recheck and --redo do not go together")
-    out_path, state_path, _ = paths(args.db)
+    if sum((args.recheck, args.redo, args.second)) > 1:
+        ap.error("--recheck, --redo and --second do not go together")
+    out_path, state_path, _ = paths(args.db, args.second)
 
     if args.command == "try":
         save = read_save(args.db) if os.path.exists(args.db) else {}
@@ -386,15 +486,21 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
         client = client_factory()
         for g in groups(words):
             msg = client.messages.create(**request_params(g, save, args.model))
-            for w, (kind, conf, senses, note, _m) in read_answer(msg, g, args.model).items():
+            for w, (kind, conf, senses, note, _m, _s) in read_answer(msg, g, args.model).items():
                 log(f"{w:20} {kind:9} {conf:3}  {','.join(senses)}  {note}")
         return 0
 
     if args.command == "status":
-        state, done = load_state(state_path), read_results(out_path)
-        low = sum(1 for v in done.values() if v[1] < args.review)
-        log(f"{len(done):,} words answered ({low:,} to check by hand); "
-            f"{len(state['batches'])} batch(es) still to collect.")
+        done = read_results(out_path)
+        pending = len(load_state(state_path)["batches"]) + len(load_state(paths(args.db, True)[1])["batches"])
+        base = {w: v for w, v in done.items() if not v[3].startswith("form of ")}
+        low = sum(1 for v in base.values() if v[1] < args.review)
+        asked = sum(1 for v in base.values() if v[1] < args.review and v[5])
+        check = sum(1 for v in base.values() if to_check(v, args.review))
+        log(f"{len(done):,} words answered ({len(done) - len(base):,} of them forms that follow their word); "
+            f"{pending} batch(es) still to collect.")
+        log(f"Of the {len(base):,} base words, {low:,} are below {args.review}; {asked:,} of those have a second "
+            f"choice. To check by hand: {check:,} (unsure, and no second choice yet or one that leads elsewhere).")
         by = {}
         for v in done.values():
             n, n_low = by.get(v[4] or "?", (0, 0))
@@ -413,9 +519,15 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
             sources[r] = sources.get(r, 0) + 1
     log(f"{len(cands):,} words to classify (" + ", ".join(f"{n:,} {r}" for r, n in sorted(sources.items())) +
         f"), {len(forms):,} forms that follow their word; {len(done):,} already answered, {len(todo):,} to send"
-        + (f" again (answered below {args.review})." if args.recheck else "."))
+        + (f" again (answered below {args.review})." if args.recheck else
+           " for their second choice (unsure, not asked yet)." if args.second else "."))
     client = client_factory() if args.command == "run" else None
-    t_in, t_out, cost = estimate(groups(todo), save, args.model, client)
+    if args.second:
+        params = lambda g: request_second(g, save, args.model, done)  # noqa: E731
+    else:
+        params = lambda g: request_params(g, save, args.model)  # noqa: E731
+    t_in, t_out, cost = estimate(groups(todo), save, args.model, client, params,
+                                 OUT_PER_WORD_SECOND if args.second else OUT_PER_WORD)
     log(f"About {t_in:,} tokens in and {t_out:,} out with {args.model} at the batch price: about ${cost:,.2f}.")
     if args.command == "estimate":
         return 0
@@ -433,17 +545,24 @@ def main(argv=None, client_factory=make_client, log=print, ask=input):
                     not in ("y", "yes"):
                 log("Nothing sent.")
                 return 1
-            submit(client, groups(todo), save, args.model, state, state_path, log)
-    results = dict(done)
+            submit(client, groups(todo), params, args.model, state, state_path, log)
+    results, got = dict(done), {}
     if state["batches"]:
         log("Waiting for the answers (most batches end within the hour; you can stop and run this again later)...")
-        results.update(collect(client, state, state_path, log=log))
+        if args.second:
+            got = collect(client, state, log=log, read=read_second)
+            for w, second in got.items():
+                if w in results:
+                    results[w] = results[w][:5] + (second,)
+        else:
+            got = collect(client, state, log=log)
+            results.update(got)
     write_results(out_path, with_forms(results, forms), save)
-    low = sum(1 for v in results.values() if v[1] < args.review)
-    log(f"Wrote {out_path}: {len(results):,} words, {low:,} to check by hand (confidence below {args.review}).")
-    failed = sum(1 for g in state["requests"].values() for w in g if w not in results)
+    check = sum(1 for w, v in results.items() if w not in forms and to_check(v, args.review))
+    log(f"Wrote {out_path}: {len(results):,} words. To check by hand: {check:,} (base words; forms follow them).")
+    failed = sum(1 for g in state["requests"].values() for w in g if w not in got)
     if failed:
-        log(f"{failed:,} words got no answer; the next run sends them again.")
+        log(f"No answer for {failed:,} of the words sent; the next run sends them again.")
     if os.path.exists(state_path):
         os.remove(state_path)                          # collected: the next run starts afresh with what is left
     return 0

@@ -136,7 +136,10 @@ ones it is unsure of are for checking by hand. `estimate` shows which words woul
 `try word ...` answers a few words at once, `run` sends them all through the Message Batches API (it asks first,
 and picks up where it was if stopped) and writes `word_categories.tsv` next to the save. To save money, run it
 with `--model claude-haiku-5-5` first, then `run --recheck`: only the words answered with less than 80% confidence
-go again, to Opus, and their answers replace Haiku's (the file notes which model answered each word). It needs `pip install
+go again, to Opus, and their answers replace Haiku's (the file notes which model answered each word). Then `run
+--second` asks Opus only for each still-unsure word's second choice, showing it the answer it already has (no word
+is classified again): a word whose two likeliest kinds lead to the same thing (shown, smeared, or left out) need
+not be checked by hand. `status` says how many are left to check. It needs `pip install
 anthropic` and an Anthropic API key, and only reads the save.
 
 ## Building a program

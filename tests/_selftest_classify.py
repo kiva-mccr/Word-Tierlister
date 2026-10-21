@@ -52,16 +52,25 @@ ans = C.read_answer(message([{"word": "box", "meanings": ["clean", "sexual"], "k
                               "note": "rude only\tin slang"},
                              {"word": "penis", "meanings": ["clinical"], "kind": "nonsense", "confidence": 99,
                               "note": ""}]), ["box", "penis", "idiot"])
-assert ans["box"] == ("double", 93, ["clean", "sexual"], "rude only in slang", ""), ans["box"]
+assert ans["box"] == ("double", 93, ["clean", "sexual"], "rude only in slang", "", ""), ans["box"]
 assert ans["penis"][1] == 0 and ans["idiot"][1] == 0                        # a bad kind or no answer: to check
 assert all(v[1] == 0 for v in C.read_answer(message([], stop="refusal"), ["box"]).values())
 assert "refusal" in C.read_answer(message([], stop="refusal"), ["box"])["box"][3]
 
 # forms of forms take the answer at the end of the chain, never an out-of-date one of their own
-chain = C.with_forms({"cocktip": ("sexual", 88, [], "", "opus"), "cock-tip": ("sexual", 70, [], "form of cocktip", "haiku"),
-                      "cock-tips": ("sexual", 70, [], "form of cock-tip", "haiku")},
+chain = C.with_forms({"cocktip": ("sexual", 88, [], "", "opus", ""),
+                      "cock-tip": ("sexual", 70, [], "form of cocktip", "haiku", ""),
+                      "cock-tips": ("sexual", 70, [], "form of cock-tip", "haiku", "")},
                      {"cock-tip": "cocktip", "cock-tips": "cock-tip"})
-assert chain["cock-tips"] == ("sexual", 88, [], "form of cock-tip", "opus") and chain["cock-tip"][1] == 88, chain
+assert chain["cock-tips"] == ("sexual", 88, [], "form of cock-tip", "opus", "") and chain["cock-tip"][1] == 88, chain
+
+# which unsure words need a person: no second choice yet, or one that leads to another outcome
+assert not C.to_check(("insult", 90, [], "", "", ""), 80)                       # sure
+assert C.to_check(("insult", 70, [], "", "", ""), 80)                           # unsure, not asked yet
+assert not C.to_check(("insult", 70, [], "", "", "crude:30"), 80)               # either way: shown, smeared
+assert not C.to_check(("slur", 70, [], "", "", "sexual:40"), 80)                # either way: left out
+assert C.to_check(("insult", 70, [], "", "", "slur:30"), 80)                    # smeared or left out
+assert C.to_check(("clinical", 70, [], "", "", "clean:45"), 80)                 # smeared or shown
 
 # ---- the estimate (offline: guessed from the text)
 t_in, t_out, cost = C.estimate(C.groups(cands), save, C.MODEL)
@@ -86,6 +95,12 @@ class FakeBatches:
 
     def results(self, bid):
         for req in self.made[bid]:
+            if req["params"]["system"] == C.SYSTEM_SECOND:                 # second choices
+                words = [ln[6:].split()[0] for ln in req["params"]["messages"][0]["content"].splitlines()
+                         if ln.startswith("WORD: ")]
+                items = [{"word": w, "second": "clean" if w == "fuck" else "insult", "chance": 30} for w in words]
+                yield NS(custom_id=req["custom_id"], result=NS(type="succeeded", message=message(items)))
+                continue
             words = [ln[6:] for ln in req["params"]["messages"][0]["content"].splitlines() if ln.startswith("WORD: ")]
             if "idiot" in words:                                           # this request fails: sent again later
                 yield NS(custom_id=req["custom_id"], result=NS(type="errored"))
@@ -107,13 +122,13 @@ assert C.main(args, client_factory=lambda: fake, log=logs.append, ask=lambda q: 
 out, state, _ = C.paths(db)
 got = C.read_results(out)
 assert got["box"][:2] == ("double", 95) and got["penis"][0] == "clinical" and got["fuck"][0] == "swear"
-assert got["fucking"] == ("swear", 95, [], "form of fuck", "claude-haiku-5-5")      # forms follow their word
+assert got["fucking"] == ("swear", 95, [], "form of fuck", "claude-haiku-5-5", "")  # forms follow their word
 assert got["bitches"][1] == 60 and got["box"][4] == "claude-haiku-5-5"
 assert "idiot" not in got and not os.path.exists(state)
-assert any("1 words got no answer" in m for m in logs) and any("1 to check by hand" in m for m in logs), logs
+assert any("No answer for 1 of the words" in m for m in logs) and any("To check by hand: 1 " in m for m in logs), logs
 with open(out, encoding="utf-8") as f:
     lines = f.read().splitlines()
-assert lines[0].startswith("# word") and lines[1].startswith("fuck\tswear\t95") and lines[1].endswith("\tclaude-haiku-5-5")
+assert lines[0].startswith("# word") and lines[1].startswith("fuck\tswear\t95") and lines[1].endswith("\tclaude-haiku-5-5\t")
 
 # the next run sends only what is left (idiot), keeping the earlier answers
 fake.messages.batches.polls = 0
@@ -137,7 +152,7 @@ assert got["bitch"][1:2] == (95,) and got["bitch"][4] == "claude-opus-5-5"
 assert got["bitches"][1] == 95 and got["bitches"][4] == "claude-opus-5-5"            # its form follows
 assert got["box"][4] == "claude-haiku-5-5"                                              # sure answers stay
 logs.clear()
-assert C.main(["status", "--db", db], log=logs.append) == 0 and "to check by hand" in logs[0]
+assert C.main(["status", "--db", db], log=logs.append) == 0 and "To check by hand" in logs[1]
 assert any("claude-opus-5-5: 2 words, 0 below" in m for m in logs) and any("claude-haiku-5-5:" in m for m in logs), logs
 assert C.main(["run", "--db", db, "--no-lists", "--recheck", "--yes"], client_factory=lambda: fake,
               log=logs.append) == 0 and "Nothing to send." in logs                     # all sure now
@@ -146,4 +161,44 @@ assert C.main(["estimate", "--db", os.path.join(tmp, "none.db")], log=logs.appen
 logs.clear()
 assert C.main(["estimate", "--db", db, "--no-lists"], log=logs.append) == 0
 assert "1 to send" in logs[0] and "$" in logs[1]                                   # (only idiot is left)
+
+# --second: only unsure base words without a second choice are sent, with the answer they already have; nothing is
+# classified again, and forms take their word's second choice
+sb = C.read_save(db)
+p2 = C.prompt_second(["box"], sb, {"box": ("double", 70, ["clean", "sexual"], "", "m", "")})
+assert "WORD: box   (answer given: double, 70% sure)" in p2 and "1. (noun) A container.  [clean]" in p2
+assert "2. (noun) (vulgar) The vagina.  [sexual]" in p2
+assert C.request_second(["box"], sb, C.MODEL, {"box": ("double", 70, [], "", "", "")})["output_config"]["format"][
+    "schema"] is C.SCHEMA_SECOND
+assert C.read_second(message([{"word": "box", "second": "clean", "chance": 140}, {"word": "zz", "second": "x",
+                                                                                   "chance": 1}]), ["box"]) == {"box": "clean:100"}
+rows = C.read_results(out)
+rows["fuck"] = ("swear", 70) + rows["fuck"][2:]                                         # make two words unsure
+rows["box"] = ("double", 75) + rows["box"][2:]
+C.write_results(out, rows, sb)
+before = len(fake.messages.batches.made)
+fake.messages.batches.polls = 0
+logs.clear()
+assert C.main(["estimate", "--db", db, "--no-lists", "--second"], log=logs.append) == 0
+assert "2 to send for their second choice" in logs[0], logs
+C.main(["run", "--db", db, "--no-lists", "--second", "--yes"], client_factory=lambda: fake, log=logs.append)
+sent = fake.messages.batches.made[f"msgbatch_{before}"]
+assert all(r["params"]["system"] == C.SYSTEM_SECOND for r in sent) and len(sent) == 2
+assert sent[0]["params"]["model"] == "claude-opus-5-5" and "(answer given: swear, 70% sure)" in sent[0]["params"][
+    "messages"][0]["content"]
+got = C.read_results(out)
+assert got["fuck"][:2] == ("swear", 70) and got["fuck"][5] == "clean:30"               # the answer itself stays
+assert got["fucking"][5] == "clean:30" and got["box"][5] == "insult:30" and got["penis"][5] == ""
+assert C.to_check(got["fuck"], 80) and not C.to_check(got["box"], 80)                  # shown/smeared vs smeared
+assert any("To check by hand: 1 " in m for m in logs), logs
+assert not os.path.exists(C.paths(db, True)[1])
+logs.clear()
+assert C.main(["run", "--db", db, "--no-lists", "--second", "--yes"], client_factory=lambda: fake,
+              log=logs.append) == 0 and "Nothing to send." in logs                     # asked once only
+logs.clear()
+C.main(["status", "--db", db], log=logs.append)
+assert "2 of those have a second choice. To check by hand: 1" in logs[1], logs
+# a recheck replaces the answer, and with it the second choice (asked again for the new answer if still unsure)
+assert C.read_answer(message([{"word": "fuck", "meanings": [], "kind": "swear", "confidence": 70, "note": ""}]),
+                     ["fuck"])["fuck"][5] == ""
 print("classify tool OK")
