@@ -8,8 +8,77 @@ else with progress is offered for merging (Store.merge does the actual merge, in
 import os
 from pathlib import Path
 import sqlite3
+import sys
+import tempfile
 
 from constants import TIERS
+
+
+# --------------------------------------------------------------------------
+# Where the program keeps its things (T-1): the save, tierlist.log, the export, the Wiktionary download
+# --------------------------------------------------------------------------
+APP_NAME = "Word Tier List"
+SOURCE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # (tierlist.py's folder, above src/)
+
+
+def is_frozen():
+    """True when running as a built program (PyInstaller), not as tierlist.py."""
+    return bool(getattr(sys, "frozen", False))
+
+
+def _writable(folder):
+    """True if a file can really be made in `folder` (os.access alone is wrong on Windows for Program Files)."""
+    try:
+        with tempfile.TemporaryFile(dir=folder):
+            return True
+    except OSError:
+        return False
+
+
+def user_data_dir(platform=None, env=None, home=None):
+    """The per-user folder for programs' data: %APPDATA% on Windows, ~/Library/Application Support on macOS,
+    $XDG_DATA_HOME (~/.local/share) elsewhere; with this program's own folder in it."""
+    platform, env = platform or sys.platform, os.environ if env is None else env
+    home = home or os.path.expanduser("~")
+    if platform.startswith("win"):
+        return os.path.join(env.get("APPDATA") or os.path.join(home, "AppData", "Roaming"), APP_NAME)
+    if platform == "darwin":
+        return os.path.join(home, "Library", "Application Support", APP_NAME)
+    return os.path.join(env.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), "word-tierlist")
+
+
+def program_dir(executable=None):
+    """The folder a built program sits in: the executable's own, or on macOS the folder holding the .app (its
+    executable is inside, Word Tier List.app/Contents/MacOS/, which is replaced with every new version)."""
+    folder = os.path.dirname(os.path.realpath(executable or sys.executable))
+    parts = Path(folder).parts
+    if len(parts) >= 3 and parts[-1] == "MacOS" and parts[-2] == "Contents" and parts[-3].endswith(".app"):
+        return str(Path(*parts[:-3]))
+    return folder
+
+
+def app_dir(frozen=None, executable=None, writable=_writable, **where):
+    """Where the save, its log and exports live. From source: tierlist.py's folder, as always. As a built program
+    (T-1): the folder the program sits in, never the folder it unpacks itself into each time it starts (a
+    one-file build's temporary folder is deleted when it exits, and the save with it); if that folder is
+    read-only (Program Files, a disk image), the per-user data folder (user_data_dir), made if needed."""
+    if not (is_frozen() if frozen is None else frozen):
+        return SOURCE_DIR
+    folder = program_dir(executable)
+    if writable(folder):
+        return folder
+    data = user_data_dir(**where)
+    os.makedirs(data, exist_ok=True)
+    return data
+
+
+def restart_args(argv=None, script=None, frozen=None):
+    """The arguments to start this program again with sys.executable: the script and its options, or just the
+    options for a built program (its executable is the program; there is no script to name)."""
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if is_frozen() if frozen is None else frozen:
+        return argv
+    return [os.path.abspath(script or os.path.join(SOURCE_DIR, "tierlist.py")), *argv]
 
 
 # --------------------------------------------------------------------------
@@ -22,7 +91,7 @@ def _pointer_file():
 
 def default_save_path(script_dir):
     """tierlist.db next to the script, or in your home folder if that folder is read-only."""
-    if os.access(script_dir, os.W_OK):
+    if _writable(script_dir):
         return os.path.join(script_dir, "tierlist.db")
     return os.path.join(os.path.expanduser("~"), "tierlist.db")
 
@@ -54,7 +123,7 @@ def save_progress(path):
 def find_saves(script_dir):
     """Files that might be tier-list saves, in the places people usually keep them."""
     home = os.path.expanduser("~")
-    roots = [script_dir, os.path.dirname(script_dir), os.getcwd(), home]
+    roots = [script_dir, os.path.dirname(script_dir), os.getcwd(), home, user_data_dir()]   # (a built program's, T-1)
     roots += [os.path.join(home, *sub) for sub in (("Downloads",), ("Documents",), ("Desktop",), ("OneDrive",),
                                                      ("OneDrive", "Documents"), ("OneDrive", "Desktop"))]
     found, seen, seen_roots = [], set(), set()

@@ -77,7 +77,7 @@ live in src/, the self-tests in tests/, check_release.py and layout_trace.py in 
                     conflicts, merging. Every change is committed immediately.
     wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
                     detection, queue preparation.
-    saves.py        finding your earlier save, remembering it, exporting the tier list.
+    saves.py        where the save lives (app_dir, T-1), finding your earlier save, remembering it, exporting.
     definitions.py  Definitions: WordNet offline, dictionaryapi.dev online, cached.
     theme.py        colour palette (UI-1).            fonts.py     typography (UI-2).
     sizing.py       window sizes from the screen and the contents; monitors; Windows display scaling.
@@ -1004,9 +1004,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Notes from the discussion: PyInstaller builds only
 # for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
 # Linux can be tested from here (Windows / macOS builds would need testing on those machines).
-# [ ] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
+# [x] T-1  app_dir(): a save/config folder that is the executable's own folder (or the home folder)
 #          when frozen. REQUIRED before any build: a one-file build unpacks to a temporary folder,
 #          so a save kept "next to the script" would be deleted when the program exits.
+#          Built: saves.app_dir(): from source tierlist.py's folder (unchanged); built (sys.frozen) the folder
+#          the program sits in (saves.program_dir: on macOS the folder holding the .app, not inside the
+#          bundle, which a new version replaces); a read-only one (Program Files, a disk image; tested by
+#          really making a file, os.access is wrong there on Windows) falls back to saves.user_data_dir
+#          (%APPDATA%\Word Tier List, ~/Library/Application Support/Word Tier List, $XDG_DATA_HOME or
+#          ~/.local/share/word-tierlist), which find_saves also searches. The save you used last is still
+#          found first (the pointer file in your home folder), so source and program share one save.
+#          saves.restart_args: a built program restarts itself with its options only (no script name).
+#          tierlist.main and App.SCRIPT_DIR use them. _selftest_appdir.py (with a stand-in built program in
+#          its own process; a real build is T-3).
 # [ ] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
 #          stays an optional download as it is now.
 # [ ] T-3  build.py: detects the OS, installs PyInstaller if missing, builds .exe / .app / binary.
@@ -1118,8 +1128,8 @@ import deps  # noqa: E402  (after the path line above)
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, plan_line  # noqa: F401
 from definitions import Definitions
-from saves import (_pointer_file, choose_save, default_save_path, find_saves,  # noqa: F401
-                   remember_save, save_progress, write_export)
+from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
+                   remember_save, restart_args, save_progress, write_export)
 from sizing import set_dpi_awareness
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
@@ -1174,11 +1184,11 @@ def main():
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
     set_dpi_awareness()          # Windows: sharp at 125% / 150% display scaling (before any window opens)
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    script_dir = app_dir()          # tierlist.py's folder, or a built program's own (T-1)
     # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a
     #        terminal, before any window, only tkinter is asked about (the window needs it to open);
     #        every Python package is offered later, in the window, each as its own choice.
-    restart_argv = [os.path.abspath(__file__), *sys.argv[1:]]
+    restart_argv = restart_args(script=__file__)
     if not args.no_install and not getattr(sys, "frozen", False):
         deps.use_private_env(restart_argv, script_dir)
     if tk is None and deps.wants_terminal_setup(args.no_install):

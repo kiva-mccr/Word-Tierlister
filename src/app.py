@@ -24,7 +24,7 @@ from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, TIERS, mask_word
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, event_spec
-from saves import write_export
+from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
@@ -36,7 +36,7 @@ from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, Du
                      Tooltip, WordCard, refresh_widgets, watch_focus)
 
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # (where tierlist.py is)
+SCRIPT_DIR = app_dir()          # where tierlist.py is, or a built program (T-1)
 
 
 def format_stats(stats):
@@ -1520,9 +1520,8 @@ class App:
 
     def add_launcher(self):
         """File > Add to applications menu (Linux, ST-5): a launcher that starts the program with no terminal."""
-        frozen = getattr(sys, "frozen", False)
         try:
-            path, how = deps.add_to_menu(sys.executable, None if frozen else os.path.join(SCRIPT_DIR, "tierlist.py"))
+            path, how = deps.add_to_menu(sys.executable, None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py"))
         except OSError as exc:
             show_exception("Applications menu", exc, self.root, "Could not add Word Tier List to the applications menu.")
             return

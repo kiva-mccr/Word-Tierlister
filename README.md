@@ -23,7 +23,10 @@ tools/             check_release.py (pre-hand-off checks, builds the zip), layou
 ```
 
 `tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
-replacing the other folders never loses your list.
+replacing the other folders never loses your list. A built program (once packaging lands) keeps it next to
+the program instead (on macOS next to the .app), or, if that folder is read-only, in your user data folder
+(`%APPDATA%\Word Tier List`, `~/Library/Application Support/Word Tier List`, `~/.local/share/word-tierlist`);
+either way the save you used last is found again, so switching between the two loses nothing.
 
 ## Files
 
@@ -35,7 +38,7 @@ replacing the other folders never loses your list.
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds, obscene words, the ones left out; ST-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the obscene words (from the download's labels, or Wiktionary's pages for an older save), queue prep. |
-| `src/saves.py` | Finding / remembering your earlier save; export. |
+| `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
