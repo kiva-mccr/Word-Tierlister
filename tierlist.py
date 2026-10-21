@@ -383,8 +383,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           For now (asked for: "it kinda worked"): "Obscene words" starts unticked, so the words marked obscene
 #           are left out until telling them apart is worked on again (deal_done 2 re-deals older saves).
 # [x] OB-1  Review the flagged obscene words by hand (asked for: "a dev option booted via the terminal", "a new
-#           tab with a simple % progress bar"). Flagging is loose on purpose now, so nothing falls through the
-#           cracks: ANY meaning rude (obscene.decide; Store.OBSCENE_VERSION 5), forms of a flagged word too.
+#           tab with a simple % progress bar"). Flagging was made loose for it (any meaning rude), then put back
+#           ("too loose, go back"): most or the first meaning rude (obscene.decide; Store.OBSCENE_VERSION 7).
 #           python tierlist.py --review-obscene opens the "Review obscene words" tab (only then; App(review=True)):
 #           the commonest flagged word not yet answered, never censored, its definitions open (not saved as your
 #           setting), Not obscene / Obscene / Swear word (keys 1 / 2 / 3, the keymap's "review" group, changeable)
@@ -914,6 +914,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: Bookshelf.mark(spines) draws a small soft lilac triangle over each (a band above the shelf
 #           holds them; a mark rises with its spine on hover); Store.spine_of(word) finds the spine from the
 #           word's rank. Cleared in Place new words and when a tab has no duel.
+# [x] UI-56 The definitions pane fits its senses (asked for: "tries to open so all the definitions are visible; if
+#           it can't due to space limitations it shouldn't"). DefinitionDrawer.lines_needed() counts the text's
+#           pixels at its width; App._fit_defs raises the pane's lines to that (9 usual, at most 40) and refits:
+#           the window grows if the screen has room, else _fit_window gives the pane the lines that fit (before
+#           any smaller font). It only grows from word to word (shrinking for each short one would make the
+#           page jump on every word) and is back to 9 lines when the pane is closed. A window grown past the
+#           screen's edge is now moved back onto it (it grew downward from where it opened).
 # [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

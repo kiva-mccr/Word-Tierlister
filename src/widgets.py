@@ -1418,6 +1418,17 @@ class DefinitionDrawer(tk.Frame):
         self.pack_propagate(False)
         super().configure(height=1)
 
+    def lines_needed(self):
+        """How many lines tall the text must be to show all of it at its present width (0 before it is laid
+        out). Headings and smeared senses are taller than a body line; this counts their pixels."""
+        t = self.text
+        self.update_idletasks()
+        if t.winfo_width() <= 1:
+            return 0
+        pixels = t.count("1.0", "end", "update", "ypixels")
+        pixels = pixels[0] if isinstance(pixels, tuple) else pixels
+        return -(-int(pixels or 0) // max(1, self._body.metrics("linespace")))
+
     def natural_height(self):
         """The height the contents want (whether or not it is folded right now)."""
         self.update_idletasks()

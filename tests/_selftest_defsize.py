@@ -1,0 +1,60 @@
+import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
+"""The definition pane opens tall enough to show every sense when the screen has room (UI-56), stays within the
+screen when it has not, grows but never shrinks from word to word, and is back to its usual height when reopened."""
+import os, tempfile
+import tkinter as tk
+import app as A
+import tierlist as T
+
+LONG = "\n".join(f"{i}. (noun) sense number {i} of a word with very many meanings indeed" for i in range(1, 17))
+SHORT = "1. (noun) a short one"
+
+
+def make(screen_h):
+    store = T.Store(os.path.join(tempfile.mkdtemp(), "s.db"))
+    words = [f"word{i}" for i in range(12)]
+    store.insert_words(words)
+    store.set_anchors(words[:6])
+    A.usable_area = lambda r: (0, 0, 1800, screen_h)
+    root = tk.Tk()
+    ap = A.App(root, store, T.Definitions(store))
+    ap.anim.reduce_motion = True
+    ap.mem_defs.update({w: SHORT for w in words})
+    root.update()
+    ap.toggle_defs(True); root.update()
+    return root, ap
+
+
+def shows_all(app):
+    t = app.def_text
+    return t.yview() == (0.0, 1.0)
+
+
+# a tall screen: a long definition opens the pane in full, a short one after it keeps the height
+root, app = make(1150)
+base_h = root.winfo_height()
+assert int(app.def_text.cget("height")) == app.DEF_LINES
+app._render_defs(["word7"]); root.update()
+assert int(app.def_text.cget("height")) == app.DEF_LINES      # short: the usual height
+app.mem_defs["word8"] = LONG
+app._render_defs(["word8"]); root.update()
+tall = int(app.def_text.cget("height"))
+assert tall > app.DEF_LINES and shows_all(app), (tall, app.def_text.yview())
+assert root.winfo_height() > base_h and root.winfo_height() <= 1150, root.winfo_height()
+assert root.winfo_y() + root.winfo_height() <= 1150, "grown past the bottom of the screen"
+app._render_defs(["word7"]); root.update()
+assert int(app.def_text.cget("height")) == tall               # never shrinks word to word (no jumping page)
+app.toggle_defs(False); root.update(); app.toggle_defs(True); root.update()
+assert int(app.def_text.cget("height")) == app.DEF_LINES      # reopened for a short word: the usual height
+root.destroy()
+
+# a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped
+root, app = make(560)
+app.mem_defs["word8"] = LONG
+app._render_defs(["word8"]); root.update()
+h = int(app.def_text.cget("height"))
+assert 3 <= h < 16 and root.winfo_height() <= 700, (h, root.winfo_height())
+assert not shows_all(app)                                     # (it scrolls for the rest)
+assert app.place_inner.winfo_reqheight() <= app.center.winfo_height(), "centre clipped"
+root.destroy()
+print("definition pane height OK")

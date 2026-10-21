@@ -106,6 +106,9 @@ bw.close(); pump(2)
 
 # ---- OB-2: a sense Wiktionary labels rude is smeared in the definitions while censoring, in both panes
 s.set_def("table", "\u2022 (noun) A flat surface.\n\u2022 (noun) (vulgar) Something rude.")
+while app.defs.pending:                          # earlier lookups done first: their answers redraw the pane
+    pump(1)
+pump(2)
 app.def_words = ["table"]; app.show_defs = True; app._render_defs(); pump(2)
 smears = app.def_text._smears
 assert len(smears) == 1 and smears[0].find_withtag("smear") and "Something rude" not in app.def_text.get("1.0", "end")

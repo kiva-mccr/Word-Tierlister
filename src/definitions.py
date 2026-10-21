@@ -5,6 +5,7 @@ definition is wanted (it returns cached text or None), then poll drain() from th
 finished lookups. Results are cached in the save file by the caller (App) via Store.set_def().
 """
 import json
+import os
 import queue
 import re
 import threading
@@ -12,6 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from constants import OFFLINE_ENV
 from obscene import rude_labels
 
 
@@ -102,6 +104,8 @@ class Definitions:
             try:
                 _wn.synsets("dog")
             except LookupError:                     # nltk is installed but not the dictionary data yet
+                if os.environ.get(OFFLINE_ENV):
+                    raise
                 import nltk
                 nltk.download("wordnet", quiet=True)
                 _wn.synsets("dog")
@@ -141,6 +145,8 @@ class Definitions:
     @staticmethod
     def _online(word):
         """Definitions from dictionaryapi.dev (up to 3 per part of speech, 10 in all), or None when offline/unknown."""
+        if os.environ.get(OFFLINE_ENV):
+            return None
         url = "https://api.dictionaryapi.dev/api/v2/entries/en/" + urllib.parse.quote(word)
         try:
             with urllib.request.urlopen(url, timeout=6) as r:

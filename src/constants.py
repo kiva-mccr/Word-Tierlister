@@ -6,6 +6,7 @@ import math
 # Tier index 0..5 everywhere in the code and the database means S..F in this order.
 TIERS = ["S", "A", "B", "C", "D", "F"]
 DEFAULT_ANCHORS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
+OFFLINE_ENV = "WORD_TIERLIST_OFFLINE"   # set (the self-tests do): never go online (Wiktionary, definitions)
 FOCUS_ROUNDS = 8  # duels in one "Refine this word" session
 # (key, menu label) for the sorting modes; the key is also what is saved in meta "mode". "review" (going through
 # the flagged obscene words) is a developer tab: it shows only when started with --review-obscene.

@@ -119,6 +119,7 @@ class App:
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
+        self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
         self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
         self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
         self._chart_ready = False
@@ -514,6 +515,8 @@ class App:
         its full height without showing it (showing it open for the measurement made it flash, UI-35).
         """
         r = self.root
+        if self.show_defs:
+            self.def_text.config(height=self._def_want)
         if not initial and self.grow > 1:
             cw, ch = self._content_size()
             if cw <= r.winfo_width() and ch <= r.winfo_height():
@@ -524,7 +527,7 @@ class App:
         # then take the next font step down, and repeat. Every fit starts again from the full size (the
         # zoom), so a step taken for a taller view (the definitions open, a duel tab) is undone when it
         # closes; it starts from the step that fitted this layout last time, so it does not flicker.
-        key = (self.mode, self.show_defs, self.zoom, tuple(area))
+        key = (self.mode, self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
         sizes = [round(self.zoom - k * self.FIT_STEP, 2)
                  for k in range(int(self.zoom * (1 - self.FIT_LOWEST) / self.FIT_STEP + 1e-6) + 1)]
@@ -538,7 +541,7 @@ class App:
                 scale_fonts(size)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
-            for lines in (range(9, 2, -1) if self.show_defs else (9,)):
+            for lines in (range(self._def_want, 2, -1) if self.show_defs else (self.DEF_LINES,)):
                 self.def_text.config(height=lines)
                 cw, ch = self._content_size()
                 if folded_drawer:
@@ -549,8 +552,8 @@ class App:
                 continue
             break
         self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
-        if not self.show_defs and int(self.def_text.cget("height")) != 9:
-            self.def_text.config(height=9)
+        if not self.show_defs and int(self.def_text.cget("height")) != self.DEF_LINES:
+            self.def_text.config(height=self.DEF_LINES)
         r.update_idletasks()
         if rescaled:
             self._fit_big_text()               # the fonts changed even if the window size did not
@@ -573,8 +576,11 @@ class App:
         else:
             r.update_idletasks()
             w, h = max(r.winfo_width(), min_w), max(r.winfo_height(), min_h)
-            if (w, h) != (r.winfo_width(), r.winfo_height()):
-                r.geometry(f"{w}x{h}")
+            x, y = r.winfo_x(), r.winfo_y()          # grown past the screen's edge (the minimum size grows it
+            nx = max(area[0], min(x, area[0] + area[2] - w))        # too): moved back onto it
+            ny = max(area[1], min(y, area[1] + area[3] - h))
+            if (w, h) != (r.winfo_width(), r.winfo_height()) or (nx, ny) != (x, y):
+                r.geometry(f"{w}x{h}" + (f"+{nx}+{ny}" if (nx, ny) != (x, y) else ""))
             if rebase:
                 self._ref_size = (max(self._ref_size[0], w), max(self._ref_size[1], h))
             self._apply_grow()
@@ -660,6 +666,8 @@ class App:
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
         self.show_defs = (not self.show_defs) if value is None else bool(value)
+        if not self.show_defs:
+            self._def_want = self.DEF_LINES     # opened again, it fits the words shown then
         self.defs_var.set(self.show_defs)
         self.store.set_meta("show_defs", int(self.show_defs))
         was_open = self.def_frame.is_open
@@ -1511,6 +1519,24 @@ class App:
             return
         self.def_frame.show_words(self.def_words, self.get_def, self.shown,
                                   censor=self.mode != "review" and self.store.deal_settings()["censor"])
+        self._fit_defs()
+
+    DEF_LINES, DEF_LINES_MAX = 9, 40     # the definition pane's usual height in lines, and the most it asks for
+
+    def _fit_defs(self):
+        """Make the definition pane tall enough to show every sense on it (UI-56), growing the window if the
+        screen has room; where it has not, _fit_window gives the pane what fits. The pane only grows from word
+        to word (shrinking back for each short definition would make the page jump on every word); it goes
+        back to its usual height when it is closed."""
+        for _ in range(3):             # a taller window may grow the fonts (UI-25), and the text then needs more
+            want = min(self.DEF_LINES_MAX, max(self.DEF_LINES, self.def_frame.lines_needed()))
+            if want <= self._def_want:
+                return
+            self._def_want = want
+            if not self.def_frame.is_open:   # about to slide open: _layout_defs makes room for it at this height
+                self.def_text.config(height=want)
+                return
+            self._fit_window()
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
