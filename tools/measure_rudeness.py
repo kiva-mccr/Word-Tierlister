@@ -118,13 +118,14 @@ def scope(targets, words):
     return need
 
 
-def outcome(scored, censored, ticked=obscene.TICKED):
+def outcome(scored, censored, senses=(), ticked=obscene.TICKED):
     """What the rules' points lead to for a word, and its meanings' kinds."""
     kinds = [rudeness.sense_kind(x) for x in scored]
     found = set(kinds) or {"clean"}
     if not ({"clean"} | set(ticked)) & found:
         return "left out", kinds
-    if rudeness.word_points(scored, censored) >= rudeness.WHOLE_MIN:
+    forms = [rudeness.is_form(s) for s in senses] if senses else None
+    if rudeness.word_points(scored, censored, forms) >= rudeness.WHOLE_MIN:
         return "smeared", kinds
     return ("some" if found & censored else "shown"), kinds
 
@@ -161,7 +162,8 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
     for w in base:
         kind, _conf, meanings = claude[w][:3]
         ref = claude_outcome(kind, meanings, censored)
-        got, kinds = outcome(scored[w][:max(1, len(meanings))], censored)
+        k = max(1, len(meanings))
+        got, kinds = outcome(scored[w][:k], censored, words[w][:k])
         table[ref, got] += 1
         agree += ref == got
         if order[w] < 5000:
@@ -184,7 +186,7 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
     for k in obscene.RUDE_KINDS:
         log(f"  {k:9} {tp[k] / max(1, tp[k] + fp[k]):6.1%} / {tp[k] / max(1, tp[k] + fn[k]):6.1%}"
             f"   ({tp[k] + fn[k]:,} words have it by Claude)")
-    flagged = collections.Counter(outcome(scored[w], censored)[0] for w in control)
+    flagged = collections.Counter(outcome(scored[w], censored, words[w])[0] for w in control)
     log(f"Control words ({len(control):,}, taken to be clean): " +
         ", ".join(f"{o} {flagged[o] / max(1, len(control)):.1%}" for o in OUTCOMES))
     for _i, w, ref, got in sorted(diffs)[:show]:

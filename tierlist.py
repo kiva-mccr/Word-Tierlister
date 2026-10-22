@@ -474,7 +474,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           lists "bad", "fuck" lists "company", thesaurus pages mix informal and rude words). So they count only
 #           on meanings marked slang, vulgar, derogatory, offensive, euphemistic or childish (REGISTER): the same
 #           76.0% overall, better kinds (Crude found 20% from 17%, Sexual 59% from 57%), as few false alarms.
-#           About 76% looks like the ceiling for Wiktionary-based rules here. Next (to agree with the user): keep each
+#           Then fixes from 50 disagreements read by hand (the rules right on ~17, Claude on ~28, 5 either):
+#           meanings that only name another word are skipped for the first meaning (is_form); later meanings
+#           count up to OTHERS_CAP (one rude later meaning never smears "hoo-ha", "bathroom"); plain sex words are
+#           Clinical, only slang / rude ones Sexual ("male", "pin-up"); "euphemistic" adds nothing (euphemisms
+#           are the polite word); "offensive" alone is no slur (a group named is: GROUP_POINTS 5, "Welsh person",
+#           "a native of"); rude categories count as a rude label; an alternative form takes its word's points;
+#           more sex words. Now 78.2% (80.3% of the commonest), words wrongly left out down from ~420 to ~100.
+#           Next (to agree with the user): keep each
 #           meaning's labels in the save at the Wiktionary build and score in the background after the queue
 #           is chosen; an older save fetches them once.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,

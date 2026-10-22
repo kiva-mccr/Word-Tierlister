@@ -32,25 +32,25 @@ A form ("plural of bitch") scores as its word; the caller looks that up (FORM_GL
 """
 import re
 
-from obscene import RUDE_KINDS, on_list
+from obscene import FORM_GLOSS, RUDE_KINDS, on_list
 
 MEANING_MIN = 3.0          # points for a meaning to count as rude (of its best kind)
 WHOLE_MIN = 3.5            # points for the whole word to be smeared while censoring
 FIRST_WEIGHT = 1.0         # how much the first meaning counts towards the word ...
-OTHERS_WEIGHT = 0.35       # ... and how much the rest do (their mean)
+OTHERS_WEIGHT = 0.35       # ... and how much the rest do (their mean, each counted up to OTHERS_CAP: one very rude
+OTHERS_CAP = 5.0           # later meaning never smears a word whose usual meaning is clean: "hoo-ha", "bathroom")
 
 # hedges: "sometimes offensive", "mildly vulgar" count for less
 HEDGES = {"sometimes": 0.5, "often": 0.8, "mildly": 0.5, "possibly": 0.5, "potentially": 0.5, "occasionally": 0.5}
 
 TAG_POINTS = {
     "vulgar": {"swear": 3.5, "sexual": 3, "crude": 3},       # (alone: a swear word; the wording decides the rest)
-    "offensive": {"slur": 3, "insult": 3},
+    "offensive": {"insult": 3, "slur": 1},          # (a slur needs a group named, or a slur label: GROUP)
     "derogatory": {"insult": 4, "slur": 2},
     "pejorative": {"insult": 4, "slur": 1},
     "slur": {"slur": 6},
     "ethnic": {"slur": 2},
     "childish": {"crude": 1.5},
-    "euphemistic": {"sexual": 1, "crude": 1},
     "humorous": {"insult": 0.5},
 }
 
@@ -78,7 +78,6 @@ TOPIC_POINTS = {
     "english vulgarities": {"sexual": 2, "swear": 2, "crude": 2},
     "english offensive terms": {"slur": 2, "insult": 2},
     "english derogatory terms": {"insult": 3, "slur": 1},
-    "english euphemisms": {"sexual": 0.5, "crude": 0.5},
     "insults": {"insult": 3},
     "personality": {"insult": 0.5},
 }
@@ -87,7 +86,8 @@ TOPIC_POINTS = {
 WORDING = [(re.compile(p, re.I), pts) for p, pts in (
     (r"\b(sexual intercourse|copulat\w*|have sex|having sex|had sex|sex with|sex act|masturbat\w*|orgasm\w*|"
      r"ejaculat\w*|semen|sperm|fellatio|cunnilingus|blowjob|erect(ion|ed) penis|oral sex|anal sex|sodom\w*|"
-     r"sexual (act|activity|activities|favou?rs?|position)|sexually suggestive|cybersex|"
+     r"sexual (act|activity|activities|favou?rs?|position)|sexually (penetrat\w*|suggestive|aroused|stimulat\w*)|"
+     r"cybersex|anilingus|rimming|virginity|deflower\w*|erotic\w*|condom|aroused|arousal|lecher\w*|horny|"
      r"pornograph\w*|porn\b|prostitut\w*|brothel|whore|promiscu\w*)", {"sexual": 3, "clinical": 1}),
     (r"\b(penis|vagina|vulva|clitoris|testic\w*|scrotum|genital\w*|anus|rectum)\b", {"sexual": 1.5, "clinical": 2}),
     (r"\b(buttocks|breasts?|nipples?|bottom|backside)\b", {"crude": 1, "clinical": 1, "sexual": 0.5}),
@@ -111,8 +111,9 @@ GROUP = [re.compile(r"\b(of (\w+ )?(\w+ )?(descent|origin|ancestry|extraction|he
                     r"woman)|jew(s|ish)?\b|homosexual|gay (man|men|person)|lesbian|bisexual|trans(gender)? (woman|"
                     r"man|person|people)|transgender|effeminate|disabled|mentally|(half|quarter)[- ]caste|mixed[- ]"
                     r"race|caucasian|immigrants?\b)", re.I),
-         re.compile(r"\b([Aa]n?|[Tt]he) [A-Z][a-z]+ (person|people|man|woman|men|women)\b")]   # "An Italian person"
-GROUP_POINTS = {"slur": 3}
+         re.compile(r"(^|\b([Aa]n?|[Tt]he) )[A-Z][a-z]+ (person|people|man|woman|men|women)\b"),  # "An Italian person"
+         re.compile(r"\b(a|the) native of\b|\bnatives of\b", re.I)]
+GROUP_POINTS = {"slur": 5}
 
 # WordNet (optional): points for a matched meaning that is, or is a kind of, one of these; and for its usage labels
 WORDNET_POINTS = {
@@ -135,6 +136,9 @@ _STOP = set("a an the of to in on or and for with by as at from that this which 
             "it its one someone something any some person thing used especially usually often like kind type sort "
             "also called other family member members part various form".split())
 _WORD = re.compile(r"[a-z]+")
+
+RUDE_CATEGORIES = {"english vulgarities", "english swear words", "english ethnic slurs", "english offensive terms",
+                   "english derogatory terms"}         # (as good as a rude label)
 
 SWEAR_POS = {"intj"}       # an interjection with a rude label is most likely a swear word
 ROOT_POINTS = 2.0          # a rude root in the word itself: to the meaning's best kind (a swear word if none)
@@ -233,6 +237,7 @@ def score_sense(sense, pos="", rude_root=False, word="", wn=None):
             rude_label = rude_label or lab in ("vulgar", "offensive", "derogatory", "pejorative", "slur")
     names = [str(t).lower().replace("-", " ") for t in sense.get("topics", [])]
     names += [(c.get("name") if isinstance(c, dict) else str(c)).lower() for c in sense.get("categories", [])]
+    rude_label = rude_label or bool(RUDE_CATEGORIES & set(names))
     for name in set(names):
         if name in TOPIC_POINTS:
             _add(points, TOPIC_POINTS[name])
@@ -255,6 +260,10 @@ def score_sense(sense, pos="", rude_root=False, word="", wn=None):
         moved = points["clinical"] * 0.7     # points go to Sexual (Crude for bodily waste)
         points["clinical"] -= moved
         _add(points, {"crude" if points.get("crude", 0) > points.get("sexual", 0) else "sexual": moved})
+    elif not slangy and points.get("sexual"):    # and plain words about sex are the proper ones ("male: produces
+        moved = points["sexual"] * 0.7           # sperm", "pin-up"): Clinical, not Sexual
+        points["sexual"] -= moved
+        _add(points, {"clinical": moved})
     if rude_root:
         best = max(RUDE_KINDS[::-1], key=lambda k: points.get(k, 0.0))
         _add(points, {best if points.get(best) else "swear": ROOT_POINTS})
@@ -273,13 +282,23 @@ def sense_points(points, kinds=RUDE_KINDS):
     return max((points.get(k, 0.0) for k in kinds), default=0.0)
 
 
-def word_points(scored, kinds=RUDE_KINDS):
+def is_form(sense):
+    """True if a meaning only names another word ("plural of bitch", "alternative spelling of bell end")."""
+    gloss = " ".join(str(g) for g in (sense.get("glosses") or [])[-1:])
+    return bool(sense.get("form_of") or sense.get("alt_of") or FORM_GLOSS.search(gloss))
+
+
+def word_points(scored, kinds=RUDE_KINDS, forms=None):
     """The word's points from its meanings' {kind: points} (in order), counting only `kinds` (the censored ones):
-    the first meaning counts FIRST_WEIGHT, the mean of the rest OTHERS_WEIGHT."""
+    its first real meaning counts FIRST_WEIGHT, the mean of the rest OTHERS_WEIGHT (each up to OTHERS_CAP).
+    `forms` ([bool] per meaning: is_form) leaves out the meanings that only name another word, unless every
+    one does."""
     pts = [sense_points(p, kinds) for p in scored]
+    if forms and not all(forms):
+        pts = [p for p, f in zip(pts, forms) if not f]
     if not pts:
         return 0.0
-    rest = pts[1:]
+    rest = [min(p, OTHERS_CAP) for p in pts[1:]]
     return FIRST_WEIGHT * pts[0] + (OTHERS_WEIGHT * sum(rest) / len(rest) if rest else 0.0)
 
 
@@ -374,6 +393,20 @@ def score_words(words, pos=None, wn=None):
     for w, scored in first.items():
         added = link_points(w, words[w], rude, incoming)
         out[w] = [dict(p) for p in scored]
-        for p, a in zip(out[w], added):
+        for p, a, sense in zip(out[w], added, words[w]):
             _add(p, a)
+            target = form_target(sense)
+            if target and target != w and target in first:      # an alternative form takes its word's points
+                best = max(first[target], key=sense_points, default={})
+                for k, v in best.items():
+                    p[k] = max(p.get(k, 0.0), v)
     return out
+
+
+def form_target(sense):
+    """The word a meaning is a form of ("Alternative form of pum-pum" -> "pum-pum"), or None."""
+    f = (sense.get("form_of") or sense.get("alt_of") or [{}])[0]
+    if isinstance(f, dict) and f.get("word"):
+        return f["word"]
+    m = FORM_GLOSS.search(" ".join(str(g) for g in (sense.get("glosses") or [])[-1:]))
+    return m.group(1).lower().strip(".'\"") if m else None

@@ -65,7 +65,8 @@ both = score_words(words, {w: ["noun"] * len(s) for w, s in words.items()})
 assert sense_kind(both["schlong"][0]) == "sexual"                            # its synonyms are sexual: outward
 assert sense_kind(both["banana"][1]) == "sexual" and sense_kind(both["banana"][0]) == "clean"   # inward
 assert sense_kind(both["table"][0]) == "clean"
-assert [sense_kind(p) for p in both["member"]] == ["clean", "clean"]          # synonyms share meaning, not rudeness
+assert [sense_kind(p) for p in both["member"]] == ["clean", "clinical"]       # synonyms share meaning, not rudeness:
+                                                                              # a plain word for it stays the proper one
 
 # WordNet, when installed (never downloaded here): a meaning matched by the words its definition shares
 from rudeness import score_word as sw, wordnet, wordnet_match
@@ -83,4 +84,17 @@ else:
     assert wkind("jackass", "A foolish or stupid person.", tags=["vulgar"]) == "insult"
     assert wkind("table", "A flat surface.") == "clean"
     assert sense_kind(sw([{"glosses": ["To urinate."]}], "verb", "pee", None)[0]) == "clean"   # (without it)
+
+# the fixes from the 50-word sample: plain sex words are Clinical, euphemisms add nothing, a group makes a slur
+assert kind("Belonging to the sex which typically produces sperm.") in ("clean", "clinical")
+assert kind("A lavatory.", ["euphemistic"]) == "clean"
+assert kind("Someone who performs anilingus.", ["slang", "vulgar"]) == "sexual"
+assert kind("Welsh person.", ["derogatory"]) == "slur" and kind("A native of the South Pacific islands.", ["derogatory"]) == "slur"
+assert kind("A youth of low social standing.", ["derogatory", "offensive"]) == "insult"   # offensive alone: no slur
+from rudeness import is_form, form_target
+assert is_form({"glosses": ["present participle and gerund of fist"]})
+assert form_target({"glosses": ["x"], "alt_of": [{"word": "pum-pum"}]}) == "pum-pum"
+assert form_target({"glosses": ["plural of bitch"]}) == "bitch" and form_target({"glosses": ["A dog."]}) is None
+assert word_points([{}, {"sexual": 10.0}]) < WHOLE_MIN                          # one very rude later meaning
+assert word_points([{}, {"sexual": 6.0}], forms=[True, False]) >= WHOLE_MIN     # (the first only names a word)
 print("RUDENESS OK")
