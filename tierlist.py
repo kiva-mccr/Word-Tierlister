@@ -429,15 +429,26 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           _selftest_classify.py uses a stand-in.
 # [ ] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab: Clean, Double
 #           meaning, Clinical, Crude, Swear word, Sexual, Insult, Slur, Not sure; keys 1-9), answers back into
-#           the list. Then the list goes inside the program, out of sight. Asked for (decided): only the base
-#           words classify_obscene.to_check picks (below 80% sure, and a second choice at least 25% likely that
-#           changes the outcome; 1,635 of the user's run, 204 among the commonest 5,000), commonest first, both
-#           choices shown.
+#           the list. Then the list goes inside the program, out of sight. Asked for (decided): per meaning
+#           (each meaning's kind, changeable) plus the whole-word smear (ticked by itself from the first meaning,
+#           changeable); only the base words that are unsure (below 80%, and a second choice at least 25% likely
+#           that changes the outcome) or where Claude's whole-word answer and the first meaning disagree on
+#           smearing the whole word: 2,079 of the user's run (542 among the commonest 5,000), commonest first.
+#           Mock-ups of this (three layouts) shown; to choose.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
 #           Decided: Double meaning words are never smeared as words ("last", "john", "brown" are double), only
 #           their rude meanings inside the definitions; Clinical words are smeared like the other ticked kinds.
+#           Then decided (asked for: "words can be multiple categories at the same time"): kinds go by MEANING.
+#           A word's kinds are its meanings' kinds (classify_obscene's per-meaning column; forms take their
+#           word's), plus its whole-word kind when no stored meaning shows it (the rude sense is not among the
+#           stored definitions: "faggot" listed only as a bundle of sticks). Dealt if any meaning is clean or of
+#           a ticked kind; left out only if every one is unticked. Censoring smears each rude meaning in the
+#           definitions, and the whole word when its first (most common) meaning is rude or every meaning is
+#           ("if the most common definition is obscene then it should fall under censoring"). Double meaning
+#           is dropped as a kind (it is just a word with clean and rude meanings): seven kinds. The user's run:
+#           4,723 base words shown, 2,187 with some meanings smeared, 6,296 smeared whole, 2,195 left out.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
