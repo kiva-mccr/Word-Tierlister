@@ -29,7 +29,7 @@ import obscene  # noqa: E402
 import rudeness  # noqa: E402
 from wordsource import WIKT_URL  # noqa: E402
 
-POLICIES = {"A": set(obscene.RUDE_KINDS), "B": {"crude", "swear", "sexual", "slur"}}
+POLICIES = {"A": set(obscene.RUDE_KINDS), "B": set(obscene.CENSORED)}
 OUTCOMES = ("shown", "some", "smeared", "left out")
 # labels about grammar, and categories about the page rather than the meaning: not kept
 GRAMMAR = {"countable", "uncountable", "transitive", "intransitive", "not-comparable", "plural", "singular",
@@ -130,10 +130,32 @@ def outcome(scored, censored, senses=(), ticked=obscene.TICKED):
     return ("some" if found & censored else "shown"), kinds
 
 
+def read_sorting(path):
+    """Claude's sorting (word_categories.tsv from the archived tools/classify_obscene.py, kept only as a yardstick):
+    {word: (kind, confidence, [meaning kinds], note)}."""
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#") or not line.strip():
+                continue
+            w, kind, conf, senses, note = (line.rstrip("\n").split("\t") + [""] * 5)[:5]
+            out[w] = (kind, int(conf or 0), [x for x in senses.split(",") if x], note)
+    return out
+
+
+def claude_kinds(kind, meanings):
+    """A word's kinds by Claude: its meanings', plus its own when no meaning shows its rude use."""
+    found = set(meanings) or {"clean"}
+    if kind in obscene.RUDE_KINDS and not (found - {"clean"}):
+        found.add(kind)
+    return found
+
+
 def claude_outcome(kind, meanings, censored, ticked=obscene.TICKED):
-    """What Claude's answers lead to under the same policy (obscene.outcome's rules, only `censored` smeared)."""
-    found = obscene.word_kinds(kind, meanings)
-    if not ({"clean", obscene.UNSURE} | set(ticked)) & found:
+    """What Claude's answers lead to under the same rules: dealt if any meaning is clean or ticked; the whole word
+    smeared when its first meaning, or every one, is of a censored kind (or its rude use is the one missing)."""
+    found = claude_kinds(kind, meanings)
+    if not ({"clean"} | set(ticked)) & found:
         return "left out"
     listed = set(meanings) or {"clean"}
     if (meanings and meanings[0] in censored) or listed <= censored or (kind in censored and listed == {"clean"}):
@@ -151,7 +173,7 @@ def score(words, poses, need, links, wn):
 def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True):
     censored = POLICIES[policy]
     words, poses = load(entries)
-    claude = obscene.read_categories(sorting)
+    claude = read_sorting(sorting)
     order = {w: i for i, w in enumerate(claude)}
     base = [w for w, v in claude.items() if not v[3].startswith("form of ") and w in words and not is_form(words[w])]
     control = [w for w in words if control_word(w, claude) and not is_form(words[w])]
@@ -169,7 +191,7 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
         if order[w] < 5000:
             common += 1
             common_agree += ref == got
-        want, have = obscene.word_kinds(kind, meanings) - {"clean"}, set(kinds) - {"clean"}
+        want, have = claude_kinds(kind, meanings) - {"clean"}, set(kinds) - {"clean"}
         for k in obscene.RUDE_KINDS:
             tp[k] += k in want and k in have
             fp[k] += k not in want and k in have

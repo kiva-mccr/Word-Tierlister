@@ -4,8 +4,8 @@ The rule (the user's): a word is flagged if MOST of its meanings are rude, or it
 rude when Wiktionary labels it vulgar, offensive, derogatory / pejorative or a slur ("sometimes offensive" is not);
 a meaning that is only a form of another word ("plural of bitch", "present participle of fuck") is rude when that
 word is flagged. So "fuck" and "cunt" are, "bureaucracy" (one pejorative meaning of three), "box" and "screw" are
-not. (A looser rule, any meaning rude, was tried and caught far too much.) The user's own answers in the review
-(python tierlist.py --review-obscene) win over it.
+not. (A looser rule, any meaning rude, was tried and caught far too much.) The developer's answers from an earlier review
+by hand (OB-1, kept in the save) win over it. (OB-6 replaces all this with rules: src/rudeness.py.)
 
     decide({"bitch": ["p", "r", "r"], "bitches": ["f:bitch"], "box": ["p", "p", "r", "p"]})  ->  {"bitch", "bitches"}
 
@@ -212,100 +212,8 @@ def obscene_in(words):
     return [w for w in words if on_list(w)]
 
 
-# ---- kinds of rude words, meaning by meaning (OB-3 .. OB-5) ------------------------------------------------------
-# tools/classify_obscene.py sorts each meaning of the rude words into a kind (word_categories.tsv); the review tab
-# (OB-4) lets the developer correct them. The rules below decide what a word's kinds lead to (the user's):
-#   * a word's kinds are its meanings' kinds, plus its whole-word kind when no listed meaning shows that (its
-#     rude use is not among the stored definitions: "faggot" listed only as a bundle of sticks);
-#   * it is dealt if any meaning is clean or of a ticked kind, left out only if every one is unticked;
-#   * censoring smears each rude meaning in the definitions, and the whole word when its first (most common)
-#     meaning is rude, or every meaning is, or its rude use is the one missing from the definitions; the
-#     developer's answer for the whole word wins.
-KINDS = (("clean", "Clean"), ("clinical", "Clinical"), ("crude", "Crude"), ("swear", "Swear word"),
-         ("insult", "Insult"), ("sexual", "Sexual"), ("slur", "Slur"))
-KIND_NAMES = dict(KINDS)
+# ---- kinds of rude words (OB-6: src/rudeness.py scores each meaning towards them) ----------------------------------
 RUDE_KINDS = ("clinical", "crude", "swear", "insult", "sexual", "slur")
 TICKED = frozenset(("clinical", "crude", "swear", "insult"))    # dealt by default (Sexual and Slur left out)
-UNSURE = "unsure"                                               # a meaning the developer is not sure of
-
-
-def word_kinds(kind, meanings):
-    """The set of kinds of a word: its meanings' kinds, plus `kind` (the word as a whole) when it is rude and no
-    meaning is rude (its rude use is not among the definitions). A meaning marked unsure counts as rude."""
-    found = {UNSURE if m == UNSURE else m for m in meanings if m} or {"clean"}
-    if kind in RUDE_KINDS and not (found - {"clean"}):
-        found.add(kind)
-    return found
-
-
-def smear_whole(kind, meanings):
-    """True if the whole word is smeared while censoring: its first (most common) meaning is rude, or every one is,
-    or its rude use is missing from the definitions (Claude's answer for the whole word is rude, every listed
-    meaning clean: then that rude use is taken to be the usual one)."""
-    if meanings and meanings[0] != "clean":
-        return True
-    listed = {m for m in meanings if m} or {"clean"}
-    return "clean" not in listed or (kind in RUDE_KINDS and listed == {"clean"})
-
-
-def outcome(kind, meanings, whole=None, ticked=TICKED):
-    """What the kinds lead to: "left out", "smeared" (the whole word, while censoring), "some" (shown, some meanings
-    smeared while censoring) or "shown". `whole` (True / False) is the developer's answer for the whole word."""
-    kinds = word_kinds(kind, meanings)
-    if not ({"clean", UNSURE} | set(ticked)) & kinds:
-        return "left out"
-    if smear_whole(kind, meanings) if whole is None else whole:
-        return "smeared"
-    return "some" if kinds - {"clean"} else "shown"
-
-
-def outcome_text(kind, meanings, whole=None, ticked=TICKED):
-    """outcome() as a line for people: "Shown; 3 of its 5 meanings smeared while censoring"."""
-    out = outcome(kind, meanings, whole, ticked)
-    rude = sum(1 for m in meanings if m and m != "clean")
-    return {"left out": "Left out (none of its meanings is of a kind that is dealt)",
-            "smeared": "Shown; the whole word smeared while censoring",
-            "some": f"Shown; {rude} of its {len(meanings)} meanings smeared while censoring" if rude else
-                    "Shown; a rude use not among its definitions",
-            "shown": "Shown as it is"}[out]
-
-
-def second_outcome(kind, meanings, second):
-    """outcome() if the second choice ("insult:30": a kind for the whole word) were right instead: "clean" makes
-    every meaning clean, "double" adds a clean one, another kind replaces the rude meanings' kinds."""
-    other = second.split(":")[0]
-    if other == "clean":
-        return outcome("clean", ["clean"] * len(meanings))
-    if other == "double":
-        return outcome("double", list(meanings) + ["clean"])
-    return outcome(other, [m if m == "clean" else other for m in meanings])
-
-
-def check_reason(kind, conf, meanings, second, sure=80, second_min=25):
-    """Why a word's answer is for checking by hand, or None: Claude was unsure (confidence below `sure`) and its
-    second choice, at least `second_min`% likely, would change the outcome (or there is none yet); or Claude's
-    answer for the whole word and the word's first meaning disagree on smearing the whole word."""
-    here = outcome(kind, meanings)
-    if conf < sure:
-        if not second:
-            return f"Claude was only {conf}% sure"
-        other, chance = second.split(":")
-        if int(chance) >= second_min and second_outcome(kind, meanings, second) != here:
-            return f"Claude was only {conf}% sure (or else: {KIND_NAMES.get(other, other)}, {chance}%)"
-    if here != "left out" and (kind in RUDE_KINDS) != bool(meanings and meanings[0] != "clean"):
-        return (f"Claude calls the word {KIND_NAMES.get(kind, kind)}, but its first meaning "
-                f"{'is not rude' if kind in RUDE_KINDS else 'is'}")
-    return None
-
-
-def read_categories(path):
-    """word_categories.tsv (tools/classify_obscene.py): {word: (kind, confidence, [meaning kinds], note, model,
-    second)}; a form ("form of bitch" in the note) has no meaning kinds of its own."""
-    out = {}
-    with open(path, encoding="utf-8") as f:
-        for line in f:
-            if line.startswith("#") or not line.strip():
-                continue
-            w, kind, conf, senses, note, model, second = (line.rstrip("\n").split("\t") + [""] * 7)[:7]
-            out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note, model, second)
-    return out
+CENSORED = frozenset(("crude", "swear", "sexual", "slur"))       # smeared while censoring (the user's choice: never
+                                                                # Clinical or Insult)

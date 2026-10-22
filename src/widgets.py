@@ -1780,7 +1780,6 @@ class WordCard(SmoothCanvas):
         self.on_find = self.on_enter = None
         self.typing, self._typed, self._saved = False, "", None
         self._find_hover = False
-        self.finds = True                  # the magnifier shows (UI-51); False hides it
         self._censor = self._old_censor = False
         self.smear = Unsmear(self, "smear")
         self.animator = None
@@ -2052,8 +2051,6 @@ class WordCard(SmoothCanvas):
 
     def _draw_find(self, bw, r):
         self.delete("find")
-        if not self.finds:                     # (a card with nothing to look up: the review tab's)
-            return
         x, y, size = self.find_box()
         ink = PALETTE["accent"] if self.typing else (PALETTE["text"] if self._find_hover else PALETTE["muted"])
         self.create_image(x, y, image=self.icon_image("search", size, ink), anchor="nw", tags="find")

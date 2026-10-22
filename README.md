@@ -26,7 +26,6 @@ All optional; `python tierlist.py --help` explains each.
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
 | `--no-install` | Never offer to install missing packages. |
-| `--review-obscene` | (Developers) a tab for checking Claude's sorting of the rude words, meaning by meaning. |
 
 ## Folders
 
@@ -37,8 +36,7 @@ src/               the program's modules
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
                    bundle.py (the data a built program carries), build.py + hooks/ (build it as a program),
-                   classify_obscene.py (sorts the rude words into kinds with Claude; developers only),
-                   measure_rudeness.py (measures the rudeness rules against that sorting)
+                   measure_rudeness.py (measures the rudeness rules)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -80,8 +78,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
-| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against Claude's sorting (OB-6; developers): `fetch` keeps the sorting's words from the Wiktionary download (and a control sample), `measure` says how often both lead to the same thing, per censoring policy. |
-| `tools/classify_obscene.py` | Sorts the rude words into kinds with Claude, meaning by meaning, with a confidence (OB-3; developers only, not part of the program): `estimate`, `try`, `run`, `status`; writes `word_categories.tsv` next to the save. |
+| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps the sorting's words from the Wiktionary download (and a control sample), `measure` says how often both lead to the same thing, per censoring policy. |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
@@ -124,34 +121,18 @@ The first start asks three short questions (any time later: Settings > How words
 
 A word is flagged as obscene if most of its meanings, or its first, are labelled vulgar, offensive, derogatory or
 a slur on Wiktionary, and its plural and other forms follow it.
-Checking Claude's sorting by hand (developers): put `word_categories.tsv` (from `tools/classify_obscene.py`, below)
-next to the save and start `python tierlist.py --review-obscene`. It loads the file (again whenever it changes;
-answers already given stay) and adds a "Review obscene words" tab, not shown otherwise, with the words worth a
-person's look, commonest first: those Claude was unsure of where its second choice would change what happens to
-the word, and those where its answer for the whole word and the word's first meaning disagree. Each meaning is
-listed with its kind; Up / Down choose a meaning, keys 1-8 (or the buttons) set its kind (Clean, Clinical, Crude,
-Swear word, Insult, Sexual, Slur, Not sure), W smears the whole word or not (ticked by itself from the rules), a
-line says what the answers lead to, Enter keeps them and goes on, Backspace goes back one word; a word with a
-"Not sure" comes back at the end. "Save answers to a file" writes `word_categories.checked.tsv` next to the save.
-The rules (obscene.py): a word comes up if any of its meanings is clean or of a ticked kind; censoring smears each
-rude meaning in the definitions, and the whole word when its first (most common) meaning is rude, or every one is,
-or its rude use is the one missing from the stored definitions.
 With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, derogatory or a slur is also smeared
 inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
 internet; until then a short list chosen by hand in `src/obscene.py` stands in).
 
-For developers, `tools/classify_obscene.py` sorts the rude words into kinds with Claude (clean, double meaning,
-clinical, crude, swear word, sexual, insult, slur), judging each meaning, with a confidence for each word; the
-ones it is unsure of are for checking by hand. `estimate` shows which words would go and about what it costs,
-`try word ...` answers a few words at once, `run` sends them all through the Message Batches API (it asks first,
-and picks up where it was if stopped) and writes `word_categories.tsv` next to the save. To save money, run it
-with `--model claude-haiku-5-5` first, then `run --recheck`: only the words answered with less than 80% confidence
-go again, to Opus, and their answers replace Haiku's (the file notes which model answered each word). Then `run
---second` asks Opus only for each still-unsure word's second choice, showing it the answer it already has (no word
-is classified again): a word whose two likeliest kinds lead to the same thing (shown, smeared, or left out) need
-not be checked by hand. `status` says how many are left to check. It needs `pip install
-anthropic` and an Anthropic API key, and only reads the save.
+Coming next (OB-6): rules instead of that labelling. `src/rudeness.py` scores every meaning towards six kinds
+(Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, topics and categories, the wording of
+the definition, the word itself, WordNet when installed, and the links between words; a word with enough points is
+smeared whole, otherwise only its rude meanings are. Censoring smears Crude, Swear word, Sexual and Slur, never
+Clinical or Insult. `tools/measure_rudeness.py` measures the rules against an earlier sorting by Claude (78% the same
+outcome, 80% for the commonest words). An earlier way, Claude sorting the words and a review tab to check them, is
+archived (see the roadmap's OB-3 / OB-4).
 
 ## Building a program
 

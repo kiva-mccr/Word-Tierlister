@@ -19,10 +19,6 @@ Data model (see SCHEMA below)
     anchors      the one reference word per tier used by "compare to anchors".
     defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
     obscene_review  the developer's first answers for flagged words (OB-1: not / obscene / swear); they win.
-    kinds        Claude's sorting of the rude words, meaning by meaning (tools/classify_obscene.py, OB-3), and
-                 the developer's corrections (the review tab, OB-4): kind (the word as a whole), meanings (one
-                 kind each, in the stored definitions' order), why (set: to be checked by hand), whole (the
-                 whole-word smear, when answered), reviewed (when), unsure.
     history      one JSON row per action, so Undo works and survives restarts.
 
 Conventions
@@ -41,7 +37,7 @@ import re
 import sqlite3
 import time
 
-from obscene import UNSURE, check_reason, on_list
+from obscene import on_list
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
@@ -80,9 +76,6 @@ CREATE TABLE IF NOT EXISTS swaps(comp_id INTEGER PRIMARY KEY, boundary INTEGER N
 CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS obscene_review(word TEXT PRIMARY KEY, verdict TEXT NOT NULL, ts REAL NOT NULL);
-CREATE TABLE IF NOT EXISTS kinds(word TEXT PRIMARY KEY, kind TEXT NOT NULL, meanings TEXT NOT NULL,
-    conf INTEGER NOT NULL, second TEXT NOT NULL, form_of TEXT, why TEXT, whole INTEGER, reviewed REAL,
-    unsure INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -341,72 +334,6 @@ class Store:
         self.db.commit()
         self._obscene = None
         self.version += 1
-
-    # ---- kinds of rude words, meaning by meaning (OB-4: the developer's review, --review-obscene) --------------
-    def load_kinds(self, sorting):
-        """Claude's sorting (obscene.read_categories: {word: (kind, confidence, [meaning kinds], note, model,
-        second)}) into the save, for the words in the list; a word already checked by hand keeps its answers.
-        `why` (obscene.check_reason) marks the words to check. Returns how many words were loaded."""
-        rows = []
-        for w, (kind, conf, meanings, note, _model, second) in sorting.items():
-            form = note[8:] if note.startswith("form of ") else None
-            why = None if form else check_reason(kind, conf, meanings, second)
-            rows.append((w, kind, ",".join(meanings), conf, second, form, why, w))
-        self.db.executemany(
-            "INSERT INTO kinds(word, kind, meanings, conf, second, form_of, why) SELECT ?, ?, ?, ?, ?, ?, ?"
-            " WHERE EXISTS (SELECT 1 FROM words WHERE word=?) ON CONFLICT(word) DO UPDATE SET kind=excluded.kind,"
-            " meanings=excluded.meanings, conf=excluded.conf, second=excluded.second, form_of=excluded.form_of,"
-            " why=excluded.why WHERE kinds.reviewed IS NULL", rows)
-        self.db.commit()
-        self.version += 1
-        return self.db.execute("SELECT COUNT(*) FROM kinds").fetchone()[0]
-
-    def kinds_next(self):
-        """The next word to check (its kinds row and rank): the commonest not checked yet, then those answered
-        "not sure" (the longest ago first); None when there are none."""
-        for where, order in (("k.reviewed IS NULL", "w.rank"), ("k.unsure=1", "k.reviewed")):
-            r = self.db.execute(f"SELECT k.*, w.rank FROM kinds k JOIN words w ON w.word = k.word"
-                                f" WHERE k.why IS NOT NULL AND {where} ORDER BY {order} LIMIT 1").fetchone()
-            if r is not None:
-                return r
-        return None
-
-    def kinds_progress(self):
-        """(words checked, words to check in all); a word answered "not sure" is not checked yet."""
-        r = self.db.execute("SELECT COUNT(reviewed) - COALESCE(SUM(unsure), 0), COUNT(*) FROM kinds"
-                            " WHERE why IS NOT NULL").fetchone()
-        return r[0], r[1]
-
-    def kinds_of(self, word):
-        """One word's kinds row, or None (tests)."""
-        return self.db.execute("SELECT * FROM kinds WHERE word=?", (word,)).fetchone()
-
-    def answer_kinds(self, word, kind, meanings, whole=None):
-        """The developer's answer for a word: its kind as a whole (the rude use its definitions leave out, if
-        any), each meaning's kind (UNSURE: not sure, so it comes back later) and the whole-word smear (True /
-        False; None: by the rules)."""
-        self.db.execute("UPDATE kinds SET kind=?, meanings=?, whole=?, reviewed=?, unsure=? WHERE word=?",
-                        (kind, ",".join(meanings), None if whole is None else int(whole), time.time(),
-                         int(UNSURE in meanings or kind == UNSURE), word))
-        self.db.commit()
-        self.version += 1
-
-    def kinds_back(self):
-        """Take back the last answer (that word comes up again, with the answer as it was given); returns the
-        word, or None."""
-        r = self.db.execute("SELECT word FROM kinds WHERE reviewed IS NOT NULL ORDER BY reviewed DESC LIMIT 1").fetchone()
-        if r is None:
-            return None
-        self.db.execute("UPDATE kinds SET reviewed=NULL, unsure=0 WHERE word=?", (r[0],))
-        self.db.commit()
-        self.version += 1
-        return r[0]
-
-    def checked_kinds(self):
-        """Every word checked by hand, commonest first: [(word, kind, [meaning kinds], whole: 1 / 0 / None)]."""
-        return [(w, k, m.split(",") if m else [], whole) for w, k, m, whole in self.db.execute(
-            "SELECT k.word, k.kind, k.meanings, k.whole FROM kinds k LEFT JOIN words w ON w.word = k.word"
-            " WHERE k.reviewed IS NOT NULL ORDER BY w.rank")]
 
     def obscene_words(self):
         """The set of obscene words (a few thousand), read once (partial index)."""

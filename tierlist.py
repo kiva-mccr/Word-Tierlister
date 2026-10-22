@@ -64,7 +64,7 @@ How it works
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, bundle,
-build, classify_obscene, measure_rudeness), the Claude notes in .claude/; the README has the same map with more detail)
+build, measure_rudeness), the Claude notes in .claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
@@ -386,7 +386,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           are left out until telling them apart is worked on again (deal_done 2 re-deals older saves).
 #           Fixed (reported): no tick boxes showed in the main window: styling the window a second time (main()
 #           at start-up, then App) made new tick images, freeing the ones the tick-box element drew.
-# [x] OB-1  Review the flagged obscene words by hand (asked for: "a dev option booted via the terminal", "a new
+# [x] OB-1  (archived: replaced by OB-4, then by OB-6's rules) Review the flagged obscene words by hand (asked for: "a dev option booted via the terminal", "a new
 #           tab with a simple % progress bar"). Flagging was made loose for it (any meaning rude), then put back
 #           ("too loose, go back"): most or the first meaning rude (obscene.decide; Store.OBSCENE_VERSION 7).
 #           python tierlist.py --review-obscene opens the "Review obscene words" tab (only then; App(review=True)):
@@ -407,7 +407,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           stored line takes the labels of the page sense sharing most of its words, at least half; a loose
 #           match labels nothing). Store.OBSCENE_VERSION 6 looks again. WordNet / dictionaryapi.dev definitions
 #           carry no such labels, so they are never smeared.
-# [x] OB-3  Sort the rude words into kinds with Claude (asked for: "a separate tool that does semantic analysis on
+# [x] OB-3  (archived, asked for: "I only want the rules, I don't want to use Claude's list anymore, or even the
+#           review system"; the code is in commit 233d6ca: tools/classify_obscene.py, _selftest_classify.py; its
+#           sorting file stays only as the yardstick of tools/measure_rudeness.py) Sort the rude words into kinds
+#           with Claude (asked for: "a separate tool that does semantic analysis on
 #           the word and definition ... not available through the UI", "take into account individual
 #           definitions", then "check the ones with low confidence"). No public list covers it: LDNOOBW (403
 #           words, no kinds), HurtLex (8,228 entries in 17 categories, noisy: "idiot" filed under female body
@@ -428,7 +431,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           out a word whose two choices have the same outcome with the defaults (OUTCOME: clean shown, sexual /
 #           slur left out, the rest smeared). Fixed: a form of a form kept an out-of-date answer (with_forms). Never run against the real API here (no key):
 #           _selftest_classify.py uses a stand-in.
-# [x] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab), answers back into
+# [x] OB-4  (archived with OB-3; in commit 233d6ca: the review tab in app.py, --review-obscene, the keymap's
+#           "review" group, Store's kinds table and methods, obscene.py's meaning rules, _selftest_review.py)
+#           Review the low-confidence words by hand with the new kinds (the --review-obscene tab), answers back into
 #           the list. Then the list goes inside the program, out of sight (still to do). Asked for (decided): per meaning
 #           (each meaning's kind, changeable) plus the whole-word smear (ticked by itself from the first meaning,
 #           changeable); only the base words that are unsure (below 80%, and a second choice at least 25% likely
@@ -1319,10 +1324,6 @@ def main():
                          "terminal gets its prompt back and messages go to tierlist.log next to the save file")
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt)")
-    ap.add_argument("--review-obscene", action="store_true",
-                    help="(developer) open a tab for checking Claude's sorting of the rude words (word_categories.tsv "
-                         "next to the save, from tools/classify_obscene.py), meaning by meaning, commonest first. "
-                         "The answers are kept in the save")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
@@ -1452,8 +1453,7 @@ def main():
             # --- 5. show the main window; App runs until it is closed
             root.deiconify()
             App(root, store, Definitions(store), note=note, other_saves=others,
-                ask_dealing=store.get_meta("dealt_asked") != "1" and not args.review_obscene,   # (ST-6: once a save)
-                review=args.review_obscene)
+                ask_dealing=store.get_meta("dealt_asked") != "1")   # (ST-6: once a save)
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()
