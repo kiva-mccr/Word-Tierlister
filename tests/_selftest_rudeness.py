@@ -45,12 +45,13 @@ assert [sense_kind(p) for p in scored] == ["clean", "sexual"] and word_points(sc
 
 # ---- the links between words (second pass): Wiktionary's synonym lists spread a kind both ways
 from rudeness import incoming_links, link_points, rude_kinds_of, score_words
-PENIS = ["dick", "johnson", "schlong", "banana"]
+PENIS = ["dick", "johnson", "schlong", "banana", "member"]
 words = {
     "dick": [{"glosses": ["The penis."], "tags": ["vulgar"], "synonyms": [{"word": w} for w in PENIS]}],
     "johnson": [{"glosses": ["The penis."], "tags": ["slang"], "categories": ["Genitalia"], "synonyms": [{"word": w} for w in PENIS]}],
-    "schlong": [{"glosses": ["A penis."], "synonyms": [{"word": "dick"}, {"word": "johnson"}]}],   # no label at all
-    "banana": [{"glosses": ["An elongated curved fruit."]}, {"glosses": ["(slang) The penis."]}],
+    "schlong": [{"glosses": ["A penis."], "tags": ["slang"], "synonyms": [{"word": "dick"}, {"word": "johnson"}]}],
+    "banana": [{"glosses": ["An elongated curved fruit."]}, {"glosses": ["The penis."], "tags": ["slang"]}],
+    "member": [{"glosses": ["One who belongs to a group."]}, {"glosses": ["A limb; the penis."]}],   # standard English
     "table": [{"glosses": ["A flat surface."], "synonyms": [{"word": "desk"}, {"word": "bench"}]}],
 }
 first = {w: score_word(s, "noun", w) for w, s in words.items()}
@@ -64,6 +65,7 @@ both = score_words(words, {w: ["noun"] * len(s) for w, s in words.items()})
 assert sense_kind(both["schlong"][0]) == "sexual"                            # its synonyms are sexual: outward
 assert sense_kind(both["banana"][1]) == "sexual" and sense_kind(both["banana"][0]) == "clean"   # inward
 assert sense_kind(both["table"][0]) == "clean"
+assert [sense_kind(p) for p in both["member"]] == ["clean", "clean"]          # synonyms share meaning, not rudeness
 
 # WordNet, when installed (never downloaded here): a meaning matched by the words its definition shares
 from rudeness import score_word as sw, wordnet, wordnet_match

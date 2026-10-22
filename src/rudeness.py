@@ -24,6 +24,10 @@ points come from its meanings, its first (most common) meaning counting most (wo
     score_word(senses, pos, word) -> [points]         each meaning's {kind: points}
     word_points(scored, kinds) -> points              the word's, over the kinds that are censored
 
+A second pass adds the links between words (score_words, link_points): Wiktionary's synonym lists say which kind a
+meaning marked as slang or rude belongs to ("banana: (slang) the penis" is listed with the words for the penis). They
+never make a standard word rude: synonyms share a meaning, not its rudeness ("shitty" lists "bad").
+
 A form ("plural of bitch") scores as its word; the caller looks that up (FORM_GLOSS). No tkinter, no internet.
 """
 import re
@@ -289,10 +293,14 @@ def score_word(senses, pos="", word="", wn=None):
 
 
 # ---- the links between words: a second pass over the first scores (Wiktionary's synonym lists) -------------------
-LINK_OUT = 3.0             # a meaning whose synonyms are mostly of a kind: up to this many points towards it
-LINK_IN = 2.5              # a word listed as a synonym of a rude meaning: towards that kind, on its matching meaning
+LINK_OUT = 2.5             # a meaning whose synonyms are mostly of a kind: up to this many points towards it
+LINK_IN = 2.0              # a word listed as a synonym of a rude meaning: towards that kind, on its matching meaning
 LINK_IN_MAX = 5.0          # (however many rude meanings list it)
 LINK_MIN = 2               # synonyms a meaning needs before they count
+# Synonyms share a meaning, not its rudeness ("shitty" lists "bad", "fuck" lists "company"): the links only count on
+# a meaning Wiktionary marks as not standard English, to say which kind of rude word it is ("banana: (slang) penis")
+REGISTER = {"slang", "euphemistic", "vulgar", "derogatory", "pejorative", "offensive", "childish", "slur",
+            "dysphemistic"}        # (not "informal", "colloquial", "humorous": thesaurus pages mix those with rude ones)
 
 
 def rude_kinds_of(scored_words):
@@ -330,11 +338,14 @@ def link_points(word, senses, rude_kinds, incoming):
     """[{kind: points}] the links add to a word's meanings: LINK_OUT for a meaning by the share of its synonyms that
     have a rude meaning of each kind (`rude_kinds`: rude_kinds_of), LINK_IN for each rude meaning elsewhere that
     lists the word, on the meaning of this word whose definition shares a word with it (none if no meaning does:
-    "banana" in a list of words for the penis gains nothing on the fruit)."""
+    "banana" in a list of words for the penis gains nothing on the fruit). Only meanings marked as not standard
+    English (REGISTER) gain anything."""
     added = [{} for _ in senses]
+    marked = [any(lab in REGISTER for lab, _w in _hedged(list(s.get("tags", [])) + list(s.get("raw_tags", []))))
+              for s in senses]
     for i, sense in enumerate(senses):
         syns = [s for s in synonyms(sense) if s != word]
-        if len(syns) >= LINK_MIN:
+        if marked[i] and len(syns) >= LINK_MIN:
             for kind in RUDE_KINDS:
                 share = sum(1 for s in syns if kind in rude_kinds.get(s, ())) / len(syns)
                 if share >= 0.3:
@@ -344,7 +355,7 @@ def link_points(word, senses, rude_kinds, incoming):
         want = _content(gloss) | _content(source.replace("-", " "))
         best, best_n = None, 0
         for i, have in enumerate(glosses):
-            n = len(want & have)
+            n = len(want & have) if marked[i] else 0
             if n > best_n:
                 best, best_n = i, n
         if best is not None and added[best].get(kind, 0.0) < LINK_IN_MAX:

@@ -466,7 +466,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           simpleton, prostitute) and usage labels (ethnic slur, disparagement, obscenity). It knows only about
 #           a fifth of these words (little slang); it changes 58 of 66k meanings, mostly unlabelled plain words
 #           ("pee", "puke", "nipple", "genitalia", "jackass"): the same 76.1% overall (78.9% of the commonest),
-#           so it fills small gaps rather than raising the score. Next (to agree with the user): keep each
+#           so it fills small gaps rather than raising the score. The links between words (asked for), a second
+#           pass (score_words / link_points): Wiktionary's synonym lists (from its thesaurus pages) give points to a
+#           meaning whose synonyms are mostly of a kind (outward) and to a word listed by a rude meaning, on its
+#           own meaning whose definition matches (inward: "banana: (slang) penis", never the fruit). Measured:
+#           letting them make words rude was worse (74.8%): synonyms share a meaning, not its rudeness ("shitty"
+#           lists "bad", "fuck" lists "company", thesaurus pages mix informal and rude words). So they count only
+#           on meanings marked slang, vulgar, derogatory, offensive, euphemistic or childish (REGISTER): the same
+#           76.0% overall, better kinds (Crude found 20% from 17%, Sexual 59% from 57%), as few false alarms.
+#           About 76% looks like the ceiling for Wiktionary-based rules here. Next (to agree with the user): keep each
 #           meaning's labels in the save at the Wiktionary build and score in the background after the queue
 #           is chosen; an older save fetches them once.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
