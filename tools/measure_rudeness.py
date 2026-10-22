@@ -27,6 +27,7 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 import obscene  # noqa: E402
+from wordfreq import zipf_frequency  # noqa: E402
 import rudeness  # noqa: E402
 from wordsource import WIKT_URL  # noqa: E402
 
@@ -73,6 +74,11 @@ def load(path):
     return words, poses, rudeness.families(built, derived)
 
 
+def zipf(word):
+    """How common a word is (wordfreq's Zipf scale: 7 "the", 5 common, 3 rare, 0 never seen)."""
+    return zipf_frequency(word, "en")
+
+
 def only_forms(senses):
     """True if every meaning of a word only names another word ("plural of bitch")."""
     return all(rudeness.is_form(s) for s in senses)
@@ -97,14 +103,14 @@ def scope(targets, words, family):
     return need
 
 
-def outcome(scored, censored, senses, ticked=obscene.TICKED):
+def outcome(scored, censored, senses, ticked=obscene.TICKED, common=False):
     """What the rules' points lead to for a word, and its meanings' kinds: "left out" (no clean meaning and none of a
     ticked kind: Store._out_sql), "smeared" whole, "some" meanings smeared, or "shown" (rudeness.results)."""
-    kinds = [rudeness.sense_kind(x) for x in scored]
+    kinds = rudeness.meaning_kinds(senses, scored, common)
     found = set(kinds) or {"clean"}
     if not ({"clean"} | set(ticked)) & found:
         return "left out", kinds
-    _bits, whole, _smeared = rudeness.results("", senses, scored, censored)
+    _bits, whole, _smeared = rudeness.results("", senses, scored, censored, common)
     if whole:
         return "smeared", kinds
     return ("some" if found & censored else "shown"), kinds
@@ -151,7 +157,8 @@ def score(words, poses, need, links, wn, family):
     return {w: rudeness.score_word(s, poses[w], w, wn) for w, s in sub.items()}
 
 
-def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True, families=True):
+def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True, families=True,
+            common_zipf=rudeness.COMMON_ZIPF):
     """Score the sorting's words and the control words, and report how often the rules lead where Claude's answers
     do (returns that share)."""
     censored = POLICIES[policy]
@@ -169,7 +176,7 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
         kind, _conf, meanings = claude[w][:3]
         ref = claude_outcome(kind, meanings, censored)
         k = max(1, len(meanings))
-        got, kinds = outcome(scored[w][:k], censored, words[w][:k])
+        got, kinds = outcome(scored[w][:k], censored, words[w][:k], common=zipf(w) >= common_zipf)
         table[ref, got] += 1
         agree += ref == got
         if order[w] < 5000:
@@ -183,7 +190,7 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
         if ref != got:
             diffs.append((order[w], w, ref, got))
     log(f"Policy {policy}{', WordNet' if wn else ''}{', links' if links else ''}{', families' if family else ''}"
-        f": {len(base):,} of the sorting's "
+        f", common from Zipf {common_zipf:g}: {len(base):,} of the sorting's "
         "words have Wiktionary entries.")
     log(f"Same outcome: {agree / len(base):.1%} (the commonest 5,000 of the sorting: {common_agree / max(1, common):.1%})")
     log("Rows: Claude's answers; columns: the rules.  " + "  ".join(f"{o:>9}" for o in OUTCOMES))
@@ -193,7 +200,8 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
     for k in obscene.RUDE_KINDS:
         log(f"  {k:9} {tp[k] / max(1, tp[k] + fp[k]):6.1%} / {tp[k] / max(1, tp[k] + fn[k]):6.1%}"
             f"   ({tp[k] + fn[k]:,} words have it by Claude)")
-    flagged = collections.Counter(outcome(scored[w], censored, words[w])[0] for w in control)
+    flagged = collections.Counter(outcome(scored[w], censored, words[w], common=zipf(w) >= common_zipf)[0]
+                                  for w in control)
     log(f"Control words ({len(control):,}, taken to be clean): " +
         ", ".join(f"{o} {flagged[o] / max(1, len(control)):.1%}" for o in OUTCOMES))
     for _i, w, ref, got in sorted(diffs)[:show]:
@@ -211,13 +219,15 @@ def main(argv=None):
     ap.add_argument("--no-wordnet", action="store_true", help="leave WordNet out (it is used when installed)")
     ap.add_argument("--no-links", action="store_true", help="leave out the links between words (the second pass)")
     ap.add_argument("--no-families", action="store_true", help="leave out word families (etymology, derived terms)")
+    ap.add_argument("--common", type=float, default=rudeness.COMMON_ZIPF,
+                    help="how common a word must be (Zipf) for only strongly labelled meanings to count; 99: never")
     args = ap.parse_args(argv)
     entries = os.path.join(os.path.dirname(os.path.abspath(args.sorting)), "rudeness_entries.jsonl")
     if args.command == "fetch":
         fetch(entries)
     else:
         measure(args.sorting, entries, args.policy, args.show, wn=None if args.no_wordnet else rudeness.wordnet(),
-                links=not args.no_links, families=not args.no_families)
+                links=not args.no_links, families=not args.no_families, common_zipf=args.common)
     return 0
 
 

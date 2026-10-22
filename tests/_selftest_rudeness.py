@@ -27,7 +27,9 @@ assert kind("Urine.", ["childish"]) == "crude"
 assert kind("A muscle of the forearm.", topics=["anatomy"]) == "clean"                # anatomy alone: clean
 assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
 assert kind("Damn!", ["vulgar"], pos="intj") == "swear"
-assert kind("Darn.", ["euphemistic"], cats=["English swear words"]) == "swear"
+assert kind("Darn.", ["euphemistic"], cats=["English swear words"]) == "clean"     # a minced oath: the polite word
+assert kind("Darn.", ["vulgar"], cats=["English swear words"]) == "swear"
+assert kind("Chess pieces.", ["slang"], cats=["English ethnic slurs"]) != "slur"  # (a category alone: maybe a slip)
 assert kind("Sometimes used of a person.", ["sometimes", "offensive"]) == "clean"     # hedged: half as rude
 assert kind("A person.", ["offensive"]) in ("slur", "insult")
 
@@ -111,7 +113,8 @@ assert both["cocktail"] == plain["cocktail"]                   # (cock's first m
 assert sum(both["shithead"][0].values()) == sum(plain["shithead"][0].values()) + 2  # (listed as derived by shit)
 # false matches the user found: "did" (a form of "do", which has a slang meaning), "best" (of "good"), "well: (slang)
 # very" (an intensifier, no rude label), "take: to have sex with" (a plain meaning of a word about something else)
-from rudeness import meaning_kinds, results
+import json
+from rudeness import compact, meaning_kinds, results, score_saved
 W = {"do": [{"glosses": ["To perform."]}, {"glosses": ["To have sex with."], "tags": ["slang"], "categories": ["Sex"]}],
      "did": [{"glosses": ["simple past of do"], "form_of": [{"word": "do"}]}],
      "fuck": [{"glosses": ["To have sexual intercourse."], "tags": ["vulgar"]}],
@@ -133,6 +136,17 @@ assert kind("The mainstream culture, controlled by the elites.", ["derogatory", 
 assert kind("Abbreviation of one-shot.", ["alt-of", "derogatory"]) == "clean"
 from rudeness import _hedged
 assert _hedged(["derogatory", "often"]) == [("derogatory", 0.8)]          # (kaikki sorts labels: hedges apply to all)
+
+# a common word (rudeness.COMMON_ZIPF) is rarely meant rudely: only its strongly labelled meanings count
+W = {"top": [{"glosses": ["The highest part."]}, {"glosses": ["Fellatio; a blowjob."], "tags": ["slang"]}],
+     "box": [{"glosses": ["A container."]}, {"glosses": ["The vagina."], "tags": ["vulgar"]}]}
+got = score_words(W)
+assert meaning_kinds(W["top"], got["top"]) == ["clean", "sexual"]
+assert meaning_kinds(W["top"], got["top"], common=True) == ["clean", "clean"]
+assert meaning_kinds(W["box"], got["box"], common=True) == ["clean", "sexual"]
+saved = {w: json.dumps([compact(x, "noun") for x in v]) for w, v in W.items()}
+assert score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["top"][0] == KIND_BITS_["clean"]
+assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][0] != KIND_BITS_["clean"]   # (a rare word: counts)
 
 # the program keeps an entry's meanings compactly, the first with its family; score_saved reads them back
 import json

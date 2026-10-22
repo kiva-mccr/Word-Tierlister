@@ -478,7 +478,12 @@ def find_rude(words, saved, old=(), log=print):
     rudeness.LISTED), with the words smeared whole before (`old`: an older save's flags). No database: a worker
     thread may run it."""
     if saved is not None:
-        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log)
+        try:
+            from wordfreq import zipf_frequency
+            zipf = lambda w: zipf_frequency(w, "en")       # noqa: E731  (how common: rudeness.COMMON_ZIPF)
+        except ImportError:
+            zipf = None
+        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log, zipf)
     return {w: rudeness.LISTED for w in [*obscene_in(words), *old]}
 
 

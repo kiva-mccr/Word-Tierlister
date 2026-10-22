@@ -151,6 +151,7 @@ _WORD = re.compile(r"[a-z]+")
 RUDE_CATEGORIES = {"english vulgarities", "english swear words", "english ethnic slurs", "english offensive terms",
                    "english derogatory terms"}         # (as good as a rude label)
 
+CATEGORY_ALONE = 0.4       # what a rude category is worth on a meaning with no rude label (see score_sense)
 SWEAR_POS = {"intj"}       # an interjection with a rude label is most likely a swear word
 
 
@@ -259,10 +260,12 @@ def score_sense(sense, pos="", word="", wn=None):
                                              # culture") or on a form ("Abbreviation of ...") is no insult
     names = [_label(t) for t in sense.get("topics", [])]
     names += [(c.get("name") if isinstance(c, dict) else str(c)).lower() for c in sense.get("categories", [])]
+    vouched = rude_label or "ethnic" in {lab for lab, _w in _hedged(labels)}
     rude_label = rude_label or bool(RUDE_CATEGORIES & set(names))
     for name in set(names):
-        if name in TOPIC_POINTS:
-            _add(points, TOPIC_POINTS[name])
+        if name in TOPIC_POINTS:            # a rude category on a meaning with no rude label of its own may be
+            _add(points, TOPIC_POINTS[name],  # Wiktionary's mistake ("wood: chess pieces" in English ethnic slurs)
+                 CATEGORY_ALONE if name in RUDE_CATEGORIES and not vouched else 1.0)
     gloss = gloss_of(sense)
     wording = {}
     for pattern, table in WORDING:
@@ -546,20 +549,35 @@ def has_signal(c):
     return bool(_ANY_WORDING.search(c.get("g", "")))
 
 
-def meaning_kinds(senses, scored):
-    """Each meaning's kind (sense_kind), except that a Clinical meaning of a word whose first real meaning is clean
-    counts as clean: the proper word for something is only a sensitive word when that is what the word is about
-    ("penis", not "take: to have sex with")."""
+COMMON_ZIPF = 4.5          # a word at least this common (wordfreq's Zipf scale: "top", "game") is rarely meant rudely
+STRONG = {"vulgar", "offensive", "derogatory", "pejorative", "slur"}     # labels that count on a common word
+
+
+def strongly_labelled(sense):
+    """True if Wiktionary marks a meaning plainly rude (STRONG, or a rude category), not only slang."""
+    names = {_label(c.get("name") if isinstance(c, dict) else c) for c in sense.get("categories", [])}
+    return bool({lab for lab, _w in _hedged(sense.get("tags", []))} & STRONG or names & RUDE_CATEGORIES)
+
+
+def meaning_kinds(senses, scored, common=False):
+    """Each meaning's kind (sense_kind), except, for a word whose first real meaning is clean: a Clinical meaning
+    counts as clean (the proper word for something is only a sensitive word when that is what the word is about:
+    "penis", not "take: to have sex with"); and on a `common` word (COMMON_ZIPF), a rude meaning counts only when
+    strongly labelled ("box: (vulgar) the vagina", not "top: (slang) fellatio")."""
     kinds = [sense_kind(p) for p in scored]
     main = next((k for k, s in zip(kinds, senses) if not is_form(s)), kinds[0] if kinds else "clean")
-    return [("clean" if k == "clinical" and main == "clean" else k) for k in kinds]
+    if main != "clean":
+        return kinds
+    return [("clean" if k == "clinical" or (common and k != "clean" and not strongly_labelled(s)) else k)
+            for k, s in zip(kinds, senses)]
 
 
-def results(word, senses, scored, censored):
+def results(word, senses, scored, censored, common=False):
     """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds), the
     whole word smeared while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]:
-    smeared in the definitions). `senses`: the kaikki.org-shaped senses that were scored."""
-    kinds = meaning_kinds(senses, scored)
+    smeared in the definitions). `senses`: the kaikki.org-shaped senses that were scored; `common`: the word is
+    at least COMMON_ZIPF common."""
+    kinds = meaning_kinds(senses, scored, common)
     bits = 0
     for k in kinds or ["clean"]:
         bits |= KIND_BITS[k]
@@ -569,7 +587,7 @@ def results(word, senses, scored, censored):
     return bits, whole, smeared
 
 
-def score_saved(saved, censored, wn=None, log=None):
+def score_saved(saved, censored, wn=None, log=None, zipf=None):
     """{word: results(...)} for {word: its compact senses as JSON text} (the save's table rude, filled from the
     Wiktionary download): both passes, reporting "(NN%)" through `log` as it goes (under a minute for 150,000 words)."""
     compacts = {w: json.loads(text) for w, text in saved.items()}
@@ -590,7 +608,9 @@ def score_saved(saved, censored, wn=None, log=None):
     out = {}
     for i, w in enumerate(words, len(words)):
         tell(i)
-        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming, family.get(w, ())), censored)
+        common = zipf is not None and zipf(w) >= COMMON_ZIPF
+        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming, family.get(w, ())), censored,
+                         common)
     for w, senses in words.items():          # a word that is only forms of one other is smeared whole as that one is
         targets = {form_target(s) for s in senses}
         if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:
