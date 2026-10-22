@@ -42,4 +42,21 @@ assert sense_points({"insult": 5.0, "crude": 3.0}, {"crude"}) == 3.0
 assert word_points([]) == 0.0 and MEANING_MIN < WHOLE_MIN
 scored = score_word([{"glosses": ["A container."]}, {"glosses": ["The vagina."], "tags": ["vulgar"]}], "noun", "box")
 assert [sense_kind(p) for p in scored] == ["clean", "sexual"] and word_points(scored) < WHOLE_MIN   # shown; smeared meaning
+
+# WordNet, when installed (never downloaded here): a meaning matched by the words its definition shares
+from rudeness import score_word as sw, wordnet, wordnet_match
+wn = wordnet()
+if wn is None:
+    print("(WordNet not installed: its checks skipped)")
+else:
+    def wkind(word, gloss, pos="noun", tags=()):
+        return sense_kind(score_sense({"glosses": [gloss], "tags": list(tags)}, pos, False, word, wn))
+    assert wordnet_match("pee", "To urinate.", "verb", wn) is not None                # a synonym for a gloss
+    assert wordnet_match("pig", "A light pinkish-red colour, like that of a pig.", "noun", wn) is None or \
+        wkind("pig", "A light pinkish-red colour, like that of a pig.") == "clean"    # not the animal, not a hog
+    assert wkind("pee", "To urinate.", "verb") == "crude"                             # (no label on Wiktionary)
+    assert wkind("puke", "vomit.") == "crude" and wkind("genitalia", "External sex organs.") == "clinical"
+    assert wkind("jackass", "A foolish or stupid person.", tags=["vulgar"]) == "insult"
+    assert wkind("table", "A flat surface.") == "clean"
+    assert sense_kind(sw([{"glosses": ["To urinate."]}], "verb", "pee", None)[0]) == "clean"   # (without it)
 print("RUDENESS OK")

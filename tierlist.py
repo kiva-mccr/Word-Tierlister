@@ -459,7 +459,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (78.8% of the commonest 5,000), slurs 89% right when flagged; 99.4% of a control sample of other
 #           words stays clean. Learned while tuning: "vulgar" alone is a swear word (the wording decides
 #           sexual / crude / insult); a slang label is never the proper (Clinical) word; anatomy alone is not
-#           sensitive; group wording counts only with a rude label. Next (to agree with the user): keep each
+#           sensitive; group wording counts only with a rude label. WordNet as a sixth source, when installed
+#           (asked for; never downloaded by it: rudeness.wordnet()): each meaning matched to one of the word's
+#           WordNet meanings by the words their definitions share (not the word itself: "pig: a pinkish colour"),
+#           points from that meaning's tree (sexual activity, genitalia, body waste, unpleasant person,
+#           simpleton, prostitute) and usage labels (ethnic slur, disparagement, obscenity). It knows only about
+#           a fifth of these words (little slang); it changes 58 of 66k meanings, mostly unlabelled plain words
+#           ("pee", "puke", "nipple", "genitalia", "jackass"): the same 76.1% overall (78.9% of the commonest),
+#           so it fills small gaps rather than raising the score. Next (to agree with the user): keep each
 #           meaning's labels in the save at the Wiktionary build and score in the background after the queue
 #           is chosen; an older save fetches them once.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,

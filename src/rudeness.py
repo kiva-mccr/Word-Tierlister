@@ -8,6 +8,10 @@ three sources, each with its own table below:
     WORDING         the words of the definition itself ("sexual intercourse", "a stupid person")
     GROUP           the definition names a group of people ("of * descent", "a trans woman"): with a rude label
     ROOT_POINTS     the word itself, when it holds a rude root ("sorry-ass", "fuck-boy": obscene.on_list)
+    WORDNET_POINTS  WordNet, when nltk and its WordNet data are installed (never downloaded here): the meaning is
+                    matched to one of the word's WordNet meanings by the words the two definitions share, and that
+                    meaning's place in WordNet's tree ("sexual activity", "body waste", "unpleasant person", ...)
+                    and its usage labels ("ethnic slur", "disparagement", "obscenity") add points
 
 A meaning's kind is the kind with the most points, when it has at least MEANING_MIN of them (else clean). A word's
 points come from its meanings, its first (most common) meaning counting most (word_points):
@@ -106,6 +110,28 @@ GROUP = [re.compile(r"\b(of (\w+ )?(\w+ )?(descent|origin|ancestry|extraction|he
          re.compile(r"\b([Aa]n?|[Tt]he) [A-Z][a-z]+ (person|people|man|woman|men|women)\b")]   # "An Italian person"
 GROUP_POINTS = {"slur": 3}
 
+# WordNet (optional): points for a matched meaning that is, or is a kind of, one of these; and for its usage labels
+WORDNET_POINTS = {
+    "sexual_activity.n.01": {"sexual": 2, "clinical": 1},
+    "copulate.v.01": {"sexual": 2, "clinical": 1}, "sleep_together.v.01": {"sexual": 2, "clinical": 1},
+    "masturbate.v.01": {"sexual": 2, "clinical": 1}, "masturbate.v.02": {"sexual": 2, "clinical": 1},
+    "genitalia.n.01": {"sexual": 1, "clinical": 2}, "erectile_organ.n.01": {"sexual": 1, "clinical": 2},
+    "reproductive_organ.n.01": {"sexual": 1, "clinical": 2},
+    "body_waste.n.01": {"crude": 2, "clinical": 1}, "excrete.v.01": {"crude": 2, "clinical": 1},
+    "prostitute.n.01": {"sexual": 2},
+    "unpleasant_person.n.01": {"insult": 2.5}, "unwelcome_person.n.01": {"insult": 1}, "bad_person.n.01": {"insult": 2},
+    "simpleton.n.01": {"insult": 2.5},
+    # usage labels
+    "ethnic_slur.n.01": {"slur": 5}, "disparagement.n.01": {"insult": 1.5, "slur": 1},
+    "obscenity.n.02": {"swear": 2, "sexual": 1.5, "crude": 1.5}, "vulgarism.n.01": {"swear": 2, "sexual": 1.5, "crude": 1.5},
+}
+WORDNET_SLANG = {"slang.n.02", "colloquialism.n.01", "euphemism.n.01"}     # (not the proper word: see slangy)
+WORDNET_POS = {"noun": "n", "verb": "v", "adj": "a", "adv": "r"}
+_STOP = set("a an the of to in on or and for with by as at from that this which who whom whose is are be been being "
+            "it its one someone something any some person thing used especially usually often like kind type sort "
+            "also called other family member members part various form".split())
+_WORD = re.compile(r"[a-z]+")
+
 SWEAR_POS = {"intj"}       # an interjection with a rude label is most likely a swear word
 ROOT_POINTS = 2.0          # a rude root in the word itself: to the meaning's best kind (a swear word if none)
 
@@ -128,9 +154,72 @@ def _add(points, table, weight=1.0):
         points[kind] = points.get(kind, 0.0) + p * weight
 
 
-def score_sense(sense, pos="", rude_root=False):
+_wordnet = []                  # [the wordnet module, or None], once looked for
+
+
+def wordnet():
+    """nltk's WordNet when it and its data are installed, else None (it is never downloaded from here)."""
+    if not _wordnet:
+        try:
+            from nltk.corpus import wordnet as wn
+            wn.synsets("dog")
+            _wordnet.append(wn)
+        except Exception:                    # (not installed, or its data missing: LookupError)
+            _wordnet.append(None)
+    return _wordnet[0]
+
+
+_signals = {}                  # synset name -> (its WORDNET_POINTS together, slang?)
+
+
+def _synset_signals(syn):
+    """The WORDNET_POINTS of a WordNet meaning (itself, what it is a kind of, its usage labels), and whether WordNet
+    calls it slang; worked out once per meaning."""
+    name = syn.name()
+    if name not in _signals:
+        points, names = {}, {name}
+        for path in syn.hypernym_paths():
+            names.update(h.name() for h in path)
+        usage = {d.name() for d in syn.usage_domains()}
+        for n in names | usage:
+            if n in WORDNET_POINTS:
+                _add(points, WORDNET_POINTS[n])
+        _signals[name] = (points, bool(usage & WORDNET_SLANG))
+    return _signals[name]
+
+
+def _content(text):
+    return {w for w in _WORD.findall(text.lower()) if w not in _STOP and len(w) > 2}
+
+
+def wordnet_match(word, gloss, pos, wn):
+    """The WordNet meaning of `word` (same part of speech) whose definition shares the most words with `gloss` (at
+    least one; the word itself does not count: "pig: a pinkish colour, like that of a pig" is not the animal), or
+    whose synonyms are the whole of a short gloss ("Penis.", "To urinate."), or None."""
+    if wn is None or not word:
+        return None
+    try:
+        syns = wn.synsets(word.replace(" ", "_").replace("-", "_"), WORDNET_POS.get(pos))
+    except Exception:
+        return None
+    if not syns:
+        return None
+    want = _content(gloss) - _content(word.replace("-", " "))
+    best, best_n = None, 0
+    for syn in syns:
+        names = {p for n in syn.lemma_names() for p in n.lower().split("_")}
+        n = len(want & (_content(syn.definition()) - _content(word.replace("-", " "))))
+        if want and want <= names:
+            n = max(n, len(want) + 1)                   # the gloss is just a synonym
+        if n > best_n:
+            best, best_n = syn, n
+    return best
+
+
+def score_sense(sense, pos="", rude_root=False, word="", wn=None):
     """{kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories",
-    "glosses"); `rude_root`: the word holds a rude root (ROOT_POINTS)."""
+    "glosses"); `rude_root`: the word holds a rude root (ROOT_POINTS); `word`, `wn`: the word and WordNet (or None),
+    for WORDNET_POINTS."""
     points = {}
     labels = list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
     rude_label = False
@@ -149,10 +238,15 @@ def score_sense(sense, pos="", rude_root=False):
             _add(points, table)
     if rude_label and any(g.search(gloss) for g in GROUP):
         _add(points, GROUP_POINTS)
+    wn_slang = False
+    syn = wordnet_match(word, gloss, pos, wn)
+    if syn is not None:
+        wn_points, wn_slang = _synset_signals(syn)
+        _add(points, wn_points)
     if pos in SWEAR_POS and rude_label:
         _add(points, {"swear": 3})
-    slangy = rude_label or any(lab in ("slang", "informal", "colloquial", "euphemistic", "childish")
-                               for lab, _w in _hedged(labels))
+    slangy = wn_slang or rude_label or any(lab in ("slang", "informal", "colloquial", "euphemistic", "childish")
+                                           for lab, _w in _hedged(labels))
     if slangy and points.get("clinical"):    # a rude or slang label is never the neutral, proper word: its
         moved = points["clinical"] * 0.7     # points go to Sexual (Crude for bodily waste)
         points["clinical"] -= moved
@@ -185,9 +279,10 @@ def word_points(scored, kinds=RUDE_KINDS):
     return FIRST_WEIGHT * pts[0] + (OTHERS_WEIGHT * sum(rest) / len(rest) if rest else 0.0)
 
 
-def score_word(senses, pos="", word=""):
+def score_word(senses, pos="", word="", wn=None):
     """[{kind: points} for each meaning] of a word's senses (kaikki.org); pos: their part of speech (one per
-    sense, or one for all); word: the word itself (ROOT_POINTS)."""
+    sense, or one for all); word: the word itself (ROOT_POINTS, and its WordNet meanings); wn: WordNet (wordnet()),
+    or None for none."""
     poses = pos if isinstance(pos, (list, tuple)) else [pos] * len(senses)
     root = bool(word) and on_list(word)
-    return [score_sense(s, p, root) for s, p in zip(senses, poses)]
+    return [score_sense(s, p, root, word, wn) for s, p in zip(senses, poses)]

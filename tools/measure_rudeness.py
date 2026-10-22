@@ -74,9 +74,9 @@ def is_form(senses):
     return all(s.get("form_of") or s.get("alt_of") for s, _p in senses)
 
 
-def rules_outcome(word, senses, censored, ticked=obscene.TICKED):
-    """What the rules lead to for a word, and its meanings' kinds."""
-    scored = rudeness.score_word([s for s, _ in senses], [p for _, p in senses], word)
+def rules_outcome(word, senses, censored, ticked=obscene.TICKED, wn=None):
+    """What the rules lead to for a word, and its meanings' kinds (`wn`: WordNet as a source too, or None)."""
+    scored = rudeness.score_word([s for s, _ in senses], [p for _, p in senses], word, wn)
     kinds = [rudeness.sense_kind(x) for x in scored]
     found = set(kinds) or {"clean"}
     if not ({"clean"} | set(ticked)) & found:
@@ -97,7 +97,7 @@ def claude_outcome(kind, meanings, censored, ticked=obscene.TICKED):
     return "some" if found & censored else "shown"
 
 
-def measure(sorting, entries, policy="B", show=0, log=print):
+def measure(sorting, entries, policy="B", show=0, log=print, wn=None):
     censored = POLICIES[policy]
     words, control = load(entries)
     claude = obscene.read_categories(sorting)
@@ -109,7 +109,7 @@ def measure(sorting, entries, policy="B", show=0, log=print):
     for w in base:
         kind, _conf, meanings = claude[w][:3]
         ref = claude_outcome(kind, meanings, censored)
-        got, kinds = rules_outcome(w, words[w][:max(1, len(meanings))], censored)
+        got, kinds = rules_outcome(w, words[w][:max(1, len(meanings))], censored, wn=wn)
         table[ref, got] += 1
         agree += ref == got
         if order[w] < 5000:
@@ -122,7 +122,8 @@ def measure(sorting, entries, policy="B", show=0, log=print):
             fn[k] += k in want and k not in have
         if ref != got:
             diffs.append((order[w], w, ref, got))
-    log(f"Policy {policy}: {len(base):,} of the sorting's words have Wiktionary entries.")
+    log(f"Policy {policy}{', with WordNet' if wn else ''}: {len(base):,} of the sorting's words have Wiktionary "
+        "entries.")
     log(f"Same outcome: {agree / len(base):.1%} (the commonest 5,000 of the sorting: {common_agree / max(1, common):.1%})")
     log("Rows: Claude's answers; columns: the rules.  " + "  ".join(f"{o:>9}" for o in OUTCOMES))
     for r in OUTCOMES:
@@ -131,7 +132,8 @@ def measure(sorting, entries, policy="B", show=0, log=print):
     for k in obscene.RUDE_KINDS:
         log(f"  {k:9} {tp[k] / max(1, tp[k] + fp[k]):6.1%} / {tp[k] / max(1, tp[k] + fn[k]):6.1%}"
             f"   ({tp[k] + fn[k]:,} words have it by Claude)")
-    flagged = collections.Counter(rules_outcome(w, words[w], censored)[0] for w in control if not is_form(words[w]))
+    flagged = collections.Counter(rules_outcome(w, words[w], censored, wn=wn)[0] for w in control
+                                  if not is_form(words[w]))
     total = sum(flagged.values())
     log(f"Control words ({total:,}, taken to be clean): " +
         ", ".join(f"{o} {flagged[o] / max(1, total):.1%}" for o in OUTCOMES))
@@ -146,12 +148,14 @@ def main(argv=None):
     ap.add_argument("--sorting", default=os.path.join(ROOT, "word_categories.tsv"))
     ap.add_argument("--policy", choices=sorted(POLICIES), default="B")
     ap.add_argument("--show", type=int, default=0, help="list this many words where the two differ (commonest)")
+    ap.add_argument("--no-wordnet", action="store_true", help="leave WordNet out (it is used when installed)")
     args = ap.parse_args(argv)
     entries = os.path.join(os.path.dirname(os.path.abspath(args.sorting)), "rudeness_entries.jsonl")
     if args.command == "fetch":
         fetch(args.sorting, entries)
     else:
-        measure(args.sorting, entries, args.policy, args.show)
+        measure(args.sorting, entries, args.policy, args.show,
+                wn=None if args.no_wordnet else rudeness.wordnet())
     return 0
 
 
