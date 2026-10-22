@@ -43,6 +43,28 @@ assert word_points([]) == 0.0 and MEANING_MIN < WHOLE_MIN
 scored = score_word([{"glosses": ["A container."]}, {"glosses": ["The vagina."], "tags": ["vulgar"]}], "noun", "box")
 assert [sense_kind(p) for p in scored] == ["clean", "sexual"] and word_points(scored) < WHOLE_MIN   # shown; smeared meaning
 
+# ---- the links between words (second pass): Wiktionary's synonym lists spread a kind both ways
+from rudeness import incoming_links, link_points, rude_kinds_of, score_words
+PENIS = ["dick", "johnson", "schlong", "banana"]
+words = {
+    "dick": [{"glosses": ["The penis."], "tags": ["vulgar"], "synonyms": [{"word": w} for w in PENIS]}],
+    "johnson": [{"glosses": ["The penis."], "tags": ["slang"], "categories": ["Genitalia"], "synonyms": [{"word": w} for w in PENIS]}],
+    "schlong": [{"glosses": ["A penis."], "synonyms": [{"word": "dick"}, {"word": "johnson"}]}],   # no label at all
+    "banana": [{"glosses": ["An elongated curved fruit."]}, {"glosses": ["(slang) The penis."]}],
+    "table": [{"glosses": ["A flat surface."], "synonyms": [{"word": "desk"}, {"word": "bench"}]}],
+}
+first = {w: score_word(s, "noun", w) for w, s in words.items()}
+assert sense_kind(first["schlong"][0]) != "sexual" and sense_kind(first["banana"][1]) != "sexual"   # alone: not yet
+rude = rude_kinds_of(first)
+assert "sexual" in rude["dick"] and "table" not in rude
+assert [k for k, _g, src in incoming_links(words, first)["banana"]] == ["sexual", "sexual"]       # (dick, johnson)
+added = link_points("banana", words["banana"], rude, incoming_links(words, first))
+assert added[0] == {} and added[1].get("sexual", 0) > 0                     # the fruit gains nothing
+both = score_words(words, {w: ["noun"] * len(s) for w, s in words.items()})
+assert sense_kind(both["schlong"][0]) == "sexual"                            # its synonyms are sexual: outward
+assert sense_kind(both["banana"][1]) == "sexual" and sense_kind(both["banana"][0]) == "clean"   # inward
+assert sense_kind(both["table"][0]) == "clean"
+
 # WordNet, when installed (never downloaded here): a meaning matched by the words its definition shares
 from rudeness import score_word as sw, wordnet, wordnet_match
 wn = wordnet()

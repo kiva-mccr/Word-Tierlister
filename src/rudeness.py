@@ -286,3 +286,83 @@ def score_word(senses, pos="", word="", wn=None):
     poses = pos if isinstance(pos, (list, tuple)) else [pos] * len(senses)
     root = bool(word) and on_list(word)
     return [score_sense(s, p, root, word, wn) for s, p in zip(senses, poses)]
+
+
+# ---- the links between words: a second pass over the first scores (Wiktionary's synonym lists) -------------------
+LINK_OUT = 3.0             # a meaning whose synonyms are mostly of a kind: up to this many points towards it
+LINK_IN = 2.5              # a word listed as a synonym of a rude meaning: towards that kind, on its matching meaning
+LINK_IN_MAX = 5.0          # (however many rude meanings list it)
+LINK_MIN = 2               # synonyms a meaning needs before they count
+
+
+def rude_kinds_of(scored_words):
+    """{word: the set of kinds of its rude meanings} from the first pass ({word: [{kind: points}]}): words with
+    none left out."""
+    out = {}
+    for w, scored in scored_words.items():
+        kinds = {sense_kind(p) for p in scored} - {"clean"}
+        if kinds:
+            out[w] = kinds
+    return out
+
+
+def incoming_links(words, scored_words):
+    """{word: [(kind, definition, from word)]}: each rude meaning (first pass) that lists the word as a synonym.
+    `words`: {word: [sense]} (kaikki.org senses, with "synonyms")."""
+    out = {}
+    for w, senses in words.items():
+        for sense, points in zip(senses, scored_words.get(w, [])):
+            kind = sense_kind(points)
+            if kind == "clean":
+                continue
+            gloss = " ".join(str(g) for g in (sense.get("glosses") or [])[-1:])
+            for syn in synonyms(sense):
+                if syn != w:
+                    out.setdefault(syn, []).append((kind, gloss, w))
+    return out
+
+
+def synonyms(sense):
+    return [s.get("word") if isinstance(s, dict) else s for s in sense.get("synonyms", []) if s]
+
+
+def link_points(word, senses, rude_kinds, incoming):
+    """[{kind: points}] the links add to a word's meanings: LINK_OUT for a meaning by the share of its synonyms that
+    have a rude meaning of each kind (`rude_kinds`: rude_kinds_of), LINK_IN for each rude meaning elsewhere that
+    lists the word, on the meaning of this word whose definition shares a word with it (none if no meaning does:
+    "banana" in a list of words for the penis gains nothing on the fruit)."""
+    added = [{} for _ in senses]
+    for i, sense in enumerate(senses):
+        syns = [s for s in synonyms(sense) if s != word]
+        if len(syns) >= LINK_MIN:
+            for kind in RUDE_KINDS:
+                share = sum(1 for s in syns if kind in rude_kinds.get(s, ())) / len(syns)
+                if share >= 0.3:
+                    _add(added[i], {kind: LINK_OUT * share})
+    glosses = [_content(" ".join(str(g) for g in (s.get("glosses") or [])[-1:])) for s in senses]
+    for kind, gloss, source in incoming.get(word, ()):
+        want = _content(gloss) | _content(source.replace("-", " "))
+        best, best_n = None, 0
+        for i, have in enumerate(glosses):
+            n = len(want & have)
+            if n > best_n:
+                best, best_n = i, n
+        if best is not None and added[best].get(kind, 0.0) < LINK_IN_MAX:
+            _add(added[best], {kind: min(LINK_IN, LINK_IN_MAX - added[best].get(kind, 0.0))})
+    return added
+
+
+def score_words(words, pos=None, wn=None):
+    """Both passes over many words: {word: [{kind: points} for each meaning]}. `words`: {word: [sense]} (kaikki.org
+    senses), `pos`: {word: [part of speech of each sense]}; wn: WordNet or None. The first pass scores each
+    meaning on its own; the second adds the links between words (link_points)."""
+    pos = pos or {}
+    first = {w: score_word(senses, pos.get(w, ""), w, wn) for w, senses in words.items()}
+    rude, incoming = rude_kinds_of(first), incoming_links(words, first)
+    out = {}
+    for w, scored in first.items():
+        added = link_points(w, words[w], rude, incoming)
+        out[w] = [dict(p) for p in scored]
+        for p, a in zip(out[w], added):
+            _add(p, a)
+    return out
