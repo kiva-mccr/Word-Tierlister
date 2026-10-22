@@ -358,7 +358,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           thousand left out of a million). The Wiktionary parse records each entry's part of speech; a
 #           save made before this gets its kinds from the stored definitions' "(noun)" lines (every source
 #           writes them; WordNet for the rest, else "other"). Obscene words: obscene.py's list (see the fix
-#           below). Both are start-up steps ("Sorting words into kinds", "Finding obscene words"). Order "Most common first" is the queue shape "rank". Browse's Show lists the placed words
+#           below). Both are start-up steps ("Sorting words into kinds", "Finding obscene words"; since OB-6 "Scoring rude meanings"). Order "Most common first" is the queue shape "rank". Browse's Show lists the placed words
 #           of a kind. With everything chosen placed, Place says how many are left out. Measured with a
 #           million words: re-dealing ~3.5 s (worker thread, moving bar), the dialog's counts ~0.4 s. The
 #           first start's steps show once per save (main(): App(ask_dealing=...)). _selftest_dealing.py.
@@ -371,7 +371,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           slurs; ROOTS also inside longer words, WORDS with the usual endings; words whose usual meaning is
 #           innocent left out, NOT_INSIDE / NOT_OBSCENE for "snigger", "spicy", "saltwater"). Checked against
 #           wordfreq's 400,000 commonest words. _selftest_obscene.py.
-#           Then the user's rule (asked for, "both most and first"): a word is obscene if MOST of its meanings
+#           Then the user's rule (asked for, "both most and first"; replaced by OB-6's rules, its code removed): a
+#           word is obscene if MOST of its meanings
 #           are rude or its FIRST one is (vulgar, offensive, derogatory / pejorative, a slur; not "sometimes
 #           offensive"); a meaning that is a form of another word ("plural of bitch") is rude when that word is
 #           (obscene.decide, tag_marks, page_senses). A Wiktionary build reads each sense's tags as it goes; a save
@@ -407,7 +408,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           gets them from the same Wiktionary pages the flagging reads (obscene.page_senses, label_lines: each
 #           stored line takes the labels of the page sense sharing most of its words, at least half; a loose
 #           match labels nothing). Store.OBSCENE_VERSION 6 looks again. WordNet / dictionaryapi.dev definitions
-#           carry no such labels, so they are never smeared.
+#           carry no such labels, so they are never smeared. Since OB-6 the rules decide which meanings are
+#           smeared (rude.smeared, by each meaning's first GLOSS_KEY characters); the labels are only shown, and
+#           the page reading (page_senses, label_lines) is gone.
 # [x] OB-3  (archived, asked for: "I only want the rules, I don't want to use Claude's list anymore, or even the
 #           review system"; the code is in commit 233d6ca: tools/classify_obscene.py, _selftest_classify.py; its
 #           sorting file stays only as the yardstick of tools/measure_rudeness.py) Sort the rude words into kinds
@@ -505,8 +508,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Decided: Double meaning words are never smeared as words ("last", "john", "brown" are double), only
 #           their rude meanings inside the definitions; Clinical words are smeared like the other ticked kinds.
 #           Then decided (asked for: "words can be multiple categories at the same time"): kinds go by MEANING.
-#           A word's kinds are its meanings' kinds (classify_obscene's per-meaning column; forms take their
-#           word's), plus its whole-word kind when no stored meaning shows it (the rude sense is not among the
+#           A word's kinds are its meanings' kinds (then classify_obscene's per-meaning column, archived; now
+#           OB-6's rules; forms take their word's), plus its whole-word kind when no stored meaning shows it (the rude sense is not among the
 #           stored definitions: "faggot" listed only as a bundle of sticks). Dealt if any meaning is clean or of
 #           a ticked kind; left out only if every one is unticked. Censoring smears each rude meaning in the
 #           definitions, and the whole word when its first (most common) meaning is rude or every meaning is

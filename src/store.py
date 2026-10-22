@@ -19,7 +19,11 @@ Data model (see SCHEMA below)
     anchors      the one reference word per tier used by "compare to anchors".
     defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
     rude         the meanings of the words Wiktionary has any sign of rudeness for (and their forms), kept
-                 compact for the rules (rudeness.compact), and the keys of those smeared in the definitions.
+                 compact for the rules (rudeness.compact), and `smeared`: the keys (first rudeness.GLOSS_KEY
+                 characters) of those smeared in the definitions while censoring (JSON, or NULL).
+                 Its meta keys: rude_senses "1" once kept, rude_done what words.rude was scored from
+                 (wordsource.rude_version), rude_tried when the background read last started; the dealing
+                 ones: deal_kinds, deal_obscene, deal_rude (rudeness.KIND_BITS), censor.
     history      one JSON row per action, so Undo works and survives restarts.
 
 Conventions

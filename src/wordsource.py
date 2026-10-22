@@ -415,7 +415,7 @@ def fill_frequencies(store, log=print):
 
 
 # --------------------------------------------------------------------------
-# Kinds of words (for a save made before ST-6: a Wiktionary build records them itself) and obscene words
+# Kinds of words (for a save made before ST-6: a Wiktionary build records them itself)
 # --------------------------------------------------------------------------
 _DEF_POS = re.compile(r"^\s*(?:\u2022|\d+\.)\s*\(([a-z ]+)\)", re.M)
 
