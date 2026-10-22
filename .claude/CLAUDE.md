@@ -126,7 +126,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED). "Obscene words" still starts unticked.
   Bump rudeness.RUDENESS_VERSION whenever the rules change. Measure with tools/measure_rudeness.py (78.5%, 80.8% of
   the commonest, 0.4% false alarms; word families replaced the hand list's roots; Wiktionary's examples were tried
-  and did not help; forms follow their word's first meaning: see OB-6). Ask the user's examples of false matches.
+  and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
+  labelled rude meanings: see OB-6). Ask the user's examples of false matches.
   Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).

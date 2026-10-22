@@ -133,7 +133,8 @@ installed, the links between words (Wiktionary's synonym lists) and word familie
 the most points, if it has enough. A word's points come mostly from its first meaning: enough of them and the whole
 word is smeared, otherwise only its rude meanings are. A plural or other form goes with its word's first meaning
 ("did" is "do", not its slang meaning), and a Clinical meaning only counts when the word is about it ("penis",
-not "take").
+not "take"). A very common word (about the 3,000 commonest, by wordfreq) is rarely meant rudely: only meanings
+Wiktionary labels plainly rude count for it ("box: (vulgar) the vagina", not "top: (slang) fellatio").
 The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, in the save's `rude`
 table) and scores them once at the end of setting up (about a minute; again only when the rules change).
 A save from before this, or one made from a word list, reads them from the Wiktionary download in the background

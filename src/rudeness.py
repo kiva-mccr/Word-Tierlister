@@ -478,7 +478,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "4"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "5"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters

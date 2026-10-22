@@ -524,8 +524,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ("system: (often derogatory) the mainstream culture") or on a form is no insult; the insult wording
 #           needs a person ("why: unpleasant surprise" was one). RUDENESS_VERSION 4. Measured: 78.5% (80.8% of the
 #           commonest), false alarms on ordinary words 0.4%, Insult 68%, Sexual 74%, Slur 90% right when flagged.
-#           Left as Wiktionary labels them: rare slang meanings of common words ("top", "head", "box", "it" for a
-#           person), which by the rule (dealt for any meaning of a ticked kind) come up under Obscene words. How words are dealt: "Obscene words" sits before "Other",
+#           Then (asked for: "the vast majority of common words are not obscene"): a word at least COMMON_ZIPF
+#           (4.5, wordfreq: about the 3,000 commonest) whose first meaning is clean counts a rude meaning only when
+#           Wiktionary labels it strongly (vulgar, offensive, derogatory, a slur, a rude category): "top: (slang)
+#           fellatio" no longer makes "top" an obscene word, "box: (vulgar) the vagina" still does. Of the 10,000
+#           commonest words, 82 drop out (do, back, love, game, play, hot, ...), none of them obscene; flagged
+#           among the 3,000 commonest: 211 -> 129. And a rude category on a meaning with no rude label of its own
+#           counts 40% (CATEGORY_ALONE: Wiktionary files "wood: chess pieces" under English ethnic slurs; "darn"
+#           is now clean). RUDENESS_VERSION 5: 78.5% against Claude's sorting (unchanged: it saw only the first
+#           meanings), Clinical right 69% when flagged (from 63%), false alarms on ordinary words 0.4%. How words are dealt: "Obscene words" sits before "Other",
 #           and shows a minus while only some kinds under it are ticked (ui_style: the tick box's "alternate").
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
