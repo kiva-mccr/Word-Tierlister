@@ -37,7 +37,8 @@ src/               the program's modules
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
                    bundle.py (the data a built program carries), build.py + hooks/ (build it as a program),
-                   classify_obscene.py (sorts the rude words into kinds with Claude; developers only)
+                   classify_obscene.py (sorts the rude words into kinds with Claude; developers only),
+                   measure_rudeness.py (measures the rudeness rules against that sorting)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -53,7 +54,8 @@ either way the save you used last is found again, so switching between the two l
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
-| `src/obscene.py` | Which words are obscene (ST-6): most or the first of a word's meanings rude, read from Wiktionary's labels (the download's tags or a page's wikitext); a short list chosen by hand stands in until a save has them. No tkinter, no internet. |
+| `src/obscene.py` | Which words are obscene (ST-6): most or the first of a word's meanings rude, read from Wiktionary's labels (the download's tags or a page's wikitext); a short list chosen by hand stands in until a save has them. Also the rules for what a word's kinds of rudeness lead to, meaning by meaning (OB-4: dealt or left out, smeared whole or meaning by meaning). No tkinter, no internet. |
+| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards each kind (Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, its topics and categories, the definition's wording and the word itself; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared). No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds, obscene words, the ones left out; ST-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the obscene words (from the download's labels, or Wiktionary's pages for an older save), queue prep. |
@@ -78,12 +80,13 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
+| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against Claude's sorting (OB-6; developers): `fetch` keeps the sorting's words from the Wiktionary download (and a control sample), `measure` says how often both lead to the same thing, per censoring policy. |
 | `tools/classify_obscene.py` | Sorts the rude words into kinds with Claude, meaning by meaning, with a confidence (OB-3; developers only, not part of the program): `estimate`, `try`, `run`, `status`; writes `word_categories.tsv` next to the save. |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
-Layers, lowest first: `constants`, `obscene`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
+Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
 `fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts`, `dealing` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 

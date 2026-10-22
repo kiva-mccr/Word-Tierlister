@@ -64,13 +64,14 @@ How it works
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, bundle,
-build, classify_obscene), the Claude notes in .claude/; the README has the same map with more detail)
+build, classify_obscene, measure_rudeness), the Claude notes in .claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
     obscene.py      which words are obscene: most or the first meaning rude by Wiktionary's labels; a hand list
                     while offline (ST-6, OB-1; no tkinter).
+    rudeness.py     how rude each meaning is, by rules: points from labels, topics, wording (OB-6; no tkinter).
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
@@ -94,7 +95,7 @@ build, classify_obscene), the Claude notes in .claude/; the README has the same 
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     app.py          App: the main window and all modes.
 
-Layers: constants, obscene, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+Layers: constants, obscene, rudeness, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
 sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing ->
 app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
@@ -444,6 +445,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           tick, what it leads to ("With the usual settings: ..."), Back / Next word, the bar, and Save answers
 #           to a file (word_categories.checked.tsv). It replaces OB-1's not / obscene / swear review (its
 #           answers stay in the save and still count for the obscene column). _selftest_review.py.
+# [ ] OB-6  Rules instead of a list (asked for: "a point-based model that uses multiple sources", "rather a
+#           solution that can run for each word on startup than a list"; "if it has really high points its
+#           completely censored, and low points not censored unless a specific definition is contributing a
+#           lot"). Built so far: src/rudeness.py: each meaning earns points towards the rude kinds from four
+#           sources (TAG_POINTS: Wiktionary's labels, hedges halving them; TOPIC_POINTS: topics and categories;
+#           WORDING: the definition's words; GROUP: a group of people named, with a rude label: a slur; the word
+#           itself holding a rude root, obscene.on_list). A meaning's kind: its best kind at MEANING_MIN 3+
+#           points; the word's points: its first meaning, plus 0.35 x the mean of the rest, over the censored
+#           kinds; WHOLE_MIN 3.5+: the whole word smeared, else only the rude meanings. Tuned against Claude's
+#           sorting of the user's 20,643 words with tools/measure_rudeness.py (kaikki.org's download streamed,
+#           56k entries kept): with Crude / Swear / Sexual / Slur censored, the same outcome for 76.1% of words
+#           (78.8% of the commonest 5,000), slurs 89% right when flagged; 99.4% of a control sample of other
+#           words stays clean. Learned while tuning: "vulgar" alone is a swear word (the wording decides
+#           sexual / crude / insult); a slang label is never the proper (Clinical) word; anatomy alone is not
+#           sensitive; group wording counts only with a rude label. Next (to agree with the user): keep each
+#           meaning's labels in the save at the Wiktionary build and score in the background after the queue
+#           is chosen; an older save fetches them once.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
