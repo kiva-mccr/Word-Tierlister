@@ -8,17 +8,18 @@ Data model (see SCHEMA below)
                  skips counts "don't know / later" presses. qkey is the seeded queue key (lower =
                  comes up sooner); rank is the frequency rank (1 = most common); pen is the
                  compound-word class (0 normal, 1 closed compound, 2 hyphenated / multi-word).
-                 kinds: its parts of speech (constants.KINDS bits; NULL = not known), obscene: 1 if most
-                 of its senses, or its first, are vulgar / offensive / derogatory / a slur (obscene.decide;
-                 the review's answers win), out: 1 if "How words are dealt" leaves
-                 it out of the queue (ST-6; kept up to date by set_deal).
+                 kinds: its parts of speech (constants.KINDS bits; NULL = not known); rude: the kinds of its
+                 meanings by the rules (rudeness.KIND_BITS: 1 clean, then one bit per rude kind; NULL = no
+                 rude meaning found), obscene: 1 if the whole word is smeared while censoring (OB-6); out: 1
+                 if "How words are dealt" leaves it out of the queue (ST-6; kept up to date by set_deal).
     comparisons  every answer ever given (winner, loser, tie, kind). Used to avoid repeating a
                  duel and to detect contradictions.
     conflicts    pairs whose answers contradict each other, waiting to be re-judged.
     swaps        boundary checks that swapped their two words (per boundary; still counted, UI-31).
     anchors      the one reference word per tier used by "compare to anchors".
     defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
-    obscene_review  the developer's first answers for flagged words (OB-1: not / obscene / swear); they win.
+    rude         the meanings of the words Wiktionary has any sign of rudeness for (and their forms), kept
+                 compact for the rules (rudeness.compact), and the keys of those smeared in the definitions.
     history      one JSON row per action, so Undo works and survives restarts.
 
 Conventions
@@ -37,9 +38,13 @@ import re
 import sqlite3
 import time
 
-from obscene import on_list
+from obscene import RUDE_KINDS, TICKED, on_list
+from rudeness import KIND_BITS
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
+
+_RUDE_BITS = sum(KIND_BITS[k] for k in RUDE_KINDS)
+_TICKED_BITS = sum(KIND_BITS[k] for k in TICKED)
 
 
 # --------------------------------------------------------------------------
@@ -59,7 +64,8 @@ CREATE TABLE IF NOT EXISTS words(
     freq REAL NOT NULL DEFAULT 0,
     kinds INTEGER,
     obscene INTEGER NOT NULL DEFAULT 0,
-    out INTEGER NOT NULL DEFAULT 0
+    out INTEGER NOT NULL DEFAULT 0,
+    rude INTEGER
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,7 +81,7 @@ CREATE TABLE IF NOT EXISTS conflicts(a TEXT NOT NULL, b TEXT NOT NULL, PRIMARY K
 CREATE TABLE IF NOT EXISTS swaps(comp_id INTEGER PRIMARY KEY, boundary INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS obscene_review(word TEXT PRIMARY KEY, verdict TEXT NOT NULL, ts REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS rude(word TEXT PRIMARY KEY, senses TEXT NOT NULL, smeared TEXT);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,6 +121,9 @@ class Store:
             self.db.execute("ALTER TABLE words ADD COLUMN kinds INTEGER")
             self.db.execute("ALTER TABLE words ADD COLUMN obscene INTEGER NOT NULL DEFAULT 0")
             self.db.execute("ALTER TABLE words ADD COLUMN out INTEGER NOT NULL DEFAULT 0")
+        if "rude" not in cols:                   # OB-6: the kinds of its meanings, by the rules (rudeness.py)
+            self.db.execute("ALTER TABLE words ADD COLUMN rude INTEGER")
+            self.db.execute("UPDATE words SET rude=? WHERE obscene=1", (KIND_BITS["swear"],))   # (until scored)
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
         # the queue (next_unplaced): the words dealt (out=0) in order, even when nearly all are left out
@@ -178,7 +187,7 @@ class Store:
         )
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '0')")
-        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('obscene_done', '0')")   # (new words: ST-6)
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('rude_done', '0')")   # (new words: OB-6)
         self.db.commit()
         self._total = None
         self._prog = None
@@ -189,8 +198,10 @@ class Store:
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        rude = int(on_list(word))                  # (no meanings to read for it: the hand-picked list)
-        self.db.execute("UPDATE words SET obscene=?, out=? WHERE word=?", (rude, self._out_value(None, rude), word))
+        rude = KIND_BITS["swear"] if on_list(word) else None     # (no meanings to read for it: the hand-picked list)
+        self.db.execute("UPDATE words SET rude=?, obscene=? WHERE word=?", (rude, int(bool(rude)), word))
+        sql, args = self._out_sql()
+        self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))
         self._obscene = None
         self.db.commit()
         self._total = None
@@ -276,38 +287,43 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    # ---- how words are dealt (ST-6): kinds of words, obscene ones -------------------------------------------
+    # ---- how words are dealt (ST-6): kinds of words, rude ones (OB-5, OB-6) ---------------------------------
     def deal_settings(self):
-        """{"kinds": the ticked kinds (constants.KINDS bits), "obscene": obscene words ticked, "censor": shown
-        smeared}. Every kind is ticked to start with, obscene words are not (for now: what counts as obscene is
-        still being worked out), and nothing is censored."""
+        """{"kinds": the ticked kinds (constants.KINDS bits), "obscene": "Obscene words" ticked, "rude": the ticked
+        rude kinds under it (rudeness.KIND_BITS), "censor": censored words shown smeared}. Every kind of word is
+        ticked to start with; "Obscene words" is not (with obscene.TICKED ticked under it for when it is), and
+        nothing is censored."""
         try:
             kinds = int(self.get_meta("deal_kinds", ALL_KINDS)) & ALL_KINDS
         except ValueError:
             kinds = ALL_KINDS
-        return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "0") == "1",
+        try:
+            rude = int(self.get_meta("deal_rude", _TICKED_BITS)) & _RUDE_BITS
+        except ValueError:
+            rude = _TICKED_BITS
+        return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "0") == "1", "rude": rude,
                 "censor": self.get_meta("censor", "0") == "1"}
 
-    def _out_value(self, kinds, obscene):
-        """words.out for a word: an obscene word is dealt only while obscene words are ticked, any other word
-        while one of its kinds is (a word whose kinds are not known counts as "other")."""
+    def _out_sql(self):
+        """(SQL for words.out, its arguments): a word with a meaning of a ticked rude kind is dealt; one with no clean
+        meaning (only rude ones) is left out otherwise; any other word is dealt while one of its kinds of word is
+        (unknown kinds count as "other")."""
         d = self.deal_settings()
-        if obscene:
-            return 0 if d["obscene"] else 1
-        return 0 if (kinds if kinds is not None else 16) & d["kinds"] else 1
+        ticked = d["rude"] if d["obscene"] else 0
+        return ("CASE WHEN (COALESCE(rude, 1) & ?) != 0 THEN 0 WHEN (COALESCE(rude, 1) & 1) = 0 THEN 1"
+                " WHEN (COALESCE(kinds, 16) & ?) != 0 THEN 0 ELSE 1 END"), (ticked, d["kinds"])
 
-    def set_deal(self, kinds=None, obscene=None):
+    def set_deal(self, kinds=None, obscene=None, rude=None):
         """Save which words are dealt and mark the rest out of the queue (one pass over the list: ~1 s with a
         million words, so the dialog runs it on a worker thread). Nothing is deleted or unplaced."""
         if kinds is not None:
             self.set_meta("deal_kinds", int(kinds) & ALL_KINDS)
         if obscene is not None:
             self.set_meta("deal_obscene", "1" if obscene else "0")
-        d = self.deal_settings()
-        self.db.execute(
-            "UPDATE words SET out = CASE WHEN obscene=1 THEN ? WHEN (COALESCE(kinds, 16) & ?) != 0 THEN 0 ELSE 1 END"
-            " WHERE out != CASE WHEN obscene=1 THEN ? WHEN (COALESCE(kinds, 16) & ?) != 0 THEN 0 ELSE 1 END",
-            (0 if d["obscene"] else 1, d["kinds"]) * 2)
+        if rude is not None:
+            self.set_meta("deal_rude", int(rude) & _RUDE_BITS)
+        sql, args = self._out_sql()
+        self.db.execute(f"UPDATE words SET out = {sql} WHERE out != {sql}", args * 2)
         self.db.commit()
         self.version += 1
 
@@ -321,40 +337,86 @@ class Store:
         self.db.commit()
         self.version += 1
 
-    OBSCENE_VERSION = "7"   # bumped when what counts as obscene changes (6: label the rude senses in the stored
-                            # definitions, OB-2; 7: back to most or the first meaning rude), to look again
-    def set_obscene(self, words, replace=False):
-        """Mark `words` (those in the list) obscene; `replace`: and only those."""
-        if replace:
-            self.db.execute("UPDATE words SET obscene=0 WHERE obscene=1")
-        self.db.executemany("UPDATE words SET obscene=1 WHERE word=? AND obscene=0", ((w,) for w in words))
-        # the developer's answers of the first review (OB-1: not / obscene / swear) win over what was found
-        self.db.execute("UPDATE words SET obscene = (SELECT verdict != 'not' FROM obscene_review r WHERE r.word = words.word)"
-                        " WHERE word IN (SELECT word FROM obscene_review)")
-        self.db.commit()
-        self._obscene = None
-        self.version += 1
+    @staticmethod
+    def _stepped(steps, chunk):
+        """A writer's steps as a generator to step through (`chunk`: App writes a background result a little at a
+        time, between frames), or all of them at once."""
+        if chunk:
+            return steps
+        for _ in steps:
+            pass
+
+    def save_rude_senses(self, saved, chunk=None):
+        """Keep {word: its meanings as compact JSON (rudeness.compact)} for the rules (the words the Wiktionary
+        download had any sign of rudeness for, and their forms), in place of what was kept before. `chunk`: see
+        _stepped."""
+        def steps():
+            items = list(saved.items())
+            self.db.execute("DELETE FROM rude")
+            for i in range(0, len(items), chunk or len(items) or 1):
+                self.db.executemany("INSERT OR REPLACE INTO rude(word, senses) VALUES(?, ?)", items[i:i + (chunk or len(items))])
+                self.db.commit()
+                yield
+            self.set_meta("rude_senses", "1")
+        return self._stepped(steps(), chunk)
+
+    def rude_senses(self):
+        """{word: compact JSON} as save_rude_senses kept them, for the words in the list."""
+        return dict(self.db.execute("SELECT r.word, r.senses FROM rude r JOIN words w ON w.word = r.word"))
+
+    def set_rude(self, found, chunk=None):
+        """Save what the rules found: {word: (rudeness.KIND_BITS of its meanings, smeared whole while censoring,
+        [the keys of its meanings smeared in the definitions])}; every other word is clean (NULL). Each word's
+        place in the queue follows at once. `chunk`: see _stepped."""
+        def steps():
+            old = [r[0] for r in self.db.execute("SELECT word FROM words WHERE rude IS NOT NULL OR obscene=1")]
+            rows = [(w, None, False, None) for w in old if w not in found]
+            rows += [(w, bits, whole, json.dumps(smeared) if smeared else None)
+                     for w, (bits, whole, smeared) in found.items()]
+            for i in range(0, len(rows), chunk or len(rows) or 1):
+                part = rows[i:i + (chunk or len(rows))]
+                sql, args = self._out_sql()          # (read each time: the settings may change between steps)
+                self.db.executemany("UPDATE words SET rude=?, obscene=? WHERE word=?",
+                                    ((b, int(bool(wh)), w) for w, b, wh, _m in part))
+                self.db.executemany(f"UPDATE words SET out = {sql} WHERE word=?", ((*args, w) for w, *_ in part))
+                self.db.executemany("UPDATE rude SET smeared=NULL WHERE word=?", ((w,) for w, *_r, m in part if not m))
+                self.db.executemany("INSERT INTO rude(word, senses, smeared) VALUES(?, '[]', ?) ON CONFLICT(word)"
+                                    " DO UPDATE SET smeared=excluded.smeared", ((w, m) for w, *_r, m in part if m))
+                self.db.commit()
+                self._obscene = None
+                self.version += 1
+                yield
+        return self._stepped(steps(), chunk)
+
+    def smeared_meanings(self, word):
+        """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring, or []."""
+        r = self.db.execute("SELECT smeared FROM rude WHERE word=?", (word,)).fetchone()
+        return json.loads(r[0]) if r and r[0] else []
 
     def obscene_words(self):
-        """The set of obscene words (a few thousand), read once (partial index)."""
+        """The words smeared whole while censoring (a few thousand), read once (partial index)."""
         if self._obscene is None:
             self._obscene = {r[0] for r in self.db.execute("SELECT word FROM words WHERE obscene=1")}
         return self._obscene
 
     def censored(self, word):
-        """True if `word` is to be shown smeared or masked (Censor obscene words is on and it is obscene)."""
+        """True if `word` is to be shown smeared or masked (Censor obscene words is on and it is smeared whole)."""
         return bool(word) and self.get_meta("censor", "0") == "1" and word in self.obscene_words()
 
     def kind_counts(self):
-        """{kind key: number of words of that kind, "obscene": number of obscene words}, over the whole list
-        (an obscene word counts only as obscene, as it is dealt). One pass: counted again only after a change."""
+        """{kind of word: words of that kind with a clean meaning (the ones its tick deals), "obscene": words with
+        only rude meanings, each rude kind: words with a meaning of that kind}, over the whole list. One pass:
+        counted again only after a change."""
         mark = self.db.total_changes
         if getattr(self, "_kc", (None,))[0] != mark:
             counts = {k: 0 for k, _, _ in KINDS}
-            counts["obscene"] = 0
-            for kinds, obscene, n in self.db.execute(
-                    "SELECT COALESCE(kinds, 16), obscene, COUNT(*) FROM words GROUP BY 1, 2"):
-                if obscene:
+            counts.update({k: 0 for k in RUDE_KINDS}, obscene=0)
+            for kinds, rude, n in self.db.execute(
+                    "SELECT COALESCE(kinds, 16), COALESCE(rude, 1), COUNT(*) FROM words GROUP BY 1, 2"):
+                for k in RUDE_KINDS:
+                    if rude & KIND_BITS[k]:
+                        counts[k] += n
+                if not rude & 1:
                     counts["obscene"] += n
                     continue
                 for key, _, bit in KINDS:
@@ -888,8 +950,8 @@ class Store:
             if tier_filter.startswith("Tier "):
                 where.append("tier=?")
                 args.append(TIERS.index(tier_filter[5:]))
-            elif tier_filter == "Obscene words":               # ST-6: a kind of word (placed ones)
-                where.append("obscene=1")
+            elif tier_filter == "Obscene words":               # ST-6: a kind of word (placed ones): only rude meanings
+                where.append("(COALESCE(rude, 1) & 1) = 0")
             elif tier_filter in self.KIND_FILTERS:
                 where.append("(COALESCE(kinds, 16) & ?) != 0")
                 args.append(self.KIND_FILTERS[tier_filter])

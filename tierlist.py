@@ -20,8 +20,9 @@ How it works
   rank, and compound words ("bookshelf", "well-known") are pushed further back.
   Same seed = same order. Change it under Settings > How words are dealt (or
   --seed N), where "Most common first" is a strict frequency order instead, and
-  kinds of words (nouns, verbs, ..., obscene words) can be left out of the queue.
-  Censor obscene words there smears them sideways until the pointer is over them.
+  kinds of words (nouns, verbs, ..., obscene words and each kind of rude meaning) can be
+  left out of the queue. Censor obscene words there smears them sideways until the pointer
+  is over them, and their rude meanings in the definitions.
   The first start asks these in three short steps. (--source wordnet gives a
   smaller ~77k list instead.)
 * Your progress lives in a save file (tierlist.db) that is written after every action.
@@ -69,9 +70,9 @@ build, measure_rudeness), the Claude notes in .claude/; the README has the same 
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
-    obscene.py      which words are obscene: most or the first meaning rude by Wiktionary's labels; a hand list
-                    while offline (ST-6, OB-1; no tkinter).
-    rudeness.py     how rude each meaning is, by rules: points from labels, topics, wording (OB-6; no tkinter).
+    obscene.py      the kinds of rude meaning, Wiktionary's rude labels, a short hand-picked list (no tkinter).
+    rudeness.py     how rude each meaning is, by rules: points from labels, topics, wording, WordNet, links
+                    between words; what a word's scores lead to (OB-6; no tkinter).
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
@@ -450,7 +451,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           tick, what it leads to ("With the usual settings: ..."), Back / Next word, the bar, and Save answers
 #           to a file (word_categories.checked.tsv). It replaces OB-1's not / obscene / swear review (its
 #           answers stay in the save and still count for the obscene column). _selftest_review.py.
-# [ ] OB-6  Rules instead of a list (asked for: "a point-based model that uses multiple sources", "rather a
+# [x] OB-6  Rules instead of a list (asked for: "a point-based model that uses multiple sources", "rather a
 #           solution that can run for each word on startup than a list"; "if it has really high points its
 #           completely censored, and low points not censored unless a specific definition is contributing a
 #           lot"). Built so far: src/rudeness.py: each meaning earns points towards the rude kinds from four
@@ -486,10 +487,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           are the polite word); "offensive" alone is no slur (a group named is: GROUP_POINTS 5, "Welsh person",
 #           "a native of"); rude categories count as a rude label; an alternative form takes its word's points;
 #           more sex words. Now 78.2% (80.3% of the commonest), words wrongly left out down from ~420 to ~100.
-#           Next (to agree with the user): keep each
-#           meaning's labels in the save at the Wiktionary build and score in the background after the queue
-#           is chosen; an older save fetches them once.
-# [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
+#           Wired in (asked for: "only the rules, not Claude's list or the review system"): the Wiktionary
+#           build keeps every meaning of the words with any sign of rudeness, and of their forms
+#           (wordsource.RudeCollector: ~150k words, compact, table rude), and prepare_queue scores them once
+#           ("Scoring rude meanings", under a minute; again when RUDENESS_VERSION changes: rudeness.score_saved, find_rude).
+#           words.rude holds the kinds of a word's meanings (rudeness.KIND_BITS, 1 = a clean one), words.obscene
+#           now means "smeared whole while censoring", rude.smeared the meanings smeared in the definitions (by
+#           their first GLOSS_KEY characters). A form-only word is smeared whole as its word is. A save without
+#           the meanings (older, or a word list) downloads Wiktionary in the background while you sort (App.
+#           _start_rude_read: a worker thread with its own read-only connection; the main thread writes the
+#           result a few thousand rows a frame); until then its earlier flags and the hand list stand in
+#           (rude_done "list"). Removed: obscene.decide / tag_marks / page_senses / label_lines, fill_obscene
+#           (Wiktionary's category pages), OBSCENE_VERSION, the OB-1 answers (table obscene_review, unused).
+# [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
 #           Decided: Double meaning words are never smeared as words ("last", "john", "brown" are double), only
@@ -503,6 +513,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ("if the most common definition is obscene then it should fall under censoring"). Double meaning
 #           is dropped as a kind (it is just a word with clean and rude meanings): seven kinds. The user's run:
 #           4,723 base words shown, 2,187 with some meanings smeared, 6,296 smeared whole, 2,195 left out.
+#           Built with OB-6's rules: under "Obscene words" (shown while it is ticked) a tick box per kind with its
+#           count (Store.kind_counts), Clinical, Crude, Swear words and Insults ticked to start with (meta
+#           deal_rude); a word with a meaning of a ticked kind is dealt, one with only rude meanings is otherwise
+#           left out, any other word goes by its kind of word (Store._out_sql). Censoring smears only Crude,
+#           Swear, Sexual and Slur (obscene.CENSORED; the user: never Clinical or Insult).
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the

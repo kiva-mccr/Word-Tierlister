@@ -10,14 +10,18 @@ import json
 import math
 import os
 import random
+import re
 import sqlite3
 import sys
+import threading
 import time
 
 import tkinter as tk
 from tkinter import filedialog, ttk
 
 import deps
+import rudeness
+import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
@@ -145,6 +149,8 @@ class App:
         self.refresh()
         self._fit_window(initial=True)
         root.after(120, self._poll_defs)
+        self.rude_read = None     # the background read of Wiktionary's meanings (_start_rude_read), while it runs
+        root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
 
     def _startup(self):
@@ -1400,7 +1406,7 @@ class App:
         if not self.show_defs:
             return
         self.def_frame.show_words(self.def_words, self.get_def, self.shown,
-                                  censor=self.store.deal_settings()["censor"])
+                                  self.store.smeared_meanings if self.store.deal_settings()["censor"] else None)
         self._fit_defs()
 
     DEF_LINES, DEF_LINES_MAX = 9, 40     # the definition pane's usual height in lines, and the most it asks for
@@ -1419,6 +1425,64 @@ class App:
                 self.def_text.config(height=want)
                 return
             self._fit_window()
+
+    # ---- Wiktionary's meanings for a save without them (OB-6), read in the background ------------------------
+    def _start_rude_read(self):
+        """A save from before OB-6 (or from a word list) keeps no Wiktionary meanings for the rudeness rules: read
+        them once in the background (a 3 GB download, resumable), then score and save them a little at a time.
+        Until then the words smeared before (and the short hand-picked list) stand in."""
+        if not wordsource.wants_rude_fetch(self.store):
+            return
+        self.store.set_meta("rude_tried", time.time())
+        state = self.rude_read = {"line": "", "result": None, "error": None}
+        path = self.store.path
+
+        def work():                                  # (no tkinter, and its own read-only connection)
+            try:
+                db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+                try:
+                    words = {r[0] for r in db.execute("SELECT word FROM words")}
+                finally:
+                    db.close()
+                log = lambda text: state.__setitem__("line", text)      # noqa: E731
+                saved = wordsource.fetch_rude_senses(path, words, log)
+                log("Scoring rude meanings (100%)")
+                state["result"] = (saved, wordsource.find_rude(words, saved, log=log))
+            except Exception as exc:                 # offline, disk full, ...: tried again later (RUDE_RETRY_S)
+                state["error"] = str(exc) or type(exc).__name__
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(2000, self._poll_rude_read)
+
+    def rude_read_note(self):
+        """How far the background read has come ("12%"), or None when none is running (How words are dealt)."""
+        if not self.rude_read:
+            return None
+        m = re.search(r"\((\d+)%\)", self.rude_read["line"])
+        return m.group(1) + "%" if m else "starting"
+
+    def _poll_rude_read(self):
+        state = self.rude_read
+        if state["error"]:
+            self.rude_read = None
+            return
+        if state["result"] is None or self.busy:
+            self.root.after(2000, self._poll_rude_read)
+            return
+        saved, found = state["result"]
+        steps = [self.store.save_rude_senses(saved, chunk=4000), self.store.set_rude(found, chunk=4000)]
+
+        def tick():                                  # a few thousand rows a frame, never while a reshuffle writes
+            if not self.busy:
+                if next(steps[0], StopIteration) is StopIteration:
+                    steps.pop(0)
+                    if not steps:
+                        self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
+                        self.rude_read = None
+                        self.after_external_change()
+                        self.flash("Rude meanings read from Wiktionary", ms=2500)
+                        return
+            self.root.after(15, tick)
+        tick()
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""

@@ -6,7 +6,9 @@ obscene ones. The same pieces make the three-step page shown on the first start.
 
 Order is "Most common first" (strictly by frequency) or "Mostly common, a little shuffled" with its shape cards
 (UI-41), spread, seed and compound strength. Which words: a tick box per kind (constants.KINDS) and one for
-obscene words, with how many words each holds; unticked ones are left out of the queue, never deleted.
+obscene words (all of their meanings rude), with how many words each holds; ticking it opens a tick box per kind
+of rude meaning (OB-5: obscene.RUDE_KINDS, Clinical, Crude, Swear words and Insults ticked to start with). Unticked
+ones are left out of the queue, never deleted (Store.set_deal).
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once.
 """
@@ -17,7 +19,9 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from constants import KIND_NOTE_EXTRA, KIND_NOTES, KINDS
+from constants import KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
+from obscene import RUDE_KINDS
+from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
 from widgets import RoundButton, ShapeCard, StyledDialog, Tooltip
@@ -48,6 +52,7 @@ class DealDialog:
         self.comp_v = tk.StringVar(value=f"{cfg['compound']:g}")
         self.kind_vs = {key: tk.BooleanVar(value=bool(deal["kinds"] & bit)) for key, _, bit in KINDS}
         self.obscene_v = tk.BooleanVar(value=deal["obscene"])
+        self.rude_vs = {k: tk.BooleanVar(value=bool(deal["rude"] & KIND_BITS[k])) for k in RUDE_KINDS}
         self.censor_v = tk.BooleanVar(value=deal["censor"])
         if first:
             self.head_lbl = tk.Label(self.body, font=font("head"), bg=PALETTE["bg"], fg=PALETTE["text"],
@@ -58,7 +63,7 @@ class DealDialog:
         self.status = ttk.Label(self.body, text="", foreground=PALETTE["bad"][1], wraplength=dlg.wrap)
         self.bar = ttk.Progressbar(self.body, mode="indeterminate")
         for v in (self.seed_v, self.spread_v, self.comp_v, self.shape_v, self.order_v, self.obscene_v,
-                  *self.kind_vs.values()):
+                  *self.kind_vs.values(), *self.rude_vs.values()):
             v.trace_add("write", lambda *_: self.status.grid_remove())        # an edit clears the last note
         self.step = 0
         if first:
@@ -166,14 +171,38 @@ class DealDialog:
             note = KIND_NOTES[key] + ("" if key == "obscene" else "\n" + KIND_NOTE_EXTRA)
             self.kind_tips[label] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap) for w in (tick, count)]
             self.kind_ticks[label] = tick
+        # the kinds of rude meaning, under Obscene words: shown while it is ticked (OB-5)
+        box = self.rude_box = tk.Frame(f, bg=PALETTE["bg"])
+        for i, k in enumerate(RUDE_KINDS):
+            r, c = (i, 0) if self.first else (i // 2, (i % 2) * 2)
+            tick = ttk.Checkbutton(box, text=RUDE_LABELS[k], variable=self.rude_vs[k], takefocus=1)
+            tick.grid(row=r, column=c, sticky="w", padx=(0, 18))
+            count = ttk.Label(box, text=f"{counts[k]:,}", foreground=PALETTE["muted"])
+            count.grid(row=r, column=c + 1, sticky="e", padx=(0, 40 if self.first else 24))
+            note = KIND_NOTES[k] + "\n" + KIND_NOTE_RUDE
+            self.kind_tips[RUDE_LABELS[k]] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap)
+                                              for w in (tick, count)]
+            self.kind_ticks[RUDE_LABELS[k]] = tick
+        self.obscene_v.trace_add("write", lambda *_: self._show_rude())
+        self._show_rude(refit=False)
         note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
-        if self.store.get_meta("obscene_done") != self.store.OBSCENE_VERSION:
-            note += (" For now the obscene words come from a short list: their meanings are read from Wiktionary"
-                     " the next time the program starts with the internet.")
+        reading = self.app.rude_read_note()
+        if reading:
+            note += (f" The rude meanings are being read from Wiktionary in the background ({reading}); until then"
+                     " a short list stands in.")
         wrap = self.dlg.wrap if self.first else font("body").measure("n") * 44
         ttk.Label(f, text=note, foreground=PALETTE["muted"], wraplength=wrap, justify="left").grid(
             row=10, column=0, columnspan=4, sticky="w", pady=(8, 0))
         return f
+
+    def _show_rude(self, refit=True):
+        """The kinds of rude meaning open under Obscene words while it is ticked."""
+        if self.obscene_v.get():
+            self.rude_box.grid(row=9, column=0, columnspan=4, sticky="w", padx=(24, 0), pady=(2, 0))
+        else:
+            self.rude_box.grid_remove()
+        if refit:
+            self.dlg.refit()
 
     def _censor(self):
         f = self._section("censor")
@@ -253,9 +282,10 @@ class DealDialog:
             self.say("Tick at least one kind of word.")
             return
         kinds = sum(bit for key, _, bit in KINDS if self.kind_vs[key].get())
-        deal = {"kinds": kinds, "obscene": self.obscene_v.get()}
+        rude = sum(KIND_BITS[k] for k in RUDE_KINDS if self.rude_vs[k].get())
+        deal = {"kinds": kinds, "obscene": self.obscene_v.get(), "rude": rude}
         reshuffle = not self.app.queue_unchanged(new)
-        redeal = deal["kinds"] != self.start_deal["kinds"] or deal["obscene"] != self.start_deal["obscene"]
+        redeal = any(deal[k] != self.start_deal[k] for k in ("kinds", "obscene", "rude"))
         censor = self.censor_v.get()
         if censor != self.start_deal["censor"]:
             self.store.set_censor(censor)

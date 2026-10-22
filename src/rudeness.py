@@ -30,6 +30,7 @@ never make a standard word rude: synonyms share a meaning, not its rudeness ("sh
 
 A form ("plural of bitch") scores as its word; the caller looks that up (FORM_GLOSS). No tkinter, no internet.
 """
+import json
 import re
 
 from obscene import FORM_GLOSS, RUDE_KINDS, on_list
@@ -389,17 +390,21 @@ def score_words(words, pos=None, wn=None):
     pos = pos or {}
     first = {w: score_word(senses, pos.get(w, ""), w, wn) for w, senses in words.items()}
     rude, incoming = rude_kinds_of(first), incoming_links(words, first)
-    out = {}
-    for w, scored in first.items():
-        added = link_points(w, words[w], rude, incoming)
-        out[w] = [dict(p) for p in scored]
-        for p, a, sense in zip(out[w], added, words[w]):
-            _add(p, a)
-            target = form_target(sense)
-            if target and target != w and target in first:      # an alternative form takes its word's points
-                best = max(first[target], key=sense_points, default={})
-                for k, v in best.items():
-                    p[k] = max(p.get(k, 0.0), v)
+    return {w: second_pass(w, words[w], first, rude, incoming) for w in first}
+
+
+def second_pass(word, senses, first, rude, incoming):
+    """A word's meanings' points after the links (link_points) and its alternative forms ("Alternative form of
+    pum-pum" takes pum-pum's points); `first`: every word's first-pass points, `rude` / `incoming` from them."""
+    added = link_points(word, senses, rude, incoming)
+    out = [dict(p) for p in first[word]]
+    for p, a, sense in zip(out, added, senses):
+        _add(p, a)
+        target = form_target(sense)
+        if target and target != word and target in first:      # an alternative form takes its word's points
+            best = max(first[target], key=sense_points, default={})
+            for k, v in best.items():
+                p[k] = max(p.get(k, 0.0), v)
     return out
 
 
@@ -410,3 +415,87 @@ def form_target(sense):
         return f["word"]
     m = FORM_GLOSS.search(" ".join(str(g) for g in (sense.get("glosses") or [])[-1:]))
     return m.group(1).lower().strip(".'\"") if m else None
+
+
+# ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
+RUDENESS_VERSION = "1"     # bumped when the rules change: every save scores its words again (in the background)
+KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
+GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
+_SIGNAL_TAGS = set(TAG_POINTS) | REGISTER | set(HEDGES)
+_SIGNAL_NAMES = set(TOPIC_POINTS) | RUDE_CATEGORIES
+_ANY_WORDING = re.compile("|".join(f"(?:{p.pattern})" for p, _t in WORDING), re.I)    # (one search: a million words)
+
+
+def compact(sense, pos=""):
+    """A kaikki.org sense cut down to what the rules read (kept in the save: about 80,000 words of a million)."""
+    out = {"g": str((sense.get("glosses") or [""])[-1])[:160]}
+    tags = [t for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
+            if t.lower().replace("-", " ") in _SIGNAL_TAGS or t in ("form-of", "alt-of")]
+    cats = [(c.get("name") if isinstance(c, dict) else str(c)) for c in sense.get("categories", [])]
+    cats = [c for c in cats if c and c.lower() in _SIGNAL_NAMES]
+    target = form_target(sense)
+    for key, val in (("t", tags), ("p", list(sense.get("topics", []))), ("c", cats), ("s", synonyms(sense)),
+                     ("f", target), ("pos", pos)):
+        if val:
+            out[key] = val
+    return out
+
+
+def expand(c):
+    """A compact sense back into the shape the rules read."""
+    out = {"glosses": [c.get("g", "")], "tags": c.get("t", []), "topics": c.get("p", []),
+           "categories": c.get("c", []), "synonyms": c.get("s", [])}
+    if c.get("f"):
+        out["form_of"] = [{"word": c["f"]}]
+    return out
+
+
+def has_signal(c):
+    """True if a compact sense shows any sign of rudeness the rules read (a label, a topic or category, the
+    wording): only such words are kept and scored."""
+    if {t.lower().replace("-", " ") for t in c.get("t", [])} & _SIGNAL_TAGS:
+        return True
+    if {n.lower().replace("-", " ") for n in c.get("p", []) + c.get("c", [])} & _SIGNAL_NAMES:
+        return True
+    return bool(_ANY_WORDING.search(c.get("g", "")))
+
+
+def results(word, senses, scored, censored):
+    """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS), the whole word smeared
+    while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]: smeared in the
+    definitions). `senses`: the kaikki.org-shaped senses that were scored."""
+    kinds = [sense_kind(p) for p in scored]
+    bits = 0
+    for k in kinds or ["clean"]:
+        bits |= KIND_BITS[k]
+    forms = [is_form(s) for s in senses]
+    whole = word_points(scored, censored, forms) >= WHOLE_MIN
+    smeared = [str((s.get("glosses") or [""])[-1])[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
+    return bits, whole, smeared
+
+
+def score_saved(saved, censored, wn=None, log=None):
+    """{word: results(...)} for {word: its compact senses as JSON text} (the save's table rude, filled from the
+    Wiktionary download): both passes, reporting "(NN%)" through `log` as it goes (under a minute for 150,000 words)."""
+    compacts = {w: json.loads(text) for w, text in saved.items()}
+    words = {w: [expand(c) for c in cs] for w, cs in compacts.items()}
+    pos = {w: [c.get("pos", "") for c in cs] for w, cs in compacts.items()}
+    total, step = 2 * len(words) + 1, max(1, len(words) // 20)
+
+    def tell(i):
+        if log and i % step == 0:
+            log(f"  scored {i // 2:,} of {len(words):,} words ({100 * i // total}%)")
+    first = {}
+    for i, (w, senses) in enumerate(words.items()):
+        tell(i)
+        first[w] = score_word(senses, pos[w], w, wn)
+    rude, incoming = rude_kinds_of(first), incoming_links(words, first)
+    out = {}
+    for i, w in enumerate(words, len(words)):
+        tell(i)
+        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming), censored)
+    for w, senses in words.items():          # a word that is only forms of one other is smeared whole as that one is
+        targets = {form_target(s) for s in senses}
+        if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:
+            out[w] = (out[w][0], out[t][1], out[w][2])
+    return out

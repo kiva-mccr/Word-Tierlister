@@ -104,7 +104,7 @@ missed). Keep the README current in the same commit as the change (the user aske
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse opens complete, like the other windows: no animation of its own; remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), UI-51 (look up a word from the card), UI-26 (final pass: smoke test, 1M check), UI-56 (definitions pane fits its senses; grows only, back to 9 lines when closed), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-5 (Linux / macOS: the terminal handed back; applications-menu launcher), ST-6 (How words are dealt: order, kinds of words, censoring), ST-7 (download speed, Step i of n), OB-2 (rude senses smeared in definitions), OB-6 in part (src/rudeness.py: rules from Wiktionary, WordNet when installed, links between words; 78% agreement with Claude's sorting), T-1 (saves.app_dir: a built program's save beside it), T-2 (tools/bundle.py: English word lists only), T-3 (tools/build.py: Linux build 22 MB, tried here), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
+Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse opens complete, like the other windows: no animation of its own; remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), UI-51 (look up a word from the card), UI-26 (final pass: smoke test, 1M check), UI-56 (definitions pane fits its senses; grows only, back to 9 lines when closed), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-5 (Linux / macOS: the terminal handed back; applications-menu launcher), ST-6 (How words are dealt: order, kinds of words, censoring), ST-7 (download speed, Step i of n), OB-2 (rude senses smeared in definitions), OB-5 (kinds of rude meaning in How words are dealt), OB-6 (src/rudeness.py: rules from Wiktionary, WordNet when installed, links between words; 78% agreement with Claude's sorting; wired in), T-1 (saves.app_dir: a built program's save beside it), T-2 (tools/bundle.py: English word lists only), T-3 (tools/build.py: Linux build 22 MB, tried here), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders). Next: T-6..T-9, W-1, then IC-1 (the program's icon, the very last). UI-32 (moving pastel
 background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
 shows which steps touch which window.
 Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
@@ -118,18 +118,14 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   its size when moved to a monitor with a different scaling.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
   open) the centre area can still clip.
-- Obscene words (the user's rule): most or the first of a word's meanings rude by Wiktionary's labels
-  (`obscene.decide`); any-one-sense rules caught "bureaucracy", "box". Older saves read the rude categories'
-  pages from Wiktionary (untested against the real site from here: proxy); offline, `obscene.py`'s
-  hand-picked list stands in. Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
-  The user found it only "kinda worked": "Obscene words" starts unticked for now.
-  Decided (the user): rules only. Claude's sorting (OB-3) and the review tab (OB-1, OB-4) are archived (code in
-  commit 233d6ca; old saves keep unused tables obscene_review / kinds). OB-6: src/rudeness.py scores each meaning
-  (points from labels, topics / categories, wording, the word itself, WordNet when installed, links between
-  words); tools/measure_rudeness.py measures it against the old sorting (78.2%, 80.3% of the commonest). Censoring
-  smears Crude, Swear, Sexual, Slur only (obscene.CENSORED), never Clinical or Insult. Next: wire the rules in
-  (keep each meaning's labels at the Wiktionary build, score in the background after the queue is chosen, an
-  older save fetches them once) and OB-5 (the kinds in How words are dealt).
+- Obscene words (OB-6, wired in): rules only (src/rudeness.py), never Claude's list or a review (archived, commit
+  233d6ca; old saves keep unused tables obscene_review / kinds). The Wiktionary build keeps the meanings the rules
+  read (table rude); prepare_queue scores them ("Scoring rude meanings"); words.rude = kinds of its meanings
+  (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
+  (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
+  Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED). "Obscene words" still starts unticked.
+  Bump rudeness.RUDENESS_VERSION whenever the rules change. Measure with tools/measure_rudeness.py (78.2%).
+  Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).
 - A read-only save file's dialog could not be verified (the test machine ran as root).

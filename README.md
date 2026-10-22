@@ -52,11 +52,11 @@ either way the save you used last is found again, so switching between the two l
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | Tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
-| `src/obscene.py` | Which words are obscene (ST-6): most or the first of a word's meanings rude, read from Wiktionary's labels (the download's tags or a page's wikitext); a short list chosen by hand stands in until a save has them. Also the rules for what a word's kinds of rudeness lead to, meaning by meaning (OB-4: dealt or left out, smeared whole or meaning by meaning). No tkinter, no internet. |
-| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards each kind (Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared). No tkinter, no internet. |
+| `src/obscene.py` | The kinds of rude meaning (Clinical, Crude, Swear word, Insult, Sexual, Slur), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (one of the rules' sources, and the stand-in until a save has Wiktionary's meanings). No tkinter, no internet. |
+| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards each kind (Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared). No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds, obscene words, the ones left out; ST-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
-| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the obscene words (from the download's labels, or Wiktionary's pages for an older save), queue prep. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and of rude meaning, the ones left out; ST-6, OB-5), the meanings the rudeness rules read and what they found (OB-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
@@ -71,7 +71,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows). |
 | `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now; a censored word is smeared sideways and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` (the definitions pane: it opens tall enough to show every sense when the screen has room), `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
-| `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too) and Censor obscene words; on the first start the same in three steps. |
+| `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
@@ -113,26 +113,30 @@ The first start asks three short questions (any time later: Settings > How words
 - **Order:** "Most common first" (strictly by how common a word is) or "Mostly common, a little shuffled"
   (the default: its shape, spread and seed decide how much).
 - **Which words:** nouns, verbs, adjectives, adverbs, other, obscene words, each a tick box with how many
-  words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words" (for
-  now: telling which words are obscene is still being worked on). Unticked ones are left out of the queue, never deleted; untick everything but "Obscene
-  words" to sort only those.
-- **Censor obscene words** ("blurred, except on hover"): they are smeared sideways on the cards until the pointer is over them, and read
-  b•••••d in messages and Browse. Exports keep the real words.
+  words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
+  Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
+  Sexual and Slurs do not. A word comes up if one of its meanings is of a ticked rude kind, or it has a clean
+  meaning and its kind of word is ticked; a word whose meanings are all rude of unticked kinds is left out.
+  Unticked ones are left out of the queue, never deleted; untick every kind of word but "Obscene words" to
+  sort only those.
+- **Censor obscene words** ("blurred, except on hover"): a word is smeared sideways on the cards until the pointer
+  is over it, and reads b•••••d in messages and Browse, when its first (most common) meaning is rude enough;
+  inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
+  pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. Exports keep
+  the real words.
 
-A word is flagged as obscene if most of its meanings, or its first, are labelled vulgar, offensive, derogatory or
-a slur on Wiktionary, and its plural and other forms follow it.
-With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, derogatory or a slur is also smeared
-inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
-and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the
-internet; until then a short list chosen by hand in `src/obscene.py` stands in).
-
-Coming next (OB-6): rules instead of that labelling. `src/rudeness.py` scores every meaning towards six kinds
-(Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, topics and categories, the wording of
-the definition, the word itself, WordNet when installed, and the links between words; a word with enough points is
-smeared whole, otherwise only its rude meanings are. Censoring smears Crude, Swear word, Sexual and Slur, never
-Clinical or Insult. `tools/measure_rudeness.py` measures the rules against an earlier sorting by Claude (78% the same
-outcome, 80% for the commonest words). An earlier way, Claude sorting the words and a review tab to check them, is
-archived (see the roadmap's OB-3 / OB-4).
+What is rude is decided by rules, not a list (`src/rudeness.py`, OB-6): every meaning earns points towards the
+six kinds from Wiktionary's labels, its topics and categories, the wording of the definition, the word itself,
+WordNet when it is installed, and the links between words (Wiktionary's synonym lists); its kind is the one with
+the most points, if it has enough. A word's points come mostly from its first meaning: enough of them and the whole
+word is smeared, otherwise only its rude meanings are. A plural or other form goes with its word.
+The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, in the save's `rude`
+table) and scores them once at the end of setting up (about a minute; again only when the rules change).
+A save from before this, or one made from a word list, reads them from the Wiktionary download in the background
+while you sort (once, resumable; until then its earlier flags and a short list chosen by hand in
+`src/obscene.py` stand in). `tools/measure_rudeness.py` measures the rules against an earlier sorting by Claude
+(78% the same outcome, 80% for the commonest words). That earlier way, Claude sorting the words and a review tab
+to check them, is archived (see the roadmap's OB-3 / OB-4).
 
 ## Building a program
 

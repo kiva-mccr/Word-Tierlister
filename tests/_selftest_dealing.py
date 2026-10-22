@@ -1,11 +1,13 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""ST-6: how words are dealt. The store (kinds, obscene words, the words left out, Most common first), the smear
+"""ST-6, OB-5: how words are dealt. The store (kinds of word and of rude meaning, obscene words, the words left
+out, Most common first), the smear
 on the word card and the duel cards (un-smearing under the pointer), the masked text elsewhere, the settings
 page and the first start's three steps."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
 import tkinter as tk
 import tierlist as T
+from rudeness import KIND_BITS as B
 from fonts import font
 from constants import mask_word
 
@@ -17,19 +19,27 @@ WORDS = ["bastard", "table", "serendipity", "luminous", "gristle", "moist", "bur
 s = T.Store(os.path.join(tempfile.mkdtemp(), "deal.db"))
 s.insert_words(WORDS)
 s.set_kinds([(w, 1) for w in WORDS] + [("run", 3), ("luminous", 4), ("moist", 4), ("quickly", 8), ("of", 16)])
-s.set_obscene(["bastard", "shit", "notinthelist"])
+# what the rules found (OB-6): the kinds of each word's meanings, smeared whole, the meanings smeared
+FOUND = {"bastard": (B["swear"], True, []), "shit": (B["crude"], True, []),
+         "bureaucracy": (B["clean"] | B["insult"], False, []), "table": (B["clean"] | B["sexual"], False, ["Something rude."])}
+s.set_rude(FOUND)
 assert s.obscene_words() == {"bastard", "shit"}
-assert s.deal_settings() == {"kinds": 31, "obscene": False, "censor": False}     # (obscene words unticked, for now)
+TICKED = B["clinical"] | B["crude"] | B["swear"] | B["insult"]
+assert s.deal_settings() == {"kinds": 31, "obscene": False, "rude": TICKED, "censor": False}   # (Obscene words unticked)
 c = s.kind_counts()
-assert c == {"noun": len(WORDS) - 6, "verb": 1, "adj": 2, "adv": 1, "other": 1, "obscene": 2}, c   # (run: noun + verb)
+assert c == {"noun": len(WORDS) - 6, "verb": 1, "adj": 2, "adv": 1, "other": 1, "obscene": 2, "clinical": 0,
+             "crude": 1, "swear": 1, "insult": 1, "sexual": 1, "slur": 0}, c   # (run: noun + verb)
+assert s.get_word("bastard")["out"] == 1 and s.get_word("bureaucracy")["out"] == 0 and s.get_word("table")["out"] == 0
 s.set_deal(kinds=4, obscene=False)                                   # adjectives only
 dealt = [r[0] for r in s.db.execute("SELECT word FROM words WHERE out=0")]
 assert sorted(dealt) == ["luminous", "moist"] and s.next_unplaced()["word"] in dealt and s.left_out() == len(WORDS) - 2
-s.set_deal(kinds=0, obscene=True)                                    # "untick the rest to sort only obscene words"
+s.set_deal(kinds=31, obscene=True, rude=B["crude"])                  # a kind of rude meaning: Crude only
+assert s.get_word("shit")["out"] == 0 and s.get_word("bastard")["out"] == 1 and s.get_word("bureaucracy")["out"] == 0
+s.set_deal(kinds=0, obscene=True, rude=B["crude"] | B["swear"])      # "untick the rest to sort only obscene words"
 assert s.next_unplaced()["word"] in ("bastard", "shit")
 s.place("bastard", 2); s.place("shit", 3)
 assert s.next_unplaced() is None and s.get_word("table")["tier"] is None      # left out, never deleted
-s.set_deal(kinds=31, obscene=True)
+s.set_deal(kinds=31, obscene=True, rude=TICKED | B["sexual"])
 assert s.next_unplaced() is not None and s.left_out() == 0
 s.add_word("zorpish"); assert s.get_word("zorpish")["out"] == 0               # (UI-51: an added word is dealt)
 # Most common first: strictly by rank, no randomness
@@ -104,7 +114,8 @@ assert bw.def_text.get("1.0", "2.0").strip() == "bastard"
 bw.filter_var.set("Verbs"); bw.reload(); pump(4); assert list(bw.tree.get_children()) == ["run"]
 bw.close(); pump(2)
 
-# ---- OB-2: a sense Wiktionary labels rude is smeared in the definitions while censoring, in both panes
+# ---- OB-2, OB-6: a meaning the rules found rude (of a censored kind) is smeared in the definitions while
+# censoring, in both panes (told apart by its first characters: Store.smeared_meanings)
 s.set_def("table", "\u2022 (noun) A flat surface.\n\u2022 (noun) (vulgar) Something rude.")
 while app.defs.pending:                          # earlier lookups done first: their answers redraw the pane
     pump(1)
@@ -126,7 +137,14 @@ bw.close(); pump(1)
 # ---- the settings page --------------------------------------------------------------------------------------
 font_px = font("body").measure("n")
 d = app.edit_dealing(); pump(4)
-assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {"Nouns", "Verbs", "Adjectives", "Adverbs", "Other", "Obscene words"}
+assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {
+    "Nouns", "Verbs", "Adjectives", "Adverbs", "Other", "Obscene words", "Clinical", "Crude", "Swear words", "Insults",
+    "Sexual", "Slurs"}
+# OB-5: the kinds of rude meaning are open under Obscene words while it is ticked
+assert d.obscene_v.get() and d.rude_box.winfo_ismapped() and d.rude_vs["sexual"].get() and not d.rude_vs["slur"].get()
+assert "Censoring smears Crude" in d.kind_tips["Insults"][0].text_fn(None)
+d.obscene_v.set(False); pump(2); assert not d.rude_box.winfo_ismapped()
+d.obscene_v.set(True); pump(2); assert d.rude_box.winfo_ismapped()
 # what each kind holds is a hover note (over its tick box and its count), wrapped
 tip = d.kind_tips["Other"][0]
 assert "pronouns" in tip.text_fn(None) and "Nouns: names" in d.kind_tips["Nouns"][1].text_fn(None)
@@ -182,7 +200,7 @@ t_end = time.time() + 20
 while d.alive() and time.time() < t_end:
     pump(2)
 assert not d.alive() and s2.get_meta("dealt_asked") == "1" and s2.queue_settings()["shape"] == "rank"
-assert s2.deal_settings() == {"kinds": 1, "obscene": False, "censor": True} and asked == ["anchors"]
+assert s2.deal_settings() == {"kinds": 1, "obscene": False, "rude": TICKED, "censor": True} and asked == ["anchors"]
 app.on_close()
 # closing the first start keeps the defaults and is not asked again
 s3 = T.Store(os.path.join(tempfile.mkdtemp(), "skip.db")); s3.insert_words(WORDS)
@@ -192,6 +210,6 @@ app.edit_anchors = lambda: asked.append("anchors 2")
 pump(30)
 app._dealing.dlg.win.event_generate("<Escape>"); pump(2)
 assert not app._dealing.alive() and s3.get_meta("dealt_asked") == "1" and asked[-1] == "anchors 2"
-assert s3.deal_settings() == {"kinds": 31, "obscene": False, "censor": False}
+assert s3.deal_settings() == {"kinds": 31, "obscene": False, "rude": TICKED, "censor": False}
 app.on_close()
 print("DEALING OK")

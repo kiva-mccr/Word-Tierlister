@@ -529,10 +529,11 @@ class Browser:
     def render_def(self):
         """Fill the definition pane for the selected word (shows 'Looking up...' until the lookup finishes)."""
         w = self.current
-        # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2); the
-        # word itself is shown whole here (you picked it)
-        fill_definitions(self.def_text, [(w, self.app.get_def(w))] if w else [], self.f_body,
-                         censor=self.app.store.deal_settings()["censor"], animator=self.app.anim)
+        # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2, OB-6);
+        # the word itself is shown whole here (you picked it)
+        store = self.app.store
+        fill_definitions(self.def_text, [(w, self.app.get_def(w), store.smeared_meanings(w))] if w else [],
+                         self.f_body, censor=store.deal_settings()["censor"], animator=self.app.anim)
 
     def move(self, tier):
         """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's

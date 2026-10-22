@@ -9,6 +9,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
+from rudeness import GLOSS_KEY
 from fonts import font
 from sizing import clamp_to_monitor, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
@@ -1297,9 +1298,10 @@ def definition_tags(t, body):
 
 def fill_definitions(t, entries, body, censor=False, animator=None):
     """Fill the definition pane `t` (a tk.Text) with [(heading, definition text or None while it is being looked
-    up)]: the heading in bold, then each sense numbered, its part of speech, its text and example. `censor`
-    (OB-2): a sense Wiktionary labels rude (vulgar, offensive, derogatory, a slur) shows its label, and its text
-    smeared sideways like a censored word, un-smearing under the pointer."""
+    up, the keys of its meanings to smear)]: the heading in bold, then each sense numbered, its part of speech, its
+    text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a censored kind (its first
+    rudeness.GLOSS_KEY characters among the keys: Store.smeared_meanings) shows its labels, and its text smeared
+    sideways like a censored word, un-smearing under the pointer."""
     from definitions import parse_definition
     for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
         c.destroy()
@@ -1307,7 +1309,7 @@ def fill_definitions(t, entries, body, censor=False, animator=None):
     definition_tags(t, body)
     t.config(state="normal")
     t.delete("1.0", "end")
-    for i, (heading, text) in enumerate(entries):
+    for i, (heading, text, smeared) in enumerate(entries):
         if i:
             t.insert("end", "\n")
         t.insert("end", heading + "\n", "head")
@@ -1322,11 +1324,10 @@ def fill_definitions(t, entries, body, censor=False, animator=None):
             if sense["pos"]:
                 t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
                 prefix += sense["pos"] + "  "
-            if censor and sense["rude"]:
-                label = "(" + ", ".join(sense["labels"]) + ") "
-                gloss = sense["text"][sense["text"].index(")") + 1:].strip()
+            if censor and sense["gloss"][:GLOSS_KEY] in smeared:
+                label = "(" + ", ".join(sense["labels"]) + ") " if sense["labels"] else ""
                 t.insert("end", label, ("pos", "sense"))
-                c = _smeared_text(t, gloss, body, animator, body.measure(prefix + label))
+                c = _smeared_text(t, sense["gloss"].strip(), body, animator, body.measure(prefix + label))
                 t.window_create("end", window=c, align="top")
                 t.insert("end", "\n", "sense")
                 t._smears.append(c)
@@ -1383,12 +1384,12 @@ class DefinitionDrawer(tk.Frame):
         definition_tags(t, body)
         self._shown = False
 
-    def show_words(self, words, get_def, name=None, censor=False):
+    def show_words(self, words, get_def, name=None, smeared=None):
         """Fill the pane: for each word, its name (name(word): what to call it, the masked text for a censored
-        word) and its senses (get_def(word) -> text, or None while it is still being looked up). `censor`: the
-        senses Wiktionary labels rude are smeared until hovered (OB-2)."""
-        fill_definitions(self.text, [(name(w) if name else w, get_def(w)) for w in words], self._body,
-                         censor=censor, animator=self._anim)
+        word) and its senses (get_def(word) -> text, or None while it is still being looked up). `smeared`: while
+        censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6)."""
+        fill_definitions(self.text, [(name(w) if name else w, get_def(w), smeared(w) if smeared else ())
+                                     for w in words], self._body, censor=smeared is not None, animator=self._anim)
 
     @property
     def is_open(self):

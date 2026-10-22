@@ -243,10 +243,12 @@ assert [keys(x) for x in parse_definition("(No definition found.)")] == [
     {"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
 assert parse_definition("") == [] and parse_definition(None) == []
 assert keys(parse_definition("1. no part of speech")[0]) == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
-# the Wiktionary build's lines: one sense each (they used to run together), its labels, rude ones marked (OB-2)
+# the Wiktionary build's lines: one sense each (they used to run together), its labels and the gloss after them
+# (a censored pane smears a meaning by its gloss's first characters: OB-6)
 senses = parse_definition("\u2022 (noun) A container.\n\u2022 (noun) (vulgar, slang) The vagina.\n"
                           "\u2022 (verb) (sometimes, offensive) To hit.\n\u2022 (noun) (obsolete) An old box.")
 assert [x["pos"] for x in senses] == ["noun", "noun", "verb", "noun"] and senses[0]["text"] == "A container."
-assert [x["rude"] for x in senses] == [False, True, False, False] and senses[1]["labels"] == ["vulgar", "slang"]
+assert senses[1]["labels"] == ["vulgar", "slang"] and senses[1]["gloss"] == "The vagina." and senses[0]["labels"] == []
+assert senses[0]["gloss"] == "A container."
 assert senses[1]["text"] == "(vulgar, slang) The vagina."
 print("CORE OK")

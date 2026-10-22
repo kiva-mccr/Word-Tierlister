@@ -14,7 +14,6 @@ import urllib.parse
 import urllib.request
 
 from constants import OFFLINE_ENV
-from obscene import rude_labels
 
 
 # --------------------------------------------------------------------------
@@ -28,17 +27,17 @@ _EXAMPLE = re.compile(r'^\s*e\.g\.\s*"?(.*?)"?\s*$')
 
 
 def _sense(num, pos, text, bullet=False):
-    """One sense: its labels are the parenthesis it starts with ("(vulgar, slang) ..."); `rude` if they say so
-    (obscene: vulgar, offensive, derogatory, a slur, not hedged), so a censored pane can smear it (OB-2)."""
+    """One sense: its labels are the parenthesis it starts with ("(vulgar, slang) ..."), its gloss the rest (a
+    censored pane smears the gloss of a meaning the rules found rude, by its first rudeness.GLOSS_KEY characters)."""
     m = _LABELS.match(text)
     labels = [x.strip() for x in m.group(1).split(",")] if m else []
     return {"num": num, "pos": pos, "text": text, "example": None, "labels": labels,
-            "rude": rude_labels(labels), "bullet": bullet}
+            "gloss": text[m.end():] if m else text, "bullet": bullet}
 
 
 def parse_definition(text):
     """Split stored definition text into senses for display (UI-12):
-    [{"num": "1", "pos": "noun", "text": "...", "example": "..." or None, "labels": [...], "rude": bool}, ...].
+    [{"num": "1", "pos": "noun", "text": "...", "example": "..." or None, "labels": [...], "gloss": "..."}, ...].
 
     Understands the formats written by _wordnet / _online ('1. (noun) text' lines, each optionally followed
     by an indented 'e.g. "..."' line) and by the Wiktionary build ('\u2022 (noun) (vulgar) text' lines, one sense

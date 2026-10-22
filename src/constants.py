@@ -66,8 +66,21 @@ KIND_NOTES = {
     "adv": "Adverbs: words that say how, when or where (quickly, soon, here).",
     "other": ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, contractions "
               "and the like (she, under, because, wow, seven, etc., don't)."),
-    "obscene": "Obscene words: vulgar, offensive or derogatory words and slurs.",
+    "obscene": ("Obscene words: words whose meanings are all rude (vulgar, offensive or derogatory words and "
+                "slurs). Tick it to choose which kinds of rude meaning come up."),
+    # the kinds of rude meaning (obscene.RUDE_KINDS), under Obscene words (OB-5)
+    "clinical": "Clinical: the proper words for the body, sex and its waste (penis, urinate).",
+    "crude": "Crude: rude words for the body and its waste.",
+    "swear": "Swear words: words said to curse or swear.",
+    "insult": "Insults: words that call a person stupid or nasty (idiot, jerk, moron).",
+    "sexual": "Sexual: slang for sex and the parts of the body it uses.",
+    "slur": "Slurs: offensive words for a group of people.",
 }
+RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
+               "sexual": "Sexual", "slur": "Slurs"}
+KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "
+                  "of word is ticked. Censoring smears Crude, Swear, Sexual and Slur meanings, never Clinical or "
+                  "Insult.")
 KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of its kinds are ticked."
 
 
