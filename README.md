@@ -26,7 +26,7 @@ All optional; `python tierlist.py --help` explains each.
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
 | `--no-install` | Never offer to install missing packages. |
-| `--review-obscene` | (Developers) a tab for checking the words flagged as obscene, one by one. |
+| `--review-obscene` | (Developers) a tab for checking Claude's sorting of the rude words, meaning by meaning. |
 
 ## Folders
 
@@ -121,10 +121,18 @@ The first start asks three short questions (any time later: Settings > How words
 
 A word is flagged as obscene if most of its meanings, or its first, are labelled vulgar, offensive, derogatory or
 a slur on Wiktionary, and its plural and other forms follow it.
-Going through the flagged words by hand decides: `python tierlist.py --review-obscene` adds a "Review obscene
-words" tab (developers; it is not shown otherwise) with each flagged word, commonest first, its definitions, and
-Not obscene / Obscene / Swear word (keys 1, 2, 3; Backspace goes back one), a percentage bar, and "Save answers to
-a file" (`obscene_review.txt` next to the save). Your answers are kept in the save and always win.
+Checking Claude's sorting by hand (developers): put `word_categories.tsv` (from `tools/classify_obscene.py`, below)
+next to the save and start `python tierlist.py --review-obscene`. It loads the file (again whenever it changes;
+answers already given stay) and adds a "Review obscene words" tab, not shown otherwise, with the words worth a
+person's look, commonest first: those Claude was unsure of where its second choice would change what happens to
+the word, and those where its answer for the whole word and the word's first meaning disagree. Each meaning is
+listed with its kind; Up / Down choose a meaning, keys 1-8 (or the buttons) set its kind (Clean, Clinical, Crude,
+Swear word, Insult, Sexual, Slur, Not sure), W smears the whole word or not (ticked by itself from the rules), a
+line says what the answers lead to, Enter keeps them and goes on, Backspace goes back one word; a word with a
+"Not sure" comes back at the end. "Save answers to a file" writes `word_categories.checked.tsv` next to the save.
+The rules (obscene.py): a word comes up if any of its meanings is clean or of a ticked kind; censoring smears each
+rude meaning in the definitions, and the whole word when its first (most common) meaning is rude, or every one is,
+or its rude use is the one missing from the stored definitions.
 With Censor obscene words on, a meaning Wiktionary labels vulgar, offensive, derogatory or a slur is also smeared
 inside the definitions (the drawer and Browse's pane), un-smearing while the pointer is over it. A save from before this learns each word's kinds from its stored definitions,
 and reads the meanings of the words Wiktionary files as rude from Wiktionary once (on a start with the

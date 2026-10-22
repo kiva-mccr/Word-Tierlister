@@ -15,6 +15,7 @@ import sys
 import time
 
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog, ttk
 
 import deps
@@ -22,6 +23,8 @@ from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, TIERS, mask_word
+from definitions import parse_definition
+from obscene import KINDS as KIND_LIST, RUDE_KINDS, TICKED, UNSURE, outcome, outcome_text, read_categories, smear_whole
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, event_spec
 from saves import app_dir, is_frozen, write_export
@@ -85,13 +88,11 @@ class App:
         self.root, self.store, self.defs = root, store, defs
         self.ask_dealing = ask_dealing
         self.review = review
-        self.review_word = None          # the flagged word on the review tab's card
         self.note, self.other_saves = note, list(other_saves)
         self.mode = "review" if review else store.get_meta("mode", "place")
         if self.mode not in self._tabs(store.stats()):
             self.mode = "place"              # unknown, or its tab is hidden (UI-46)
-        # (the review tab starts with the definitions on, since its answers rest on them; your setting is kept)
-        self.show_defs = review or store.get_meta("show_defs", "0") == "1"
+        self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
         self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
@@ -146,6 +147,10 @@ class App:
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._update_options()
         self._layout_defs()
+        loaded = self.load_sorting() if review else None       # (Claude's sorting, new or changed: OB-4)
+        if loaded is not None:
+            self.note = (f"Loaded Claude's sorting: {loaded:,} word{'s' if loaded != 1 else ''}"
+                         + (f". {self.note}" if self.note else ""))
         self.refresh()
         self._fit_window(initial=True)
         root.after(120, self._poll_defs)
@@ -839,6 +844,11 @@ class App:
         keys = lambda a: " or ".join(self.keys.display(a))
         if self.mode == "place" and self.cmp:
             h = f"{keys('stop')} stop comparing" if self.keys.keys_of("stop") else ""
+        elif self.mode == "review":              # (Back and Next word show their keys; the meanings' do not)
+            ud = [" / ".join(self.keys.display(a)) for a in ("review_up", "review_down") if self.keys.keys_of(a)]
+            h = f"{' '.join(ud)} choose a meaning" if ud else ""
+            if len(self.mode_switch.visible) > 1 and self.keys.keys_of("next_tab"):
+                h += ("   \u00b7   " if h else "") + f"{keys('next_tab')} next tab"
         else:                                    # (the Compare button that shows Space is hidden meanwhile)
             h = f"{keys('undo')} undo" if self.keys.keys_of("undo") else ""
             if len(self.mode_switch.visible) > 1 and self.keys.keys_of("next_tab"):
@@ -878,94 +888,248 @@ class App:
                 f.pack_forget()
         frame.pack(fill="both", expand=True)
 
-    # ---- the review of the flagged obscene words (developer tab: --review-obscene) ----------------------------
-    REVIEW_BUTTONS = (("review_not", "Not obscene", "not", 3), ("review_obscene", "Obscene", "obscene", 0),
-                      ("review_swear", "Swear word", "swear", 1))     # (action, label, answer, tier colour)
+    # ---- the review of Claude's sorting, meaning by meaning (developer tab: --review-obscene; OB-4) -----------
+    REVIEW_KINDS = KIND_LIST + ((UNSURE, "Not sure"),)
+    REVIEW_LINES = 9           # the meanings list keeps this height word after word (a long list scrolls)
+    SORTING_FILE = "word_categories.tsv"
+
+    def _kind_color(self, kind):
+        """A kind's colour, by what it leads to with the default ticks: clean green, dealt and smeared yellow, left
+        out pink, not sure grey."""
+        if kind == "clean":
+            return PALETTE["better"]
+        return {True: TIER_COLORS[2], False: PALETTE["worse"]}.get(kind in TICKED if kind != UNSURE else None,
+                                                                    PALETTE["neutral"])
 
     def _build_review(self):
-        """The review tab's view: the flagged word on its card (never censored), its definitions in the drawer,
-        Not obscene / Obscene / Swear word and Back, a plain percentage bar, and Save answers to a file."""
+        """The review tab's view: the word on its card (never censored) and why it is to be checked, its meanings
+        with their kinds (the selected one tinted), the kinds for the selected meaning, the whole-word smear,
+        what the answers lead to, Back / Next word, a percentage bar and Save answers to a file."""
         self.review_frame = ttk.Frame(self.center)
         ri = self.review_inner = ttk.Frame(self.review_frame)
         ri.place(relx=0.5, rely=0.5, anchor="center")
-        self.review_title = ttk.Label(ri, text="Is this word obscene?", font=font("title"))
-        self.review_title.grid(row=0, column=0, pady=(0, 12))
+        self._rv = None                  # the word being checked: its answers so far (see _review_load)
+        self.review_title = ttk.Label(ri, text="Sort each meaning of this word", font=font("title"))
+        self.review_title.grid(row=0, column=0, pady=(0, 8))
         self.review_card = WordCard(ri, font("word"), font("body"))
         self.review_card.finds = False
-        self.review_card.grid(row=1, column=0, pady=(0, 18))
+        self.review_card.grid(row=1, column=0, pady=(0, 4))
+        self.review_why = ttk.Label(ri, foreground=PALETTE["muted"])
+        self.review_why.grid(row=2, column=0, pady=(0, 8))
         self.review_empty = EmptyCard(ri, font("title"), font("body"))
+        body = font("body")
+        self.review_list = tk.Text(ri, height=self.REVIEW_LINES, width=78, wrap="word", font=body, bd=0, cursor="arrow",
+                                   bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"],
+                                   padx=8, pady=6, state="disabled", spacing1=2, spacing3=2)
+        self.review_list.grid(row=3, column=0)
+        italic = self._review_italic = tkfont.Font(font=body)
+        italic.configure(slant="italic")
+        self.review_list.tag_configure("pos", font=italic, foreground=PALETTE["muted"])
+        self.review_list.tag_configure("num", foreground=PALETTE["muted"])
+        self.review_list.tag_configure("picked", background=PALETTE["surface2"])   # (not "sel": Tk's selection)
+        self.review_kinds_lbl = ttk.Label(ri, text="Kind of the selected meaning:", foreground=PALETTE["muted"])
+        self.review_kinds_lbl.grid(row=4, column=0, pady=(10, 4))
         row = ttk.Frame(ri)
-        row.grid(row=2, column=0)
+        row.grid(row=5, column=0)
         self.review_btns = {}
-        for i, (action, label, answer, tier) in enumerate(self.REVIEW_BUTTONS):
-            b = RoundButton(row, label, lambda a=answer: self.review_answer(a), bg=TIER_COLORS[tier],
-                            font=font("choice"), padx=22, pady=12, animator=self.anim)
-            b.grid(row=0, column=i, padx=8)
-            self.review_btns[action] = b
-        self.review_btns["review_back"] = RoundButton(row, "Back", self.review_back, font=font("body"), padx=14,
-                                                      pady=8, animator=self.anim)
-        self.review_btns["review_back"].grid(row=0, column=3, padx=(24, 0))
+        for k, label in self.REVIEW_KINDS:
+            b = RoundButton(row, label, lambda k=k: self.review_set(k), bg=self._kind_color(k), font=body,
+                            padx=11, pady=6, animator=self.anim)
+            b.pack(side="left", padx=3)
+            self.review_btns["review_" + k] = b
+        whole = ttk.Frame(ri)
+        whole.grid(row=6, column=0, pady=(12, 2))
+        self.review_whole_v = tk.BooleanVar(value=False)
+        self.review_whole = ttk.Checkbutton(whole, variable=self.review_whole_v, command=self.review_toggle_whole,
+                                            takefocus=0)
+        self.review_whole.pack(side="left")
+        ttk.Label(whole, text="   ticked by itself when its most common (first) meaning is rude, or every meaning is",
+                  foreground=PALETTE["muted"]).pack(side="left")
+        self.review_result = tk.Label(ri, font=body, fg=PALETTE["text"], padx=12, pady=4)
+        self.review_result.grid(row=7, column=0, pady=(6, 0))
+        nav = ttk.Frame(ri)
+        nav.grid(row=8, column=0, pady=(12, 0))
+        self.review_btns["review_back"] = RoundButton(nav, "Back", self.review_back, font=body, padx=14, pady=6,
+                                                      animator=self.anim)
+        self.review_btns["review_back"].pack(side="left", padx=6)
+        self.review_btns["review_next"] = RoundButton(nav, "Next word", self.review_next, bg=PALETTE["accent"],
+                                                      font=font("label"), padx=18, pady=6, animator=self.anim)
+        self.review_btns["review_next"].pack(side="left", padx=6)
         self.review_bar = ttk.Progressbar(ri, mode="determinate", maximum=100, length=420)
-        self.review_bar.grid(row=3, column=0, pady=(26, 4))
+        self.review_bar.grid(row=9, column=0, pady=(14, 4))
         line = ttk.Frame(ri)
-        line.grid(row=4, column=0)
+        line.grid(row=10, column=0)
         self.review_lbl = ttk.Label(line, foreground=PALETTE["muted"])
         self.review_lbl.pack(side="left")
-        RoundButton(line, "Save answers to a file", self.save_review, font=font("body"), flat=True,
+        RoundButton(line, "Save answers to a file", self.save_review, font=body, flat=True,
                     animator=self.anim).pack(side="left", padx=(16, 0))
+        self._review_parts = (self.review_title, self.review_card, self.review_why, self.review_list,
+                              self.review_kinds_lbl, row, whole, self.review_result)
+
+    def load_sorting(self):
+        """Load Claude's sorting (word_categories.tsv next to the save, from tools/classify_obscene.py) when it is
+        new or changed since it was last loaded; the answers already given stay. Returns how many words were
+        loaded, or None when nothing changed (or there is no file)."""
+        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), self.SORTING_FILE)
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        stamp = f"{st.st_size}:{int(st.st_mtime)}"
+        if self.store.get_meta("kinds_file") == stamp:
+            return None
+        try:
+            n = self.store.load_kinds(read_categories(path))
+        except (OSError, ValueError) as exc:
+            show_exception("Load the sorting", exc, self.root, f"Could not read {path}.")
+            return None
+        self.store.set_meta("kinds_file", stamp)
+        return n
+
+    def _review_load(self, row):
+        """Start checking a word (its kinds row): the meanings with their stored definitions, Claude's kinds (or
+        the answers already given), the first meaning selected."""
+        defs = parse_definition(self.store.get_def(row["word"]) or "")
+        kinds = row["meanings"].split(",") if row["meanings"] else []
+        n = max(len(defs), len(kinds))
+        kinds = (kinds + ["clean"] * n)[:n]
+        rude_listed = any(k != "clean" for k in kinds)
+        self._rv = {"word": row["word"], "kind": row["kind"], "meanings": kinds, "defs": defs, "sel": 0,
+                    "whole": None if row["whole"] is None else bool(row["whole"]),
+                    # a rude use not among the definitions (or one answered "not sure")
+                    "other": (row["kind"] in RUDE_KINDS and not rude_listed) or row["kind"] == UNSURE}
 
     def _show_review(self):
-        """The next flagged word (commonest first), or "all reviewed"; the bar shows how far along."""
+        """The next word to check (commonest first; "not sure" ones come back last), or why there is none; the bar
+        shows how far along."""
         self.progress_bar.mark([])
         self._show_frame(self.review_frame)
-        done, left = self.store.review_progress()
-        total = done + left
+        done, total = self.store.kinds_progress()
         pct = 100.0 * done / total if total else 100.0
         self.review_bar["value"] = pct
-        self.review_lbl.config(text=f"{done:,} of {total:,} reviewed ({pct:.0f}%)")
-        row = self.store.review_next()
+        self.review_lbl.config(text=f"{done:,} of {total:,} checked ({pct:.0f}%)  \u00b7  commonest first")
+        row = self.store.kinds_next()
+        answered = bool(self.store.checked_kinds())
         for action, b in self.review_btns.items():
-            b.set_enabled(row is not None if action != "review_back" else done > 0)
+            b.set_enabled(row is not None if action != "review_back" else answered)
         if row is None:
-            self.review_word = None
-            self.review_card.grid_remove()
-            self.review_title.grid_remove()
-            self.review_empty.set("Every flagged word is reviewed",
-                                  "Your answers count from now on. Save answers to a file keeps a copy.")
+            self._rv = None
+            for w in self._review_parts:
+                w.grid_remove()
+            if total:
+                self.review_empty.set("Every word to check is checked",
+                                      "Your answers are in the save. Save answers to a file keeps a copy.")
+            else:
+                self.review_empty.set("No sorting loaded",
+                                      f"Put {self.SORTING_FILE} (from tools/classify_obscene.py) next to your "
+                                      "save and start again.")
             self.review_empty.grid(row=1, column=0, pady=(0, 18))
             self._render_defs([])
         else:
-            self.review_word = row["word"]
+            if self._rv is None or self._rv["word"] != row["word"]:
+                self._review_load(row)
             self.review_empty.grid_remove()
-            self.review_title.grid()
-            self.review_card.grid()
-            self.review_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}")   # (never censored here)
+            for w in self._review_parts:
+                w.grid()
+            self.review_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}")    # (never censored here)
+            self.review_why.config(text=f"Here because {row['why']}" if row["why"] else "")
             self._render_defs([row["word"]])
+            self._review_render()
         self._hint()
 
-    def review_answer(self, verdict):
-        """Not obscene / Obscene / Swear word for the word on the card; the next one comes up."""
-        if not self.review_word:
+    def _review_render(self):
+        """Redraw the meanings (each with its kind as a little button; the selected one tinted), the whole-word
+        tick and what the answers lead to."""
+        rv, t = self._rv, self.review_list
+        t.config(state="normal")
+        t.delete("1.0", "end")                # (the old kind buttons go with it)
+        rows = [(d["pos"], d["text"]) if d else ("", "(no definition stored)")
+                for d in rv["defs"] + [None] * (len(rv["meanings"]) - len(rv["defs"]))]
+        kinds = list(rv["meanings"])
+        if rv["other"]:
+            rows.append(("", "Another use, not among these definitions (Claude knows it)"))
+            kinds.append(rv["kind"])
+        for i, ((pos, text), kind) in enumerate(zip(rows, kinds)):
+            tags = ("row", f"row{i}") + (("picked",) if i == rv["sel"] else ())
+            t.insert("end", f"{i + 1:>2}. ", tags + ("num",))
+            chip = RoundButton(t, dict(self.REVIEW_KINDS).get(kind, kind), lambda i=i: self.review_select(i),
+                               bg=self._kind_color(kind), font=font("body"), padx=8, pady=1, radius=9,
+                               canvas_bg=PALETTE["surface2"] if i == rv["sel"] else PALETTE["surface"],
+                               animator=self.anim)
+            t.window_create("end", window=chip, align="center")
+            t.insert("end", "  ", tags)
+            if pos:
+                t.insert("end", pos + "  ", tags + ("pos",))
+            t.insert("end", text + "\n", tags)
+            t.tag_bind(f"row{i}", "<Button-1>", lambda e, i=i: self.review_select(i))
+        t.config(state="disabled")
+        t.see(f"row{rv['sel']}.first")
+        whole = smear_whole(rv["kind"], rv["meanings"]) if rv["whole"] is None else rv["whole"]
+        self.review_whole_v.set(whole)
+        self.review_whole.config(text=f"Smear the whole word ({self.keys.display('review_whole')[0]})"
+                                 if self.keys.keys_of("review_whole") else "Smear the whole word")
+        out = outcome(rv["kind"], rv["meanings"], rv["whole"])
+        self.review_result.config(text=f"With the usual settings: {outcome_text(rv['kind'], rv['meanings'], rv['whole'])}",
+                                  bg={"shown": PALETTE["better"], "left out": PALETTE["worse"]}.get(out, TIER_COLORS[2]))
+
+    def _review_rows(self):
+        return len(self._rv["meanings"]) + bool(self._rv["other"])
+
+    def review_select(self, i):
+        """Select meaning `i` (a click on it, or Up / Down)."""
+        if self._rv is not None and 0 <= i < self._review_rows() and i != self._rv["sel"]:
+            self._rv["sel"] = i
+            self._review_render()
+
+    def review_set(self, kind):
+        """The kind of the selected meaning (a button or its key); the next meaning is selected after it."""
+        rv = self._rv
+        if rv is None:
             return
-        self.store.review(self.review_word, verdict)
+        if rv["sel"] < len(rv["meanings"]):
+            rv["meanings"][rv["sel"]] = kind
+        else:
+            rv["kind"] = kind                 # (the rude use not among the definitions)
+        rv["sel"] = min(rv["sel"] + 1, self._review_rows() - 1)
+        self._review_render()
+
+    def review_toggle_whole(self):
+        """Smear the whole word, or not (the tick or its key): the answer for the word, whatever the rules say."""
+        rv = self._rv
+        if rv is None:
+            return
+        now = smear_whole(rv["kind"], rv["meanings"]) if rv["whole"] is None else rv["whole"]
+        rv["whole"] = not now
+        self._review_render()
+
+    def review_next(self):
+        """Keep the answers for this word (as shown) and go on to the next one."""
+        rv = self._rv
+        if rv is None:
+            return
+        self.store.answer_kinds(rv["word"], rv["kind"], rv["meanings"], rv["whole"])
+        self._rv = None
         self.refresh()
 
     def review_back(self):
-        """Back one word: the last answer is taken back and that word comes up again."""
-        word = self.store.review_back()
+        """Back one word: its answers are taken back and it comes up again, as it was answered."""
+        word = self.store.kinds_back()
         if word is None:
             self.flash("Nothing to go back to", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
             return
+        self._rv = None
         self.refresh()
 
     def save_review(self):
-        """Write every answer to obscene_review.txt next to the save: one "word<Tab>answer" line each."""
-        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), "obscene_review.txt")
-        rows = self.store.review_rows()
+        """Write the answers given so far to word_categories.checked.tsv next to the save (word, kind, the
+        meanings' kinds, whole: 1 / 0 / empty for "by the rules"), commonest first."""
+        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), "word_categories.checked.tsv")
+        rows = self.store.checked_kinds()
         try:
             with open(path, "w", encoding="utf-8") as f:
-                f.write("# Word Tier List: obscene words reviewed by hand (not / obscene / swear)\n")
-                f.writelines(f"{w}\t{v}\n" for w, v in rows)
+                f.write("# word\tkind\tmeanings\twhole (Word Tier List: Claude's sorting, checked by hand)\n")
+                f.writelines(f"{w}\t{k}\t{','.join(m)}\t{'' if whole is None else whole}\n"
+                             for w, k, m, whole in rows)
         except OSError as exc:
             show_exception("Save answers", exc, self.root, "Could not save the answers.")
             return None
@@ -1489,9 +1653,16 @@ class App:
             return self.cmp_btns[action], lambda: self.cmp_answer(action)
         if action in ("left", "right", "tie", "skip"):
             return self.duel.buttons[action], lambda: self._on_duel(action)
-        if action in self.review_btns:
-            answer = {a: v for a, _l, v, _t in self.REVIEW_BUTTONS}.get(action)
-            return self.review_btns[action], ((lambda: self.review_answer(answer)) if answer else self.review_back)
+        if action.startswith("review_"):
+            kind = action[len("review_"):]
+            if kind in dict(self.REVIEW_KINDS):
+                return self.review_btns[action], lambda: self.review_set(kind)
+            sel = self._rv["sel"] if self._rv else 0
+            return {"review_up": (None, lambda: self.review_select(sel - 1)),
+                    "review_down": (None, lambda: self.review_select(sel + 1)),
+                    "review_whole": (None, self.review_toggle_whole),
+                    "review_next": (self.review_btns["review_next"], self.review_next),
+                    "review_back": (self.review_btns["review_back"], self.review_back)}[action]
         return {"compare": (self.compare_btn, self.start_compare), "later": (self.later_btn, self.skip_word),
                 "find": (None, self.start_lookup),
                 "back": (self.cmp_btns["back"], self.cmp_back), "stop": (None, self._cancel_compare)}[action]

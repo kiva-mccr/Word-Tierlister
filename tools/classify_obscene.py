@@ -8,8 +8,9 @@
 Cheap first, then strong where unsure: run --model claude-haiku-5-5, then run --recheck (Opus, the default) sends
 only the words answered below --review again; their new answers replace the old ones. Then run --second asks only
 for each unsure word's second choice (its likeliest other kind and the chance of it), giving Claude the answer it
-already has: a word whose two choices lead to the same outcome (OUTCOME: shown, smeared, or left out) need not be
-checked by hand (to_check). No word is ever classified twice by these, and forms never cost anything.
+already has. Which words a person should check (to_check) follows obscene.check_reason, the program's own rules for
+what a word's kinds lead to (dealt or left out, smeared whole or meaning by meaning). No word is ever classified
+twice by these, and forms never cost anything.
 
 The kinds (CATEGORIES): clean, double (an innocent main meaning with a rude slang one), clinical, crude, swear,
 sexual, insult, slur. Every meaning is judged on its own and the word gets a kind and a confidence (0-100); the
@@ -41,7 +42,7 @@ ROOT = os.path.dirname(TOOLS)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from constants import OFFLINE_ENV  # noqa: E402
 from definitions import parse_definition  # noqa: E402
-from obscene import FORM_GLOSS, on_list  # noqa: E402
+from obscene import FORM_GLOSS, check_reason, on_list, read_categories  # noqa: E402
 
 CATEGORIES = ("clean", "double", "clinical", "crude", "swear", "sexual", "insult", "slur")
 SENSE_CATEGORIES = tuple(c for c in CATEGORIES if c != "double")      # (a single meaning is never "double")
@@ -125,29 +126,14 @@ SCHEMA_SECOND = {
 }
 OUT_PER_WORD_SECOND = 50    # its answer is short
 
-# What a kind leads to with the default choices (OB-5: Sexual and Slur left out; Crude, Swear, Insult and Clinical
-# words smeared while censoring; clean and Double meaning words shown as they are, a double word's rude meanings
-# smeared only inside its definitions: the user's choice, "last" and "john" are double). A doubt between two kinds
-# with the same outcome changes nothing, so such a word need not be checked by hand; nor one whose second choice
-# is unlikely (below SECOND_MIN, the user's choice).
-OUTCOME = {"clean": "shown", "double": "shown", "sexual": "left out", "slur": "left out"}
-SECOND_MIN = 25
-
-
-def outcome(kind):
-    return OUTCOME.get(kind, "smeared")
+SECOND_MIN = 25     # a second choice less likely than this (%) is not worth a person's check (the user's choice)
 
 
 def to_check(answer, below, second_min=SECOND_MIN):
-    """True if a word's answer is for checking by hand: unsure (confidence below `below`) and either no second
-    choice asked yet, or a second choice at least `second_min`% likely that would lead somewhere else."""
-    kind, conf, _s, _n, _m, second = answer
-    if conf >= below:
-        return False
-    if not second:
-        return True
-    other, chance = second.split(":")
-    return int(chance) >= second_min and outcome(other) != outcome(kind)
+    """True if a word's answer is for checking by hand (obscene.check_reason: unsure, with a second choice that
+    would change what happens to the word, or Claude's whole-word answer and the first meaning disagree)."""
+    kind, conf, senses, _n, _m, second = answer
+    return check_reason(kind, conf, senses, second, below, second_min) is not None
 
 
 # ---- which words go -------------------------------------------------------------------------------------------
@@ -341,15 +327,7 @@ def write_results(path, results, save):
 
 
 def read_results(path):
-    out = {}
-    if os.path.exists(path):
-        with open(path, encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("#") or not line.strip():
-                    continue
-                w, kind, conf, senses, note, model, second = (line.rstrip("\n").split("\t") + [""] * 7)[:7]
-                out[w] = (kind, int(conf or 0), [s for s in senses.split(",") if s], note, model, second)
-    return out
+    return read_categories(path) if os.path.exists(path) else {}
 
 
 # ---- cost ---------------------------------------------------------------------------------------------------

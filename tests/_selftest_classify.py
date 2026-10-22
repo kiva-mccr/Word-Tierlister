@@ -65,15 +65,14 @@ chain = C.with_forms({"cocktip": ("sexual", 88, [], "", "opus", ""),
 assert chain["cock-tips"] == ("sexual", 88, [], "form of cock-tip", "opus", "") and chain["cock-tip"][1] == 88, chain
 
 # which unsure words need a person: no second choice yet, or one that leads to another outcome
-assert not C.to_check(("insult", 90, [], "", "", ""), 80)                       # sure
-assert C.to_check(("insult", 70, [], "", "", ""), 80)                           # unsure, not asked yet
-assert not C.to_check(("insult", 70, [], "", "", "crude:30"), 80)               # either way: shown, smeared
-assert not C.to_check(("slur", 70, [], "", "", "sexual:40"), 80)                # either way: left out
-assert C.to_check(("insult", 70, [], "", "", "slur:30"), 80)                    # smeared or left out
-assert C.to_check(("clinical", 70, [], "", "", "clean:45"), 80)                 # smeared or shown
-assert not C.to_check(("double", 70, [], "", "", "clean:45"), 80)               # double words show as they are
-assert not C.to_check(("insult", 70, [], "", "", "slur:20"), 80)                # an unlikely second choice
-assert C.to_check(("insult", 70, [], "", "", "slur:20"), 80, second_min=0)
+I = ["insult", "insult"]                                                            # (the rules: test_obscene)
+assert not C.to_check(("insult", 90, I, "", "", ""), 80)                          # sure
+assert C.to_check(("insult", 70, I, "", "", ""), 80)                              # unsure, not asked yet
+assert not C.to_check(("insult", 70, I, "", "", "crude:30"), 80)                  # either way: smeared
+assert C.to_check(("insult", 70, I, "", "", "slur:30"), 80)                       # smeared or left out
+assert not C.to_check(("insult", 70, I, "", "", "slur:20"), 80)                   # an unlikely second choice
+assert C.to_check(("insult", 70, I, "", "", "slur:20"), 80, second_min=0)
+assert C.to_check(("insult", 95, ["clean", "insult"], "", "", ""), 80)            # sure, but first meaning clean
 
 # ---- the estimate (offline: guessed from the text)
 t_in, t_out, cost = C.estimate(C.groups(cands), save, C.MODEL)
@@ -101,7 +100,7 @@ class FakeBatches:
             if req["params"]["system"] == C.SYSTEM_SECOND:                 # second choices
                 words = [ln[6:].split()[0] for ln in req["params"]["messages"][0]["content"].splitlines()
                          if ln.startswith("WORD: ")]
-                items = [{"word": w, "second": "clean" if w in ("fuck", "box") else "insult", "chance": 30} for w in words]
+                items = [{"word": w, "second": {"fuck": "clean", "box": "double"}.get(w, "insult"), "chance": 30} for w in words]
                 yield NS(custom_id=req["custom_id"], result=NS(type="succeeded", message=message(items)))
                 continue
             words = [ln[6:] for ln in req["params"]["messages"][0]["content"].splitlines() if ln.startswith("WORD: ")]
@@ -109,7 +108,7 @@ class FakeBatches:
                 yield NS(custom_id=req["custom_id"], result=NS(type="errored"))
                 continue
             cheap = req["params"]["model"] == "claude-haiku-5-5"            # (Haiku is unsure of bitch)
-            items = [{"word": w, "meanings": ["sexual"], "kind": {"box": "double", "penis": "clinical"}.get(w, "swear"),
+            items = [{"word": w, "meanings": ["clean", "sexual"] if w == "box" else ["sexual"], "kind": {"box": "double", "penis": "clinical"}.get(w, "swear"),
                       "confidence": 60 if w == "bitch" and cheap else 95, "note": ""} for w in words]
             yield NS(custom_id=req["custom_id"], result=NS(type="succeeded", message=message(items)))
 
@@ -191,8 +190,8 @@ assert sent[0]["params"]["model"] == "claude-opus-5-5" and "(answer given: swear
     "messages"][0]["content"]
 got = C.read_results(out)
 assert got["fuck"][:2] == ("swear", 70) and got["fuck"][5] == "clean:30"               # the answer itself stays
-assert got["fucking"][5] == "clean:30" and got["box"][5] == "clean:30" and got["penis"][5] == ""
-assert C.to_check(got["fuck"], 80) and not C.to_check(got["box"], 80)                  # smeared/shown vs shown/shown
+assert got["fucking"][5] == "clean:30" and got["box"][5] == "double:30" and got["penis"][5] == ""
+assert C.to_check(got["fuck"], 80) and not C.to_check(got["box"], 80)                  # smeared/shown vs some/some
 assert any("To check by hand: 1 " in m for m in logs), logs
 assert not os.path.exists(C.paths(db, True)[1])
 logs.clear()

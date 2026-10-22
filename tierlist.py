@@ -427,14 +427,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           out a word whose two choices have the same outcome with the defaults (OUTCOME: clean shown, sexual /
 #           slur left out, the rest smeared). Fixed: a form of a form kept an out-of-date answer (with_forms). Never run against the real API here (no key):
 #           _selftest_classify.py uses a stand-in.
-# [ ] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab: Clean, Double
-#           meaning, Clinical, Crude, Swear word, Sexual, Insult, Slur, Not sure; keys 1-9), answers back into
-#           the list. Then the list goes inside the program, out of sight. Asked for (decided): per meaning
+# [x] OB-4  Review the low-confidence words by hand with the new kinds (the --review-obscene tab), answers back into
+#           the list. Then the list goes inside the program, out of sight (still to do). Asked for (decided): per meaning
 #           (each meaning's kind, changeable) plus the whole-word smear (ticked by itself from the first meaning,
 #           changeable); only the base words that are unsure (below 80%, and a second choice at least 25% likely
 #           that changes the outcome) or where Claude's whole-word answer and the first meaning disagree on
 #           smearing the whole word: 2,079 of the user's run (542 among the commonest 5,000), commonest first.
-#           Mock-ups of this (three layouts) shown; to choose.
+#           Mock-up A chosen. Built: the rules in obscene.py (KINDS, TICKED, word_kinds, smear_whole, outcome,
+#           outcome_text, check_reason, read_categories), shared with the tool. Store: table kinds (load_kinds:
+#           the words in the list, answered ones kept; kinds_next: commonest unchecked, then "not sure" ones;
+#           kinds_progress, answer_kinds, kinds_back, checked_kinds). App.load_sorting reads
+#           word_categories.tsv next to the save on a --review-obscene start when it is new or changed (meta
+#           kinds_file). The tab: the card and why it is here, the meanings in a fixed-height text (each kind
+#           a little button; the selected meaning tinted; a rude use missing from the definitions as one more
+#           row), the kind buttons (keymap group review: 1-8, Up / Down, W, Return, BackSpace), the whole-word
+#           tick, what it leads to ("With the usual settings: ..."), Back / Next word, the bar, and Save answers
+#           to a file (word_categories.checked.tsv). It replaces OB-1's not / obscene / swear review (its
+#           answers stay in the save and still count for the obscene column). _selftest_review.py.
 # [ ] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
@@ -1271,8 +1280,9 @@ def main():
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt)")
     ap.add_argument("--review-obscene", action="store_true",
-                    help="(developer) open a tab for going through every word flagged as obscene, one by one: "
-                         "not obscene / obscene / swear word. The answers are kept in the save and always win")
+                    help="(developer) open a tab for checking Claude's sorting of the rude words (word_categories.tsv "
+                         "next to the save, from tools/classify_obscene.py), meaning by meaning, commonest first. "
+                         "The answers are kept in the save")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
