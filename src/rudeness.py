@@ -383,23 +383,59 @@ def link_points(word, senses, rude_kinds, incoming):
     return added
 
 
-def score_words(words, pos=None, wn=None):
+FAMILY_POINTS = 2.0        # a word built from a rude word (its etymology, or that word's derived terms): like ROOT
+
+
+def family_points(word, senses, parents, first):
+    """[{kind: points}] a word's family adds to its meanings: FAMILY_POINTS for each word it is built from whose
+    first real meaning is rude (`parents`: the words its etymology names, and those listing it as derived:
+    "bullshit" from "shit"; `first`: the first pass), towards the parent's kind. A booster like ROOT_POINTS: on its
+    own it never makes a meaning rude."""
+    added = [{} for _ in senses]
+    for parent in parents:
+        scored = first.get(parent)
+        if not scored or parent == word:
+            continue
+        kind = sense_kind(scored[0])
+        if kind == "clean":
+            continue
+        for p, sense in zip(added, senses):
+            if not is_form(sense):
+                _add(p, {kind: FAMILY_POINTS})
+    return added
+
+
+def families(built_from, derived):
+    """{word: the words it is built from}: from {word: [the words its etymology names]} and {word: [its derived
+    terms]} (Wiktionary's, both)."""
+    out = {w: set(ps) for w, ps in built_from.items()}
+    for parent, kids in derived.items():
+        for kid in kids:
+            out.setdefault(kid, set()).add(parent)
+    return out
+
+
+def score_words(words, pos=None, wn=None, family=None):
     """Both passes over many words: {word: [{kind: points} for each meaning]}. `words`: {word: [sense]} (kaikki.org
-    senses), `pos`: {word: [part of speech of each sense]}; wn: WordNet or None. The first pass scores each
-    meaning on its own; the second adds the links between words (link_points)."""
-    pos = pos or {}
+    senses), `pos`: {word: [part of speech of each sense]}; wn: WordNet or None; `family`: families(...) or None.
+    The first pass scores each meaning on its own; the second adds the links between words (link_points) and
+    word families (family_points)."""
+    pos, family = pos or {}, family or {}
     first = {w: score_word(senses, pos.get(w, ""), w, wn) for w, senses in words.items()}
     rude, incoming = rude_kinds_of(first), incoming_links(words, first)
-    return {w: second_pass(w, words[w], first, rude, incoming) for w in first}
+    return {w: second_pass(w, words[w], first, rude, incoming, family.get(w, ())) for w in first}
 
 
-def second_pass(word, senses, first, rude, incoming):
-    """A word's meanings' points after the links (link_points) and its alternative forms ("Alternative form of
-    pum-pum" takes pum-pum's points); `first`: every word's first-pass points, `rude` / `incoming` from them."""
+def second_pass(word, senses, first, rude, incoming, parents=()):
+    """A word's meanings' points after the links (link_points), its family (family_points: `parents`) and its
+    alternative forms ("Alternative form of pum-pum" takes pum-pum's points); `first`: every word's first-pass
+    points, `rude` / `incoming` from them."""
     added = link_points(word, senses, rude, incoming)
     out = [dict(p) for p in first[word]]
-    for p, a, sense in zip(out, added, senses):
+    for p, a, f in zip(out, added, family_points(word, senses, parents, first)):
         _add(p, a)
+        _add(p, f)
+    for p, sense in zip(out, senses):
         target = form_target(sense)
         if target and target != word and target in first:      # an alternative form takes its word's points
             best = max(first[target], key=sense_points, default={})
@@ -427,7 +463,8 @@ _ANY_WORDING = re.compile("|".join(f"(?:{p.pattern})" for p, _t in WORDING), re.
 
 
 def compact(sense, pos=""):
-    """A kaikki.org sense cut down to what the rules read (kept in the save: about 80,000 words of a million)."""
+    """A kaikki.org sense cut down to what the rules read (the save keeps the meanings of about 150,000 words of a
+    million, with their forms)."""
     out = {"g": str((sense.get("glosses") or [""])[-1])[:160]}
     tags = [t for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
             if t.lower().replace("-", " ") in _SIGNAL_TAGS or t in ("form-of", "alt-of")]

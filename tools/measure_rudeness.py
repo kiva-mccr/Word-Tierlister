@@ -62,7 +62,35 @@ def compact(e):
             if val:
                 r[key] = val
         senses.append(r)
-    return {"w": w, "pos": e.get("pos"), "senses": senses} if senses else None
+    if not senses:
+        return None
+    out = {"w": w, "pos": e.get("pos"), "senses": senses}
+    fam = family(e)
+    if fam:
+        out["fam"] = fam
+    derived = sorted({d.get("word") for d in e.get("derived", []) if d.get("word")})
+    if derived:
+        out["der"] = derived
+    return out
+
+
+# etymology templates that name the words a word is built from ("compound|en|mother|fucker", "suffix|en|bitch|y")
+FAMILY_TEMPLATES = {"compound", "com", "affix", "af", "suffix", "suf", "prefix", "pre", "blend", "confix", "con",
+                    "surf", "univerbation", "univ", "clipping", "clip", "back-formation", "bf", "rhyming slang"}
+
+
+def family(e):
+    """The words an entry is built from, by its etymology's templates (lower case, no affixes)."""
+    out = []
+    for t in e.get("etymology_templates", []):
+        if t.get("name") not in FAMILY_TEMPLATES:
+            continue
+        args = t.get("args", {})
+        for k in sorted((k for k in args if k.isdigit() and k != "1"), key=int):
+            v = str(args[k]).strip().lower()
+            if v and not v.startswith("-") and not v.endswith("-") and v not in out:
+                out.append(v)
+    return out
 
 
 def fetch(out, url=WIKT_URL, log=print):
@@ -84,17 +112,21 @@ def fetch(out, url=WIKT_URL, log=print):
 
 
 def load(path):
-    """({word: [sense]} as kaikki.org senses, {word: [part of speech of each]})"""
+    """({word: [sense]} as kaikki.org senses, {word: [part of speech of each]}, {word: the words it is built from}
+    (rudeness.families))"""
     words, poses = collections.defaultdict(list), collections.defaultdict(list)
+    built, derived = collections.defaultdict(list), collections.defaultdict(list)
     with open(path, encoding="utf-8") as f:
         for line in f:
             e = json.loads(line)
+            built[e["w"]] += e.get("fam", [])
+            derived[e["w"]] += e.get("der", [])
             for r in e["senses"]:
                 words[e["w"]].append({"glosses": [r["g"]], "tags": r.get("t", []), "topics": r.get("p", []),
                                       "categories": r.get("c", []), "synonyms": r.get("s", []),
                                       **({"form_of": [{"word": r["f"]}]} if "f" in r else {})})
                 poses[e["w"]].append(e.get("pos") or "")
-    return words, poses
+    return words, poses, rudeness.families(built, derived)
 
 
 def is_form(senses):
@@ -105,11 +137,12 @@ def control_word(w, sorting):
     return w not in sorting and int(hashlib.md5(w.encode()).hexdigest(), 16) % 40 == 0
 
 
-def scope(targets, words):
-    """The words the two passes need for `targets`: themselves, their synonyms, and the words whose meanings list
-    them."""
+def scope(targets, words, family):
+    """The words the two passes need for `targets`: themselves, their synonyms, the words they are built from, and
+    the words whose meanings list them."""
     need = set(targets)
     for w in targets:
+        need.update(family.get(w, ()))
         for s in words.get(w, ()):
             need.update(rudeness.synonyms(s))
     for w, senses in words.items():
@@ -163,21 +196,22 @@ def claude_outcome(kind, meanings, censored, ticked=obscene.TICKED):
     return "some" if found & censored else "shown"
 
 
-def score(words, poses, need, links, wn):
+def score(words, poses, need, links, wn, family):
     sub = {w: words[w] for w in need if w in words}
     if links:
-        return rudeness.score_words(sub, {w: poses[w] for w in sub}, wn)
+        return rudeness.score_words(sub, {w: poses[w] for w in sub}, wn, family)
     return {w: rudeness.score_word(s, poses[w], w, wn) for w, s in sub.items()}
 
 
-def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True):
+def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True, families=True):
     censored = POLICIES[policy]
-    words, poses = load(entries)
+    words, poses, family = load(entries)
+    family = family if families else {}
     claude = read_sorting(sorting)
     order = {w: i for i, w in enumerate(claude)}
     base = [w for w, v in claude.items() if not v[3].startswith("form of ") and w in words and not is_form(words[w])]
     control = [w for w in words if control_word(w, claude) and not is_form(words[w])]
-    scored = score(words, poses, scope(set(base) | set(control), words), links, wn)
+    scored = score(words, poses, scope(set(base) | set(control), words, family), links, wn, family)
     table, tp, fp, fn = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
     agree = common = common_agree = 0
     diffs = []
@@ -198,7 +232,8 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
             fn[k] += k in want and k not in have
         if ref != got:
             diffs.append((order[w], w, ref, got))
-    log(f"Policy {policy}{', WordNet' if wn else ''}{', links' if links else ''}: {len(base):,} of the sorting's "
+    log(f"Policy {policy}{', WordNet' if wn else ''}{', links' if links else ''}{', families' if family else ''}"
+        f"{', no root list' if not rudeness.ROOT_POINTS else ''}: {len(base):,} of the sorting's "
         "words have Wiktionary entries.")
     log(f"Same outcome: {agree / len(base):.1%} (the commonest 5,000 of the sorting: {common_agree / max(1, common):.1%})")
     log("Rows: Claude's answers; columns: the rules.  " + "  ".join(f"{o:>9}" for o in OUTCOMES))
@@ -224,13 +259,17 @@ def main(argv=None):
     ap.add_argument("--show", type=int, default=0, help="list this many words where the two differ (commonest)")
     ap.add_argument("--no-wordnet", action="store_true", help="leave WordNet out (it is used when installed)")
     ap.add_argument("--no-links", action="store_true", help="leave out the links between words (the second pass)")
+    ap.add_argument("--no-families", action="store_true", help="leave out word families (etymology, derived terms)")
+    ap.add_argument("--no-root", action="store_true", help="leave out the hand-picked list's roots (ROOT_POINTS)")
     args = ap.parse_args(argv)
     entries = os.path.join(os.path.dirname(os.path.abspath(args.sorting)), "rudeness_entries.jsonl")
     if args.command == "fetch":
         fetch(entries)
     else:
-        measure(args.sorting, entries, args.policy, args.show,
-                wn=None if args.no_wordnet else rudeness.wordnet(), links=not args.no_links)
+        if args.no_root:
+            rudeness.ROOT_POINTS = 0.0
+        measure(args.sorting, entries, args.policy, args.show, wn=None if args.no_wordnet else rudeness.wordnet(),
+                links=not args.no_links, families=not args.no_families)
     return 0
 
 

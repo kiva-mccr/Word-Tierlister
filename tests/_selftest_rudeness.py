@@ -97,4 +97,18 @@ assert form_target({"glosses": ["x"], "alt_of": [{"word": "pum-pum"}]}) == "pum-
 assert form_target({"glosses": ["plural of bitch"]}) == "bitch" and form_target({"glosses": ["A dog."]}) is None
 assert word_points([{}, {"sexual": 10.0}]) < WHOLE_MIN                          # one very rude later meaning
 assert word_points([{}, {"sexual": 6.0}], forms=[True, False]) >= WHOLE_MIN     # (the first only names a word)
+# word families: a word built from one whose first meaning is rude gains points towards that kind, a booster only
+from rudeness import families
+fam = families({"bullshit": ["bull", "shit"]}, {"shit": ["shithead"], "cock": ["cocktail"]})
+assert fam == {"bullshit": {"bull", "shit"}, "shithead": {"shit"}, "cocktail": {"cock"}}
+W = {"shit": [{"glosses": ["Faeces."], "tags": ["vulgar"]}], "bull": [{"glosses": ["A male bovine."]}],
+     "cock": [{"glosses": ["A male chicken."]}, {"glosses": ["A penis."], "tags": ["vulgar", "slang"]}],
+     "bullshit": [{"glosses": ["Nonsense."], "tags": ["slang"]}],
+     "shithead": [{"glosses": ["A contemptible person."]}], "cocktail": [{"glosses": ["A mixed drink."]}]}
+plain = score_words(W)
+both = score_words(W, family=fam)
+assert sum(both["bullshit"][0].values()) == sum(plain["bullshit"][0].values()) + 2   # from shit, not from bull
+assert both["bullshit"][0]["crude"] >= 2                       # (towards shit's kind)
+assert both["cocktail"] == plain["cocktail"]                   # (cock's first meaning is the bird)
+assert sense_kind(both["shithead"][0]) != "clean"              # (an insult's wording plus its family)
 print("RUDENESS OK")
