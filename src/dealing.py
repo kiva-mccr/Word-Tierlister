@@ -30,6 +30,7 @@ CENSOR_NOTE = "blurred, except on hover"
 
 
 class DealDialog:
+    """The page (or, on the first start, the three steps) of How words are dealt; see the module's note."""
     STEPS = ("order", "kinds", "censor")
     HEADS = {"order": ("How words are dealt", "Choose the order new words come in, and which words. You can change "
                                               "this any time (Settings > How words are dealt)."),
@@ -270,6 +271,7 @@ class DealDialog:
         self.dlg.refit()
 
     def apply(self):
+        """Apply / Done: check the fields, save the censor tick at once, then reshuffle and / or re-deal if needed."""
         new, err = self._settings()
         if err:
             if self.first:

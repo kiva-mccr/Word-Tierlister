@@ -1,13 +1,12 @@
 """How rude a word's meanings are, by rules: points from several sources, no word list (OB-6).
 
 Each meaning (a sense in the Wiktionary download) earns points towards the rude kinds (obscene.RUDE_KINDS) from
-three sources, each with its own table below:
+these sources, each with its own table below:
 
     TAG_POINTS      Wiktionary's labels on the meaning ("vulgar", "derogatory", "slur", "childish", ...)
     TOPIC_POINTS    its topics and categories ("sexuality", "anatomy", "Genitalia", "English ethnic slurs", ...)
     WORDING         the words of the definition itself ("sexual intercourse", "a stupid person")
     GROUP           the definition names a group of people ("of * descent", "a trans woman"): with a rude label
-    ROOT_POINTS     the word itself, when it holds a rude root ("sorry-ass", "fuck-boy": obscene.on_list)
     WORDNET_POINTS  WordNet, when nltk and its WordNet data are installed (never downloaded here): the meaning is
                     matched to one of the word's WordNet meanings by the words the two definitions share, and that
                     meaning's place in WordNet's tree ("sexual activity", "body waste", "unpleasant person", ...)
@@ -24,16 +23,27 @@ points come from its meanings, its first (most common) meaning counting most (wo
     score_word(senses, pos, word) -> [points]         each meaning's {kind: points}
     word_points(scored, kinds) -> points              the word's, over the kinds that are censored
 
-A second pass adds the links between words (score_words, link_points): Wiktionary's synonym lists say which kind a
-meaning marked as slang or rude belongs to ("banana: (slang) the penis" is listed with the words for the penis). They
-never make a standard word rude: synonyms share a meaning, not its rudeness ("shitty" lists "bad").
+A second pass (score_words, second_pass) adds what other words say:
+    link_points     Wiktionary's synonym lists say which kind a meaning marked as slang or rude belongs to ("banana:
+                    (slang) the penis" is listed with the words for the penis). They never make a standard word rude:
+                    synonyms share a meaning, not its rudeness ("shitty" lists "bad").
+    family_points   a word built from one whose first meaning is rude ("bullshit" from "shit": its etymology, or
+                    that word's derived terms) gains FAMILY_POINTS towards its kind.
+    forms           a form ("plural of bitch", form_target / FORM_GLOSS) takes its word's points.
 
-A form ("plural of bitch") scores as its word; the caller looks that up (FORM_GLOSS). No tkinter, no internet.
+In the program: the Wiktionary build keeps each meaning compactly (compact / expand, only for words with
+has_signal), and score_saved scores them all, giving results(): the meanings' kinds as KIND_BITS (words.rude), the
+whole word smeared or not, and the first GLOSS_KEY characters of the meanings smeared in the definitions. Bump
+RUDENESS_VERSION when the rules change: every save scores its words again. No tkinter, no internet.
 """
 import json
 import re
 
-from obscene import FORM_GLOSS, RUDE_KINDS, on_list
+from obscene import RUDE_KINDS
+
+# a gloss that only says which word this is a form of ("plural of bitch", "present participle of fuck")
+FORM_GLOSS = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|comparative|superlative|gerund|"
+                        r"inflection|misspelling)\b.*\bof ([^\s,;:()]+)\s*$", re.I)
 
 MEANING_MIN = 3.0          # points for a meaning to count as rude (of its best kind)
 WHOLE_MIN = 3.5            # points for the whole word to be smeared while censoring
@@ -142,14 +152,23 @@ RUDE_CATEGORIES = {"english vulgarities", "english swear words", "english ethnic
                    "english derogatory terms"}         # (as good as a rude label)
 
 SWEAR_POS = {"intj"}       # an interjection with a rude label is most likely a swear word
-ROOT_POINTS = 2.0          # a rude root in the word itself: to the meaning's best kind (a swear word if none)
+
+
+def _label(text):
+    """A label, topic or category as the tables name it: lower case, hyphens as spaces."""
+    return str(text).lower().replace("-", " ")
+
+
+def gloss_of(sense):
+    """A kaikki.org sense's definition: its last gloss (the first ones name the broader meaning it belongs to)."""
+    return str((sense.get("glosses") or [""])[-1])
 
 
 def _hedged(labels):
     """[(label, weight)] for a meaning's labels: a hedge ("sometimes", "mildly") weakens the label after it."""
     out, weight = [], 1.0
     for lab in labels:
-        lab = lab.lower().replace("-", " ").strip()
+        lab = _label(lab).strip()
         if lab in HEDGES:
             weight = HEDGES[lab]
             continue
@@ -225,9 +244,9 @@ def wordnet_match(word, gloss, pos, wn):
     return best
 
 
-def score_sense(sense, pos="", rude_root=False, word="", wn=None):
+def score_sense(sense, pos="", word="", wn=None):
     """{kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories",
-    "glosses"); `rude_root`: the word holds a rude root (ROOT_POINTS); `word`, `wn`: the word and WordNet (or None),
+    "glosses"); `word`, `wn`: the word and WordNet (or None),
     for WORDNET_POINTS."""
     points = {}
     labels = list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
@@ -236,13 +255,13 @@ def score_sense(sense, pos="", rude_root=False, word="", wn=None):
         if lab in TAG_POINTS:
             _add(points, TAG_POINTS[lab], w)
             rude_label = rude_label or lab in ("vulgar", "offensive", "derogatory", "pejorative", "slur")
-    names = [str(t).lower().replace("-", " ") for t in sense.get("topics", [])]
+    names = [_label(t) for t in sense.get("topics", [])]
     names += [(c.get("name") if isinstance(c, dict) else str(c)).lower() for c in sense.get("categories", [])]
     rude_label = rude_label or bool(RUDE_CATEGORIES & set(names))
     for name in set(names):
         if name in TOPIC_POINTS:
             _add(points, TOPIC_POINTS[name])
-    gloss = " ".join(str(g) for g in (sense.get("glosses") or [])[-1:])
+    gloss = gloss_of(sense)
     for pattern, table in WORDING:
         if pattern.search(gloss):
             _add(points, table)
@@ -265,9 +284,6 @@ def score_sense(sense, pos="", rude_root=False, word="", wn=None):
         moved = points["sexual"] * 0.7           # sperm", "pin-up"): Clinical, not Sexual
         points["sexual"] -= moved
         _add(points, {"clinical": moved})
-    if rude_root:
-        best = max(RUDE_KINDS[::-1], key=lambda k: points.get(k, 0.0))
-        _add(points, {best if points.get(best) else "swear": ROOT_POINTS})
     return points
 
 
@@ -285,7 +301,7 @@ def sense_points(points, kinds=RUDE_KINDS):
 
 def is_form(sense):
     """True if a meaning only names another word ("plural of bitch", "alternative spelling of bell end")."""
-    gloss = " ".join(str(g) for g in (sense.get("glosses") or [])[-1:])
+    gloss = gloss_of(sense)
     return bool(sense.get("form_of") or sense.get("alt_of") or FORM_GLOSS.search(gloss))
 
 
@@ -305,11 +321,10 @@ def word_points(scored, kinds=RUDE_KINDS, forms=None):
 
 def score_word(senses, pos="", word="", wn=None):
     """[{kind: points} for each meaning] of a word's senses (kaikki.org); pos: their part of speech (one per
-    sense, or one for all); word: the word itself (ROOT_POINTS, and its WordNet meanings); wn: WordNet (wordnet()),
-    or None for none."""
+    sense, or one for all); word: the word itself (for its WordNet meanings); wn: WordNet (wordnet()), or None for
+    none."""
     poses = pos if isinstance(pos, (list, tuple)) else [pos] * len(senses)
-    root = bool(word) and on_list(word)
-    return [score_sense(s, p, root, word, wn) for s, p in zip(senses, poses)]
+    return [score_sense(s, p, word, wn) for s, p in zip(senses, poses)]
 
 
 # ---- the links between words: a second pass over the first scores (Wiktionary's synonym lists) -------------------
@@ -343,7 +358,7 @@ def incoming_links(words, scored_words):
             kind = sense_kind(points)
             if kind == "clean":
                 continue
-            gloss = " ".join(str(g) for g in (sense.get("glosses") or [])[-1:])
+            gloss = gloss_of(sense)
             for syn in synonyms(sense):
                 if syn != w:
                     out.setdefault(syn, []).append((kind, gloss, w))
@@ -351,6 +366,7 @@ def incoming_links(words, scored_words):
 
 
 def synonyms(sense):
+    """The words a sense lists as its synonyms (kaikki.org's dicts, or plain words in a compact sense)."""
     return [s.get("word") if isinstance(s, dict) else s for s in sense.get("synonyms", []) if s]
 
 
@@ -370,7 +386,7 @@ def link_points(word, senses, rude_kinds, incoming):
                 share = sum(1 for s in syns if kind in rude_kinds.get(s, ())) / len(syns)
                 if share >= 0.3:
                     _add(added[i], {kind: LINK_OUT * share})
-    glosses = [_content(" ".join(str(g) for g in (s.get("glosses") or [])[-1:])) for s in senses]
+    glosses = [_content(gloss_of(s)) for s in senses]
     for kind, gloss, source in incoming.get(word, ()):
         want = _content(gloss) | _content(source.replace("-", " "))
         best, best_n = None, 0
@@ -383,14 +399,14 @@ def link_points(word, senses, rude_kinds, incoming):
     return added
 
 
-FAMILY_POINTS = 2.0        # a word built from a rude word (its etymology, or that word's derived terms): like ROOT
+FAMILY_POINTS = 2.0        # a word built from a rude word (its etymology, or that word's derived terms)
 
 
 def family_points(word, senses, parents, first):
     """[{kind: points}] a word's family adds to its meanings: FAMILY_POINTS for each word it is built from whose
     first real meaning is rude (`parents`: the words its etymology names, and those listing it as derived:
-    "bullshit" from "shit"; `first`: the first pass), towards the parent's kind. A booster like ROOT_POINTS: on its
-    own it never makes a meaning rude."""
+    "bullshit" from "shit"; `first`: the first pass), towards the parent's kind. A booster: on its own it never
+    makes a meaning rude (measured: it replaces the hand-picked list's roots, with a little more agreement)."""
     added = [{} for _ in senses]
     for parent in parents:
         scored = first.get(parent)
@@ -449,13 +465,14 @@ def form_target(sense):
     f = (sense.get("form_of") or sense.get("alt_of") or [{}])[0]
     if isinstance(f, dict) and f.get("word"):
         return f["word"]
-    m = FORM_GLOSS.search(" ".join(str(g) for g in (sense.get("glosses") or [])[-1:]))
+    m = FORM_GLOSS.search(gloss_of(sense))
     return m.group(1).lower().strip(".'\"") if m else None
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "1"     # bumped when the rules change: every save scores its words again (in the background)
+RUDENESS_VERSION = "2"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
+LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
 _SIGNAL_TAGS = set(TAG_POINTS) | REGISTER | set(HEDGES)
 _SIGNAL_NAMES = set(TOPIC_POINTS) | RUDE_CATEGORIES
@@ -465,9 +482,9 @@ _ANY_WORDING = re.compile("|".join(f"(?:{p.pattern})" for p, _t in WORDING), re.
 def compact(sense, pos=""):
     """A kaikki.org sense cut down to what the rules read (the save keeps the meanings of about 150,000 words of a
     million, with their forms)."""
-    out = {"g": str((sense.get("glosses") or [""])[-1])[:160]}
+    out = {"g": gloss_of(sense)[:160]}
     tags = [t for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
-            if t.lower().replace("-", " ") in _SIGNAL_TAGS or t in ("form-of", "alt-of")]
+            if _label(t) in _SIGNAL_TAGS or t in ("form-of", "alt-of")]
     cats = [(c.get("name") if isinstance(c, dict) else str(c)) for c in sense.get("categories", [])]
     cats = [c for c in cats if c and c.lower() in _SIGNAL_NAMES]
     target = form_target(sense)
@@ -475,6 +492,40 @@ def compact(sense, pos=""):
                      ("f", target), ("pos", pos)):
         if val:
             out[key] = val
+    return out
+
+
+# etymology templates that name the words a word is built from ("compound|en|mother|fucker", "suffix|en|bitch|y")
+FAMILY_TEMPLATES = {"compound", "com", "affix", "af", "suffix", "suf", "prefix", "pre", "blend", "confix", "con",
+                    "surf", "univerbation", "univ", "clipping", "clip", "back-formation", "bf", "rhyming slang"}
+
+
+def compact_entry(entry, examples=0):
+    """A kaikki.org entry's glossed senses, each compact(), the first also holding the entry's word family: "e" the
+    words its etymology names (FAMILY_TEMPLATES, no affixes), "d" its derived terms. `examples`: keep that many of
+    each sense's examples ("x", for tools/measure_rudeness.py)."""
+    pos = entry.get("pos") or ""
+    out = []
+    for s in entry.get("senses", []):
+        if s.get("glosses"):
+            c = compact(s, pos)
+            x = [str(e.get("text", ""))[:200] for e in s.get("examples", [])[:examples] if e.get("text")]
+            if x:
+                c["x"] = x
+            out.append(c)
+    if out:
+        built = []
+        for t in entry.get("etymology_templates", []):
+            if t.get("name") in FAMILY_TEMPLATES:
+                args = t.get("args", {})
+                for k in sorted((k for k in args if k.isdigit() and k != "1"), key=int):
+                    v = str(args[k]).strip().lower()
+                    if v and v[0] != "-" and v[-1] != "-" and v not in built:
+                        built.append(v)
+        derived = sorted({d.get("word") for d in entry.get("derived", []) if d.get("word")})
+        for key, val in (("e", built), ("d", derived)):
+            if val:
+                out[0][key] = val
     return out
 
 
@@ -490,9 +541,9 @@ def expand(c):
 def has_signal(c):
     """True if a compact sense shows any sign of rudeness the rules read (a label, a topic or category, the
     wording): only such words are kept and scored."""
-    if {t.lower().replace("-", " ") for t in c.get("t", [])} & _SIGNAL_TAGS:
+    if {_label(t) for t in c.get("t", [])} & _SIGNAL_TAGS:
         return True
-    if {n.lower().replace("-", " ") for n in c.get("p", []) + c.get("c", [])} & _SIGNAL_NAMES:
+    if {_label(n) for n in c.get("p", []) + c.get("c", [])} & _SIGNAL_NAMES:
         return True
     return bool(_ANY_WORDING.search(c.get("g", "")))
 
@@ -507,7 +558,7 @@ def results(word, senses, scored, censored):
         bits |= KIND_BITS[k]
     forms = [is_form(s) for s in senses]
     whole = word_points(scored, censored, forms) >= WHOLE_MIN
-    smeared = [str((s.get("glosses") or [""])[-1])[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
+    smeared = [gloss_of(s)[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
     return bits, whole, smeared
 
 
@@ -517,6 +568,8 @@ def score_saved(saved, censored, wn=None, log=None):
     compacts = {w: json.loads(text) for w, text in saved.items()}
     words = {w: [expand(c) for c in cs] for w, cs in compacts.items()}
     pos = {w: [c.get("pos", "") for c in cs] for w, cs in compacts.items()}
+    family = families({w: [p for c in cs for p in c.get("e", ())] for w, cs in compacts.items()},
+                      {w: [k for c in cs for k in c.get("d", ())] for w, cs in compacts.items()})
     total, step = 2 * len(words) + 1, max(1, len(words) // 20)
 
     def tell(i):
@@ -530,7 +583,7 @@ def score_saved(saved, censored, wn=None, log=None):
     out = {}
     for i, w in enumerate(words, len(words)):
         tell(i)
-        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming), censored)
+        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming, family.get(w, ())), censored)
     for w, senses in words.items():          # a word that is only forms of one other is smeared whole as that one is
         targets = {form_target(s) for s in senses}
         if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:

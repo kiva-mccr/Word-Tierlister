@@ -16,6 +16,7 @@ COLUMNS = (("all", "browse"), ("place", "compare"), ("duel",))     # the cards, 
 
 
 class ShortcutsDialog:
+    """Settings > Keyboard shortcuts...: every action's keys, changeable (see the module's note)."""
     def __init__(self, app):
         self.app, self.km = app, app.keys
         self.waiting = None                     # (action, slot) while a key is being changed (slot None: a new key)

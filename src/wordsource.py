@@ -26,7 +26,7 @@ import urllib.request
 
 import rudeness
 from constants import OFFLINE_ENV, kind_bits
-from obscene import CENSORED, HEDGES, RUDE, obscene_in, on_list
+from obscene import CENSORED, RUDE, obscene_in
 from problems import SetupError
 
 
@@ -179,17 +179,20 @@ def _summarize(entry):
             live = True
         if len(lines) < 4:
             # its labels as the drawer shows them: the rude ones (and their hedges) first, then the dead ones
-            rude = [t.replace("-", " ") for t in s.get("tags", []) if t.replace("-", " ") in RUDE | HEDGES]
+            rude = [t.replace("-", " ") for t in s.get("tags", []) if t.replace("-", " ") in RUDE | _HEDGES]
             shown = (rude if set(rude) & RUDE else []) + sorted(dead)
             label = f"({', '.join(shown)}) " if shown else ""
             lines.append(f"• ({pos}) {label}{str(glosses[-1])[:220]}")
     return n, lemma, live, "\n".join(lines)
 
 
+_HEDGES = set(rudeness.HEDGES)
+
+
 class RudeCollector:
     """Picks out, from the Wiktionary download's entries, the meanings the rudeness rules read (OB-6): every
-    meaning (rudeness.compact) of a word with any sign of rudeness (rudeness.has_signal, or a rude root:
-    obscene.on_list), and of a word that is only a form of one ("fucks: plural of fuck"). A word's entries come
+    meaning (rudeness.compact) of a word with any sign of rudeness (rudeness.has_signal), and of a word that is only
+    a form of one ("fucks: plural of fuck"). A word's entries come
     one after another in the download; a form usually comes after its word, the few before it wait till the end.
 
         c = RudeCollector(); c.add(word, entry) for each entry kept; c.finish() -> {word: compact JSON}
@@ -199,11 +202,11 @@ class RudeCollector:
         self.kept, self.seen, self.waiting = {}, set(), {}
 
     def add(self, word, entry):
+        """One entry of `word` (kaikki.org's JSON); a new word settles the last one."""
         if word != self.word:
             self._flush()
             self.word = word
-        pos = entry.get("pos") or ""
-        self.senses += [rudeness.compact(s, pos) for s in entry.get("senses", []) if s.get("glosses")]
+        self.senses += rudeness.compact_entry(entry)
 
     def _flush(self):
         word, senses = self.word, self.senses
@@ -211,7 +214,7 @@ class RudeCollector:
         if not senses:
             return
         self.seen.add(word)
-        if on_list(word) or any(rudeness.has_signal(c) for c in senses):
+        if any(rudeness.has_signal(c) for c in senses):
             self.kept[word] = json.dumps(senses, separators=(",", ":"))
             return
         targets = {c.get("f") for c in senses}
@@ -223,6 +226,7 @@ class RudeCollector:
                 self.waiting[word] = (target, senses)
 
     def finish(self):
+        """{word: compact JSON} for every word kept, after the last entry (the forms that waited join their word)."""
         self._flush()
         for word, (target, senses) in self.waiting.items():
             if target in self.kept:
@@ -468,15 +472,12 @@ def rude_version(store):
 
 def find_rude(words, saved, old=(), log=print):
     """{word: rudeness.results} for the words of a save: the rules over the meanings it keeps (`saved`: {word:
-    compact JSON}), and the short hand-picked list (obscene.on_list) for the words they do not cover. Without kept
-    meanings (`saved` None), the words smeared whole before (`old`: an older save's flags) stay so. No database:
-    a worker thread may run it."""
-    found = {w: (rudeness.KIND_BITS["swear"], True, []) for w in obscene_in(words)}
-    if saved is None:
-        found.update({w: (rudeness.KIND_BITS["swear"], True, []) for w in old})
-    else:
-        found.update(rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log))
-    return found
+    compact JSON}). Without kept meanings (`saved` None) the short hand-picked list stands in (obscene.on_list:
+    rudeness.LISTED), with the words smeared whole before (`old`: an older save's flags). No database: a worker
+    thread may run it."""
+    if saved is not None:
+        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log)
+    return {w: rudeness.LISTED for w in [*obscene_in(words), *old]}
 
 
 def wants_rude_fetch(store):

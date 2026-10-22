@@ -1,20 +1,16 @@
-"""Obscene words: the rude kinds a meaning can be, the labels Wiktionary marks rude meanings with, and a short
-list chosen by hand (OB-6: src/rudeness.py scores each meaning by rules; this list is one of its sources, and
-stands in for a save whose Wiktionary meanings have not been read yet). No tkinter, no internet.
+"""Obscene words: the kinds of rude meaning (RUDE_KINDS; TICKED: dealt to start with; CENSORED: smeared while
+censoring), the labels Wiktionary marks rude meanings with (RUDE: shown in the stored definitions), and a short
+list chosen by hand (on_list), which stands in for a save whose Wiktionary meanings have not been read yet and for
+a word added by hand (OB-6: src/rudeness.py decides by rules). No tkinter, no internet.
 
     on_list("motherfucker") -> True          obscene_in(words) -> the ones on the list
 """
 
 import re
 
-# Wiktionary's labels for a rude meaning (shown in the stored definitions), and the words that soften them
+# Wiktionary's labels for a rude meaning (shown in the stored definitions, with their hedges: rudeness.HEDGES)
 RUDE = {"vulgar", "offensive", "derogatory", "pejorative", "slur", "ethnic slur", "racial slur", "swear word",
         "profane", "profanity", "ethnic-slur"}
-HEDGES = {"sometimes", "possibly", "potentially", "occasionally", "may", "can", "rarely", "mildly", "slightly"}
-
-# a gloss that only says which word this is a form of ("plural of bitch", "present participle of fuck")
-FORM_GLOSS = re.compile(r"\b(?:plural|participle|tense|form|spelling|singular|comparative|superlative|gerund|"
-                        r"inflection|misspelling)\b.*\bof ([^\s,;:()]+)\s*$", re.I)
 
 
 # ---- the short list chosen by hand ----------------------------------------------------------------------------

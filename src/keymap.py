@@ -127,6 +127,7 @@ def place_keys(first):
 
 
 def place_display(first):
+    """The placing keys as a hint names them: "1 … 6" (the first and the last), or the one key."""
     keys = place_keys(first) or [first]
     return f"{display(keys[0])} … {display(keys[-1])}" if len(keys) > 1 else display(keys[0])
 

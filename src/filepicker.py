@@ -43,6 +43,7 @@ def use_themed(root):
 
 # ---------------------------------------------------------------- small helpers
 def human_size(n):
+    """A file size for the list: "1.2 MB"."""
     for unit, size in (("GB", 1e9), ("MB", 1e6), ("kB", 1e3)):
         if n >= size:
             v = n / size
@@ -300,6 +301,7 @@ class ImportDialog:
 
 
 def ask_import(parent, store_path, script_dir, animator=None):
+    """The Import picker (Linux): waits, then returns the chosen file or None."""
     d = ImportDialog(parent, store_path, script_dir, animator)
     d.dlg.show(wait=True)
     return d.result
@@ -406,6 +408,7 @@ class ExportDialog:
 
 
 def ask_export(parent, folder, name="tierlist", kind="txt", save_dir=None, animator=None):
+    """The Export picker (Linux): waits, then returns (the chosen path or None, its kind, its folder)."""
     d = ExportDialog(parent, folder, name, kind, save_dir, animator)
     d.dlg.show(wait=True)
     return d.result, d.kind, d.folder

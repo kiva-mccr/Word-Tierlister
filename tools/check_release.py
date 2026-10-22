@@ -67,6 +67,7 @@ def requirement_names():
 
 
 def check_imports(problems):
+    """Every import is our own module, the standard library, or in requirements.txt (with deps.PACKAGES)."""
     local = {_name(f)[:-3] for f in py_files()}
     stdlib = set(sys.stdlib_module_names)
     reqs = requirement_names()
@@ -96,6 +97,8 @@ def check_imports(problems):
 
 
 def check_docs(problems):
+    """Every module is in the README's file map, every self-test in run_tests.sh, the notes present, no module at
+    the top but tierlist.py (R-1)."""
     readme = open(os.path.join(HERE, "README.md"), encoding="utf-8").read()
     for f in py_files():
         if not f.startswith("tests") and f"`{f.replace(os.sep, '/')}`" not in readme and f"`{_name(f)}`" not in readme:
@@ -113,6 +116,7 @@ def check_docs(problems):
 
 
 def check_pyflakes(problems):
+    """pyflakes finds nothing (when it is installed)."""
     try:
         out = subprocess.run([sys.executable, "-m", "pyflakes", *py_files()], cwd=HERE,
                              capture_output=True, text=True).stdout
@@ -153,6 +157,8 @@ def shippable_files():
 
 
 def check_stray(problems):
+    """No scratch files in the project (databases, logs, .pyc, .part, screenshots outside docs/); the save and its
+    log next to tierlist.py are allowed."""
     for f in _walk(""):
         if f.endswith(STRAY) and not (f.startswith("docs" + os.sep) and f.endswith(".png")):
             if os.sep not in f and f.endswith((".db", ".db-wal", ".db-shm", ".log")):
@@ -161,6 +167,7 @@ def check_stray(problems):
 
 
 def build_zip(target):
+    """Zip the shippable files into `target`, under one word-tierlist/ folder."""
     root = "word-tierlist"
     files = shippable_files()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
@@ -170,6 +177,7 @@ def build_zip(target):
 
 
 def main(argv):
+    """The checks, then --tests (run them) and --zip (build the zip)."""
     problems = []
     sys.path[:0] = [os.path.join(HERE, "src"), HERE]
     check_imports(problems)

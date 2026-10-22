@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """Which words are obscene (OB-6): the meanings the rules read are picked out of the Wiktionary download
-(wordsource.RudeCollector), scored (rudeness.score_saved through wordsource.find_rude), and the short hand-picked
-list (obscene.on_list) covers the words they do not."""
+(wordsource.RudeCollector), scored (rudeness.score_saved through wordsource.find_rude); the short hand-picked list
+(obscene.on_list) stands in until a save has them."""
 import json
 
 import rudeness
@@ -25,22 +25,23 @@ for w, e in [("bitches", entry("bitches", ["plural of bitch"], form_of="bitch"))
              ("bitch", entry("bitch", ["A malicious woman."], ["vulgar", "derogatory"])),   # (entries one after another)
              ("box", entry("box", ["A container."])),                                  # nothing rude: not kept
              ("boxes", entry("boxes", ["plural of box"], form_of="box")),              # nor its forms
-             ("bitchy", entry("bitchy", ["Like a bitch."], pos="adj")),                # a rude root: kept
+             ("bitchy", entry("bitchy", ["Like a bitch."], pos="adj")),                # no sign of its own: not kept
              ("penis", entry("penis", ["The male organ."], categories=["Genitalia"])),  # a category the rules read
              ("bonk", entry("bonk", ["To have sexual intercourse."], ["slang"]))]:     # the wording (slang: Sexual)
     c.add(w, e)
 kept = c.finish()
-assert set(kept) == {"bitch", "bitches", "bitchy", "penis", "bonk"}, set(kept)
+assert set(kept) == {"bitch", "bitches", "penis", "bonk"}, set(kept)
 bitch = json.loads(kept["bitch"])
 assert [m["g"] for m in bitch] == ["A female dog.", "A malicious woman."] and bitch[1]["t"] == ["vulgar", "derogatory"]
 
 # ---- scoring them: the kinds of each word's meanings, smeared whole or meaning by meaning ------------------
-found = find_rude(["bitch", "bitches", "bitchy", "penis", "bonk", "box", "shit"], kept, log=lambda *_: None)
+found = find_rude(["bitch", "bitches", "penis", "bonk", "box", "shit"], kept, log=lambda *_: None)
 assert found["penis"] == (B["clinical"], False, []), found["penis"]                  # (Clinical is never smeared)
 assert found["bonk"][0] == B["sexual"] and found["bonk"][1], found["bonk"]
 assert found["bitch"] == (B["clean"] | B["insult"], False, []), found["bitch"]   # (an insult: shown as it is)
 assert found["bitches"][1] == found["bitch"][1]                                      # a form is smeared as its word
-assert found["shit"] == (B["swear"], True, []) and "box" not in found                # (no meanings kept: the list)
+assert "shit" not in found and "box" not in found                                    # (no meanings kept: clean)
+# without kept meanings (a save that has not read them yet) the hand-picked list and the earlier flags stand in
 assert find_rude(["box", "shit"], None, old=["box"]) == {"box": (B["swear"], True, []), "shit": (B["swear"], True, [])}
 
 # ---- the hand-picked list --------------------------------------------------------

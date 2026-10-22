@@ -43,7 +43,7 @@ import sqlite3
 import time
 
 from obscene import RUDE_KINDS, TICKED, on_list
-from rudeness import KIND_BITS
+from rudeness import KIND_BITS, LISTED
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
@@ -202,7 +202,7 @@ class Store:
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        rude = KIND_BITS["swear"] if on_list(word) else None     # (no meanings to read for it: the hand-picked list)
+        rude = LISTED[0] if on_list(word) else None     # (no meanings to read for it: the hand-picked list)
         self.db.execute("UPDATE words SET rude=?, obscene=? WHERE word=?", (rude, int(bool(rude)), word))
         sql, args = self._out_sql()
         self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))

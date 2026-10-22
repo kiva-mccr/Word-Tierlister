@@ -1,12 +1,12 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""The rudeness rules (OB-6): points from labels, topics / categories, the definition's wording and the word
-itself; a meaning's kind; the word's points over the censored kinds. Cases from the tuning against Claude."""
+"""The rudeness rules (OB-6): points from labels, topics / categories, the definition's wording, WordNet, the
+links between words and word families; a meaning's kind; the word's points over the censored kinds. Cases from the tuning against Claude."""
 from rudeness import MEANING_MIN, WHOLE_MIN, score_sense, score_word, sense_kind, sense_points, word_points
 
 
-def kind(gloss, tags=(), topics=(), cats=(), pos="noun", root=False):
+def kind(gloss, tags=(), topics=(), cats=(), pos="noun"):
     return sense_kind(score_sense({"glosses": [gloss], "tags": list(tags), "topics": list(topics),
-                                   "categories": [{"name": c} for c in cats]}, pos, root))
+                                   "categories": [{"name": c} for c in cats]}, pos))
 
 
 assert kind("A table.") == "clean" and kind("To arrive.", ["slang"]) == "clean"
@@ -27,9 +27,6 @@ assert kind("A muscle of the forearm.", topics=["anatomy"]) == "clean"          
 assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
 assert kind("Damn!", ["vulgar"], pos="intj") == "swear"
 assert kind("Darn.", ["euphemistic"], cats=["English swear words"]) == "swear"
-assert kind("Very; extremely.", root=True) == "clean"                                  # a rude root alone: not enough,
-assert kind("Very bad.", ["humorous"], root=True) == "clean"
-assert sense_points(score_sense({"glosses": ["Awful."], "tags": ["derogatory"]}, "adj", True)) == 6.0  # but it adds
 assert kind("Sometimes used of a person.", ["sometimes", "offensive"]) == "clean"     # hedged: half as rude
 assert kind("A person.", ["offensive"]) in ("slur", "insult")
 
@@ -75,7 +72,7 @@ if wn is None:
     print("(WordNet not installed: its checks skipped)")
 else:
     def wkind(word, gloss, pos="noun", tags=()):
-        return sense_kind(score_sense({"glosses": [gloss], "tags": list(tags)}, pos, False, word, wn))
+        return sense_kind(score_sense({"glosses": [gloss], "tags": list(tags)}, pos, word, wn))
     assert wordnet_match("pee", "To urinate.", "verb", wn) is not None                # a synonym for a gloss
     assert wordnet_match("pig", "A light pinkish-red colour, like that of a pig.", "noun", wn) is None or \
         wkind("pig", "A light pinkish-red colour, like that of a pig.") == "clean"    # not the animal, not a hog
@@ -108,7 +105,19 @@ W = {"shit": [{"glosses": ["Faeces."], "tags": ["vulgar"]}], "bull": [{"glosses"
 plain = score_words(W)
 both = score_words(W, family=fam)
 assert sum(both["bullshit"][0].values()) == sum(plain["bullshit"][0].values()) + 2   # from shit, not from bull
-assert both["bullshit"][0]["crude"] >= 2                       # (towards shit's kind)
+assert both["bullshit"][0]["crude"] >= 2                       # (towards shit's kind: Faeces is Crude)
 assert both["cocktail"] == plain["cocktail"]                   # (cock's first meaning is the bird)
-assert sense_kind(both["shithead"][0]) != "clean"              # (an insult's wording plus its family)
+assert sum(both["shithead"][0].values()) == sum(plain["shithead"][0].values()) + 2  # (listed as derived by shit)
+# the program keeps an entry's meanings compactly, the first with its family; score_saved reads them back
+import json
+from rudeness import compact_entry, score_saved, KIND_BITS
+e = {"word": "shithead", "pos": "noun", "senses": [{"glosses": ["A contemptible person."], "examples": [{"text": "x"}]}],
+     "etymology_templates": [{"name": "compound", "args": {"1": "en", "2": "shit", "3": "head"}}]}
+c = compact_entry(e)
+assert c == [{"g": "A contemptible person.", "pos": "noun", "e": ["shit", "head"]}], c
+assert compact_entry(e, examples=1)[0]["x"] == ["x"]
+saved = {"shithead": json.dumps(c), "shit": json.dumps(compact_entry(
+    {"word": "shit", "pos": "noun", "senses": [{"glosses": ["Faeces."], "tags": ["vulgar"]}]}))}
+got = score_saved(saved, {"crude", "swear", "sexual", "slur"})
+assert got["shithead"][0] == KIND_BITS["insult"] and got["shit"][1], got
 print("RUDENESS OK")

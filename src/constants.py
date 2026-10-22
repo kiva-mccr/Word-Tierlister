@@ -104,6 +104,7 @@ PLAN_MARK = "\x1eplan:"
 
 
 def plan_line(steps):
+    """A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan)."""
     return PLAN_MARK + "\x1f".join(steps)
 
 
