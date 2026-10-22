@@ -532,7 +532,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           among the 3,000 commonest: 211 -> 129. And a rude category on a meaning with no rude label of its own
 #           counts 40% (CATEGORY_ALONE: Wiktionary files "wood: chess pieces" under English ethnic slurs; "darn"
 #           is now clean). RUDENESS_VERSION 5: 78.5% against Claude's sorting (unchanged: it saw only the first
-#           meanings), Clinical right 69% when flagged (from 63%), false alarms on ordinary words 0.4%. How words are dealt: "Obscene words" sits before "Other",
+#           meanings), Clinical right 69% when flagged (from 63%), false alarms on ordinary words 0.4%.
+#           Then (asked for: "look up similar problems and solutions that wouldn't normally be applied to
+#           vocabulary ... validate for random lists of words"): 9 random lists of 200 words (any word; the 20,000
+#           commonest; words with any sign), judged meaning by meaning by two independent subagents (99.2% the
+#           same; a third settled the 32 disputed words), only to measure. Of the borrowed ideas, three kept
+#           (RUDENESS_VERSION 6): a rude label alone is a suspect, not an insult, without a person described
+#           badly in the gloss or WordNet (disease case definitions: two kinds of evidence); "euphemistic" /
+#           "childish" soften a meaning (SOFTENED: clinical text's negation / hedge rules); a slang meaning that is
+#           a rude word takes its kind ("dam: Damn.") and a short slang name for a body part or sex act gains
+#           SLANG_BODY (one step along the link, as TrustRank). Words falsely flagged 48 -> 28, smeared meanings
+#           missed 36 -> 27 of 138 (false 16 -> 17); the cost: mild insults missed (words missed 30 -> 47, insults
+#           are never smeared). Tried and dropped: label repeated on every meaning as a leak, harmless-topic
+#           veto, two sources for unlabelled meanings, per-source caps, a higher bar for late meanings. How words are dealt: "Obscene words" sits before "Other",
 #           and shows a minus while only some kinds under it are ticked (ui_style: the tick box's "alternate").
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then

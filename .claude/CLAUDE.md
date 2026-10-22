@@ -124,10 +124,11 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
   (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
   Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED). "Obscene words" still starts unticked.
-  Bump rudeness.RUDENESS_VERSION whenever the rules change. Measure with tools/measure_rudeness.py (78.5%, 80.8% of
+  Bump rudeness.RUDENESS_VERSION whenever the rules change. Measure with tools/measure_rudeness.py (78.8%, 80.8% of
   the commonest, 0.4% false alarms; word families replaced the hand list's roots; Wiktionary's examples were tried
   and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
-  labelled rude meanings: see OB-6). Ask the user's examples of false matches.
+  labelled rude meanings; borrowed ideas checked on random lists judged by subagents (scratch only): see OB-6).
+  Ask the user's examples of false matches.
   Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).

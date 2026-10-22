@@ -152,6 +152,7 @@ RUDE_CATEGORIES = {"english vulgarities", "english swear words", "english ethnic
                    "english derogatory terms"}         # (as good as a rude label)
 
 CATEGORY_ALONE = 0.4       # what a rude category is worth on a meaning with no rude label (see score_sense)
+SOFTENED = 0.3            # what a euphemistic or childish meaning's rude points are worth (see score_sense)
 SWEAR_POS = {"intj"}       # an interjection with a rude label is most likely a swear word
 
 
@@ -276,7 +277,7 @@ def score_sense(sense, pos="", word="", wn=None):
     _add(points, wording)
     if rude_label and any(g.search(gloss) for g in GROUP):
         _add(points, GROUP_POINTS)
-    wn_slang = False
+    wn_slang, wn_points = False, {}
     syn = wordnet_match(word, gloss, pos, wn)
     if syn is not None:
         wn_points, wn_slang = _synset_signals(syn)
@@ -293,6 +294,16 @@ def score_sense(sense, pos="", word="", wn=None):
         moved = points["sexual"] * 0.7           # sperm", "pin-up"): Clinical, not Sexual
         points["sexual"] -= moved
         _add(points, {"clinical": moved})
+    labs = {lab for lab, _w in _hedged(labels)}
+    if points.get("insult") and labs & {"derogatory", "pejorative", "offensive"} and not wording.get("insult") \
+            and not wn_points.get("insult"):  # a label alone is a suspect, not an insult (case definitions: two kinds
+        points["insult"] *= 0.5               # of evidence): "landlubber", "a dollar that has lost value"
+        if points.get("slur") and not any(g.search(gloss) for g in GROUP):
+            points["slur"] *= 0.5
+    if labs & {"euphemistic", "childish"} and "vulgar" not in labs:    # a softener (as clinical text's "no", "mild"):
+        for k in points:                                               # "pass water", "go potty", "oldest occupation"
+            if k != "clinical":
+                points[k] *= SOFTENED
     return points
 
 
@@ -465,7 +476,27 @@ def second_pass(word, senses, first, rude, incoming, parents=()):
         if target and target != word and first.get(target):    # a form takes its word's main (first) meaning's
             for k, v in first[target][0].items():               # points: "did" is "do", not its slang meaning
                 p[k] = max(p.get(k, 0.0), v)
+        labs = {lab for lab, _w in _hedged(list(sense.get("tags", [])) + list(sense.get("raw_tags", [])))}
+        if not labs & SLANGY:
+            continue
+        gloss = gloss_of(sense)
+        m = _LEAD.match(gloss.lower())       # a slang meaning that is a rude word ("dam: Damn.", "cattle trucked:
+        ref = m.group(1) if m else None      # Fucked"): that word's main kind (one step along the link, as TrustRank)
+        if ref and ref != word and first.get(ref) and sense_kind(first[ref][0]) in GLOSS_KINDS:
+            k = sense_kind(first[ref][0])
+            p[k] = max(p.get(k, 0.0), MEANING_MIN + 0.5)
+        if len(gloss.split()) <= 8 and _BODY.search(gloss):     # a short slang name for a body part or a sex act
+            _add(p, {"crude" if _WASTE.search(gloss) else "sexual": SLANG_BODY})   # ("maraca: breasts")
     return out
+
+
+SLANGY = {"slang", "informal", "colloquial", "vulgar", "derogatory", "offensive"}
+GLOSS_KINDS = {"crude", "swear", "sexual", "slur"}     # (the kinds smeared while censoring: obscene.CENSORED)
+SLANG_BODY = 2.0
+_LEAD = re.compile(r"^\W*([a-z][a-z'-]+)")
+_BODY = re.compile(r"\b(breasts?|nipples?|buttocks|penis|testicles?|vagina|vulva|genitals?|genitalia|anus|erection|"
+                   r"semen|orgasm|sex|sexual|intercourse|masturbat\w*|urinate|defecate|feces|faeces|excrement)\b", re.I)
+_WASTE = re.compile(r"urinat|defecat|fe?ces|faeces|excrement|buttocks|anus", re.I)
 
 
 def form_target(sense):
@@ -478,7 +509,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "5"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "6"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters

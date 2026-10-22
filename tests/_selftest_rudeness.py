@@ -23,7 +23,7 @@ assert kind("A person of Chinese descent.", ["ethnic", "slur"]) == "slur"
 assert kind("A stupid person.") == "insult" and kind("a stupid person", ["derogatory"]) == "insult"   # (no slur)
 assert kind("The penis.", cats=["Genitalia"]) == "clinical"                            # the proper word
 assert kind("Penis.", ["slang"], cats=["Genitalia"]) == "sexual"                      # a slang one is not
-assert kind("Urine.", ["childish"]) == "crude"
+assert kind("Urine.", ["childish"]) == "clean"                                          # a softener ("wee-wee")
 assert kind("A muscle of the forearm.", topics=["anatomy"]) == "clean"                # anatomy alone: clean
 assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
 assert kind("Damn!", ["vulgar"], pos="intj") == "swear"
@@ -31,7 +31,7 @@ assert kind("Darn.", ["euphemistic"], cats=["English swear words"]) == "clean"  
 assert kind("Darn.", ["vulgar"], cats=["English swear words"]) == "swear"
 assert kind("Chess pieces.", ["slang"], cats=["English ethnic slurs"]) != "slur"  # (a category alone: maybe a slip)
 assert kind("Sometimes used of a person.", ["sometimes", "offensive"]) == "clean"     # hedged: half as rude
-assert kind("A person.", ["offensive"]) in ("slur", "insult")
+assert kind("A person.", ["offensive"]) == "clean"                                   # (a label alone: a suspect)
 
 # the word's points: its first meaning counts most; only the censored kinds count
 rude, clean = {"sexual": 6.0}, {}
@@ -147,6 +147,18 @@ assert meaning_kinds(W["box"], got["box"], common=True) == ["clean", "sexual"]
 saved = {w: json.dumps([compact(x, "noun") for x in v]) for w, v in W.items()}
 assert score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["top"][0] == KIND_BITS_["clean"]
 assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][0] != KIND_BITS_["clean"]   # (a rare word: counts)
+
+# borrowed ideas, measured on random lists judged by hand (OB-6): a rude label alone is a suspect, not an insult;
+# a euphemism is the polite word; a slang meaning that is a rude word, or a short slang name for a body part, is rude
+assert kind("Someone unfamiliar with the sea.", ["derogatory"]) == "clean"              # ("landlubber")
+assert kind("A stupid, contemptible person.", ["derogatory"]) == "insult"
+assert kind("To urinate.", ["euphemistic"], cats=["Bodily functions"], pos="verb") == "clean"   # ("pass water")
+W = {"damn": [{"glosses": ["To condemn to hell."], "tags": ["vulgar"], "categories": ["English swear words"]}],
+     "dam": [{"glosses": ["A barrier across a river."]}, {"glosses": ["Damn."], "tags": ["slang"]}],
+     "unit": [{"glosses": ["A single thing."]}, {"glosses": ["A penis."], "tags": ["slang"]}]}
+got = score_words(W)
+assert sense_kind(got["dam"][1]) == "swear" and sense_kind(got["dam"][0]) == "clean"
+assert sense_kind(got["unit"][1]) == "sexual" and sense_kind(score_words({k: W[k] for k in ("unit",)})["unit"][1])
 
 # the program keeps an entry's meanings compactly, the first with its family; score_saved reads them back
 import json
