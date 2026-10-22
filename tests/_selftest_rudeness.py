@@ -1,6 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """The rudeness rules (OB-6): points from labels, topics / categories, the definition's wording, WordNet, the
 links between words and word families; a meaning's kind; the word's points over the censored kinds. Cases from the tuning against Claude."""
+from rudeness import KIND_BITS as KIND_BITS_
 from rudeness import MEANING_MIN, WHOLE_MIN, score_sense, score_word, sense_kind, sense_points, word_points
 
 
@@ -108,6 +109,31 @@ assert sum(both["bullshit"][0].values()) == sum(plain["bullshit"][0].values()) +
 assert both["bullshit"][0]["crude"] >= 2                       # (towards shit's kind: Faeces is Crude)
 assert both["cocktail"] == plain["cocktail"]                   # (cock's first meaning is the bird)
 assert sum(both["shithead"][0].values()) == sum(plain["shithead"][0].values()) + 2  # (listed as derived by shit)
+# false matches the user found: "did" (a form of "do", which has a slang meaning), "best" (of "good"), "well: (slang)
+# very" (an intensifier, no rude label), "take: to have sex with" (a plain meaning of a word about something else)
+from rudeness import meaning_kinds, results
+W = {"do": [{"glosses": ["To perform."]}, {"glosses": ["To have sex with."], "tags": ["slang"], "categories": ["Sex"]}],
+     "did": [{"glosses": ["simple past of do"], "form_of": [{"word": "do"}]}],
+     "fuck": [{"glosses": ["To have sexual intercourse."], "tags": ["vulgar"]}],
+     "fucked": [{"glosses": ["simple past of fuck"], "form_of": [{"word": "fuck"}]}],
+     "take": [{"glosses": ["To grab."]}, {"glosses": ["To have sex with."], "categories": ["Sex"]}],
+     "penis": [{"glosses": ["The male organ."], "categories": ["Genitalia"]}]}
+got = score_words(W)
+assert sense_kind(got["do"][1]) == "sexual" and sense_kind(got["did"][0]) == "clean"      # a form follows the first
+assert sense_kind(got["fucked"][0]) == "sexual"                                            # meaning of its word
+assert kind("Very (as a general-purpose intensifier).", ["slang"], pos="adv") == "clean"
+assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
+assert meaning_kinds(W["take"], got["take"]) == ["clean", "clean"]                          # (Clinical, but not
+assert meaning_kinds(W["penis"], got["penis"]) == ["clinical"]                              # what "take" is about)
+assert results("take", W["take"], got["take"], {"sexual"})[0] == KIND_BITS_["clean"]
+assert kind("To take the virginity of.", ["euphemistic"], pos="verb") != "sexual"          # (a euphemism: polite)
+
+assert kind("An exclamation used to express pleasant or unpleasant mild surprise.", pos="intj") == "clean"   # "why"
+assert kind("The mainstream culture, controlled by the elites.", ["derogatory", "often"]) == "clean"  # "system"
+assert kind("Abbreviation of one-shot.", ["alt-of", "derogatory"]) == "clean"
+from rudeness import _hedged
+assert _hedged(["derogatory", "often"]) == [("derogatory", 0.8)]          # (kaikki sorts labels: hedges apply to all)
+
 # the program keeps an entry's meanings compactly, the first with its family; score_saved reads them back
 import json
 from rudeness import compact_entry, score_saved, KIND_BITS

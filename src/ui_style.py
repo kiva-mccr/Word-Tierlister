@@ -106,7 +106,9 @@ def apply_ttk_style(root):
 
 def _tick_boxes(root, style, line):
     """Tick boxes drawn as images (the clam theme's own is a tiny cross that is hard to read): a rounded
-    white box with a hairline, and when ticked a lilac box with a white tick. Sized from the body font."""
+    white box with a hairline, when ticked a lilac box with a white tick, and when only some of what it stands
+    for is ticked (the "alternate" state: tick.state(["alternate"])) a lilac box with a white minus. Sized from the
+    body font."""
     n = max(13, int(line * 0.8)) | 1
     name = f"Tick{n}.indicator"
     kept = getattr(root, "_tick_images", {})
@@ -132,10 +134,14 @@ def _tick_boxes(root, style, line):
             x = int((x1 + (x2 - x1) * i / steps) * n)
             y = int((y1 + (y2 - y1) * i / steps) * n)
             on.put(P["surface"], to=(x - t // 2, y - t // 2, x - t // 2 + t, y - t // 2 + t))
-    kept[name] = (off, on)                                   # keep references (Tk images are freed otherwise)
+    mixed = box(P["accent"], P["accent"])
+    y = n // 2 - t // 2
+    mixed.put(P["surface"], to=(int(n * 0.26), y, n - int(n * 0.26), y + t))
+    kept[name] = (off, on, mixed)                            # keep references (Tk images are freed otherwise)
     root._tick_images = kept
     if name not in style.element_names():
-        style.element_create(name, "image", off, ("selected", on), width=n + max(6, n // 2), sticky="w")
+        style.element_create(name, "image", off, ("alternate", mixed), ("selected", on),
+                              width=n + max(6, n // 2), sticky="w")
     _tick_layout(style, name)
 
 

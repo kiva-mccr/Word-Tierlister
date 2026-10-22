@@ -159,11 +159,16 @@ class DealDialog:
         f = self._section("kinds")
         counts = self.store.kind_counts()
         rows = [(key, label, self.kind_vs[key], f"{counts[key]:,}") for key, label, _ in KINDS]
-        rows.append(("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}"))
+        rows.insert(-1, ("obscene", "Obscene words", self.obscene_v, f"{counts['obscene']:,}"))   # (before Other)
         self.kind_ticks, self.kind_tips = {}, {}
         wrap = font("body").measure("n") * 40
+        box_row = None
         for i, (key, label, var, n) in enumerate(rows):    # one column on the first start, two on the page
             r, c = (i, 0) if self.first else (i // 2, (i % 2) * 2)
+            if box_row is not None and self.first:
+                r += 1                                      # (the kinds of rude meaning open under Obscene words)
+            if key == "obscene":
+                box_row = 1 + r + 1
             tick = ttk.Checkbutton(f, text=label, variable=var, takefocus=1)
             tick.grid(row=1 + r, column=c, sticky="w", padx=(0, 18))
             count = ttk.Label(f, text=n, foreground=PALETTE["muted"])
@@ -184,7 +189,10 @@ class DealDialog:
             self.kind_tips[RUDE_LABELS[k]] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap)
                                               for w in (tick, count)]
             self.kind_ticks[RUDE_LABELS[k]] = tick
+        self.box_row = box_row
         self.obscene_v.trace_add("write", lambda *_: self._show_rude())
+        for v in self.rude_vs.values():
+            v.trace_add("write", lambda *_: self._mark_obscene())
         self._show_rude(refit=False)
         note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
         reading = self.app.rude_read_note()
@@ -199,11 +207,22 @@ class DealDialog:
     def _show_rude(self, refit=True):
         """The kinds of rude meaning open under Obscene words while it is ticked."""
         if self.obscene_v.get():
-            self.rude_box.grid(row=9, column=0, columnspan=4, sticky="w", padx=(24, 0), pady=(2, 0))
+            self.rude_box.grid(row=self.box_row, column=0, columnspan=4, sticky="w", padx=(24, 0), pady=(2, 0))
         else:
             self.rude_box.grid_remove()
+        self._mark_obscene()
         if refit:
             self.dlg.refit()
+
+    def _mark_obscene(self):
+        """Obscene words shows a minus, as tick boxes do, while it is ticked but not every kind under it is."""
+        def mark():         # (a moment later: the tick box's own trace, run after ours, clears "alternate" when its
+                            # value changes, and refit() runs idle callbacks before that)
+            partial = self.obscene_v.get() and not all(v.get() for v in self.rude_vs.values())
+            tick = self.kind_ticks["Obscene words"]
+            if tick.winfo_exists():
+                tick.state(["alternate" if partial else "!alternate"])
+        self.body.after(1, mark)
 
     def _censor(self):
         f = self._section("censor")

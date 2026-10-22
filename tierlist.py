@@ -514,6 +514,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Found on the way: the program's compact meanings dropped "informal" / "colloquial", which the rules
 #           read (fixed). False alarms: 0.6% of a control sample of ordinary words; 7.7% of the words Claude
 #           called clean among its suspects; per kind, Swear is the loosest (41% precision), Slur the surest (89%).
+#           Fixed (reported: "did", "take", "best", "p" came up as obscene words): a form now follows its word's
+#           first meaning, not its rudest ("did" is "do", "best" is "good", "p" is "pretty"); "intensifier" /
+#           "expletive" wording is a swear word only with a rude label ("well: (slang) very"); a Clinical meaning
+#           counts only when the word is about it, its first meaning not clean (meaning_kinds: "penis", not "take:
+#           to have sex with"); "euphemistic" no longer makes a meaning Sexual ("make: to take the virginity of").
+#           Then, from the commonest 3,000 words: hedges ("often", "sometimes") weaken every label of a meaning
+#           (kaikki.org sorts the labels, so which one they hedged is lost); a rude label on a meaning about a thing
+#           ("system: (often derogatory) the mainstream culture") or on a form is no insult; the insult wording
+#           needs a person ("why: unpleasant surprise" was one). RUDENESS_VERSION 4. Measured: 78.5% (80.8% of the
+#           commonest), false alarms on ordinary words 0.4%, Insult 68%, Sexual 74%, Slur 90% right when flagged.
+#           Left as Wiktionary labels them: rare slang meanings of common words ("top", "head", "box", "it" for a
+#           person), which by the rule (dealt for any meaning of a ticked kind) come up under Obscene words. How words are dealt: "Obscene words" sits before "Other",
+#           and shows a minus while only some kinds under it are ticked (ui_style: the tick box's "alternate").
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.

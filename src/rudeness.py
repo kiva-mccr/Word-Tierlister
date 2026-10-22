@@ -108,9 +108,9 @@ WORDING = [(re.compile(p, re.I), pts) for p, pts in (
      {"swear": 3}),
     (r"\b(used as an? (intensifier|expletive|exclamation|oath)|expletive|intensifier|exclamation of "
      r"(anger|annoyance|frustration|surprise|disgust)|expressing (anger|annoyance|frustration))", {"swear": 3}),
-    (r"^(an?|one|someone|somebody|any) (\w+ )?(person|man|woman|individual|people|fellow|guy|girl|boy)?\s*"
-     r"(who|that|whose)?\b.*\b(stupid|foolish|idiotic|contemptible|despicable|worthless|obnoxious|annoying|"
-     r"incompetent|cowardly|lazy|unpleasant|silly|dull|ignorant|arrogant|mean|nasty|hateful|weak|pathetic)\b",
+    (r"^(?=.*\b(stupid|foolish|idiotic|contemptible|despicable|worthless|obnoxious|annoying|incompetent|cowardly|"
+     r"lazy|unpleasant|silly|dull|ignorant|arrogant|mean|nasty|hateful|weak|pathetic)\b)"     # (a person, so described)
+     r"((an?|any) ([\w-]+,? ){0,4}(person|man|woman|individual|people|fellow|guy|girl|boy)|someone|somebody|one)\b",
      {"insult": 3}),
     (r"\b(stupid|foolish|contemptible|despicable|worthless) (person|man|woman|people|fellow)\b", {"insult": 2}),
     (r"\b(medical|medicine|disease|disorder|condition|syndrome|infection|hormone|anatomy|anatomical)\b",
@@ -164,17 +164,16 @@ def gloss_of(sense):
     return str((sense.get("glosses") or [""])[-1])
 
 
+_NOT_A_PERSON = re.compile(r"^(the|abbreviation|initialism|acronym|alternative|clipping|used|an? (exclamation|"
+                           r"expression|interjection))\b", re.I)
+
+
 def _hedged(labels):
-    """[(label, weight)] for a meaning's labels: a hedge ("sometimes", "mildly") weakens the label after it."""
-    out, weight = [], 1.0
-    for lab in labels:
-        lab = _label(lab).strip()
-        if lab in HEDGES:
-            weight = HEDGES[lab]
-            continue
-        out.append((lab, weight))
-        weight = 1.0
-    return out
+    """[(label, weight)] for a meaning's labels: a hedge ("sometimes", "mildly") weakens them all (kaikki.org sorts
+    a meaning's labels, so "often derogatory" comes as "derogatory", "often": which one it hedged is lost)."""
+    labs = [_label(lab).strip() for lab in labels]
+    weight = min([HEDGES[lab] for lab in labs if lab in HEDGES], default=1.0)
+    return [(lab, weight) for lab in labs if lab not in HEDGES]
 
 
 def _add(points, table, weight=1.0):
@@ -255,6 +254,9 @@ def score_sense(sense, pos="", word="", wn=None):
         if lab in TAG_POINTS:
             _add(points, TAG_POINTS[lab], w)
             rude_label = rude_label or lab in ("vulgar", "offensive", "derogatory", "pejorative", "slur")
+    if points.get("insult") and (is_form(sense) or _NOT_A_PERSON.match(gloss_of(sense))):
+        del points["insult"]                 # a rude label on a thing ("system: (often derogatory) the mainstream
+                                             # culture") or on a form ("Abbreviation of ...") is no insult
     names = [_label(t) for t in sense.get("topics", [])]
     names += [(c.get("name") if isinstance(c, dict) else str(c)).lower() for c in sense.get("categories", [])]
     rude_label = rude_label or bool(RUDE_CATEGORIES & set(names))
@@ -262,9 +264,13 @@ def score_sense(sense, pos="", word="", wn=None):
         if name in TOPIC_POINTS:
             _add(points, TOPIC_POINTS[name])
     gloss = gloss_of(sense)
+    wording = {}
     for pattern, table in WORDING:
         if pattern.search(gloss):
-            _add(points, table)
+            _add(wording, table)
+    if not rude_label:                       # "an intensifier" alone is not swearing ("well: (slang) very")
+        wording.pop("swear", None)
+    _add(points, wording)
     if rude_label and any(g.search(gloss) for g in GROUP):
         _add(points, GROUP_POINTS)
     wn_slang = False
@@ -274,7 +280,7 @@ def score_sense(sense, pos="", word="", wn=None):
         _add(points, wn_points)
     if pos in SWEAR_POS and rude_label:
         _add(points, {"swear": 3})
-    slangy = wn_slang or rude_label or any(lab in ("slang", "informal", "colloquial", "euphemistic", "childish")
+    slangy = wn_slang or rude_label or any(lab in ("slang", "informal", "colloquial", "childish")
                                            for lab, _w in _hedged(labels))
     if slangy and points.get("clinical"):    # a rude or slang label is never the neutral, proper word: its
         moved = points["clinical"] * 0.7     # points go to Sexual (Crude for bodily waste)
@@ -453,9 +459,8 @@ def second_pass(word, senses, first, rude, incoming, parents=()):
         _add(p, f)
     for p, sense in zip(out, senses):
         target = form_target(sense)
-        if target and target != word and target in first:      # an alternative form takes its word's points
-            best = max(first[target], key=sense_points, default={})
-            for k, v in best.items():
+        if target and target != word and first.get(target):    # a form takes its word's main (first) meaning's
+            for k, v in first[target][0].items():               # points: "did" is "do", not its slang meaning
                 p[k] = max(p.get(k, 0.0), v)
     return out
 
@@ -470,7 +475,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "2"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "4"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -541,11 +546,20 @@ def has_signal(c):
     return bool(_ANY_WORDING.search(c.get("g", "")))
 
 
-def results(word, senses, scored, censored):
-    """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS), the whole word smeared
-    while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]: smeared in the
-    definitions). `senses`: the kaikki.org-shaped senses that were scored."""
+def meaning_kinds(senses, scored):
+    """Each meaning's kind (sense_kind), except that a Clinical meaning of a word whose first real meaning is clean
+    counts as clean: the proper word for something is only a sensitive word when that is what the word is about
+    ("penis", not "take: to have sex with")."""
     kinds = [sense_kind(p) for p in scored]
+    main = next((k for k, s in zip(kinds, senses) if not is_form(s)), kinds[0] if kinds else "clean")
+    return [("clean" if k == "clinical" and main == "clean" else k) for k in kinds]
+
+
+def results(word, senses, scored, censored):
+    """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds), the
+    whole word smeared while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]:
+    smeared in the definitions). `senses`: the kaikki.org-shaped senses that were scored."""
+    kinds = meaning_kinds(senses, scored)
     bits = 0
     for k in kinds or ["clean"]:
         bits |= KIND_BITS[k]

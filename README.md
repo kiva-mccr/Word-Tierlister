@@ -112,11 +112,12 @@ The first start asks three short questions (any time later: Settings > How words
 
 - **Order:** "Most common first" (strictly by how common a word is) or "Mostly common, a little shuffled"
   (the default: its shape, spread and seed decide how much).
-- **Which words:** nouns, verbs, adjectives, adverbs, other, obscene words, each a tick box with how many
+- **Which words:** nouns, verbs, adjectives, adverbs, obscene words, other, each a tick box with how many
   words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
   Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
-  Sexual and Slurs do not. A word comes up if one of its meanings is of a ticked rude kind, or it has a clean
-  meaning and its kind of word is ticked; a word whose meanings are all rude of unticked kinds is left out.
+  Sexual and Slurs do not ("Obscene words" shows a minus while only some are). A word comes up if one of its
+  meanings is of a ticked rude kind, or it has a clean meaning and its kind of word is ticked; a word whose
+  meanings are all rude of unticked kinds is left out.
   Unticked ones are left out of the queue, never deleted; untick every kind of word but "Obscene words" to
   sort only those.
 - **Censor obscene words** ("blurred, except on hover"): a word is smeared sideways on the cards until the pointer
@@ -130,7 +131,9 @@ six kinds from Wiktionary's labels, its topics and categories, the wording of th
 installed, the links between words (Wiktionary's synonym lists) and word families ("bullshit" is built from
 "shit"); its kind is the one with
 the most points, if it has enough. A word's points come mostly from its first meaning: enough of them and the whole
-word is smeared, otherwise only its rude meanings are. A plural or other form goes with its word.
+word is smeared, otherwise only its rude meanings are. A plural or other form goes with its word's first meaning
+("did" is "do", not its slang meaning), and a Clinical meaning only counts when the word is about it ("penis",
+not "take").
 The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, in the save's `rude`
 table) and scores them once at the end of setting up (about a minute; again only when the rules change).
 A save from before this, or one made from a word list, reads them from the Wiktionary download in the background

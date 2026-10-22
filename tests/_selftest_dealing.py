@@ -145,6 +145,19 @@ assert d.obscene_v.get() and d.rude_box.winfo_ismapped() and d.rude_vs["sexual"]
 assert "Censoring smears Crude" in d.kind_tips["Insults"][0].text_fn(None)
 d.obscene_v.set(False); pump(2); assert not d.rude_box.winfo_ismapped()
 d.obscene_v.set(True); pump(2); assert d.rude_box.winfo_ismapped()
+time.sleep(0.01); pump(1)
+# ticked but not every kind under it: the minus, as tick boxes do; every kind: the tick
+obs = d.kind_ticks["Obscene words"]
+assert d.rude_vs["slur"].get() is False and obs.instate(["alternate"])
+for v in d.rude_vs.values():
+    v.set(True)
+time.sleep(0.01); pump(1); assert not obs.instate(["alternate"])
+d.rude_vs["slur"].set(False); time.sleep(0.01); pump(1); assert obs.instate(["alternate"])
+d.obscene_v.set(False); time.sleep(0.01); pump(1); assert not obs.instate(["alternate"])
+d.obscene_v.set(True); pump(1)
+# Obscene words sits before Other (the user's order), its kinds open under it
+assert obs.grid_info()["column"] == 0 and d.kind_ticks["Other"].grid_info()["column"] == 2
+assert int(d.rude_box.grid_info()["row"]) == int(obs.grid_info()["row"]) + 1
 # what each kind holds is a hover note (over its tick box and its count), wrapped
 tip = d.kind_tips["Other"][0]
 assert "pronouns" in tip.text_fn(None) and "Nouns: names" in d.kind_tips["Nouns"][1].text_fn(None)
