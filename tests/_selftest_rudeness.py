@@ -115,7 +115,6 @@ e = {"word": "shithead", "pos": "noun", "senses": [{"glosses": ["A contemptible 
      "etymology_templates": [{"name": "compound", "args": {"1": "en", "2": "shit", "3": "head"}}]}
 c = compact_entry(e)
 assert c == [{"g": "A contemptible person.", "pos": "noun", "e": ["shit", "head"]}], c
-assert compact_entry(e, examples=1)[0]["x"] == ["x"]
 from rudeness import compact, has_signal
 kept = compact({"glosses": ["A penis."], "tags": ["informal", "countable"]}, "noun")    # (informal: read, not a sign)
 assert kept["t"] == ["informal"] and not has_signal({"g": "A table.", "t": ["informal"]})

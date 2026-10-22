@@ -502,6 +502,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           result a few thousand rows a frame); until then its earlier flags and the hand list stand in
 #           (rude_done "list"). Removed: obscene.decide / tag_marks / page_senses / label_lines, fill_obscene
 #           (Wiktionary's category pages), OBSCENE_VERSION, the OB-1 answers (table obscene_review, unused).
+#           Word families (asked for): a word built from one whose first meaning is rude (its etymology's parts:
+#           compound, affix, blend ...; or listed among that word's derived terms) gains FAMILY_POINTS towards its
+#           kind (rudeness.family_points; kept with the meanings: compact_entry "e" / "d"). Measured: 78.4% with
+#           families, the same without the hand-picked list's roots, so ROOT_POINTS is gone and the list only
+#           stands in until a save has Wiktionary's meanings (and for a word added by hand). RUDENESS_VERSION 2.
+#           Tried and dropped (asked for: "run the examples through an NLP library"): each meaning's Wiktionary
+#           examples. Other rude words in an example made it worse (74.9%; 75.0% on slang / rude meanings only:
+#           rude words are illustrated beside clean ones), patterns of use ("you ___", "what the ___", "___!")
+#           and NLTK's VADER (a hostile example, the word itself taken out) changed nothing (78.0%, 77.9%).
+#           Found on the way: the program's compact meanings dropped "informal" / "colloquial", which the rules
+#           read (fixed). False alarms: 0.6% of a control sample of ordinary words; 7.7% of the words Claude
+#           called clean among its suspects; per kind, Swear is the loosest (41% precision), Slur the surest (89%).
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.

@@ -501,19 +501,11 @@ FAMILY_TEMPLATES = {"compound", "com", "affix", "af", "suffix", "suf", "prefix",
                     "surf", "univerbation", "univ", "clipping", "clip", "back-formation", "bf", "rhyming slang"}
 
 
-def compact_entry(entry, examples=0):
+def compact_entry(entry):
     """A kaikki.org entry's glossed senses, each compact(), the first also holding the entry's word family: "e" the
-    words its etymology names (FAMILY_TEMPLATES, no affixes), "d" its derived terms. `examples`: keep that many of
-    each sense's examples ("x", for tools/measure_rudeness.py)."""
+    words its etymology names (FAMILY_TEMPLATES, no affixes), "d" its derived terms."""
     pos = entry.get("pos") or ""
-    out = []
-    for s in entry.get("senses", []):
-        if s.get("glosses"):
-            c = compact(s, pos)
-            x = [str(e.get("text", ""))[:200] for e in s.get("examples", [])[:examples] if e.get("text")]
-            if x:
-                c["x"] = x
-            out.append(c)
+    out = [compact(s, pos) for s in entry.get("senses", []) if s.get("glosses")]
     if out:
         built = []
         for t in entry.get("etymology_templates", []):

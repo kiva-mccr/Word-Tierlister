@@ -9,6 +9,8 @@ Flow on a first run (driven by main() in tierlist.py):
                                               unplaced word a seeded queue key (Store.reshuffle)
     fetch_rude_senses()                       a save without Wiktionary's meanings (older, or from a word
                                               list): App reads them in the background, once
+A Wiktionary build hands each entry to a RudeCollector, which keeps the meanings the rudeness rules read (the save's
+table rude); find_rude scores them (rudeness.score_saved), or lets the hand-picked list stand in (rude_version).
 
 The Wiktionary path is resumable at every stage: the 3 GB download continues from its .part file,
 the parsed entries sit in a temporary `wk` table (flag meta.wk_done), and existing progress in the

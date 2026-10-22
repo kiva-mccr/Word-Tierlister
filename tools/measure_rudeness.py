@@ -7,7 +7,7 @@
 
 The compact entries (rudeness_entries.jsonl next to the sorting, about 300 MB) keep each meaning as the program does
 (rudeness.compact_entry: the last gloss, the labels, topics and categories the rules read, synonyms, the word it is
-a form of, the word family) plus EXAMPLES of its examples. Every word is kept
+a form of, the word family). Every word is kept
 because the links between words (the second pass) reach anywhere. The comparison uses the meanings Claude saw (the
 first few of each word) and a censoring policy, the same for both sides:
     A   every rude kind is censored (Clinical, Crude, Swear word, Insult, Sexual, Slur)
@@ -19,7 +19,6 @@ import argparse
 import collections
 import hashlib
 import json
-import re
 import os
 import sys
 import urllib.request
@@ -33,12 +32,11 @@ from wordsource import WIKT_URL  # noqa: E402
 
 POLICIES = {"A": set(obscene.RUDE_KINDS), "B": set(obscene.CENSORED)}
 OUTCOMES = ("shown", "some", "smeared", "left out")
-EXAMPLES = 2                # examples kept per meaning (rudeness.compact_entry), for trying them as a source
 
 
 def fetch(out, url=WIKT_URL, log=print):
     """Stream the download and keep every lower-case English entry, as the program keeps its rude words'
-    (rudeness.compact_entry), with a few examples per meaning."""
+    (rudeness.compact_entry)."""
     n = kept = 0
     with urllib.request.urlopen(url, timeout=60) as r, open(out, "w", encoding="utf-8") as f:
         for raw in r:
@@ -52,7 +50,7 @@ def fetch(out, url=WIKT_URL, log=print):
             w = e.get("word", "")
             if e.get("lang_code") != "en" or not w or w != w.lower():
                 continue
-            senses = rudeness.compact_entry(e, EXAMPLES)
+            senses = rudeness.compact_entry(e)
             if senses:
                 f.write(json.dumps({"w": w, "senses": senses}, separators=(",", ":")) + "\n")
                 kept += 1
@@ -61,8 +59,8 @@ def fetch(out, url=WIKT_URL, log=print):
 
 def load(path):
     """({word: [sense]} as kaikki.org senses (rudeness.expand), {word: [part of speech of each]}, {word: the words it
-    is built from} (rudeness.families), {word: [[examples] of each sense]})"""
-    words, poses, examples = collections.defaultdict(list), collections.defaultdict(list), collections.defaultdict(list)
+    is built from} (rudeness.families))"""
+    words, poses = collections.defaultdict(list), collections.defaultdict(list)
     built, derived = collections.defaultdict(list), collections.defaultdict(list)
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -70,10 +68,9 @@ def load(path):
             for c in e["senses"]:
                 words[e["w"]].append(rudeness.expand(c))
                 poses[e["w"]].append(c.get("pos", ""))
-                examples[e["w"]].append(c.get("x", []))
                 built[e["w"]] += c.get("e", [])
                 derived[e["w"]] += c.get("d", [])
-    return words, poses, rudeness.families(built, derived), examples
+    return words, poses, rudeness.families(built, derived)
 
 
 def only_forms(senses):
@@ -82,6 +79,7 @@ def only_forms(senses):
 
 
 def control_word(w, sorting):
+    """True for 1 in 40 of the words Claude never sorted: the control sample, taken to be clean."""
     return w not in sorting and int(hashlib.md5(w.encode()).hexdigest(), 16) % 40 == 0
 
 
@@ -146,76 +144,24 @@ def claude_outcome(kind, meanings, censored, ticked=obscene.TICKED):
 
 
 def score(words, poses, need, links, wn, family):
+    """{word: [{kind: points}]} for the words in `need`: both passes, or the first alone (no links)."""
     sub = {w: words[w] for w in need if w in words}
     if links:
         return rudeness.score_words(sub, {w: poses[w] for w in sub}, wn, family)
     return {w: rudeness.score_word(s, poses[w], w, wn) for w, s in sub.items()}
 
 
-# ---- trying each meaning's examples as a source (the user's idea; not part of the program unless it helps) --------
-_TOKEN = re.compile(r"[a-z]+(?:['-][a-z]+)*")
-_RUDE_TAGS = {"vulgar", "derogatory", "offensive", "slur", "pejorative"}
-
-
-def rude_neighbours(words, poses, wn):
-    """{word: its rude kinds} for the words with a rude label anywhere (first pass only): what an example's other
-    words may be."""
-    sub = {w: s for w, s in words.items() if any(_RUDE_TAGS & set(x.get("tags", [])) for x in s)}
-    return rudeness.rude_kinds_of({w: rudeness.score_word(s, poses[w], w, wn) for w, s in sub.items()})
-
-
-def example_points(word, senses, examples, rude, which, vader=None):
-    """[{kind: points}] a word's meanings gain from their examples. `which`: "n" other rude words in the example
-    (towards their kinds), "p" patterns of use ("you ___", "what a ___": an insult; "what the ___", "___ off", the
-    word alone with "!": a swear word), "v" a hostile example by VADER (the word itself taken out): towards Insult;
-    "m" only on meanings marked as slang or rude (REGISTER)."""
-    stem = re.escape(word.lower())
-    w_ = rf"{stem}\w*"
-    insult = re.compile(rf"\b(you|what an?|such an?|you're an?|you are an?|stupid|little|fucking|bloody) ({w_})\b")
-    swear = re.compile(rf"(\bwhat the {w_}\b|\b{w_} (off|it|you|me|this|that)\b|^\W*{w_}\W*!|\b{w_}!)")
-    added = [{} for _ in senses]
-    for p, sense, xs in zip(added, senses, examples):
-        labels = {lab for lab, _w in rudeness._hedged(list(sense.get("tags", [])))}
-        if "m" in which and not labels & rudeness.REGISTER:
-            continue
-        for x in xs:
-            low = x.lower()
-            if "n" in which:
-                kinds = set()
-                for t in set(_TOKEN.findall(low)):
-                    if not t.startswith(word.lower()[:4]):
-                        kinds |= rude.get(t, set())
-                for k in kinds:
-                    p[k] = max(p.get(k, 0.0), 1.5)
-            if "p" in which:
-                if insult.search(low):
-                    p["insult"] = max(p.get("insult", 0.0), 2.0)
-                if swear.search(low):
-                    p["swear"] = max(p.get("swear", 0.0), 2.0)
-            if "v" in which and vader is not None:
-                if vader.polarity_scores(re.sub(w_, "", low))["compound"] <= -0.5:
-                    p["insult"] = max(p.get("insult", 0.0), 1.5)
-    return added
-
-
-def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True, families=True, examples=""):
+def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True, families=True):
+    """Score the sorting's words and the control words, and report how often the rules lead where Claude's answers
+    do (returns that share)."""
     censored = POLICIES[policy]
-    words, poses, family, ex = load(entries)
+    words, poses, family = load(entries)
     family = family if families else {}
     claude = read_sorting(sorting)
     order = {w: i for i, w in enumerate(claude)}
     base = [w for w, v in claude.items() if not v[3].startswith("form of ") and w in words and not only_forms(words[w])]
     control = [w for w in words if control_word(w, claude) and not only_forms(words[w])]
     scored = score(words, poses, scope(set(base) | set(control), words, family), links, wn, family)
-    if examples:
-        vader = None
-        if "v" in examples:
-            from nltk.sentiment.vader import SentimentIntensityAnalyzer
-            vader = SentimentIntensityAnalyzer()
-        rude = rude_neighbours(words, poses, wn) if "n" in examples else {}
-        for w in set(base) | set(control):
-            for p, a in zip(scored[w], example_points(w, words[w], ex[w], rude, examples, vader)):
-                rudeness._add(p, a)
     table, tp, fp, fn = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
     agree = common = common_agree = 0
     diffs = []
@@ -237,7 +183,6 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
         if ref != got:
             diffs.append((order[w], w, ref, got))
     log(f"Policy {policy}{', WordNet' if wn else ''}{', links' if links else ''}{', families' if family else ''}"
-        f"{', examples ' + examples if examples else ''}"
         f": {len(base):,} of the sorting's "
         "words have Wiktionary entries.")
     log(f"Same outcome: {agree / len(base):.1%} (the commonest 5,000 of the sorting: {common_agree / max(1, common):.1%})")
@@ -257,6 +202,7 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
 
 
 def main(argv=None):
+    """The command line: fetch, or measure."""
     ap = argparse.ArgumentParser(description="Measure the rudeness rules against Claude's sorting.")
     ap.add_argument("command", choices=("fetch", "measure"))
     ap.add_argument("--sorting", default=os.path.join(ROOT, "word_categories.tsv"))
@@ -265,15 +211,13 @@ def main(argv=None):
     ap.add_argument("--no-wordnet", action="store_true", help="leave WordNet out (it is used when installed)")
     ap.add_argument("--no-links", action="store_true", help="leave out the links between words (the second pass)")
     ap.add_argument("--no-families", action="store_true", help="leave out word families (etymology, derived terms)")
-    ap.add_argument("--examples", default="", help="try the meanings' examples: n (rude words in them), p (patterns of "
-                                                   "use), v (VADER, needs nltk's vader_lexicon), m (marked meanings only)")
     args = ap.parse_args(argv)
     entries = os.path.join(os.path.dirname(os.path.abspath(args.sorting)), "rudeness_entries.jsonl")
     if args.command == "fetch":
         fetch(entries)
     else:
         measure(args.sorting, entries, args.policy, args.show, wn=None if args.no_wordnet else rudeness.wordnet(),
-                links=not args.no_links, families=not args.no_families, examples=args.examples)
+                links=not args.no_links, families=not args.no_families)
     return 0
 
 
