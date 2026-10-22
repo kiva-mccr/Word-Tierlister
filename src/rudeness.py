@@ -476,6 +476,7 @@ LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-p
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
 _SIGNAL_TAGS = set(TAG_POINTS) | REGISTER | set(HEDGES)
 _SIGNAL_NAMES = set(TOPIC_POINTS) | RUDE_CATEGORIES
+_KEPT_TAGS = _SIGNAL_TAGS | {"informal", "colloquial"}     # (read by score_sense's slangy: kept, but no sign alone)
 _ANY_WORDING = re.compile("|".join(f"(?:{p.pattern})" for p, _t in WORDING), re.I)    # (one search: a million words)
 
 
@@ -484,7 +485,7 @@ def compact(sense, pos=""):
     million, with their forms)."""
     out = {"g": gloss_of(sense)[:160]}
     tags = [t for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
-            if _label(t) in _SIGNAL_TAGS or t in ("form-of", "alt-of")]
+            if _label(t) in _KEPT_TAGS or t in ("form-of", "alt-of")]
     cats = [(c.get("name") if isinstance(c, dict) else str(c)) for c in sense.get("categories", [])]
     cats = [c for c in cats if c and c.lower() in _SIGNAL_NAMES]
     target = form_target(sense)

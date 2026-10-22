@@ -116,6 +116,9 @@ e = {"word": "shithead", "pos": "noun", "senses": [{"glosses": ["A contemptible 
 c = compact_entry(e)
 assert c == [{"g": "A contemptible person.", "pos": "noun", "e": ["shit", "head"]}], c
 assert compact_entry(e, examples=1)[0]["x"] == ["x"]
+from rudeness import compact, has_signal
+kept = compact({"glosses": ["A penis."], "tags": ["informal", "countable"]}, "noun")    # (informal: read, not a sign)
+assert kept["t"] == ["informal"] and not has_signal({"g": "A table.", "t": ["informal"]})
 saved = {"shithead": json.dumps(c), "shit": json.dumps(compact_entry(
     {"word": "shit", "pos": "noun", "senses": [{"glosses": ["Faeces."], "tags": ["vulgar"]}]}))}
 got = score_saved(saved, {"crude", "swear", "sexual", "slur"})
