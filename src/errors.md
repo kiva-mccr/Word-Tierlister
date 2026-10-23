@@ -3,7 +3,7 @@
 Friendly error and message dialogs and the program-wide safety net (ST-2): every run goes through `run_guarded`, and Tk / thread errors are logged and shown once.
 
 - **Uses:** `fonts`, `problems`, `theme`, `ui_style`, `widgets`
-- **Used by:** `app`, `browser`, `filepicker`, `sources`, `startup`, `tierlist`
+- **Used by:** `app`, `browser`, `filepicker`, `sources`, `startup`, `stress_ui`, `tierlist`
 - **Tests:** `_selftest_errors`
 
 The module docstring has the details; this page is the map.

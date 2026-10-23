@@ -3,7 +3,7 @@
 File > Source & Updates (T-6..T-8): from source, make a standalone program next to `tierlist.py`; in the program, unpack its source into a folder (a sync); either way an "Update to the newest version first" tick.
 
 - **Uses:** `constants`, `errors`, `filepicker`, `problems`, `saves`, `standalone`, `startup`, `widgets`
-- **Used by:** `app`
+- **Used by:** `app`, `stress_ui`
 - **Tests:** `_selftest_sources`
 
 The module docstring has the details; this page is the map.

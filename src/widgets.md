@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
 
@@ -66,6 +66,7 @@ The module docstring has the details; this page is the map.
 - The folded definitions pane is placed, not packed, so its text can measure its lines before opening (F-2).
 - No `ttk.Combobox` / `tk.Menu` pop-ups (they grab input on Linux): use `ChoiceButton` / `DropMenu`. Dialogs build on `StyledDialog` (`StyledDialog.text` for wrapped lines).
 - Our dialogs mark their window (`styled_dialog`), so `dialog_open(root)` can tell when a question is on screen (nothing else may ask then).
+- `StyledDialog.refit` keeps the dialog on its monitor (`sizing.keep_on_screen`).
 
 ## Changing it
 

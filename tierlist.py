@@ -267,6 +267,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] F-8  A definition arriving while the pane slides open (an online lookup, WordNet) was fitted against the
 #           half-open pane and left it taller than fits, over the word card (found as a flaky _selftest_sizing,
 #           the same look as the report fixed in F-2's notes). App._fit_defs settles the slide before fitting.
+# [x] F-9  A stringent review (asked for: file by file, the UI first; optimised, robust on every screen, bug free).
+#           Measured first: the main window on 11 screens x zoom x grown x tab x definitions pane, every dialog and
+#           Browse on 7 screens, speed on a 1M-word save (300k and 3k placed), the layout-jitter trace, and a
+#           random-action run (keys, tabs, resizes, Browse, dialogs, censoring). Found and fixed:
+#           - a big zoom on a small screen clipped the word card (the fit stopped at half the zoom, not half the
+#             normal size); Keyboard shortcuts ran off a small screen (its cards now wrap to a second row);
+#           - dialogs opened on the pointer's monitor, not their window's, and the main window fitted itself to
+#             the pointer's monitor (sizing.monitor_box); a dialog that grew could run off the screen (refit);
+#           - speed with a million words: opening 6.2 -> 0.9 s (WordNet is read at the first lookup, not at start),
+#             a placement 129 -> 31 ms, a refresh 75 -> 12 ms (tier counts kept up to date, the skipped count
+#             from its own index), a Refine duel 93 -> ~40 ms (seeds without sorting a run, settled shares by the
+#             smaller side), unplace 75 -> 1 ms, Browse's sorts and filters up to 0.9 s -> under 0.17 s (an index
+#             per order, named), How words are dealt's counts 0.5 -> 0.08 s. Nine new indexes: built once on the
+#             first open of an existing save (3.7 s for a million words; the file grows ~45%);
+#           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
+#           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
+#           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,

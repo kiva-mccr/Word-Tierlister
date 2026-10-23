@@ -1,9 +1,9 @@
 """Window sizing that adapts to the screen and to the contents (used by every window).
 
 Three questions this module answers:
-    * How big is the usable screen?   usable_area(root): the monitor the pointer is on (Linux asks
-      xrandr, because Tk reports all monitors as one wide screen; Windows asks the system, because Tk
-      reports only the main monitor), minus room for panels and title bars. monitor_at(root, x, y) and
+    * How big is the usable screen?   usable_area(root): the monitor root's window is on (the pointer's for a
+      window not shown yet; Linux asks xrandr, because Tk reports all monitors as one wide screen; Windows asks
+      the system, because Tk reports only the main monitor), minus room for panels and title bars. monitor_at(root, x, y) and
       clamp_to_monitor() keep pop-ups (drop-downs, hover notes) on the monitor they open from.
     * Windows display scaling: set_dpi_awareness() (called before the first window) tells Windows the
       program sizes itself, so at 125% / 150% it is drawn sharp instead of stretched as a picture.
@@ -124,8 +124,32 @@ def monitor_at(root, px, py):
     return 0, 0, sw, sh
 
 
+def _shown_window(w):
+    """The window `w` is in, or the one that window belongs to (a dialog not shown yet: its parent), if it is on
+    screen; else None."""
+    try:
+        top = w.winfo_toplevel()
+        while top is not None:
+            if top.winfo_viewable():
+                return top
+            top = top.master.winfo_toplevel() if top.master is not None else None
+    except Exception:
+        pass
+    return None
+
+
 def monitor_box(root):
-    """(x, y, w, h) of the monitor to open on: the one under the pointer, else the primary, else the screen."""
+    """(x, y, w, h) of the monitor to use: the one `root`'s window is on (or its parent's, for a dialog about to
+    open); for a window not on screen yet, the one under the pointer, else the primary, else the screen. (It
+    used to be always the pointer's: with the window on one monitor and the pointer on the other, a dialog was
+    pushed onto the wrong one and the main window fitted itself to the wrong size.)"""
+    win = _shown_window(root)
+    if win is not None:
+        try:
+            return monitor_at(root, win.winfo_rootx() + win.winfo_width() // 2,
+                              win.winfo_rooty() + win.winfo_height() // 2)
+        except Exception:
+            pass
     try:
         px, py = root.winfo_pointerxy()
     except Exception:
@@ -194,6 +218,21 @@ def center_geometry(w, h, area):
     x = ax + max(0, (aw - w) // 2)
     y = ay + max(0, (ah - h) // 2)
     return f"{w}x{h}+{x}+{y}"
+
+
+def keep_on_screen(win):
+    """After a window grew (a message shown, a row grew): move it, and if need be shrink it, so it stays on its
+    monitor's usable area. A window that fits where it is is left alone (at its natural size)."""
+    try:
+        win.update_idletasks()
+        ax, ay, aw, ah = usable_area(win)
+        w, h = min(win.winfo_reqwidth(), aw), min(win.winfo_reqheight(), ah)
+        x0, y0 = win.winfo_x(), win.winfo_y()
+        x, y = min(max(x0, ax), ax + aw - w), min(max(y0, ay), ay + ah - h)
+        if (x, y) != (x0, y0) or (w, h) != (win.winfo_reqwidth(), win.winfo_reqheight()):
+            win.geometry(f"{w}x{h}+{x}+{y}")
+    except Exception:
+        pass
 
 
 def place_dialog(dlg, parent):

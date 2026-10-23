@@ -3,7 +3,7 @@
 The save file: every read and write of the SQLite database goes through `Store` (words, tiers, ratings, duels, conflicts, anchors, cached definitions, settings, the undo history, the rude meanings).
 
 - **Uses:** `constants`, `obscene`, `rudeness`
-- **Used by:** `browser`, `tierlist`
+- **Used by:** `browser`, `speed_check`, `tierlist`
 - **Tests:** none of its own
 
 The module docstring has the details; this page is the map.
@@ -19,6 +19,9 @@ The module docstring has the details; this page is the map.
 - Anything run per duel or per refresh must stay fast on a million-word save: read the indexes, check `EXPLAIN QUERY PLAN` for "TEMP B-TREE", test a dense and a sparse save.
 - Long work (a reshuffle) runs on a worker thread while nothing else writes.
 - Settings are text in `meta`; read numbers with `meta_number` (it handles damaged values), not `int(get_meta(...))`.
+- Change a word's tier only through Store methods: they keep the running tallies (`tier_counts`, the shelf) with `_tier_moved`, or recount with `_forget_tallies` (a bulk write, a rollback). A write around the Store is not noticed.
+- Browse's orders name their index (`INDEXED BY`, `_PLACED_INDEX` / `_UNPLACED_INDEX`): without fresh statistics the planner sorted every row instead (up to 0.9 s in a million). A new sort needs its index there.
+- Per-duel and per-refresh work is index-only: `stats()` (the skipped count by `idx_words_skipped`), `_least_dueled` (no `ORDER BY ... RANDOM()` over a whole run), `settled_shares` (counts the smaller side). Test on a 1M save, dense and sparse.
 
 ## Changing it
 

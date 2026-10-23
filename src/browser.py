@@ -576,7 +576,8 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
+            show_message("Anchor word", f"'{self.app.shown(w)}' is an anchor", "Change anchors in Settings first.",
+                         parent=self.win)
             return
         self.store.unplace(w)
         self.app.after_external_change()
@@ -594,7 +595,7 @@ class Browser:
             return
         row = self.store.get_word(w)
         if row is None or row["tier"] is None:
-            show_message("Not placed", f"'{w}' is not placed yet", "Place the word in a tier first, then refine it.",
-                         parent=self.win)
+            show_message("Not placed", f"'{self.app.shown(w)}' is not placed yet",
+                         "Place the word in a tier first, then refine it.", parent=self.win)
             return
         self.app.start_focus(w)

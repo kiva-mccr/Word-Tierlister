@@ -20,3 +20,4 @@ The module docstring has the details; this page is the map.
 - Animations are short (<= 250 ms), ease out, never loop, and nothing runs while idle.
 - A key press speeds running animations out of the way (`hurry_all`), never jumps them.
 - Reduce motion makes `run` jump to the end; frame callbacks are tiny and never query the database.
+- A frame or end callback that finds its widget destroyed is dropped (`_gone`); any other error is raised as before.

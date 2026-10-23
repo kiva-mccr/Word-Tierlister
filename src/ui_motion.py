@@ -10,8 +10,11 @@ Rules every animation here follows (they are the promises in the roadmap guardra
     * per-frame callbacks must be tiny and must never query the database.
 
 tkinter has no transparency, so a "fade" is a colour blend toward the background (lerp_color).
+A frame (or its end) that finds its widget gone (its window closed meanwhile) is dropped quietly (_gone): such
+an error used to reach the safety net and show an error dialog.
 """
 import time
+import tkinter as tk
 
 HURRY_MS = 90          # how fast a running animation gets out of the way when a new action starts
 
@@ -31,6 +34,22 @@ def lerp_color(c1, c2, t):
         x, y = int(a[i:i + 2], 16), int(b[i:i + 2], 16)
         out.append(round(x + (y - x) * t))
     return "#%02X%02X%02X" % tuple(out)
+
+
+def _gone(exc):
+    """True for a Tk error that only says the widget was destroyed (its window closed while it animated)."""
+    text = str(exc)
+    return isinstance(exc, tk.TclError) and ("invalid command name" in text or "bad window path" in text
+                                              or "application has been destroyed" in text)
+
+
+def _call(fn, *args):
+    """fn(*args), quietly skipping a widget that is gone (see _gone)."""
+    try:
+        fn(*args)
+    except tk.TclError as exc:
+        if not _gone(exc):
+            raise
 
 
 class Animator:
@@ -80,7 +99,7 @@ class Animator:
             self.finish(key)
             return
         try:
-            anim["frame"](anim["ease"](p))
+            _call(anim["frame"], anim["ease"](p))
         except Exception:
             self._running.pop(key, None)   # a broken frame must never leave a timer looping
             raise
@@ -93,9 +112,9 @@ class Animator:
             return
         if anim["job"] is not None:
             self.root.after_cancel(anim["job"])
-        anim["frame"](anim["ease"](1.0))
+        _call(anim["frame"], anim["ease"](1.0))
         if anim["done"]:
-            anim["done"]()
+            _call(anim["done"])
 
     def is_running(self, key):
         """True while the animation `key` runs (tests)."""

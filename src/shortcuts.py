@@ -1,5 +1,5 @@
 """Settings > Keyboard shortcuts... (UI-48): every action that has a key, in cards side by side by view (the
-layout the user chose, mock-up C). Click a key, press the new one; "+" adds another; a key already used in the
+layout the user chose, mock-up C; on a screen too narrow for three in a row, the last goes below). Click a key, press the new one; "+" adds another; a key already used in the
 same view offers a swap. Changes apply at once (App.apply_keys) and are saved in the save (meta keymap).
 
     ShortcutsDialog(app)                  # app: the App (its keymap, store, animator and apply_keys)
@@ -7,6 +7,7 @@ same view offers a swap. Changes apply at once (App.apply_keys) and are saved in
 import tkinter as tk
 
 from fonts import font
+from sizing import usable_area
 from keymap import (GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, spec_of,
                     place_display, place_keys)
 from theme import PALETTE
@@ -43,9 +44,10 @@ class ShortcutsDialog:
         bg, f = PALETTE["bg"], font("body")
         line = f.metrics("linespace")
         self.rows = {}                          # action -> (its keycap strip, its "↺ default" cell)
-        for ci, groups in enumerate(COLUMNS):
+        self.cols, self._gap = [], round(line * 1.4)
+        for groups in COLUMNS:
             col = tk.Frame(self.cards, bg=bg)
-            col.grid(row=0, column=ci, sticky="n", padx=(0 if ci == 0 else round(line * 1.4), 0))
+            self.cols.append(col)
             # room for "↺ default" kept on every row, so nothing shifts when one appears
             col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
@@ -64,11 +66,29 @@ class ShortcutsDialog:
                         r += 1
         self._refresh()
 
+    def _arrange(self):
+        """The cards side by side, as many to a row as the screen is wide enough for (the rest below: a small
+        screen at a big scaling could not show the three in a row); again whenever a row of keys grows."""
+        self.cards.update_idletasks()
+        room = usable_area(self.app.root)[2] - 2 * 26 - 40          # (the dialog's own margins)
+        widths = [c.winfo_reqwidth() for c in self.cols]
+        per_row = next((n for n in range(len(widths), 0, -1)
+                        if all(sum(widths[i:i + n]) + self._gap * (len(widths[i:i + n]) - 1) <= room
+                               for i in range(0, len(widths), n))), 1)
+        if getattr(self, "_per_row", None) == per_row:
+            return
+        self._per_row = per_row
+        for i, col in enumerate(self.cols):
+            r, c = divmod(i, per_row)
+            col.grid(row=r, column=c, sticky="nw", padx=(0 if c == 0 else self._gap, 0),
+                     pady=(0 if r == 0 else self._gap, 0))
+
     def _refresh(self, actions=None):
         """Refill these actions' keycaps (all by default). The new ones go in before the old ones go, so a row is
         never empty and the window keeps its size; it only grows if a row needs more room."""
         for a in actions or list(self.rows):
             self._fill(a)
+        self._arrange()
         win = self.dlg.win
         win.update_idletasks()
         if win.winfo_reqwidth() > win.winfo_width() or win.winfo_reqheight() > win.winfo_height():

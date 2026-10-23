@@ -3,7 +3,7 @@
 Definitions: offline WordNet, the online dictionaryapi.dev fallback, splitting stored text into senses, and finding the word a meaning only names ("Alternative spelling of jail": `form_target`, F-3).
 
 - **Uses:** `constants`
-- **Used by:** `tierlist`, `widgets`
+- **Used by:** `speed_check`, `tierlist`, `widgets`
 - **Tests:** `_selftest`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
@@ -20,6 +20,7 @@ The module docstring has the details; this page is the map.
 
 - Lookups run on one worker thread; the UI polls `drain()`. The worker never touches tkinter.
 - Never goes online with `OFFLINE_ENV` set (the tests set it).
+- WordNet is read in at the first word not cached, not at start (reading it competed with building the main window: 5.5 s instead of 1.3 s on a big save).
 
 ## Changing it
 

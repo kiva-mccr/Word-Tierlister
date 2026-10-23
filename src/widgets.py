@@ -12,7 +12,7 @@ from tkinter import ttk
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
 from fonts import font
-from sizing import clamp_to_monitor, monitor_at, place_dialog
+from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS
 from ui_motion import HURRY_MS, lerp_color
@@ -1416,7 +1416,7 @@ def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=PALETTE["t
     (`hover`), or when the caller says so: canvas.unsmear.hover(on, animator)."""
     c = tk.Canvas(parent, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
     item = c.create_text(0, 0, text=text, font=font_, width=width, anchor="nw", fill=fg, tags="gloss")
-    x0, y0, x1, y1 = c.bbox(item)
+    x0, y0, x1, y1 = c.bbox(item) or (0, 0, 0, 0)          # (no box for an empty text)
     c.configure(width=x1 + 1, height=y1 + 1)
     smear = c.unsmear = Unsmear(c, "smear")
     smear.place(item, text, fg, bg)
@@ -2528,9 +2528,11 @@ class StyledDialog:
             self.win.wait_window()
 
     def refit(self):
-        """Re-size to the contents after something was shown or hidden."""
+        """Re-size to the contents after something was shown or hidden, kept on its monitor (a dialog that grew
+        could run off the bottom of a small screen)."""
         self.win.update_idletasks()
         self.win.geometry("")
+        keep_on_screen(self.win)
 
     def close(self):
         try:

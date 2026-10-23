@@ -3,7 +3,7 @@
 The main window (`App`): the header, the three placing views, the duel tabs, the chart and shelf, the definitions pane, the bottom bar, keys, zoom and window fitting, undo, and the background jobs it polls.
 
 - **Uses:** `browser`, `constants`, `dealing`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `theme`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
-- **Used by:** `tierlist`
+- **Used by:** `speed_check`, `stress_ui`, `tierlist`
 - **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
@@ -24,6 +24,10 @@ The module docstring has the details; this page is the map.
 - Messages: `flash(text, kind)`; each is its own toast, newest on top. Text-only places name a censored word with `shown()` (masked); everything drawn smears it.
 - The window opens complete (`open_window`, F-1).
 - The first start offers the other form once (`_offer_other_form`, T-9), never while a dialog is open (`widgets.dialog_open`), a job runs or a download is going; `App(offer_form=...)` is off unless `main()` turns it on, so tests never see it.
+- Every word in a message goes through `shown()` (duel results too: they once printed censored words whole).
+- `on_close` waits while `busy` (a worker writing the save) and cancels pending timers before destroying the window.
+- The fit may shrink a big zoom to half the normal size on a small screen (`FIT_LOWEST` applies to the normal size, not the zoom).
+- on_close cancels pending `after` jobs with Tcl's `after cancel`, never `after_cancel` (that deletes a command another widget still owns; root.destroy then raises "can't delete Tcl command").
 
 ## Changing it
 

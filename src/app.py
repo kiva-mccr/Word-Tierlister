@@ -485,7 +485,7 @@ class App:
 
     # ---- window size: fits the screen and the contents ------------------------------------------
     FIT_STEP, FIT_LOWEST = 0.1, 0.5         # sizes tried until the contents fit: the zoom, then 0.1 less each time,
-                                             # down to half the zoom
+                                             # down to half the normal size (half the zoom when that is smaller)
     BASE_SIZE = (1040, 760)                  # preferred window size at the classic 96 dpi
     MIN_SIZE = (780, 580)                    # never smaller than this (also at 96 dpi)
 
@@ -596,8 +596,9 @@ class App:
         # closes; it starts from the step that fitted this layout last time, so it does not flicker.
         key = (self.mode, self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
-        sizes = [round(self.zoom - k * self.FIT_STEP, 2)
-                 for k in range(int(self.zoom * (1 - self.FIT_LOWEST) / self.FIT_STEP + 1e-6) + 1)]
+        lowest = min(self.zoom, 1.0) * self.FIT_LOWEST      # (half the normal size: a big zoom on a small
+        sizes = [round(self.zoom - k * self.FIT_STEP, 2)      # screen may shrink as far as no zoom would)
+                 for k in range(int((self.zoom - lowest) / self.FIT_STEP + 1e-6) + 1)]
         rescaled = False
         self.grow = 1.0                          # measured at the normal size; _apply_grow re-grows after
         for size in [z for z in sizes if z <= start + 1e-9]:
@@ -1237,11 +1238,12 @@ class App:
             win, lose = (a, b) if ans != "right" else (b, a)
             tier = self.store.get_word(win)["tier"]
             tint = TIER_COLORS[tier] if tier is not None else PALETTE["info"][0]
-            self.flash(f"{win}  {'=' if ans == 'tie' else '>'}  {lose}", bg=tint, fg=TIER_TEXT, ms=1400)
+            self.flash(f"{self.shown(win)}  {'=' if ans == 'tie' else '>'}  {self.shown(lose)}", bg=tint, fg=TIER_TEXT,
+                       ms=1400)
         if self.focus:
             self.focus_left -= 1
             if self.focus_left <= 0:
-                self.flash(f"Finished refining '{self.focus}'")
+                self.flash(f"Finished refining '{self.shown(self.focus)}'")
                 self.focus = None
         self.pair = None                       # answered: nothing more to click until the next pair is up
         if ans in ("left", "right"):
@@ -1825,7 +1827,18 @@ class App:
         self.flash(f"Exported {len(rows):,} placed words", ms=3000)
 
     def on_close(self):
-        """Close the save cleanly and quit."""
+        """Close the save cleanly and quit. While a long job writes the save (a reshuffle: App.busy) it waits for
+        it to finish (closing then would shut the save under the worker thread). Timers still waiting are dropped
+        first, so none fires into a window that is gone (each was logged as an error at every quit)."""
+        if self.busy:
+            self.root.after(200, self.on_close)
+            return
         self.anim.cancel_all()
+        try:
+            for job in self.root.tk.splitlist(self.root.tk.call("after", "info")):
+                self.root.tk.call("after", "cancel", job)   # (not after_cancel: it frees a command its widget
+                                                            # still lists, and destroy then fails freeing it again)
+        except tk.TclError:
+            pass
         self.store.close()
         self.root.destroy()

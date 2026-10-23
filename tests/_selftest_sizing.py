@@ -141,4 +141,24 @@ assert Z.set_dpi_awareness(w) and [c[0] for c in calls] == ["SetProcessDpiAwaren
 w, calls = fake_windll(0, 5, 1)
 assert Z.set_dpi_awareness(w) and calls[-1][0] == "SetProcessDPIAware"
 assert Z.set_dpi_awareness() is (os.name == "nt") or os.name == "nt"           # elsewhere: nothing to do
+# two monitors: a window uses the monitor it is on, and a dialog opens on its parent's, wherever the pointer is
+# (it used to be the pointer's monitor: a dialog was pushed onto the other one, the main window fitted to its size)
+root = tk.Tk()
+from fonts import init_fonts
+init_fonts(root)
+saved = dict(Z._xrandr_cache)
+Z._xrandr_cache["monitors"] = [(0, 0, 1000, 700, True), (1000, 0, 900, 600, False)]
+second = tk.Toplevel(root); second.geometry("300x200+1200+100"); second.update()
+assert Z.monitor_box(second) == (1000, 0, 900, 600), Z.monitor_box(second)
+from widgets import StyledDialog
+dlg = StyledDialog(second, "Two monitors", "A question", "On the second monitor, over its window.")
+dlg.button("OK", dlg.close, default=True)
+Z.place_dialog(dlg.win, second); dlg.win.deiconify(); dlg.win.update()
+assert dlg.win.winfo_x() >= 1000, dlg.win.winfo_x()
+# a dialog that grows stays on its monitor (refit: keep_on_screen)
+dlg.win.geometry("+1500+500"); dlg.win.update()
+tk.Label(dlg.body, text="more\n" * 12).pack(); dlg.refit(); dlg.win.update()
+assert dlg.win.winfo_y() + dlg.win.winfo_height() <= 600 + 2, (dlg.win.winfo_y(), dlg.win.winfo_height())
+dlg.close(); second.destroy(); root.destroy()
+Z._xrandr_cache.clear(); Z._xrandr_cache.update(saved)
 print("sizing OK")

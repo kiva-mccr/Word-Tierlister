@@ -114,9 +114,9 @@ class Definitions:
             self.pending.discard(word)
             out.append((word, text, found))
 
-    def _worker(self):
-        """Thread body: load WordNet if installed, then answer requests forever (WordNet first, then online)."""
-        wn = None
+    @staticmethod
+    def _load_wordnet():
+        """nltk's WordNet, read in (downloading its data once if needed and allowed), or None."""
         try:
             from nltk.corpus import wordnet as _wn
 
@@ -128,11 +128,19 @@ class Definitions:
                 import nltk
                 nltk.download("wordnet", quiet=True)
                 _wn.synsets("dog")
-            wn = _wn
+            return _wn
         except Exception:
-            wn = None
+            return None
+
+    def _worker(self):
+        """Thread body: answer requests forever (WordNet first, then online). WordNet is read in at the first word
+        not cached in the save, not at start: reading it takes seconds of Python, which slowed opening the main
+        window by as much (a Wiktionary save caches its definitions, so it is often never needed)."""
+        wn, loaded = None, False
         while True:
             word = self.req.get()
+            if not loaded:
+                wn, loaded = self._load_wordnet(), True
             text = None
             try:
                 if wn is not None:
