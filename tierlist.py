@@ -64,8 +64,8 @@ How it works
 * Every key can be changed under Settings > Keyboard shortcuts (the keys above are the defaults).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
-live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, bundle,
-build, measure_rudeness), the Claude notes in .claude/; the README has the same map with more detail)
+live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, build,
+measure_rudeness), the Claude notes in .claude/; the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
@@ -76,6 +76,8 @@ build, measure_rudeness), the Claude notes in .claude/; the README has the same 
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
+    bundle.py       the data a built program carries (T-2: English word lists only; no tkinter).
+    standalone.py   making the program: the source, its manifest, the PyInstaller build (T-3, T-6; no tkinter).
     store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
                     conflicts, merging. Every change is committed immediately.
     wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
@@ -94,10 +96,11 @@ build, measure_rudeness), the Claude notes in .claude/; the README has the same 
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
+    sources.py      File > Source & Updates...: make a standalone program from source (T-6).
     app.py          App: the main window and all modes.
 
-Layers: constants, obscene, rudeness, problems, deps, keymap -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
-sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing ->
+Layers: constants, obscene, rudeness, problems, deps, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
+sizing, ui_style, ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing, sources ->
 app -> tierlist. Nothing lower imports anything higher, and
 only the UI layer imports tkinter, so the core runs and is tested without it.
 """
@@ -544,7 +547,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           SLANG_BODY (one step along the link, as TrustRank). Words falsely flagged 48 -> 28, smeared meanings
 #           missed 36 -> 27 of 138 (false 16 -> 17); the cost: mild insults missed (words missed 30 -> 47, insults
 #           are never smeared). Tried and dropped: label repeated on every meaning as a leak, harmless-topic
-#           veto, two sources for unlabelled meanings, per-source caps, a higher bar for late meanings. How words are dealt: "Obscene words" sits before "Other",
+#           veto, two sources for unlabelled meanings, per-source caps, a higher bar for late meanings.
+#           Checked on 4 fresh held-out lists (800 words, judged the same way): false flags 23 -> 16 held up; the
+#           smeared-meaning gain did not (12+17 -> 14+16: it had fitted the tuning lists). A Clinical rule (only
+#           when the definition starts with the body / sex / waste) held up (false flags 16 -> 11) but was left out
+#           (the user chose the roadmap). Then 17 rule sets voting (asked for): majority, k of 17 and every 3- / 5-
+#           voter committee, chosen on the tuning lists: at best 3% fewer errors held out, smeared meanings
+#           unchanged: the voters share Wiktionary's data, so they share its mistakes. Not built. How words are dealt: "Obscene words" sits before "Other",
 #           and shows a minus while only some kinds under it are ticked (ui_style: the tick box's "alternate").
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
@@ -1207,7 +1216,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          its own process; a real build is T-3).
 # [x] T-2  Bundle data: tell the builder to include wordfreq's data files (tens of MB); WordNet
 #          stays an optional download as it is now.
-#          Built: tools/bundle.py: datas() [(file, folder in the program)] for PyInstaller's --add-data, and
+#          Built: tools/bundle.py (now src/bundle.py, for T-6): datas() [(file, folder in the program)] for PyInstaller's --add-data, and
 #          EXCLUDE (wordfreq's Chinese / Japanese / Korean tokenizers, test suites). wordfreq ships 60 MB in
 #          40 languages; only the English lists go in (large_en, small_en: 1.6 MB), plus langcodes' language
 #          registry (wordfreq looks "en" up in it) and nltk's VERSION file (read on import): 2.3 MB in all.
@@ -1230,7 +1239,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          is installed).
 # [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
 #          dependencies once and start the program. Roughly ten lines each, nothing to sign.
-# [ ] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running
+# [x] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running
 #           from source): asks first, installs PyInstaller if missing (the ST-4 way), builds a one-file
 #           program for this OS behind the progress window (T-3 is the engine), bundles the complete
 #           source inside it (see T-7), then starts the new program and closes this window. Both use the
@@ -1240,6 +1249,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           edited, added or deleted) is in the new program. Each build records a manifest (file list
 #           + hashes) inside the program; if nothing changed since the last build, it says so and just
 #           starts the existing program instead of rebuilding.
+#           Built: File > Source & Updates... (from source only; src/sources.py) says what it does, where the program
+#           goes (next to tierlist.py: program_path), and when the program there was built from exactly this
+#           source ("Nothing has changed ...": Start it / Build again). "Make the program" runs
+#           standalone.make_program behind the progress window ("Step i of n": Installing PyInstaller, Building,
+#           Putting it in place): PyInstaller is installed with pip if missing (asked first, in that page: the ST-4
+#           dialog is for the program's own requirements), the source (standalone.source_files: the same list the
+#           zip ships) and its manifest (sha256 per file) are copied inside the program under source/ for T-7, the
+#           program replaces any older one, and the manifest is left beside it (.word-tierlist-build.json). Then
+#           the program starts on its own and this window closes; a failed build shows PyInstaller's last lines and
+#           changes nothing. tools/build.py and check_release.py now use src/standalone.py (which also took over
+#           tools/bundle.py, now src/bundle.py), so the zip and the program carry the same files. Checked here: a
+#           real build (23 MB), its source and manifest inside it (PyInstaller's archive reader), started with the
+#           same save. Still to come: the "Update to the newest version first" tick (with T-8's releases).
+#           _selftest_sources.py, _selftest_build.py.
 # [ ] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
 #           (shown in the built program): writes the exact source files that were bundled (no real
 #           decompiling is needed or attempted) into a folder you pick: the program files at the top,

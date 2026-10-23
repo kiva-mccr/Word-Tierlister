@@ -8,8 +8,8 @@ What comes out (PyInstaller builds only for the system it runs on; T-8 covers th
     Windows   dist/word-tierlist.exe        one file, no console window
     macOS     dist/Word Tier List.app       an app bundle (one-file apps are not how macOS does it)
 
-The program keeps its save beside itself (T-1: saves.app_dir) and carries only the data it reads (T-2:
-tools/bundle.py). WordNet stays an optional download, as from source: the build machine's own ~/nltk_data is never
+The program keeps its save beside itself (T-1: saves.app_dir), carries only the data it reads (T-2: src/bundle.py)
+and its own source (T-7). The work is done by src/standalone.py, which File > Source & Updates uses too (T-6). WordNet stays an optional download, as from source: the build machine's own ~/nltk_data is never
 packed in (PyInstaller's nltk hook would do that; tools/hooks/hook-nltk.py replaces it).
 """
 import argparse
@@ -22,88 +22,15 @@ import time
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
-sys.path.insert(0, TOOLS)
-import bundle  # noqa: E402
-
-NAME = "word-tierlist"
-MAC_NAME = "Word Tier List"
-
-
-def output_path(dist, platform=None):
-    """Where the built program ends up for `platform` (sys.platform)."""
-    platform = platform or sys.platform
-    if platform.startswith("win"):
-        return os.path.join(dist, NAME + ".exe")
-    if platform == "darwin":
-        return os.path.join(dist, MAC_NAME + ".app")
-    return os.path.join(dist, NAME)
-
-
-def pyinstaller_args(dist, work, platform=None):
-    """The PyInstaller command line (after "python -m PyInstaller") for this system."""
-    platform = platform or sys.platform
-    sep = ";" if platform.startswith("win") else ":"
-    mac = platform == "darwin"
-    args = [os.path.join(ROOT, "tierlist.py"), "--noconfirm", "--clean",
-            "--name", MAC_NAME if mac else NAME,
-            "--distpath", dist, "--workpath", work, "--specpath", work,
-            "--paths", os.path.join(ROOT, "src"),                        # (tierlist.py adds src/ itself at run time)
-            "--additional-hooks-dir", os.path.join(TOOLS, "hooks"),
-            "--windowed",                                               # no console window (ST-1, ST-2)
-            "--onedir" if mac else "--onefile"]
-    for src, dest in bundle.datas():
-        args += ["--add-data", f"{src}{sep}{dest}"]
-    for mod in bundle.EXCLUDE:
-        args += ["--exclude-module", mod]
-    return args
-
-
-def ensure_pyinstaller(python=sys.executable, log=print):
-    """Install PyInstaller if this Python lacks it (pip; with --break-system-packages on a Python that refuses
-    plain pip installs, such as Debian's). Returns True when it is there."""
-    def have():
-        return subprocess.run([python, "-c", "import PyInstaller"], capture_output=True).returncode == 0
-    if have():
-        return True
-    log("Installing PyInstaller (one time)...")
-    for extra in ([], ["--break-system-packages"]):
-        r = subprocess.run([python, "-m", "pip", "install", "--disable-pip-version-check", "pyinstaller", *extra],
-                           capture_output=True, text=True)
-        if r.returncode == 0 and have():
-            return True
-        if "externally-managed" not in (r.stderr + r.stdout):
-            break
-    log("Could not install PyInstaller:\n" + (r.stderr or r.stdout)[-1500:])
-    return False
+sys.path.insert(0, os.path.join(ROOT, "src"))
+from standalone import executable  # noqa: E402
+import standalone  # noqa: E402
 
 
 def build(dist=None, log=print):
-    """Build the program; returns its path, or None if the build failed."""
-    dist = dist or os.path.join(ROOT, "dist")
-    if not ensure_pyinstaller(log=log):
-        return None
-    work = tempfile.mkdtemp(prefix="wtl-build-")
-    try:
-        log(f"Building {os.path.basename(output_path(dist))} for this system (a minute or two)...")
-        r = subprocess.run([sys.executable, "-m", "PyInstaller", *pyinstaller_args(dist, work)],
-                           capture_output=True, text=True)
-        if r.returncode != 0:
-            log("The build failed:\n" + r.stderr[-3000:])
-            return None
-    finally:
-        shutil.rmtree(work, ignore_errors=True)
-    out = output_path(dist)
-    size = os.path.getsize(out) if os.path.isfile(out) else sum(
-        os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs)
-    log(f"Built {out} ({size / 1e6:.0f} MB).")
-    return out
-
-
-def executable(out, platform=None):
-    """The file to run inside what build() made (the .app's own executable on macOS)."""
-    if (platform or sys.platform) == "darwin":
-        return os.path.join(out, "Contents", "MacOS", MAC_NAME)
-    return out
+    """Build the program into `dist` (default dist/ in the project), carrying its source inside (T-7); returns its
+    path, or None if the build failed. (File > Source & Updates does the same and puts it next to tierlist.py: T-6.)"""
+    return standalone.build(dist or os.path.join(ROOT, "dist"), ROOT, log)
 
 
 def check(out, seconds=12, log=print):

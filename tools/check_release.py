@@ -21,10 +21,10 @@ import sys
 import zipfile
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top of the project
+sys.path.insert(0, os.path.join(HERE, "src"))
+import standalone  # noqa: E402  (what ships: standalone.SHIP_DIRS / source_files)
 CODE_DIRS = ("", "src", "tests", "tools")         # where .py files live ("" = the top: tierlist.py)
-SHIP_DIRS = ("", "src", "tests", "tools", ".claude", "docs", ".github")   # what goes in the zip
-SKIP = {".git", ".venv", "venv", "__pycache__", ".pytest_cache"}
-KNOWN_OPTIONAL_DEV = {"PIL": "pillow"}            # only tests may import these (screenshots)
+KNOWN_OPTIONAL_DEV = {"PIL": "pillow", "PyInstaller": "pyinstaller"}   # only tests import these (screenshots, builds)
 NOISE = ("imported but unused",)                  # tierlist.py re-exports and a few test imports
 STRAY = (".db", ".db-wal", ".db-shm", ".log", ".pyc", ".part", ".png")
 
@@ -133,27 +133,12 @@ def check_pyflakes(problems):
 
 def _walk(d):
     """Files under d (relative to the top), skipping version control, environments and caches."""
-    out = []
-    for base, dirs, files in os.walk(os.path.join(HERE, d) if d else HERE):
-        top = os.path.abspath(base) == HERE        # (SHIP_DIRS names the top's folders; all of theirs go: tools/hooks)
-        dirs[:] = sorted(x for x in dirs if x not in SKIP and (d or not top or x in SHIP_DIRS))
-        rel = os.path.relpath(base, HERE)
-        out += [f if rel == "." else os.path.join(rel, f) for f in sorted(files)]
-    return out
+    return standalone.walk(HERE, d)
 
 
 def shippable_files():
-    """Files that belong in the zip, with their folders: code, docs, tests, the Claude files and the licence;
-    never saves, logs or caches (docs/ may hold screenshots)."""
-    keep = []
-    for f in _walk(""):
-        top_level = os.sep not in f
-        if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f == "LICENSE" or \
-                (f.startswith("docs" + os.sep) and f.endswith(".png")):
-            if top_level and f.endswith(".txt") and f != "requirements.txt":
-                continue                              # an export (tierlist.txt) next to tierlist.py is yours
-            keep.append(f)
-    return keep
+    """Files that belong in the zip, with their folders (standalone.source_files: also what a built program carries)."""
+    return standalone.source_files(HERE)
 
 
 def check_stray(problems):

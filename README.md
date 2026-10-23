@@ -35,13 +35,12 @@ requirements.txt   the Python packages (the program offers to install them itsel
 src/               the program's modules
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
-                   bundle.py (the data a built program carries), build.py + hooks/ (build it as a program),
-                   measure_rudeness.py (measures the rudeness rules)
+                   build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
 `tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
-replacing the other folders never loses your list. A built program (`tools/build.py`) keeps it next to
+replacing the other folders never loses your list. A built program (File > Source & Updates, or `tools/build.py`) keeps it next to
 the program instead (on macOS next to the .app), or, if that folder is read-only, in your user data folder
 (`%APPDATA%\Word Tier List`, `~/Library/Application Support/Word Tier List`, `~/.local/share/word-tierlist`);
 either way the save you used last is found again, so switching between the two loses nothing.
@@ -77,14 +76,16 @@ either way the save you used last is found again, so switching between the two l
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
-| `tools/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python tools/bundle.py` lists them. WordNet stays an optional download. |
+| `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
+| `src/standalone.py` | Making the program (T-3, T-6): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, and the PyInstaller build that carries the source inside the program. No tkinter. |
+| `src/sources.py` | File > Source & Updates... (T-6), from source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
-| `tools/build.py` | Builds the program for this system with PyInstaller (T-3): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
+| `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
-Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `keymap` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts`, `dealing` -> `app` -> `tierlist`. A file only imports from files
+Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts`, `dealing`, `sources` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Where to change things
@@ -173,6 +174,15 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   stays in the terminal and says why.
 - File > Add to applications menu (Linux) puts Word Tier List in your desktop's applications menu, so it
   starts with no terminal at all. Anything that must be installed is then asked in the window.
+
+## Making it a program
+
+File > Source & Updates... (when running `tierlist.py`) makes Word Tier List into one program for this computer:
+`word-tierlist` on Linux, `word-tierlist.exe` on Windows, `Word Tier List.app` on macOS, next to `tierlist.py`,
+so it keeps using the same save and no longer needs Python. It takes a minute or two (the first time it installs
+the builder, PyInstaller, about 15 MB), then starts the new program and closes this window. The program carries its
+complete source inside it (for getting the source back later: T-7). If nothing has changed since the last build,
+it offers to start that program instead.
 
 ## Missing packages
 Installing happens in two stages.

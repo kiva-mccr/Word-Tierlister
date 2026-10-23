@@ -30,6 +30,7 @@ from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, event_spec
 from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
+from sources import SourceDialog
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
@@ -181,6 +182,7 @@ class App:
                       ("command", "Where is my save file?", self.show_save_location, None),
                       *([("command", "Add to applications menu", self.add_launcher, None)]
                         if sys.platform.startswith("linux") else []),
+                      *([("command", "Source & Updates...", self.source_updates, None)] if not is_frozen() else []),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
             ("Edit", [("command", "Undo", self.undo, key("undo"))]),
@@ -1624,6 +1626,10 @@ class App:
                 else "Word Tier List updated in your applications menu")
         self.flash(text, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=2600)
         return path
+
+    def source_updates(self):
+        """File > Source & Updates... (T-6): from source, make a standalone program for this computer."""
+        return SourceDialog(self)
 
     def edit_keys(self):
         """Settings > Keyboard shortcuts... (UI-48)."""
