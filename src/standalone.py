@@ -8,7 +8,8 @@
     start(path)               start the program on its own (this window then closes)
 
 The program carries its complete source (source_files) and the manifest inside it, under SOURCE_DIR, so the built
-program can give the source back (T-7: no decompiling). A build also leaves the manifest beside the program
+program can give the source back (T-7: no decompiling): bundled_source, plan_unpack (what would change: added,
+updated, removed, backed up), unpack (do it, and record it in the folder: UNPACKED), summary (in a line). A build also leaves the manifest beside the program
 (SIDE_FILE), which is how up_to_date knows. PyInstaller builds only for the system it runs on; T-8 covers the
 others. tools/build.py is the command-line way in. No tkinter.
 """
@@ -234,3 +235,124 @@ def start(path, popen=subprocess.Popen):
         return popen(["open", path])
     return popen([exe], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---- back to source (T-7): the built program gives its source back ---------------------------------------------------
+UNPACKED = ".word-tierlist-source.json"     # in an unpacked folder: the manifest of what was last unpacked there
+
+
+def bundled_source():
+    """The source carried inside this program (SOURCE_DIR), or None when running from source or built without it."""
+    base = getattr(sys, "_MEIPASS", None)
+    folder = os.path.join(base, SOURCE_DIR) if getattr(sys, "frozen", False) and base else None
+    return folder if folder and os.path.isfile(os.path.join(folder, MANIFEST)) else None
+
+
+def _sha(path):
+    try:
+        with open(path, "rb") as fh:
+            return hashlib.sha256(fh.read()).hexdigest()
+    except OSError:
+        return None
+
+
+def read_manifest(folder, name=MANIFEST):
+    try:
+        with open(os.path.join(folder, name), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def plan_unpack(source, target):
+    """What unpacking `source` (a folder with MANIFEST) into `target` would do, without doing it:
+    {"add": [...], "update": [...], "remove": [...], "backup": [...], "same": n} (paths with "/").
+
+    Only files the program owns are ever touched: those in its manifest, and those the last unpack there put in
+    (UNPACKED) that it no longer has (they are removed). A file you edited since the last unpack, or that was
+    there before any unpack and differs, is backed up (name.bak) before it is replaced or removed. Anything else
+    in the folder (your save, its log, a .venv) is never looked at."""
+    new = (read_manifest(source) or {}).get("files", {})
+    last = (read_manifest(target, UNPACKED) or {}).get("files", {})
+    plan = {"add": [], "update": [], "remove": [], "backup": [], "same": 0}
+    for f, digest in sorted(new.items()):
+        have = _sha(os.path.join(target, f))
+        if have is None:
+            plan["add"].append(f)
+        elif have == digest:
+            plan["same"] += 1
+        else:
+            plan["update"].append(f)
+            if last.get(f) != have:                 # edited since the last unpack (or never unpacked here)
+                plan["backup"].append(f)
+    for f, digest in sorted(last.items()):
+        if f not in new:
+            have = _sha(os.path.join(target, f))
+            if have is not None:
+                plan["remove"].append(f)
+                if have != digest:
+                    plan["backup"].append(f)
+    return plan
+
+
+def summary(plan):
+    """"3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already."""
+    parts = [f"{len(plan[k]):,} {word}" for k, word in (("update", "updated"), ("add", "added"), ("remove", "removed"))
+             if plan[k]]
+    if not parts:
+        return "Everything there is already the same."
+    text = ", ".join(parts)
+    if plan["backup"]:
+        n = len(plan["backup"])
+        text += f" ({n:,} edited file{'s' if n != 1 else ''} kept as .bak first)"
+    return text[0].upper() + text[1:] + "."
+
+
+def unpack(source, target, plan=None):
+    """Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
+    Returns the plan carried out."""
+    plan = plan or plan_unpack(source, target)
+    os.makedirs(target, exist_ok=True)
+    for f in plan["backup"]:
+        p = os.path.join(target, f)
+        if os.path.exists(p):
+            shutil.copy2(p, p + ".bak")
+    for f in plan["add"] + plan["update"]:
+        dest = os.path.join(target, f)
+        os.makedirs(os.path.dirname(dest) or target, exist_ok=True)
+        shutil.copy2(os.path.join(source, f), dest)
+    for f in plan["remove"]:
+        try:
+            os.remove(os.path.join(target, f))
+        except OSError:
+            pass
+    shutil.copy2(os.path.join(source, MANIFEST), os.path.join(target, UNPACKED))
+    return plan
+
+
+def default_source_folder(program=None):
+    """Where the source goes unless you pick another folder: beside the program, in "Word Tier List source"."""
+    program = program or (sys.executable if getattr(sys, "frozen", False) else ROOT)
+    where = os.path.dirname(program)
+    if where.endswith(os.path.join(".app", "Contents", "MacOS")):        # (beside the .app, not inside it)
+        where = os.path.dirname(os.path.dirname(os.path.dirname(where)))
+    return os.path.join(where, "Word Tier List source")
+
+
+def python_for_source():
+    """A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own
+    Python inside, which cannot run loose source files)."""
+    for name in (("py", "python") if sys.platform.startswith("win") else ("python3", "python")):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def open_folder(path, popen=subprocess.Popen):
+    """Show a folder in the system's file manager."""
+    if sys.platform.startswith("win"):
+        os.startfile(path)                          # noqa: S606  (Windows only)
+        return None
+    return popen(["open" if sys.platform == "darwin" else "xdg-open", path],
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -182,7 +182,7 @@ class App:
                       ("command", "Where is my save file?", self.show_save_location, None),
                       *([("command", "Add to applications menu", self.add_launcher, None)]
                         if sys.platform.startswith("linux") else []),
-                      *([("command", "Source & Updates...", self.source_updates, None)] if not is_frozen() else []),
+                      ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
             ("Edit", [("command", "Undo", self.undo, key("undo"))]),
@@ -1628,7 +1628,8 @@ class App:
         return path
 
     def source_updates(self):
-        """File > Source & Updates... (T-6): from source, make a standalone program for this computer."""
+        """File > Source & Updates... (T-6, T-7): from source, make a standalone program for this computer; in the
+        program, unpack the source code it was built from."""
         return SourceDialog(self)
 
     def edit_keys(self):

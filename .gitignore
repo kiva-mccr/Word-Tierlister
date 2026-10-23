@@ -235,3 +235,5 @@ word_categories.state.json*
 /word-tierlist.exe
 /Word Tier List.app/
 .word-tierlist-build.json
+.word-tierlist-source.json
+*.py.bak

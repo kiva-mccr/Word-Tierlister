@@ -77,8 +77,8 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
-| `src/standalone.py` | Making the program (T-3, T-6): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, and the PyInstaller build that carries the source inside the program. No tkinter. |
-| `src/sources.py` | File > Source & Updates... (T-6), from source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. |
+| `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak). No tkinter. |
+| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py. |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -181,8 +181,14 @@ File > Source & Updates... (when running `tierlist.py`) makes Word Tier List int
 `word-tierlist` on Linux, `word-tierlist.exe` on Windows, `Word Tier List.app` on macOS, next to `tierlist.py`,
 so it keeps using the same save and no longer needs Python. It takes a minute or two (the first time it installs
 the builder, PyInstaller, about 15 MB), then starts the new program and closes this window. The program carries its
-complete source inside it (for getting the source back later: T-7). If nothing has changed since the last build,
-it offers to start that program instead.
+complete source inside it. If nothing has changed since the last build, it offers to start that program instead.
+
+In the program, the same menu item gives the source back: **Unpack the source code** writes it into a folder
+(beside the program, "Word Tier List source", or one you pick), laid out like this repository. Unpacking into a
+folder you unpacked into before brings it up to date: changed files are updated, new ones added and ones the program
+no longer has removed. Only the program's own files are touched (your save, its log or a .venv never are), and a
+file you edited there is kept as `name.bak` first. What it will do is shown before it does it. Then the folder opens
+and it offers to start `tierlist.py` from there (that needs Python on the computer; it uses the same save).
 
 ## Missing packages
 Installing happens in two stages.

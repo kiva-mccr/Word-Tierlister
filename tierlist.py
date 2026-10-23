@@ -77,7 +77,7 @@ measure_rudeness), the Claude notes in .claude/; the README has the same map wit
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
     bundle.py       the data a built program carries (T-2: English word lists only; no tkinter).
-    standalone.py   making the program: the source, its manifest, the PyInstaller build (T-3, T-6; no tkinter).
+    standalone.py   the program and its source: manifest, PyInstaller build, unpack / sync (T-3, T-6, T-7; no tkinter).
     store.py        Store: the SQLite save file. Tiers, Elo duels, undo history, queue order,
                     conflicts, merging. Every change is committed immediately.
     wordsource.py   building the word list: WordNet, Wiktionary download/parse, compound
@@ -96,7 +96,7 @@ measure_rudeness), the Claude notes in .claude/; the README has the same map wit
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
-    sources.py      File > Source & Updates...: make a standalone program from source (T-6).
+    sources.py      File > Source & Updates...: make a standalone program; in the program, unpack its source (T-6, T-7).
     app.py          App: the main window and all modes.
 
 Layers: constants, obscene, rudeness, problems, deps, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
@@ -229,6 +229,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           sorting a whole tier, and the least-dueled seeds tier by tier; tier_counts counted once per change
 #           (keyed on the connection's total_changes); the shelf redraws only its marks for a new duel; Browse
 #           loads 1,000 rows a page, not 3,000. The one-off test failure did not come back (7 full runs since).
+#
+# --- Fixes (asked for, after T-7) -------------------------------------------------------------------------------
+# [ ] F-1  Opening the program, the window stays hidden until it is fully loaded in (no half-drawn or resizing
+#           window on the way), then appears complete, as Browse and the dialogs already do.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -1263,7 +1267,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           real build (23 MB), its source and manifest inside it (PyInstaller's archive reader), started with the
 #           same save. Still to come: the "Update to the newest version first" tick (with T-8's releases).
 #           _selftest_sources.py, _selftest_build.py.
-# [ ] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
+# [x] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
 #           (shown in the built program): writes the exact source files that were bundled (no real
 #           decompiling is needed or attempted) into a folder you pick: the program files at the top,
 #           and the Claude files (CLAUDE.md, CHECKLIST.md) plus the tests (_selftest_*.py, run_tests.sh,
@@ -1284,6 +1288,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           builds from that, so unpacking is also how you update; unticked, it uses exactly the version
 #           you have. Offline or no newer version: it says so in a line and carries on with yours. The
 #           update keeps your save untouched and, like any unpack, only changes files the program owns.
+#           Built (without the update tick, which needs T-8's releases): File > Source & Updates... in the built
+#           program shows "Unpack the source code" (src/sources.py): the folder (beside the program, "Word Tier List
+#           source", or Change folder...: the themed folder browser on Linux) and what it will do there, before it
+#           does it. standalone.plan_unpack / unpack: the source the program carries (bundled_source: source/ in
+#           PyInstaller's folder) goes in with the repository's own layout (R-1 replaced the planned "tests in a
+#           separate folder", so run_tests.sh and check_release.py need no change). Into a folder unpacked before
+#           (its record: .word-tierlist-source.json) it syncs: updated / added / removed, only files in the
+#           program's manifest or in that record; a file edited since the last unpack, or differing in a folder never
+#           unpacked into (a clone), is kept as name.bak first; a save, its log or a .venv are never looked at. Then
+#           the folder opens (file manager) and it offers to start tierlist.py from there with this computer's
+#           Python (the same save: the pointer file); without a Python it says to install one. _selftest_sources.py;
+#           _selftest_build.py takes the source back out of a real build, checks every byte against the manifest,
+#           unpacks it and runs the unpacked copy's core self-test.
 # [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
 #           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
 #           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds

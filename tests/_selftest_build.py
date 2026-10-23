@@ -3,8 +3,8 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 & Updates use it). Always: the command line for each system (one file and no console on Linux / Windows, an app
 bundle on macOS; only src/bundle.py's data; no CJK tokenizers; our own nltk hook, so the build machine's WordNet
 stays out; the source carried inside); the source list, its manifest and whether a program is up to date. With
-PyInstaller installed (it is never installed by the tests): a real build, its source inside it, then the new
-program run from a folder of its own."""
+PyInstaller installed (it is never installed by the tests): a real build, its source inside it (taken back out,
+unpacked and its core self-test run from there: T-7), then the new program run from a folder of its own."""
 import importlib.util, json, os, sys, tempfile
 sys.path.insert(0, os.path.join(_paths.ROOT, "tools"))
 import build
@@ -64,5 +64,19 @@ else:
     assert "source/manifest.json" in inside and "source/tierlist.py" in inside and "source/src/app.py" in inside
     built = json.load(open(os.path.join(dist, S.SIDE_FILE)))
     assert built["files"] == S.manifest(_paths.ROOT)["files"]      # (what File > Source & Updates compares)
+    # T-7: the source comes back out of the program whole, unpacks, and runs on its own
+    reader = CArchiveReader(out)
+    carried = tempfile.mkdtemp(prefix="carried-")
+    for name in (n for n in reader.toc if n.startswith(S.SOURCE_DIR + "/")):
+        dest = os.path.join(carried, name[len(S.SOURCE_DIR) + 1:])
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        open(dest, "wb").write(reader.extract(name))
+    assert S.manifest(carried, list(built["files"]))["files"] == built["files"]     # every file, every byte
+    unpacked = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+    S.unpack(carried, unpacked)
+    import subprocess
+    r = subprocess.run([sys.executable, os.path.join(unpacked, "tests", "_selftest.py")], capture_output=True, text=True,
+                       timeout=600)
+    assert r.returncode == 0 and "CORE OK" in r.stdout, r.stderr[-2000:]
     assert build.check(out, log=lambda *_: None)                   # opens, stays open, its save beside itself
     print(f"BUILD OK (built and ran {os.path.basename(out)}, {os.path.getsize(out) / 1e6:.0f} MB)")
