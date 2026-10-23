@@ -191,6 +191,32 @@ per = (time.time() - t) / 50
 print(f"next+stats at 300k: {per * 1000:.2f} ms")
 assert per < 0.05
 
+# ---- F-10: big writes take the indexes away and build them again once; the shelf's totals are kept in the save
+import store as _store
+def indexes(st):
+    return {r[0] for r in st.db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='words' "
+                                        "AND sql IS NOT NULL")}
+want = {n for n, _spec in _store.WORD_INDEXES}
+assert indexes(big) == want, want ^ indexes(big)                 # (after a 300k insert and a 300k reshuffle)
+try:
+    with big.bulk_write():
+        assert not indexes(big)
+        big.db.execute("UPDATE words SET skips=7 WHERE rank < 10")
+        raise RuntimeError("stopped halfway")
+except RuntimeError:
+    pass
+assert indexes(big) == want and not big.db.execute("SELECT 1 FROM words WHERE skips=7").fetchone()   # rolled back
+with big.bulk_write(("idx_unplaced_queue",)):                    # a sort named after its index still works meanwhile
+    assert big.list_words("", "Unplaced", "Default", limit=3)[0]
+big.db.execute("DROP INDEX idx_words_tg"); big.db.commit()       # (stopped halfway: opening the save mends it)
+assert indexes(T.Store(big.path)) == want
+sh = big.shelf(); assert big.get_meta("shelf_totals")
+big._prog = None; assert big.shelf() == sh                        # (read back from the save, not counted again)
+big.add_word("zzzznewword"); big.place("zzzznewword", 0)
+assert big.get_meta("shelf_totals") is None                     # (a new word: counted again)
+total = sum(sp["words"] for sp in big.shelf()["spines"])
+assert total == big.count_words(), (total, big.count_words())
+
 # ---- M-11: the duel pickers read indexes instead of sorting whole tiers
 import random as _r
 _r.seed(3)

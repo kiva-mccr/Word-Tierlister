@@ -284,6 +284,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-10 Start-up speed (asked for, after a measured list of what was left). On a million words:
+#           - big writes take the words table's indexes away and build them once afterwards (Store.bulk_write,
+#             WORD_INDEXES): saving a million new words 19.3 -> 12.6 s; the reshuffle also sets aside the second
+#             index holding the queue keys (F-9 had added it), about a quarter faster (16.6 -> 12.3 s averaged; this
+#             machine's timings swing +-30%); Browse skips an index name while a reshuffle has it away (_hint);
+#           - a Wiktionary build stores each word's frequency as it ranks them: "Looking up how common" (6-11 s)
+#             is gone from the first run; its kinds are saved in the same pass, before the indexes come back;
+#           - the progress shelf's totals (words per spine, their frequency) are counted once and kept in the save
+#             (meta shelf_totals, counted again when words or frequencies change); its placed words come from
+#             idx_placed_shelf (replaces idx_placed_rank): 0.3-0.45 s -> 6-8 ms on every start of a sparse save.
+#           A first run from a made-up million-entry download, after the download: 89.6 -> 72.1 s.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -1581,7 +1592,7 @@ def main():
                 steps, adds = wiktionary_steps(store, args.wiktionary_file), True
             elif args.source == "wordnet" and existing == 0:
                 steps, adds = ["First run: building the word list"], True
-            steps += queue_steps(store, adds_words=adds, records_kinds=builds_wiktionary)
+            steps += queue_steps(store, adds_words=adds, by_wiktionary=builds_wiktionary)
             if args.seed is not None and args.seed != store.queue_settings()["seed"]:
                 steps.append("Reshuffling the queue")
             log(plan_line(steps))

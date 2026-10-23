@@ -292,7 +292,7 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     shorter first). Definitions are cached into the save file. Existing progress is kept.
     """
     try:
-        from wordfreq import get_frequency_dict, zipf_frequency
+        from wordfreq import get_frequency_dict
     except ImportError:
         raise SetupError("A required package is missing.\n\nOpen a terminal and run:\n    pip install wordfreq\n\nthen start the program again.")
     db = store.db
@@ -321,16 +321,15 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     log("Ranking words by frequency...")
     log("  loading the word-frequency data (about a minute)...")
     fd = get_frequency_dict("en")
+    freqs = {}          # (kept for the coverage tag: fill_frequencies has nothing left to do)
 
     def zipf(w):
-        # Zipf scale (log10 of frequency per billion words). Hyphenated/spaced forms are not in the
-        # single-word dictionary, so ask wordfreq to estimate them; everything else unknown is 0.
-        f = fd.get(w)
-        if f:
-            return math.log10(f) + 9.0
-        if "-" in w or " " in w:
-            return zipf_frequency(w, "en")
-        return 0.0
+        # Zipf scale (log10 of frequency per billion words); wordfreq's own estimates of hyphenated / spaced forms
+        # are rounded to two places, as its zipf_frequency does
+        f = freqs[w] = frequency(fd, w)
+        if not f:
+            return 0.0
+        return math.log10(f) + 9.0 if w in fd else round(math.log10(f) + 9.0, 2)
 
     log("  ordering the words by how common they are...")
     rows = db.execute("SELECT word, senses, lemma, live FROM wk").fetchall()
@@ -340,13 +339,18 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     if not ordered:
         store.set_meta("wk_done", "0")
         raise RuntimeError("no usable entries were found in the Wiktionary file")
-    if store.count_words():
+    older = store.count_words()
+    if older:
         # Words already in the save that Wiktionary lacks go behind everything else.
         db.execute("UPDATE words SET rank = rank + ?", (len(ordered),))
     log(f"  saving {len(ordered):,} words and their definitions to your save file...")
-    store.insert_words(ordered)
+    with store.bulk_write():                      # (the indexes are built once, after all three passes)
+        store.insert_words(ordered)
+        db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word)")
+        if older:                                 # (the words Wiktionary lacks: how common they are too)
+            freqs.update((w, frequency(fd, w)) for (w,) in db.execute("SELECT word FROM words") if w not in freqs)
+        store.set_frequencies((w, f) for w, f in freqs.items() if f)
     db.execute("INSERT OR REPLACE INTO defs(word, text) SELECT word, text FROM wk")
-    db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word)")
     store.set_meta("kinds_done", "1")
     db.execute("DROP TABLE wk")
     db.commit()
@@ -401,23 +405,30 @@ def compute_penalties(store, log=print):
     return True
 
 
+def frequency(fd, w):
+    """wordfreq's frequency of `w` (`fd`: its get_frequency_dict("en")): hyphenated / spaced forms, which that
+    dictionary lacks, are estimated by wordfreq; any other word it has never seen is 0."""
+    f = fd.get(w)
+    if f:
+        return f
+    if "-" in w or " " in w:
+        from wordfreq import word_frequency
+        return word_frequency(w, "en")
+    return 0.0
+
+
 def fill_frequencies(store, log=print):
     """Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14). Words wordfreq has never
-    seen keep 0: they add nothing to how much of everyday English is covered."""
+    seen keep 0: they add nothing to how much of everyday English is covered. (A Wiktionary build stores them as it
+    ranks the words: this is for the other word lists and older saves.)"""
     try:
-        from wordfreq import get_frequency_dict, word_frequency
+        from wordfreq import get_frequency_dict
     except ImportError:
         log("wordfreq is not installed, so the coverage figure is not available (pip install wordfreq).")
         return
     fd = get_frequency_dict("en")
-
-    def freq(w):        # the same as the ranking (build_wiktionary's zipf): hyphenated / spaced forms are estimated
-        f = fd.get(w)
-        if f:
-            return f
-        return word_frequency(w, "en") if ("-" in w or " " in w) else 0.0
     words = [r[0] for r in store.db.execute("SELECT word FROM words")]
-    store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
+    store.set_frequencies((w, f) for w, f in ((w, frequency(fd, w)) for w in words) if f)
 
 
 # --------------------------------------------------------------------------
@@ -542,15 +553,15 @@ def wiktionary_steps(store, path=None):
     return steps + ["Ranking words"]
 
 
-def queue_steps(store, adds_words=False, records_kinds=False):
+def queue_steps(store, adds_words=False, by_wiktionary=False):
     """The main steps prepare_queue will report (see wiktionary_steps). `adds_words`: words are about to be
-    added first, which makes it redo them (adding words resets pen_done, freq_done and rude_done); `records_kinds`:
-    by a Wiktionary build, which records the kinds itself."""
+    added first, which makes it redo them (adding words resets pen_done, freq_done and rude_done); `by_wiktionary`:
+    by a Wiktionary build, which records their kinds and frequencies itself."""
     if not adds_words and not store.count_words():
         return []
     pen = adds_words or store.get_meta("pen_done") != "1"
-    freq = adds_words or store.get_meta("freq_done") != store.FREQ_VERSION
-    kinds = not records_kinds and store.get_meta("kinds_done") != "1"
+    freq = not by_wiktionary and (adds_words or store.get_meta("freq_done") != store.FREQ_VERSION)
+    kinds = not by_wiktionary and store.get_meta("kinds_done") != "1"
     rude = adds_words or store.get_meta("rude_done") != rude_version(store)
     shuffle = pen or store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None

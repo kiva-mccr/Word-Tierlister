@@ -286,8 +286,8 @@ assert "checking every word for compounds" in text and "giving every unplaced wo
 
 # ---- the main steps planned up front ("Step i of n") are exactly the stages a build then reports, in order
 st4 = T.Store(os.path.join(tmp, "plan.db"))
-plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True, records_kinds=True)
-assert plan == ["Reading entries", "Ranking words", "Detecting compound words", "Looking up how common",
+plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True, by_wiktionary=True)
+assert plan == ["Reading entries", "Ranking words", "Detecting compound words",
                 "Scoring rude meanings", "Shuffling the queue"], plan     # (src given: nothing to download)
 lines = []
 W.build_wiktionary(st4, src, log=lines.append); W.prepare_queue(st4, log=lines.append)

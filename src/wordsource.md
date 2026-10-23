@@ -16,6 +16,7 @@ The module docstring has the details; this page is the map.
   - methods: add, finish
 - `build_wiktionary`: Load every English Wiktionary word into `store`, most common first.
 - `compute_penalties`: Flag compounds so they are demoted in the queue (pen: 1 = closed compound, 2 = hyphenated).
+- `frequency`: wordfreq's frequency of `w` (`fd`: its get_frequency_dict("en")): hyphenated / spaced forms, which that dictionary lacks, are estimated by wordfreq; any other word it...
 - `fill_frequencies`: Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14).
 - `fill_kinds`: Each word's kinds from its stored definition (every source writes "(noun) ..." lines: the Wiktionary build's, WordNet's, dictionaryapi.dev's), else from WordNet...
 - `rude_version`: What words.rude should be scored from: RUDENESS_VERSION once the save keeps Wiktionary's meanings (a Wiktionary build, or read later by fetch_rude_senses), else...
@@ -32,6 +33,7 @@ The module docstring has the details; this page is the map.
 - Every stage is resumable and never touches existing progress.
 - Keep `wiktionary_steps` / `queue_steps` in step with the stage lines they predict (the "Step i of n" corner).
 - The background read of rude meanings honours `OFFLINE_ENV` and retries only after `RUDE_RETRY_S`.
+- A Wiktionary build stores the frequencies it ranked by (`frequency`, the same as fill_frequencies) and the kinds, inside one `bulk_write`; `queue_steps(by_wiktionary=True)` then predicts neither step.
 
 ## Changing it
 

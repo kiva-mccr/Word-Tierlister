@@ -84,8 +84,8 @@ assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"
 assert kinds["don't"] == 16 and kinds["of"] == 16
 assert s.get_meta("kinds_done") == "1"
 assert set(s.rude_senses()) == {"bastard", "bastards", "shit", "bureaucracy", "come", "gyp"}, s.rude_senses()
-assert T.queue_steps(s) == ["Detecting compound words", "Looking up how common", "Scoring rude meanings",
-                            "Shuffling the queue"]
+assert T.queue_steps(s) == ["Detecting compound words", "Scoring rude meanings", "Shuffling the queue"]
+assert s.get_meta("freq_done") == T.Store.FREQ_VERSION and s.get_word("run")["freq"] > 0   # (stored as it ranked)
 T.prepare_queue(s, log=lambda *_: None)
 assert not T.queue_steps(s) and s.get_meta("rude_done") == rudeness.RUDENESS_VERSION
 B = rudeness.KIND_BITS
