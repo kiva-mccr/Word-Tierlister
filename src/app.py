@@ -31,6 +31,7 @@ from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from sources import SourceDialog
+import standalone
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
@@ -38,7 +39,7 @@ from ui_style import apply_ttk_style
 from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
-                     Tooltip, WordCard, refresh_widgets, watch_focus)
+                     Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
 
 
 SCRIPT_DIR = app_dir()          # where tierlist.py is, or a built program (T-1)
@@ -81,13 +82,15 @@ class App:
     buttons) are two frames in self.center; refresh() shows the one matching the mode.
     """
 
-    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False):
+    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False, offer_form=False):
         """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
         extra saves with progress that _startup() offers to merge. `defs` is a Definitions. `ask_dealing`: show
-        the first start's "How words are dealt" steps (ST-6; main() asks once per save).
+        the first start's "How words are dealt" steps (ST-6; main() asks once per save). `offer_form`: offer the
+        other form once (T-9: make a program from source, or unpack the source in the program; main() turns it off
+        with --no-install, and tests leave it off).
         """
         self.root, self.store, self.defs = root, store, defs
-        self.ask_dealing = ask_dealing
+        self.ask_dealing, self.offer_form = ask_dealing, offer_form
         self.note, self.other_saves = note, list(other_saves)
         self.mode = store.get_meta("mode", "place")
         if self.mode not in self.modes_with_work(store.stats()):
@@ -189,6 +192,46 @@ class App:
             self.edit_dealing(first=True, on_done=anchors)
         else:
             anchors()
+        if self.offer_form:
+            self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
+
+    # ---- T-9: the other form, offered once --------------------------------------------------------------------
+    FORM_OFFER_MS = 1500                     # after the start's own questions; then checked this often until quiet
+    FORM_ASKED = {False: "offered_program", True: "offered_source"}      # meta: asked once (source / program)
+
+    def _offer_other_form(self):
+        """Once (remembered in the save, from source and in the program each), when nothing else is going on: from
+        source "Make this a standalone program?", in the program "Unpack the source code next to it?" (T-9). Yes
+        does what File > Source & Updates would (it stays in the menu either way). Waits while a question or
+        settings page is open, while a long job runs and while Wiktionary's meanings are being downloaded."""
+        frozen = is_frozen()
+        key = self.FORM_ASKED[frozen]
+        if not self.root.winfo_exists() or self.store.get_meta(key) == "1":
+            return
+        if dialog_open(self.root) or self.busy or self.rude_read is not None:
+            self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
+            return
+        if frozen and not standalone.bundled_source():
+            return                                   # (built without its source: nothing to offer)
+        if not frozen and os.path.exists(standalone.program_path(standalone.ROOT)):
+            return                                   # (a program is beside tierlist.py already)
+        self.store.set_meta(key, "1")                # (asked once, whatever the answer)
+        if frozen:
+            where = standalone.default_source_folder()
+            yes = ask_yes_no("Source & Updates", "Unpack the source code next to it?",
+                             "This program carries the source code it was built from. Unpack it into "
+                             f"\"{os.path.basename(where)}\" beside the program, to read it, change it or run it "
+                             "with Python? You can do it any time from File > Source & Updates.",
+                             yes="Unpack it", no="Not now", parent=self.root)
+        else:
+            yes = ask_yes_no("Source & Updates", "Make this a standalone program?",
+                             "It builds Word Tier List into one program for this computer, next to tierlist.py "
+                             "(a minute or two), then reopens as the program with the same save; Python is no "
+                             "longer needed to run it. You can do it any time from File > Source & Updates.",
+                             yes="Make it", no="Not now", parent=self.root)
+        if yes:
+            return SourceDialog(self, go=True)
+        return None
 
     # ---- construction ------------------------------------------------------------------
     def _menu_items(self):
@@ -1458,7 +1501,8 @@ class App:
             if not self.def_frame.is_open:   # about to slide open: _layout_defs makes room for it at this height
                 self.def_text.config(height=want)
                 return
-            self._fit_window()
+            self.def_frame.settle()          # (a definition arriving while it slides open: fitted against the
+            self._fit_window()               # half-open pane, it ended taller than fits, over the word card)
 
     # ---- Wiktionary's meanings for a save without them (OB-6), read in the background ------------------------
     def _start_rude_read(self):

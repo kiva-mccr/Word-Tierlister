@@ -2427,6 +2427,14 @@ def watch_focus(root, on_lost=None):
     return check
 
 
+def dialog_open(root):
+    """True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen."""
+    try:
+        return any(getattr(w, "styled_dialog", False) and w.winfo_viewable() for w in root.winfo_children())
+    except tk.TclError:
+        return False
+
+
 class StyledDialog:
     """The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and
     a row of rounded buttons, the default one (what Enter presses) in lilac and on the right.
@@ -2446,6 +2454,7 @@ class StyledDialog:
         self.on_cancel = self.close
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(parent)
+        self.win.styled_dialog = True            # (a question or message is open: dialog_open)
         # hidden until show() has sized and centred it: built while showing, it appeared where the window
         # manager put it (the parent's top left) and then jumped to the middle
         self.win.withdraw()

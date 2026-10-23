@@ -70,6 +70,18 @@ assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheig
 assert app.grow > 1 and root.winfo_height() <= 1150
 root.destroy()
 
+# a definition arriving while the pane slides open (an online lookup, WordNet): fitted against the half-open pane it
+# ended taller than fits, over the word card (seen as a flaky _selftest_sizing); the slide settles first now
+root, app = make(560)
+app.toggle_defs(False); root.update()
+app.anim.reduce_motion = False
+app.toggle_defs(True); root.update()                            # (sliding)
+app.mem_defs[app.cur_word] = LONG
+app._render_defs(); app.anim.finish_all(); root.update(); root.update_idletasks()
+room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()
+assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheight(), room)
+root.destroy()
+
 # a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped
 root, app = make(560)
 app.mem_defs["word8"] = LONG

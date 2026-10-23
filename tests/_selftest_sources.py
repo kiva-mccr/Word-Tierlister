@@ -196,4 +196,50 @@ d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
 d.update_var.set(False); d.buttons["Make the program"].invoke(); pump(root, 2)
 assert made == ["9.1.0", None], made
 app.on_close()
+
+# ---- T-9: the first start of each form offers the other once, when nothing else is being asked ----------------------
+import app as A
+asked = []
+answer = [True]
+A.ask_yes_no = lambda title, headline, *a, **kw: (asked.append(headline), answer[0])[1]
+made = []
+S.make_program = lambda root_dir, log, release=None: (made.append(root_dir), None)[1]
+sources.show_error = lambda *a, **kw: None
+S.ROOT = project()                                                 # (from source: no program beside it yet)
+root, app = window()
+app.offer_form = False
+app._startup(); pump(root)
+assert app.store.get_meta("offered_program") is None              # (off: --no-install, and the tests)
+for w in root.winfo_children():                                   # (the start's own question: anchor words)
+    if getattr(w, "styled_dialog", False):
+        w.destroy()
+app.offer_form = True
+busy = sources.SourceDialog(app, root_dir=S.ROOT, check=lambda: None); pump(root)
+app._offer_other_form(); pump(root)
+assert not asked                                                  # another question open: it waits
+busy.close(); pump(root)
+app.rude_read = {"line": ""}; app._offer_other_form(); pump(root)
+assert not asked                                                  # Wiktionary's meanings downloading: it waits
+app.rude_read = None
+app._offer_other_form(); pump(root, 4)
+assert asked == ["Make this a standalone program?"] and made == [S.ROOT]       # yes: builds at once
+assert app.store.get_meta("offered_program") == "1"
+app._offer_other_form(); pump(root)
+assert len(asked) == 1                                            # once only, whatever the answer
+# in the program: "Unpack the source code next to it?", yes unpacks beside it (and offers to start it)
+A.is_frozen = lambda: True
+S.bundled_source = lambda: v2
+beside = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+S.default_source_folder = lambda program=None: beside
+sources.is_frozen = lambda: True
+sources.ask_yes_no = lambda *a, **kw: False                       # (then: not starting tierlist.py)
+app._offer_other_form(); pump(root, 4)
+assert asked[-1] == "Unpack the source code next to it?" and os.path.exists(os.path.join(beside, "tierlist.py"))
+assert app.store.get_meta("offered_source") == "1"
+# "Not now": remembered all the same
+app.store.set_meta("offered_source", "0"); answer[0] = False
+shutil.rmtree(beside)
+app._offer_other_form(); pump(root, 4)
+assert not os.path.exists(beside) and app.store.get_meta("offered_source") == "1"
+app.on_close()
 print("SOURCES OK")

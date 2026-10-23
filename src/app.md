@@ -2,9 +2,9 @@
 
 The main window (`App`): the header, the three placing views, the duel tabs, the chart and shelf, the definitions pane, the bottom bar, keys, zoom and window fitting, undo, and the background jobs it polls.
 
-- **Uses:** `browser`, `constants`, `dealing`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `theme`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
+- **Uses:** `browser`, `constants`, `dealing`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `theme`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -19,9 +19,11 @@ The module docstring has the details; this page is the map.
 
 - Window size: what shows = min(zoom, biggest that fits) x grow; re-fit from the zoom on every layout change, never ratchet down; measure minimum sizes at grow 1 (`_fit_window`).
 - In a grown window the folded definitions pane counts at its full height and is shortened to fit (it once slid open over the word card).
+- A definition that arrives while the pane slides open settles the slide before the fit (`_fit_defs`); fitted against the half-open pane it ended over the word card (F-8).
 - Every key goes through `on_key` and the keymap; a held key repeats after 500 ms, then every 250 ms (`_repeat_allowed`).
 - Messages: `flash(text, kind)`; each is its own toast, newest on top. Text-only places name a censored word with `shown()` (masked); everything drawn smears it.
 - The window opens complete (`open_window`, F-1).
+- The first start offers the other form once (`_offer_other_form`, T-9), never while a dialog is open (`widgets.dialog_open`), a job runs or a download is going; `App(offer_form=...)` is off unless `main()` turns it on, so tests never see it.
 
 ## Changing it
 

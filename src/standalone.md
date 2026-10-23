@@ -3,7 +3,7 @@
 Turning the source into a program and back (T-3, T-6..T-8): the list of source files and their manifest, the PyInstaller build that carries the source inside, unpacking / syncing it into a folder, and the newest release on GitHub (update tick).
 
 - **Uses:** `bundle`, `constants`
-- **Used by:** `build`, `check_release`, `sources`
+- **Used by:** `app`, `build`, `check_release`, `sources`
 - **Tests:** `_selftest_build`, `_selftest_sources`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.

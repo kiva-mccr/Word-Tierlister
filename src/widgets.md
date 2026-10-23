@@ -52,6 +52,7 @@ The module docstring has the details; this page is the map.
   - methods: text, show_at, hide
 - `close_popups`: Close every drop-down the program has open (UI-43): all DropMenus (header menus, ChoiceButtons).
 - `watch_focus`: When the whole program loses focus (another program came to the front), close its drop-downs (close_popups) and call on_lost().
+- `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
   - methods: text, button, clear_buttons, show, refit, close, alive
 - `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized.
@@ -64,6 +65,7 @@ The module docstring has the details; this page is the map.
 - After animating a frame's height, reset it to height 0 and `pack_propagate(True)`, or Tk flips between sizes forever.
 - The folded definitions pane is placed, not packed, so its text can measure its lines before opening (F-2).
 - No `ttk.Combobox` / `tk.Menu` pop-ups (they grab input on Linux): use `ChoiceButton` / `DropMenu`. Dialogs build on `StyledDialog` (`StyledDialog.text` for wrapped lines).
+- Our dialogs mark their window (`styled_dialog`), so `dialog_open(root)` can tell when a question is on screen (nothing else may ask then).
 
 ## Changing it
 

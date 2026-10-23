@@ -13,7 +13,8 @@ changed files are updated, new ones added, and ones the program no longer has re
 are ever touched, and a file you edited there is kept as name.bak first. What it will do is shown before it does
 it. Then it opens the folder and offers to start tierlist.py from it (that needs a Python on this computer).
 
-Either way a tick box, ticked to start with, says "Update to the newest version first" (T-8): the dialog asks
+The first start of either form offers the other once (T-9: App._offer_other_form), and a yes does it straight
+away (go=True). Either way a tick box, ticked to start with, says "Update to the newest version first" (T-8): the dialog asks
 GitHub for the newest release in the background (standalone.latest_release) and says in a line what it found.
 Ticked and newer, "Make the program" downloads that version's source and builds from it, and "Unpack" downloads
 it and shows what unpacking it would change before it does it; offline, or with no newer version, it says so and
@@ -48,10 +49,11 @@ UNPACK_INTRO = ("Writes the source code this program was built from into a folde
 
 
 class SourceDialog:
-    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None):
+    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None, go=False):
         """`root_dir`: the project (from source); `source`: the source the program carries, and `frozen`: which
         side to show; `check() -> release or None`: how to find the newest release (tests pass them; the program
-        finds them itself)."""
+        finds them itself). `go`: do it straight away, without showing the page (T-9's "yes": make the program,
+        or unpack beside it, from the version you have); if unpacking fails, the page shows to try elsewhere."""
         self.app = app
         self.frozen = is_frozen() if frozen is None else frozen
         self.release = None                       # the newest release, once the check has found one
@@ -62,6 +64,14 @@ class SourceDialog:
         else:
             self.root_dir = root_dir or standalone.ROOT
             self._make_page()
+        if go and "Unpack" in self.dlg.buttons:
+            self.unpack()
+            if self.dlg.alive():                 # (it could not: the page, to pick another folder)
+                self.dlg.show()
+            return
+        if go and not self.frozen:
+            self.make()
+            return
         if hasattr(self, "update_var"):
             self._start_check(check or standalone.latest_release)
         self.dlg.show()

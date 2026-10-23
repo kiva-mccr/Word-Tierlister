@@ -264,6 +264,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           StyledDialog.text, Browser._set_size / _row_height, DistributionChart._ease, App._word_to_act_on.
 #           The tests' temporary folders now go in one folder per test, removed at its end (tests/_paths: they
 #           had filled the disk); tools/layout_trace.py stays offline.
+# [x] F-8  A definition arriving while the pane slides open (an online lookup, WordNet) was fitted against the
+#           half-open pane and left it taller than fits, over the word card (found as a flaky _selftest_sizing,
+#           the same look as the report fixed in F-2's notes). App._fit_defs settles the slide before fitting.
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -1369,12 +1372,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           downloads it, shows what unpacking it changes, and the next Unpack does it. Not tried for real here:
 #           the workflow on GitHub (no gh login in this container) and a real release (none published yet).
 #           _selftest_updates.py, _selftest_sources.py.
-# [ ] T-9  Introduce the other form on first start (asked for). The first time the program starts as a
+# [x] T-9  Introduce the other form on first start (asked for). The first time the program starts as a
 #           script (tierlist.py) it asks once: "Make this a standalone program? It saves, builds, and
 #           reopens as the program" (T-6); the first time the built program starts it asks the reverse:
 #           "Unpack the source code next to it?" (T-7). Either way the save is committed first, the
 #           answer is remembered (meta), and both stay in the File menu afterwards. Never asked during
 #           a first-run download or while another question is open; --no-install also silences it.
+#           Built: App._offer_other_form, started from App._startup after the start's own questions (merge,
+#           How words are dealt, anchors); it waits while one of our dialogs is open (widgets.dialog_open), a long
+#           job runs (App.busy) or Wiktionary's meanings are downloading (App.rude_read). Asked once per form (meta
+#           offered_program / offered_source, set before asking, so "Not now" is remembered too); every save write
+#           commits already. Yes does Source & Updates' own action at once (SourceDialog(go=True): from source
+#           make the program and reopen as it; in the program unpack into "Word Tier List source" beside it, the page
+#           showing only if that fails), from the version you have. Not asked when a program already sits next to
+#           tierlist.py, or when the program carries no source. App(offer_form=...) is off unless main() turns it on
+#           (not with --no-install), so tests never see it. _selftest_sources.py.
 # [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
@@ -1485,7 +1497,8 @@ def main():
                          "it, for troubleshooting. Normally the program carries on in its own window, the "
                          "terminal gets its prompt back and messages go to tierlist.log next to the save file")
     ap.add_argument("--no-install", action="store_true",
-                    help="never offer to pip-install missing packages (they are listed in requirements.txt)")
+                    help="never offer to pip-install missing packages (they are listed in requirements.txt), "
+                         "nor to make a program / unpack the source on the first start")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
@@ -1614,7 +1627,8 @@ def main():
             print(f"{store.count_words():,} words ready.")
             # --- 5. show the main window, built, sized and filled while still hidden (F-1); App runs until closed
             app = App(root, store, Definitions(store), note=note, other_saves=others,
-                      ask_dealing=store.get_meta("dealt_asked") != "1")   # (ST-6: once a save)
+                      ask_dealing=store.get_meta("dealt_asked") != "1",   # (ST-6: once a save)
+                      offer_form=not args.no_install)                     # (T-9: the other form, once)
             app.open_window()
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)

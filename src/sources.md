@@ -17,3 +17,4 @@ The module docstring has the details; this page is the map.
 
 - What it will do is always shown before it does it (the plan's summary); an update downloads first, shows the plan, and the next Unpack does it.
 - The GitHub check runs on a worker thread; the dialog polls its answer.
+- `SourceDialog(app, go=True)` does the page's action at once (T-9's yes), from the version you have; an unpack that fails shows the page.

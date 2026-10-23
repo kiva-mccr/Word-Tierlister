@@ -31,7 +31,7 @@ All optional; `python tierlist.py --help` explains each.
 | `--keep-download` | Keep the 3 GB Wiktionary download after building. |
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
-| `--no-install` | Never offer to install missing packages. |
+| `--no-install` | Never offer to install missing packages, nor (on the first start) to make a program or unpack the source. |
 
 ## Folders
 
@@ -213,6 +213,12 @@ File > Source & Updates... (when running `tierlist.py`) makes Word Tier List int
 so it keeps using the same save and no longer needs Python. It takes a minute or two (the first time it installs
 the builder, PyInstaller, about 15 MB), then starts the new program and closes this window. The program carries its
 complete source inside it. If nothing has changed since the last build, it offers to start that program instead.
+
+The first time each form starts, it offers the other once, when nothing else is being asked: `tierlist.py` asks
+"Make this a standalone program?" (yes builds it and reopens as it), the program asks "Unpack the source code next
+to it?" (yes writes it into "Word Tier List source" beside it). Either answer is remembered in the save, and both
+stay in File > Source & Updates. Not asked when a program already sits next to `tierlist.py`, nor with
+`--no-install`.
 
 Either way the dialog has a tick box, ticked to start with: **Update to the newest version first**. It asks GitHub
 for the newest release and says in a line what it found. Ticked and newer than yours, making the program builds
