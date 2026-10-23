@@ -27,7 +27,7 @@ from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, TIERS, mask_word
 from fonts import ROLES, init_fonts, font, scale_fonts
-from keymap import Keymap, display, event_spec
+from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from sources import SourceDialog
@@ -122,7 +122,7 @@ class App:
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
         self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
         self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
-        self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
+        self.zoom = store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
         self._chart_ready = False
         self._settled_ready = False
 
@@ -411,7 +411,7 @@ class App:
     def _say_zoom(self, z):
         """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
         note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
-        self.flash(f"Zoom {round(z * 100)}%{note}", bg=PALETTE["info"][0], fg=PALETTE["info"][1],
+        self.flash(f"Zoom {round(z * 100)}%{note}", kind="info",
                    ms=900 if not note else 1600)
 
     def zoom_step(self, d):
@@ -428,7 +428,7 @@ class App:
         t = getattr(self, "_zoom_note", None)
         if t is not None and t.cget("text") == self.ZOOM_FULL and t.wiggle():
             return
-        self.flash(self.ZOOM_FULL, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+        self.flash(self.ZOOM_FULL, kind="info", ms=1500)
         self._zoom_note = self.toast
 
     ZOOM_FULL = "This is as big as fits on this screen"
@@ -767,10 +767,12 @@ class App:
             self.toasts.remove(t)
             t.destroy()
 
-    def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
-        """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
-        replaces the old one."""
-        self._new_toast().show(text, (bg, fg), ms, in_=self.center,
+    def flash(self, text, kind="ok", ms=3500, bg=None, fg=None):
+        """Show a message in a toast for `ms` milliseconds, coloured for its `kind` ("ok", "info", "warn":
+        PALETTE's pairs) or by `bg` / `fg` (a tier's colours). Each message is its own toast, the newest on top."""
+        if bg is None:
+            bg, fg = PALETTE[kind]
+        self._new_toast().show(text, (bg, fg or PALETTE[kind][1]), ms, in_=self.center,
                          wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
@@ -973,27 +975,32 @@ class App:
         else:
             self.vs_lbl.grid_remove()
 
+    def _word_to_act_on(self):
+        """The word on the card, for placing or skipping it, or None (none, or comparing). A word being typed on
+        the card is put back first (a button clicked while typing)."""
+        if not self.cur_word or self.cmp:
+            return None
+        self.word_card.end_typing()
+        return self.cur_word
+
     def place_word(self, tier):
         """Put the current word straight into `tier` (keys 1-6 or the tier buttons)."""
-        if not self.cur_word or self.cmp:
-            return
-        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
-        word = self.cur_word
-        self.store.place(word, tier)
-        self._after_place(word, tier)
+        word = self._word_to_act_on()
+        if word:
+            self.store.place(word, tier)
+            self._after_place(word, tier)
 
     def skip_word(self):
         """'Don't know / later': move the current word behind every fresh word."""
-        if not self.cur_word or self.cmp:
+        word = self._word_to_act_on()
+        if not word:
             return
-        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
-        word = self.cur_word
         if word == self.looked_up:
             self.looked_up = None
         self.store.skip(word)
         self._count_action()
         old_sub = self.word_card.sub
-        self.flash(f"'{self.shown(word)}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.flash(f"'{self.shown(word)}' moved to the back of the queue", kind="info", ms=1800)
         self.refresh()
         f = ui_factor(self.root)               # "later": it drifts back (up and away) instead of toward a tier
         self.word_card.transition_from(word, old_sub, dx=0, dy=-int(10 * f), animator=self.anim)
@@ -1042,7 +1049,7 @@ class App:
             return
         self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
         if not all(self.anchors):
-            self.flash("Set all six anchor words first (Settings > Anchor words...)", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+            self.flash("Set all six anchor words first (Settings > Anchor words...)", kind="warn")
             return
         self.cmp = {"lo": 0, "hi": len(TIERS) - 1, "stack": [], "log": [], "mid": None}
         self._cmp_step()
@@ -1140,7 +1147,7 @@ class App:
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:
-                self.flash(f"No fresh opponents left for '{self.shown(self.focus)}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+                self.flash(f"No fresh opponents left for '{self.shown(self.focus)}'", kind="warn")
                 self.focus = None
                 self._update_focus_label()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
@@ -1191,7 +1198,7 @@ class App:
         if self.focus:
             self.focus_left -= 1
             if self.focus_left <= 0:
-                self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
+                self.flash(f"Finished refining '{self.focus}'")
                 self.focus = None
         self.pair = None                       # answered: nothing more to click until the next pair is up
         if ans in ("left", "right"):
@@ -1262,7 +1269,7 @@ class App:
                 return
             self.store.add_word(text)
             row = self.store.get_word(text)
-            self.flash(f"'{text}' added to the word list", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+            self.flash(f"'{text}' added to the word list", kind="info", ms=1800)
         self._to_add = None
         self.looked_up = row["word"]
         card.end_typing(restore=False)
@@ -1302,11 +1309,11 @@ class App:
             return
         word = self.store.undo()
         if word is None:
-            self.flash("Nothing to undo", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+            self.flash("Nothing to undo", kind="info", ms=1500)
             return
         self.session_count = max(0, self.session_count - 1)
         self.cmp = None
-        self.flash(f"Undid last action ({self.shown(word)})", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.flash(f"Undid last action ({self.shown(word)})", kind="info", ms=1800)
         self.refresh()
 
     def shown(self, word):
@@ -1364,7 +1371,7 @@ class App:
             if e.keysym == "Escape":
                 self.header.close()
             return
-        spec = event_spec(e.keysym, getattr(e, "state", 0), self._ws)
+        spec = spec_of(e, self._ws)
         if spec is None:
             return
         view = ("compare" if self.cmp else "place") if self.mode == "place" else "duel"
@@ -1432,7 +1439,7 @@ class App:
             self.def_words = words
         if not self.show_defs:
             return
-        self.def_frame.show_words(self.def_words, self.get_def, self.shown,
+        self.def_frame.show_words(self.def_words, self.get_def, self.store.censored,
                                   self.store.smeared_meanings if self.store.deal_settings()["censor"] else None)
         self._fit_defs()
 
@@ -1649,7 +1656,7 @@ class App:
             return
         text = ("Word Tier List added to your applications menu (it starts without a terminal)" if how == "added"
                 else "Word Tier List updated in your applications menu")
-        self.flash(text, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=2600)
+        self.flash(text, kind="info", ms=2600)
         return path
 
     def source_updates(self):

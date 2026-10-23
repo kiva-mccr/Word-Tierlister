@@ -92,7 +92,8 @@ def kind_bits(pos):
 
 
 def mask_word(word):
-    """A censored word as text (ST-6), where a smear cannot be drawn (Browse's list, messages): b•••••d."""
+    """A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d. Everywhere a
+    widget can draw (cards, definitions, Browse's list) the word is smeared instead (widgets.smear_items)."""
     if len(word) <= 2:
         return "•" * len(word)
     return word[0] + "•" * (len(word) - 2) + word[-1]

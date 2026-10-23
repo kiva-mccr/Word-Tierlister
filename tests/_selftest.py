@@ -251,4 +251,12 @@ assert [x["pos"] for x in senses] == ["noun", "noun", "verb", "noun"] and senses
 assert senses[1]["labels"] == ["vulgar", "slang"] and senses[1]["gloss"] == "The vagina." and senses[0]["labels"] == []
 assert senses[0]["gloss"] == "A container."
 assert senses[1]["text"] == "(vulgar, slang) The vagina."
+# numeric settings: read, kept in range, and the default for one unset or damaged by hand
+m = T.Store(os.path.join(tempfile.mkdtemp(), "meta.db"))
+assert m.meta_number("zoom", 1.0) == 1.0
+m.set_meta("zoom", "9"); assert m.meta_number("zoom", 1.0, hi=2.5) == 2.5
+m.set_meta("zoom", "big"); assert m.meta_number("zoom", 1.0) == 1.0
+m.set_meta("browse_zoom", "-9"); assert m.meta_number("browse_zoom", 0, int, lo=-4) == -4
+fresh = m.deal_settings()["kinds"]
+m.set_meta("deal_kinds", "not a number"); assert m.deal_settings()["kinds"] == fresh   # (every kind, as when new)
 print("CORE OK")

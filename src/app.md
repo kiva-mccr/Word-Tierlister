@@ -1,0 +1,28 @@
+# `src/app.py`
+
+The main window (`App`): the header, the three placing views, the duel tabs, the chart and shelf, the definitions pane, the bottom bar, keys, zoom and window fitting, undo, and the background jobs it polls.
+
+- **Uses:** `browser`, `constants`, `dealing`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `theme`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
+- **Used by:** `tierlist`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
+
+The module docstring has the details; this page is the map.
+
+## Public API
+
+- `format_stats`: The status line (UI-15): one quiet line.
+- `local_midnight`: The start of today, local time, as a timestamp.
+- `App`: The main window and the state of what is currently on screen.
+  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, on_close
+
+## Rules and pitfalls (fixed before: keep them fixed)
+
+- Window size: what shows = min(zoom, biggest that fits) x grow; re-fit from the zoom on every layout change, never ratchet down; measure minimum sizes at grow 1 (`_fit_window`).
+- In a grown window the folded definitions pane counts at its full height and is shortened to fit (it once slid open over the word card).
+- Every key goes through `on_key` and the keymap; a held key repeats after 500 ms, then every 250 ms (`_repeat_allowed`).
+- Messages: `flash(text, kind)`; each is its own toast, newest on top. Text-only places name a censored word with `shown()` (masked); everything drawn smears it.
+- The window opens complete (`open_window`, F-1).
+
+## Changing it
+
+- Building the window: `_build_ui` / `_build_header`. Placing / skipping: `place_word` / `skip_word`. Zoom: `set_zoom` / `zoom_step`.

@@ -21,7 +21,12 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 - Every new widget or behaviour gets a `tests/_selftest_*.py` (first line `import _paths`) and a line in
   `tests/run_tests.sh`.
 
-## Layering (a file only imports from files earlier in this list)
+## Notes beside the code
+Every code file in the top folder, `src/` and `tools/` has a note beside it (`src/app.md`): read it before editing
+the file. Its facts (uses, used by, tests, public API) come from `python tools/notes.py`; its purpose and "Rules and
+pitfalls" are written by hand: add the rule or the bug there when you fix one. check_release fails on a stale note.
+
+## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
 constants, obscene, rudeness, problems, deps, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
 ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, dealing, sources -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
@@ -76,8 +81,9 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
 - Censored (obscene) words: copies of the word side by side over 0.625 letter widths, cut straight at its ends
-  (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) wherever only text fits (messages, Browse's list);
-  route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
+  (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
+  (`widgets.smeared_label`; the word un-smears while the pointer is over the pane) and Browse's list too
+  (`widgets.TreeSmears` over a blank cell). Route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
 
 ## Before handing a round over
@@ -133,6 +139,9 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   (scratch only): see OB-6). Never name a module like a PyPI package (src/ is first on the path: "packaging").
   Ask the user's examples of false matches.
   Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
+- The Windows zoom keys are now read by keycode with Ctrl held (keymap.WIN_CTRL_KEYS); not tried on real Windows.
+  The PyInstaller.utils error was not reproduced here: the build now checks the parts it uses and repairs an
+  incomplete PyInstaller.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
@@ -141,6 +150,5 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
   hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).
   Ask what OS / save size / key if it happens again.
-- The tests leave temporary folders in /tmp (30 GB once filled the disk): clear them if space runs out.
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.

@@ -14,16 +14,16 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from constants import KINDS, TIERS, mask_word
+from constants import KINDS, TIERS
 from errors import show_message
 from fonts import family, font
-from keymap import event_spec
+from keymap import spec_of
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from smooth import arrow_image
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
 from ui_motion import lerp_color
-from widgets import ChoiceButton, RoundButton, Toast, fill_definitions, refresh_widgets
+from widgets import ChoiceButton, RoundButton, Toast, TreeSmears, fill_definitions, refresh_widgets
 
 
 class Browser:
@@ -62,10 +62,7 @@ class Browser:
         self._shown_size = False                   # the first size it is shown at was taken (_on_configure)
         self._open_size = None                     # the size it opens at (_fit_to_contents), for the text size
         self.fsize = 0
-        try:
-            self.zoom = max(-4, min(30, int(app.store.get_meta("browse_zoom", "0"))))
-        except ValueError:
-            self.zoom = 0
+        self.zoom = app.store.meta_number("browse_zoom", 0, int, lo=-4, hi=30)
 
         # Shared fonts: resizing these two updates every widget that uses them at once.
         self.f_body = tkfont.Font(family=family(), size=12)
@@ -131,6 +128,8 @@ class Browser:
         self.tree.bind("<<TreeviewSelect>>", lambda e: (self._on_select(), self._draw_outline()))
         self.tree.bind("<Configure>", lambda e: self._draw_outline(), add="+")
         self.tree.bind("<Double-1>", lambda e: self.refine())
+        # censored words smeared over their (blank) cells, as on the cards (asked for: not b\u2022\u2022\u2022\u2022\u2022d)
+        self.smears = TreeSmears(self.tree, "word", self.f_body, self._row_colors, animator=anim)
 
         btns = self.btn_bar = ttk.Frame(self.win, padding=(10, 8))
         btns.pack(fill="x")
@@ -248,14 +247,22 @@ class Browser:
         size = max(8, min(64, int(round(12 * min(w / self.base_w, h / self.base_h))) + self.zoom))
         if size == self.fsize:
             return
+        self._set_size(size)
+        self._update_minsize()
+        self.win.after_idle(self._draw_outline)     # (rows moved: the outline and the smeared words follow)
+
+    def _row_height(self):
+        """A list row's height for the current text size (the tree does not derive it from the font)."""
+        return int(self.f_body.metrics("linespace") * 1.5) + 6
+
+    def _set_size(self, size):
+        """The text at `size` points: fonts, row height, columns, and every widget using the shared fonts."""
         self.fsize = size
         self.f_body.configure(size=size)
         self.f_bold.configure(size=size)
-        # Row height must be set explicitly: the tree does not derive it from the font.
-        self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
+        self.style.configure(self.tstyle, rowheight=self._row_height())
         self._set_columns()
         refresh_widgets(self.win)                   # the tier buttons and Show / Sort use the shared fonts
-        self._update_minsize()
 
     def _col_widths(self):
         """Column widths in pixels, measured from the current fonts so headings and numbers never clip."""
@@ -283,7 +290,7 @@ class Browser:
         count_w = self.f_body.measure(self._longest_count()) + 4
         top_w = self.top_bar.winfo_reqwidth() - self.count_lbl.winfo_reqwidth() + count_w
         w = max(top_w, self.btn_bar.winfo_reqwidth(), tree_w)
-        row_h = int(self.f_body.metrics("linespace") * 1.5) + 6
+        row_h = self._row_height()
         fixed = sum(x.winfo_reqheight() for x in self.win.pack_slaves() if x is not self.tree.master)
         return w, fixed + row_h * 8 + 16
 
@@ -295,12 +302,7 @@ class Browser:
     def _fit_to_contents(self):
         """First sizing, once the widgets exist: at the 12 pt reference text, make sure the preferred
         size is not smaller than what the toolbars and columns need, then place the window."""
-        self.fsize = 12
-        self.f_body.configure(size=12)
-        self.f_bold.configure(size=12)
-        self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
-        self._set_columns()
-        refresh_widgets(self.win)
+        self._set_size(12)
         area = usable_area(self.app.root)
         nw, nh = self._needed_size()
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
@@ -314,7 +316,7 @@ class Browser:
         """A key in this window, through the app's keymap: Browse's own keys (Unplace), then Undo and zoom from
         the Everywhere ones. While typing in the search box only Ctrl / Alt keys act, so Backspace still edits
         the text; on macOS the key marked delete (Backspace) unplaces too (UI-39)."""
-        spec = event_spec(e.keysym, getattr(e, "state", 0), self._ws)
+        spec = spec_of(e, self._ws)
         if spec is None:
             return None
         typing = isinstance(e.widget, (ttk.Entry, tk.Entry))
@@ -413,20 +415,23 @@ class Browser:
 
     def _add_rows(self, rows):
         """Append rows to the table, colouring placed words by tier. The word itself is the row id; a censored one
-        (ST-6) reads b\u2022\u2022\u2022\u2022\u2022d in the list (its definition pane shows it whole)."""
+        (ST-6) has a blank cell with the word smeared over it (TreeSmears)."""
         hide = self.app.store.obscene_words() if self.app.store.deal_settings()["censor"] else ()
         for r in rows:
             tier = "-" if r["tier"] is None else TIERS[r["tier"]]
             tags = () if r["tier"] is None else (f"t{r['tier']}",)
             try:
                 self.tree.insert("", "end", iid=r["word"], tags=tags, values=(
-                    tier, mask_word(r["word"]) if r["word"] in hide else r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
+                    tier, "" if r["word"] in hide else r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
                     r["games"], f"{r['rank'] + 1:,}"))
             except tk.TclError:  # the same word arriving twice because the list changed under us
-                pass
+                continue
+            if r["word"] in hide:
+                self.smears.words.add(r["word"])
 
     def _clear_tree(self):
         """Empty the table (in slices, which is much faster than one huge delete)."""
+        self.smears.words.clear()
         kids = self.tree.get_children()
         for i in range(0, len(kids), 2000):
             self.tree.delete(*kids[i:i + 2000])
@@ -478,7 +483,10 @@ class Browser:
             self.win.after_idle(self._load_more)
 
     def _draw_outline(self):
-        """Place the selection outline round the selected row, or hide it when that row is scrolled out."""
+        """Place the selection outline round the selected row, or hide it when that row is scrolled out; and the
+        smeared words over their rows (TreeSmears)."""
+        self.smears.inset = max(2, self.fsize // 5) + 1
+        self.smears.refresh()
         try:
             sel = self.tree.selection()
             box = self.tree.bbox(sel[0]) if sel else None
@@ -499,6 +507,16 @@ class Browser:
                 (x, y, w, t), (x, y + h - t, w, t), (x, y, t, h), (x + w - t, y, t, h))):
             edge.place(x=ex, y=ey, width=ew, height=eh)
             edge.lift()
+
+    def _row_colors(self, iid):
+        """(ink, paper) of a row in the list: its tier's colour (stronger when selected), or the plain list's."""
+        tag = next((g for g in self.tree.item(iid, "tags") if g.startswith("t")), None)
+        if tag:
+            t = int(tag[1:])
+            return TIER_TEXT, TIER_COLORS[t] if iid in self.tree.selection() else TIER_ROW[t]
+        state = ["selected"] if iid in self.tree.selection() else []
+        return (self.style.lookup(self.tstyle, "foreground", state) or PALETTE["text"],
+                self.style.lookup(self.tstyle, "background", state) or PALETTE["surface"])
 
     def _load_more(self):
         """Fetch and append the next page of rows (no-op if already loading or everything is loaded)."""
@@ -530,11 +548,11 @@ class Browser:
         """Fill the definition pane for the selected word (shows 'Looking up...' until the lookup finishes)."""
         w = self.current
         # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2, OB-6);
-        # the word itself is shown whole here (you picked it)
+        # a censored word smeared too, un-smearing while the pointer is over the pane
         store = self.app.store
 
         def entry(word):
-            return word, self.app.get_def(word), store.smeared_meanings(word)
+            return word, self.app.get_def(word), store.smeared_meanings(word), store.censored(word)
         fill_definitions(self.def_text, [entry(w)] if w else [], self.f_body, censor=store.deal_settings()["censor"],
                          animator=self.app.anim, base=entry)
 

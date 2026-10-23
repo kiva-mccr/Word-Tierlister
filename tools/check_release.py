@@ -6,8 +6,10 @@
     python tools/check_release.py --zip out.zip   # also build the zip (only if the checks pass)
 
 Checks: every third-party import is in requirements.txt (and the runtime ones in deps.PACKAGES), every
-module is in the README file map, every self-test is in run_tests.sh, pyflakes is clean (apart from the
-known re-export noise), and no stray logs, saves or caches would end up in the zip.
+module is in the README file map, every self-test is in run_tests.sh, every code file has its notes beside it
+(name.md, up to date: tools/notes.py), the modules import only from the layers
+below them (LAYERS, as .claude/CLAUDE.md lists them), pyflakes is clean (apart from the known re-export noise),
+and no stray logs, saves or caches would end up in the zip.
 Exit status is 0 only if everything passed. See .claude/CHECKLIST.md for the checks a script cannot do.
 
 Layout (R-1): tierlist.py at the top (next to your save), the modules in src/, the self-tests in tests/,
@@ -47,13 +49,7 @@ def _name(path):
 
 def imports_of(path):
     """Top-level module names imported anywhere in the file (including inside functions)."""
-    names = set()
-    for node in ast.walk(ast.parse(open(os.path.join(HERE, path), encoding="utf-8").read())):
-        if isinstance(node, ast.Import):
-            names |= {a.name.split(".")[0] for a in node.names}
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            names.add(node.module.split(".")[0])
-    return names
+    return {mod for mod, _line in _module_imports(path)}
 
 
 def requirement_names():
@@ -115,6 +111,51 @@ def check_docs(problems):
             problems.append(f"{f} is at the top of the project: modules go in src/, tests in tests/ (R-1)")
 
 
+# The layers of src/ (.claude/CLAUDE.md), lowest first: a module imports only from modules before it; the ones in
+# one inner list are equals (none imports another). Only UI modules (from "theme" on) import tkinter.
+LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["keymap"], ["bundle"], ["standalone"],
+          ["store"], ["wordsource", "saves", "definitions"], ["theme"], ["fonts"], ["sizing"], ["ui_style"],
+          ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart"], ["browser"], ["filepicker"],
+          ["shortcuts"], ["dealing"], ["sources"], ["app"]]
+
+
+def _module_imports(path):
+    """(module name, line) for every import in the file, at any depth."""
+    for node in ast.walk(ast.parse(open(os.path.join(HERE, path), encoding="utf-8").read())):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                yield a.name.split(".")[0], node.lineno
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            yield node.module.split(".")[0], node.lineno
+
+
+def check_layers(problems):
+    """Every src/ module is in LAYERS and imports only from the layers below its own; tkinter only from "theme"
+    on (workers and the logic stay testable without a window)."""
+    rank = {m: i for i, group in enumerate(LAYERS) for m in group}
+    ui = rank["theme"]
+    for f in _files_in("src"):
+        if not f.endswith(".py"):
+            continue
+        me = _name(f)[:-3]
+        if me not in rank:
+            problems.append(f"{f} is not in check_release.LAYERS (and .claude/CLAUDE.md's layer list)")
+            continue
+        for mod, line in _module_imports(f):
+            if mod in rank and mod != me and rank[mod] >= rank[me]:
+                problems.append(f"{f}:{line} imports {mod}, which is not below it in the layers (LAYERS)")
+            if mod == "tkinter" and rank[me] < ui:
+                problems.append(f"{f}:{line} imports tkinter but is not a UI module (LAYERS: from theme on)")
+
+
+def check_code_notes(problems):
+    """Every code file has its notes beside it (src/app.py: src/app.md), with its purpose written and its
+    generated parts (uses, used by, tests, public API) up to date (tools/notes.py)."""
+    sys.path.insert(0, os.path.join(HERE, "tools"))
+    import notes
+    problems += notes.notes(check=True)
+
+
 def check_pyflakes(problems):
     """pyflakes finds nothing (when it is installed)."""
     try:
@@ -167,6 +208,8 @@ def main(argv):
     sys.path[:0] = [os.path.join(HERE, "src"), HERE]
     check_imports(problems)
     check_docs(problems)
+    check_layers(problems)
+    check_code_notes(problems)
     check_pyflakes(problems)
     check_stray(problems)
     if "--tests" in argv:

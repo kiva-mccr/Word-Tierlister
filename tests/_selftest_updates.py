@@ -7,6 +7,11 @@ import standalone as S
 from constants import REPO, VERSION
 import importlib.util
 
+class R:
+    def __init__(self, code=0, out=""):
+        self.returncode, self.stdout, self.stderr = code, out, ""
+
+
 # versions
 assert S.version_tuple("v1.2.10") == (1, 2, 10) and S.version_tuple("1.0") == (1, 0)
 assert S.newer({"version": "9.0.0"}) and not S.newer({"version": VERSION}) and not S.newer(None)
@@ -63,14 +68,28 @@ assert S.make_program(proj, steps.append, release=r) == S.program_path(proj)
 assert built[0].endswith("release") and "Downloading version 9.1.0" in steps[0]
 assert S.make_program(proj, steps.append) and built[1] == proj           # (unticked: the source you have)
 
+# PyInstaller there but incomplete (reported: "No module named 'PyInstaller.utils'"): the check imports what a build
+# uses, and a broken one is reinstalled, not taken as installed; both run from a neutral folder
+import importlib
+S2 = importlib.reload(S)                                    # (the real functions, not the stand-ins above)
+calls = []
+def fake_run(args, **kw):
+    calls.append((args, kw.get("cwd")))
+    code = args[-1] if args[1] == "-c" else None
+    ok = {"import PyInstaller": 0, S2.PYINSTALLER_CHECK: 1 if len(calls) < 3 else 0}.get(code, 0)
+    return R(ok)
+S2.subprocess.run = fake_run
+try:
+    assert S2.ensure_pyinstaller("python", log=lambda t: None)
+finally:
+    S2.subprocess.run = importlib.import_module("subprocess").run
+pip = [a for a, _ in calls if "pip" in a]
+assert pip and "--force-reinstall" in pip[0], calls                  # (repaired, not "installed")
+assert all(cwd for _, cwd in calls)
+
 # tools/build.py --all: says what is missing, or runs the workflow, waits and fetches both programs into dist/
 spec = importlib.util.spec_from_file_location("build_tool", os.path.join(_paths.ROOT, "tools", "build.py"))
 B = importlib.util.module_from_spec(spec); spec.loader.exec_module(B)
-
-
-class R:
-    def __init__(self, code=0, out=""):
-        self.returncode, self.stdout, self.stderr = code, out, ""
 
 
 def fake_gh(logged_in=True, pushed=True, runs_ok=True):

@@ -7,7 +7,7 @@ same view offers a swap. Changes apply at once (App.apply_keys) and are saved in
 import tkinter as tk
 
 from fonts import font
-from keymap import (GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, event_spec,
+from keymap import (GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, spec_of,
                     place_display, place_keys)
 from theme import PALETTE
 from widgets import RoundButton, StyledDialog
@@ -139,7 +139,7 @@ class ShortcutsDialog:
         self._say("")
 
     def _caught(self, e):
-        self.press(event_spec(e.keysym, getattr(e, "state", 0), self.app._ws))
+        self.press(spec_of(e, self.app._ws))
         return "break"                          # (Enter, Escape, Tab... are the new key, not the dialog's)
 
     def press(self, spec):

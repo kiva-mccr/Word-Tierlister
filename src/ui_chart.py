@@ -116,6 +116,10 @@ class DistributionChart(SmoothCanvas):
         goal = self._goal = [c / peak for c in counts]
         start = list(self._shown)
         self.counts = counts
+        self._ease(start, goal, animate)
+
+    def _ease(self, start, goal, animate):
+        """The bars from `start` to `goal` (their shares of the tallest), easing over GROW_MS or at once."""
         if not animate or self._anim is None or start == goal:
             self._shown = goal
             self._paint()
@@ -215,15 +219,7 @@ class SettledChart(DistributionChart):
         goal = [s or 0.0 for s in self.shares]
         start = list(self._shown)
         self.counts = [1 if s else 0 for s in self.shares]           # a sliver for any settled word
-        if not animate or self._anim is None or start == goal:
-            self._shown = goal
-            self._paint()
-            return
-
-        def frame(p):
-            self._shown = [a + (b - a) * p for a, b in zip(start, goal)]
-            self._paint()
-        self._anim.run(f"chart{id(self)}", GROW_MS, frame)
+        self._ease(start, goal, animate)
 
 
 class ConflictCard(SmoothCanvas):

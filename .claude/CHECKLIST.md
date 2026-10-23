@@ -5,7 +5,11 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
 
 ## 1. Code
 - [ ] New code lives in the right layer (README, "Layers") and folder (modules in src/, tests in tests/,
-      tierlist.py stays at the top); only UI files import tkinter.
+      tierlist.py stays at the top); only UI files import tkinter (auto: check_release.LAYERS).
+- [ ] Each code file touched: its note (`name.md`) still true. `python tools/notes.py` refreshes the generated
+      parts (auto: --check); a rule changed or a bug fixed goes in its "Rules and pitfalls" by hand.
+- [ ] Nothing written twice: a third copy of the same few lines becomes a helper (as `Store.meta_number`,
+      `App.flash(kind=...)`, `StyledDialog.text`, `keymap.spec_of`).
 - [ ] Every new third-party import is in `requirements.txt` AND `deps.PACKAGES` (auto). Optional ones are
       listed in requirements.txt too (commented), and the code works without them. Packages only tests or
       tools import (pillow, anthropic) go in requirements.txt commented, never in deps.PACKAGES.

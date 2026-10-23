@@ -492,11 +492,7 @@ def wants_rude_fetch(store):
     the App reads them in the background (fetch_rude_senses), and it is time to try again."""
     if store.get_meta("rude_senses") == "1" or os.environ.get(OFFLINE_ENV) or not store.count_words():
         return False
-    try:
-        last = float(store.get_meta("rude_tried", "0"))
-    except ValueError:
-        last = 0.0
-    return time.time() - last > RUDE_RETRY_S
+    return time.time() - store.meta_number("rude_tried", 0.0) > RUDE_RETRY_S
 
 
 def read_rude_senses(path, keep, log=print):

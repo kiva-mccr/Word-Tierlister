@@ -161,6 +161,17 @@ class Store:
         r = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
         return r["value"] if r else default
 
+    def meta_number(self, key, default, cast=float, lo=None, hi=None):
+        """A numeric setting: `cast` of its text (float or int), kept within lo..hi; `default` when it is unset or
+        not a number (a hand-edited or damaged save)."""
+        try:
+            value = cast(self.get_meta(key, default))
+        except (TypeError, ValueError):
+            value = cast(default)
+        if lo is not None:
+            value = max(lo, value)
+        return min(hi, value) if hi is not None else value
+
     def set_meta(self, key, value):
         """Save a setting (stored as text) and commit."""
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)", (key, str(value)))
@@ -240,11 +251,8 @@ class Store:
             seed = random.SystemRandom().randrange(1, 2 ** 31)
             self.set_meta("qseed", seed)
         shape = self.get_meta("qshape", QUEUE_DEFAULTS["qshape"])
-        try:
-            spread = max(100.0, float(self.get_meta("qspread", QUEUE_DEFAULTS["qspread"])))
-            comp = min(10.0, max(0.0, float(self.get_meta("qcompound", QUEUE_DEFAULTS["qcompound"]))))
-        except ValueError:
-            spread, comp = float(QUEUE_DEFAULTS["qspread"]), float(QUEUE_DEFAULTS["qcompound"])
+        spread = self.meta_number("qspread", QUEUE_DEFAULTS["qspread"], lo=100.0)
+        comp = self.meta_number("qcompound", QUEUE_DEFAULTS["qcompound"], lo=0.0, hi=10.0)
         return {"seed": int(seed), "spread": spread,
                 "shape": shape if shape in QUEUE_SHAPES else "exp", "compound": comp}
 
@@ -297,14 +305,8 @@ class Store:
         rude kinds under it (rudeness.KIND_BITS), "censor": censored words shown smeared}. Every kind of word is
         ticked to start with; "Obscene words" is not (with obscene.TICKED ticked under it for when it is), and
         nothing is censored."""
-        try:
-            kinds = int(self.get_meta("deal_kinds", ALL_KINDS)) & ALL_KINDS
-        except ValueError:
-            kinds = ALL_KINDS
-        try:
-            rude = int(self.get_meta("deal_rude", _TICKED_BITS)) & _RUDE_BITS
-        except ValueError:
-            rude = _TICKED_BITS
+        kinds = self.meta_number("deal_kinds", ALL_KINDS, int) & ALL_KINDS
+        rude = self.meta_number("deal_rude", _TICKED_BITS, int) & _RUDE_BITS
         return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "0") == "1", "rude": rude,
                 "censor": self.get_meta("censor", "0") == "1"}
 

@@ -31,11 +31,9 @@ from tkinter import filedialog, ttk
 import standalone
 from errors import ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
-from fonts import font
 from problems import STOPPED_MESSAGE
 from saves import is_frozen
 from startup import run_with_progress
-from theme import PALETTE
 from widgets import StyledDialog
 from constants import VERSION
 
@@ -75,9 +73,8 @@ class SourceDialog:
         self.update_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(dlg.body, text="Update to the newest version first", variable=self.update_var,
                         command=self._show_update, takefocus=1).pack(anchor="w", pady=(12, 0))
-        self.update_line = ttk.Label(dlg.body, text=f"Version {VERSION}. Checking GitHub for a newer one...",
-                                     foreground=PALETTE["muted"], wraplength=dlg.wrap, justify="left")
-        self.update_line.pack(anchor="w", padx=(24, 0))
+        self.update_line = dlg.text(f"Version {VERSION}. Checking GitHub for a newer one...", muted=True,
+                                    padx=(24, 0))
         self.checked = False
 
     def _start_check(self, check):
@@ -137,12 +134,9 @@ class SourceDialog:
             state = "The source has changed since the program there was built: it is built again from this source."
         else:
             state = None
-        self.where = ttk.Label(dlg.body, text=f"It goes next to tierlist.py:\n{path}", foreground=PALETTE["muted"],
-                               wraplength=dlg.wrap, justify="left")
-        self.where.pack(anchor="w")
+        self.where = dlg.text(f"It goes next to tierlist.py:\n{path}", muted=True)
         if state:
-            self.state = ttk.Label(dlg.body, text=state, font=font("body"), wraplength=dlg.wrap, justify="left")
-            self.state.pack(anchor="w", pady=(10, 0))
+            self.state = dlg.text(state, pady=(10, 0))
         self._update_row()
         dlg.button("Cancel", dlg.close)
         if self.fresh:
@@ -196,17 +190,14 @@ class SourceDialog:
         self.dlg = dlg = StyledDialog(self.app.root, "Source & Updates", UNPACK_HEADLINE, UNPACK_INTRO,
                                       animator=self.app.anim, wrap_chars=64)
         if not self.source:
-            ttk.Label(dlg.body, text="This program was built without its source code inside it, so there is "
-                      "nothing to unpack.", wraplength=dlg.wrap, justify="left").pack(anchor="w")
+            dlg.text("This program was built without its source code inside it, so there is nothing to unpack.")
             dlg.button("Close", dlg.close, default=True)
             return
         self.target = standalone.default_source_folder()
         row = ttk.Frame(dlg.body)
         row.pack(fill="x", anchor="w")
-        self.where = ttk.Label(row, text="", foreground=PALETTE["muted"], wraplength=dlg.wrap - 140, justify="left")
-        self.where.pack(side="left", anchor="w")
-        self.state = ttk.Label(dlg.body, text="", font=font("body"), wraplength=dlg.wrap, justify="left")
-        self.state.pack(anchor="w", pady=(10, 0))
+        self.where = dlg.text("", muted=True, parent=row, room=140, side="left")
+        self.state = dlg.text("", pady=(10, 0))
         self._update_row()
         dlg.button("Change folder...", self.change_folder, side="left")
         dlg.button("Cancel", dlg.close)

@@ -7,6 +7,7 @@ After a shared Font object is resized, call refresh_widgets(window) so they re-m
 import math
 import tkinter as tk
 import tkinter.font as tkfont
+from tkinter import ttk
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
@@ -1298,24 +1299,40 @@ def definition_tags(t, body):
 
 
 def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
-    """Fill the definition pane `t` (a tk.Text) with [(heading, definition text or None while it is being looked
-    up, the keys of its meanings to smear)]: the heading in bold, then each sense numbered, its part of speech, its
-    text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a censored kind (its first
-    rudeness.GLOSS_KEY characters among the keys: Store.smeared_meanings) shows its labels, and its text smeared
-    sideways like a censored word, un-smearing under the pointer. `base` (F-3): base(word) -> the same three for
-    another word; under a meaning that only names one ("Alternative form of bull dyke"), that word's own first
-    meaning, muted."""
+    """Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up,
+    the keys of its meanings to smear, True if the word itself is censored)]: the word in bold, then each sense
+    numbered, its part of speech, its text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a
+    censored kind (its first rudeness.GLOSS_KEY characters among the keys: Store.smeared_meanings) shows its labels,
+    and its text smeared sideways like a censored word, un-smearing under the pointer. A censored word is smeared
+    the same way (not masked), and un-smears while the pointer is anywhere over the pane. `base` (F-3): base(word)
+    -> the same four for another word; under a meaning that only names one ("Alternative form of bull dyke"), that
+    word's own first meaning, muted."""
     from definitions import form_target, main_sense, parse_definition
     for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
         c.destroy()
-    t._smears = []
+    t._smears, t._words, t._animator = [], [], animator
+    _watch_pane(t)
+    inside = _pointer_inside(t)
     definition_tags(t, body)
     t.config(state="normal")
     t.delete("1.0", "end")
-    for i, (heading, text, smeared) in enumerate(entries):
+
+    def word(name, hide, font_, tag):
+        """The word `name` (a censored one smeared, un-smearing while the pointer is over the pane)."""
+        if not hide:
+            t.insert("end", name, tag)
+            return
+        c = smeared_label(t, name, font_, t.cget("bg"), animator, hover=False)
+        t.window_create("end", window=c, align="center")
+        t._smears.append(c)
+        t._words.append(c)
+        if inside:
+            c.unsmear.hover(True)
+    for i, (heading, text, smeared, hide) in enumerate(entries):
         if i:
             t.insert("end", "\n")
-        t.insert("end", heading + "\n", "head")
+        word(heading, hide, t.tag_cget("head", "font") or body, "head")
+        t.insert("end", "\n", "head")
         if text is None:
             t.insert("end", "Looking up definition...\n", "wait")
             continue
@@ -1334,50 +1351,157 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
             target = form_target(sense["gloss"]) if base else None
             if target and target not in shown:          # (each word once: "plural of X" and "past of X" share it)
                 shown.add(target)
-                name, other, keys = base(target)
+                name, other, keys, hidden = base(target)
                 main = main_sense(other) if other else None
-                prefix = name + (f" ({main['pos']})" if main and main["pos"] else "") + ": "
-                t.insert("end", prefix, "base")
+                word(name, hidden, body, "base")
+                after = (f" ({main['pos']})" if main and main["pos"] else "") + ": "
+                t.insert("end", after, "base")
                 if other is None:
                     t.insert("end", "Looking up definition...\n", "base")
                 elif main is None:
                     t.insert("end", "No definition found.\n", "base")
                 else:
                     _insert_gloss(t, main, "base", censor and main["gloss"][:GLOSS_KEY] in keys, body, animator,
-                                  " " * 6 + prefix)
+                                  " " * 6 + name + after)
     t.config(state="disabled")
+
+
+def _pointer_inside(w):
+    """True if the pointer is over `w` or anything inside it."""
+    try:
+        over = w.winfo_containing(*w.winfo_pointerxy())
+    except (tk.TclError, KeyError):
+        return False
+    while over is not None:
+        if over is w:
+            return True
+        over = over.master
+    return False
+
+
+def _watch_pane(t):
+    """Once per pane: while the pointer is anywhere over it, its censored words un-smear (asked for); moving onto
+    a smeared meaning inside it is still over the pane."""
+    if getattr(t, "_watched", False):
+        return
+    t._watched = True
+
+    def over(on):
+        for c in getattr(t, "_words", ()):
+            c.unsmear.hover(on, t._animator)
+    t.bind("<Enter>", lambda e: over(True), add="+")
+    t.bind("<Leave>", lambda e: None if _pointer_inside(t) else over(False), add="+")
 
 
 def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
     """A sense's text and a line end into the pane `t` under `tag`; `smear`: its labels, then its gloss smeared
-    (_smeared_text; `prefix`: the text already on its line)."""
+    (smeared_label, wrapped to the room left on its line; `prefix`: the text already on it)."""
     if not smear:
         t.insert("end", sense["text"] + "\n", tag)
         return
     label = "(" + ", ".join(sense["labels"]) + ") " if sense["labels"] else ""
     t.insert("end", label, ("pos", tag))
-    c = _smeared_text(t, sense["gloss"].strip(), body, animator, body.measure(prefix + label))
+    pad = int(t.cget("padx") or 0)
+    room = (t.winfo_width() if t.winfo_ismapped() else int(t.cget("width")) * body.measure("0")) - 2 * pad - 30
+    width = max(body.measure("n" * 12), room - body.measure(prefix + label))
+    c = smeared_label(t, sense["gloss"].strip(), body, t.cget("bg"), animator, width=width)
     t.window_create("end", window=c, align="top")
     t.insert("end", "\n", tag)
     t._smears.append(c)
 
 
-def _smeared_text(t, text, body, animator, used):
-    """A little canvas inside the pane `t` with `text` smeared (smear_items), wrapped to the room left on its
-    line (`used` pixels are taken), un-smearing while the pointer is over it."""
-    bg = t.cget("bg")
-    pad = int(t.cget("padx") or 0)
-    room = (t.winfo_width() if t.winfo_ismapped() else int(t.cget("width")) * body.measure("0")) - 2 * pad - 30
-    width = max(body.measure("n" * 12), room - used)
-    c = tk.Canvas(t, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
-    item = c.create_text(0, 0, text=text, font=body, width=width, anchor="nw", fill=PALETTE["text"], tags="gloss")
+def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=PALETTE["text"], hover=True):
+    """A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places
+    that are not our own canvases (the definition panes, Browse's list). It un-smears while the pointer is over it
+    (`hover`), or when the caller says so: canvas.unsmear.hover(on, animator)."""
+    c = tk.Canvas(parent, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
+    item = c.create_text(0, 0, text=text, font=font_, width=width, anchor="nw", fill=fg, tags="gloss")
     x0, y0, x1, y1 = c.bbox(item)
     c.configure(width=x1 + 1, height=y1 + 1)
     smear = c.unsmear = Unsmear(c, "smear")
-    smear.place(item, text, PALETTE["text"], bg)
-    c.bind("<Enter>", lambda e: smear.hover(True, animator))
-    c.bind("<Leave>", lambda e: smear.hover(False, animator))
+    smear.place(item, text, fg, bg)
+    if hover:
+        c.bind("<Enter>", lambda e: smear.hover(True, animator))
+        c.bind("<Leave>", lambda e: smear.hover(False, animator))
     return c
+
+
+class TreeSmears:
+    """Censored words in one column of a ttk.Treeview (Browse's list), smeared as everywhere else (asked for: no
+    more b\u2022\u2022\u2022\u2022\u2022d). A Treeview cell holds only plain text, so the word's cell is left blank and a small
+    canvas with the word smeared is placed over it while its row is on screen; it un-smears under the pointer,
+    and clicks, double-clicks and the mouse wheel go on to the list.
+
+        smears = TreeSmears(tree, "word", font, colors=lambda row_id: (ink, paper), animator=anim)
+        smears.words = {row ids of censored words}; smears.refresh() after anything that moves or recolours the
+        rows (scrolling, resizing, selecting, a new font size, rows added or removed)
+    """
+    PAD = 6                                      # (the cell's own text inset, about)
+
+    def __init__(self, tree, column, font_, colors, animator=None, inset=None):
+        self.tree, self.column, self.font, self.colors, self.anim = tree, column, font_, colors, animator
+        self.inset = inset                       # (pixels kept clear at the row's top and bottom: the selection)
+        self.words = set()
+        self._marks = {}                         # row id -> (canvas, what it was drawn for)
+
+    def _visible(self):
+        """[(row id, cell box)] for the rows on screen."""
+        t = self.tree
+        rows = t.get_children()
+        if not rows:
+            return []
+        i = max(0, int(float(t.yview()[0]) * len(rows)) - 1)
+        out, seen = [], False
+        for iid in rows[i:i + 400]:
+            box = t.bbox(iid, self.column)
+            if box:
+                seen = True
+                out.append((iid, box))
+            elif seen:
+                break
+        return out
+
+    def refresh(self):
+        try:
+            boxes = {iid: box for iid, box in self._visible() if iid in self.words}
+        except tk.TclError:
+            return
+        for iid in set(self._marks) - set(boxes):
+            self._marks.pop(iid)[0].destroy()
+        inset = self.inset if self.inset is not None else 2
+        for iid, (x, y, w, h) in boxes.items():
+            ink, paper = self.colors(iid)
+            key = (w, h, ink, paper, self.font.actual("size"))
+            c, drawn = self._marks.get(iid, (None, None))
+            if c is None:
+                c = self._mark(iid)
+            if drawn != key:
+                c.configure(bg=paper, width=w - 2, height=h - 2 * inset)
+                c.delete("all")
+                item = c.create_text(self.PAD, (h - 2 * inset) / 2, text=iid, font=self.font, anchor="w", fill=ink)
+                c.unsmear.place(item, iid, ink, paper)
+            self._marks[iid] = (c, key)
+            c.place(x=x + 1, y=y + inset, width=w - 2, height=h - 2 * inset)
+
+    def _mark(self, iid):
+        t = self.tree
+        c = tk.Canvas(t, highlightthickness=0, bd=0, cursor="arrow")
+        c.unsmear = Unsmear(c, "smear")
+        c.bind("<Enter>", lambda e: c.unsmear.hover(True, self.anim))
+        c.bind("<Leave>", lambda e: c.unsmear.hover(False, self.anim))
+
+        def click(e, double=False):
+            t.focus_set()
+            t.selection_set(iid)
+            t.focus(iid)
+            if double:
+                t.event_generate("<Double-1>", x=e.x + c.winfo_x(), y=e.y + c.winfo_y())
+        c.bind("<Button-1>", click)
+        c.bind("<Double-1>", lambda e: click(e, True))
+        c.bind("<MouseWheel>", lambda e: t.yview_scroll(-1 if e.delta > 0 else 1, "units"))
+        c.bind("<Button-4>", lambda e: t.yview_scroll(-1, "units"))
+        c.bind("<Button-5>", lambda e: t.yview_scroll(1, "units"))
+        return c
 
 
 class DefinitionDrawer(tk.Frame):
@@ -1408,13 +1532,13 @@ class DefinitionDrawer(tk.Frame):
         definition_tags(t, body)
         self._shown = False
 
-    def show_words(self, words, get_def, name=None, smeared=None):
-        """Fill the pane: for each word, its name (name(word): what to call it, the masked text for a censored
-        word) and its senses (get_def(word) -> text, or None while it is still being looked up). `smeared`: while
+    def show_words(self, words, get_def, censored=None, smeared=None):
+        """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
+        up). `censored(word)`: True for a word shown smeared (until the pointer is over the pane); `smeared`: while
         censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6). A meaning that only
         names another word shows that word's first meaning under it, looked up the same way (F-3)."""
         def entry(w):
-            return name(w) if name else w, get_def(w), smeared(w) if smeared else ()
+            return w, get_def(w), smeared(w) if smeared else (), bool(censored and censored(w))
         fill_definitions(self.text, [entry(w) for w in words], self._body, censor=smeared is not None,
                          animator=self._anim, base=entry)
 
@@ -2352,6 +2476,14 @@ class StyledDialog:
         self.win.bind("<Return>", lambda e: self._default.invoke() if self._default else None)
         self.win.bind("<Escape>", lambda e: self.on_cancel())
         self.win.protocol("WM_DELETE_WINDOW", lambda: self.on_cancel())
+
+    def text(self, text, muted=False, parent=None, room=0, **pack):
+        """A wrapped line of text in the body (or `parent`), packed to the left (`pack`: more pack options); muted
+        for notes. `room`: pixels to leave beside it. Returns the label (its text can change later)."""
+        label = ttk.Label(parent or self.body, text=text, wraplength=self.wrap - room, justify="left",
+                          **({"foreground": PALETTE["muted"]} if muted else {"font": font("body")}))
+        label.pack(**dict({"anchor": "w"}, **pack))
+        return label
 
     def button(self, text, command, default=False, side="right"):
         """Add a rounded button; `default` makes it the lilac one Enter presses."""

@@ -146,19 +146,34 @@ def pyinstaller_args(dist, work, root=ROOT, platform=None, source=None):
     return args
 
 
+# what a build imports: a PyInstaller that only half installed passes "import PyInstaller" and then fails the
+# build with "No module named 'PyInstaller.utils'" (reported), so the check imports the parts the build uses
+PYINSTALLER_CHECK = "import PyInstaller.__main__, PyInstaller.utils.hooks"
+
+
+def _python_ok(python, code):
+    """True if `python -c code` runs, from a neutral folder (the folder the program was started from could hold a
+    file that shadows a module: `python -m` and `-c` look there first)."""
+    return subprocess.run([python, "-c", code], capture_output=True, cwd=tempfile.gettempdir()).returncode == 0
+
+
 def has_pyinstaller(python=sys.executable):
-    return subprocess.run([python, "-c", "import PyInstaller"], capture_output=True).returncode == 0
+    return _python_ok(python, PYINSTALLER_CHECK)
 
 
 def ensure_pyinstaller(python=sys.executable, log=print):
-    """Install PyInstaller if this Python lacks it (pip; with --break-system-packages on a Python that refuses
-    plain pip installs, such as Debian's). Returns True when it is there."""
+    """Install PyInstaller if this Python lacks it, or reinstall it if it is there but incomplete (pip; with
+    --break-system-packages on a Python that refuses plain pip installs, such as Debian's). Returns True when it
+    works."""
     if has_pyinstaller(python):
         return True
-    log("Installing PyInstaller (one time, about 15 MB)...")
+    broken = _python_ok(python, "import PyInstaller")
+    log("Repairing PyInstaller (it is installed but incomplete)..." if broken else
+        "Installing PyInstaller (one time, about 15 MB)...")
+    repair = ["--force-reinstall", "--upgrade"] if broken else []
     for extra in ([], ["--break-system-packages"]):
-        r = subprocess.run([python, "-m", "pip", "install", "--disable-pip-version-check", "pyinstaller", *extra],
-                           capture_output=True, text=True)
+        r = subprocess.run([python, "-m", "pip", "install", "--disable-pip-version-check", "pyinstaller", *repair,
+                            *extra], capture_output=True, text=True, cwd=tempfile.gettempdir())
         if r.returncode == 0 and has_pyinstaller(python):
             return True
         if "externally-managed" not in (r.stderr + r.stdout):
@@ -199,7 +214,7 @@ def build(dist, root=ROOT, log=print, carry_source=True):
         log(f"Building {output_name()} for this computer (a minute or two)...")
         log("  PyInstaller is putting Python, the program and its word lists into one file")
         r = subprocess.run([sys.executable, "-m", "PyInstaller", *pyinstaller_args(dist, work, root, source=source)],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, cwd=work)      # (a neutral folder: see _python_ok)
         if r.returncode != 0:
             log("The build failed:\n" + r.stderr[-3000:])
             return None

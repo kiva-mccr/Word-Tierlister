@@ -106,11 +106,27 @@ left.event_generate("<Leave>"); app.anim.finish_all(); pump(1)
 assert left.smear.clear == 0 and left.find_withtag("smear")
 app.duel.show("table", "moist"); pump(1); assert not left.find_withtag("smear") and left.itemcget("label", "state") != "hidden"
 app.mode_var.set("place"); app.on_mode_change(); pump(4)
-# Browse: the list masks it, its definition pane shows it whole; Show lists a kind
+# Browse (asked for: smeared, not b•••••d): the list leaves its cell blank with the word smeared over it, which
+# un-smears under the pointer and passes clicks on to the list; its definition pane smears it too, un-smearing
+# while the pointer is anywhere over the pane
 app.open_browser(); pump(6); bw = app.browsers[0]
-assert bw.tree.item("bastard", "values")[1] == "b•••••d" and bw.tree.item("table", "values")[1] == "table"
-bw.tree.selection_set("bastard"); pump(3)
-assert bw.def_text.get("1.0", "2.0").strip() == "bastard"
+assert bw.tree.item("bastard", "values")[1] == "" and bw.tree.item("table", "values")[1] == "table"
+mark = bw.smears._marks["bastard"][0]
+assert "table" not in bw.smears._marks and mark.find_withtag("smear") and mark.winfo_ismapped()
+x, y, w, h = bw.tree.bbox("bastard", "word")
+assert abs(mark.winfo_x() - x) <= 2 and y <= mark.winfo_y() <= y + h // 2               # (over its own cell)
+mark.event_generate("<Enter>"); app.anim.finish_all(); pump(1)
+assert mark.unsmear.clear == 1
+mark.event_generate("<Button-1>", x=4, y=4); pump(3)
+assert bw.tree.selection() == ("bastard",)
+assert bw.smears._marks["bastard"][1][3] == bw._row_colors("bastard")[1]   # (its row's colour, selected or not)
+heads = bw.def_text._words
+assert len(heads) == 1 and heads[0].find_withtag("smear") and "bastard" not in bw.def_text.get("1.0", "end")
+bw.def_text.event_generate("<Enter>"); app.anim.finish_all(); pump(1)
+assert heads[0].unsmear.clear == 1                                    # (anywhere over the pane: the word shows)
+bw.tree.yview_moveto(1.0); pump(3)                                    # scrolled out of sight: the mark goes
+if not bw.tree.bbox("bastard", "word"):
+    assert "bastard" not in bw.smears._marks
 bw.filter_var.set("Verbs"); bw.reload(); pump(4); assert list(bw.tree.get_children()) == ["run"]
 bw.close(); pump(2)
 

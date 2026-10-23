@@ -75,22 +75,34 @@ MODIFIER_KEYS = {"Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "Alt_R
                  "Super_L", "Super_R", "Caps_Lock", "Num_Lock", "ISO_Level3_Shift", "Mode_switch"}
 
 
-def event_spec(keysym, state=0, windowing="x11"):
-    """The key name for a key press (Tk's keysym and state). None for a lone modifier key (Shift, Ctrl...).
-    Shift is only part of the name for keys without a shifted character (Shift+Tab, Shift+F5); Ctrl on macOS is
-    the Command key as well."""
+# Windows: with Ctrl held, the key's name Tk reports for these keys depends on the keyboard layout and can be
+# something else entirely (reported: the zoom keys did nothing on Windows); its virtual-key code does not
+WIN_CTRL_KEYS = {187: "equal", 189: "minus", 107: "plus", 109: "minus", 48: "0", 96: "0"}
+
+
+def event_spec(keysym, state=0, windowing="x11", keycode=None):
+    """The key name for a key press (Tk's keysym and state; on Windows also its keycode). None for a lone modifier
+    key (Shift, Ctrl...). Shift is only part of the name for keys without a shifted character (Shift+Tab,
+    Shift+F5); Ctrl on macOS is the Command key as well."""
     if keysym in MODIFIER_KEYS or not keysym:
         return None
     shift = bool(state & 0x1) or keysym == "ISO_Left_Tab"
     ctrl = bool(state & 0x4) or (windowing == "aqua" and bool(state & 0x8))
     alt = bool(state & (0x20000 if windowing == "win32" else 0x10 if windowing == "aqua" else 0x8))
     key = KEYPAD.get(keysym, keysym)
+    if windowing == "win32" and ctrl and keycode in WIN_CTRL_KEYS:
+        key = "plus" if keycode == 187 and shift else WIN_CTRL_KEYS[keycode]
     if len(key) == 1:
         key = key.lower()
         shift = False                        # (the character already says it: "?" not Shift+/)
     elif key in NAMES and len(NAMES[key]) == 1 and key not in ("Up", "Down", "Left", "Right"):
         shift = False                        # punctuation by name ("question", "plus")
     return ("Ctrl+" if ctrl else "") + ("Alt+" if alt else "") + ("Shift+" if shift else "") + key
+
+
+def spec_of(e, windowing):
+    """event_spec for a Tk key event."""
+    return event_spec(e.keysym, getattr(e, "state", 0), windowing, getattr(e, "keycode", None))
 
 
 def split(spec):

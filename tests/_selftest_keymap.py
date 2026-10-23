@@ -58,4 +58,16 @@ for g, _name in K.GROUPS:
             for s in km.keys_of(a):
                 assert s not in seen, (g, s, a, seen.get(s))
                 seen[s] = a
+# reported: the zoom keys did nothing on Windows. With Ctrl held, Windows' key name for these keys depends on the
+# layout; the virtual-key code does not, so the zoom keys are read from it there (and nowhere else)
+assert K.event_spec("??", 0x4, "win32", 189) == "Ctrl+minus" and K.event_spec("??", 0x4, "win32", 187) == "Ctrl+equal"
+assert K.event_spec("??", 0x5, "win32", 187) == "Ctrl+plus" and K.event_spec("??", 0x4, "win32", 107) == "Ctrl+plus"
+assert K.event_spec("??", 0x4, "win32", 48) == "Ctrl+0" and K.event_spec("??", 0x4, "win32", 96) == "Ctrl+0"
+assert K.event_spec("minus", 0x0, "win32", 189) == "minus"                      # (without Ctrl: as Tk says)
+assert K.event_spec("??", 0x4, "x11", 189) == "Ctrl+??"                          # (other systems: as Tk says)
+km = K.Keymap()
+for code, action in ((187, "zoom_in"), (189, "zoom_out"), (48, "zoom_reset"), (107, "zoom_in"), (109, "zoom_out")):
+    assert km.lookup("place", K.event_spec("??", 0x4, "win32", code)) == action, code
+import types
+assert K.spec_of(types.SimpleNamespace(keysym="??", state=0x4, keycode=189), "win32") == "Ctrl+minus"
 print("KEYMAP OK")
