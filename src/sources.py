@@ -12,10 +12,20 @@ another), in the same layout as the repository (R-1). Into a folder that already
 changed files are updated, new ones added, and ones the program no longer has removed; only the program's own files
 are ever touched, and a file you edited there is kept as name.bak first. What it will do is shown before it does
 it. Then it opens the folder and offers to start tierlist.py from it (that needs a Python on this computer).
+
+Either way a tick box, ticked to start with, says "Update to the newest version first" (T-8): the dialog asks
+GitHub for the newest release in the background (standalone.latest_release) and says in a line what it found.
+Ticked and newer, "Make the program" downloads that version's source and builds from it, and "Unpack" downloads
+it and shows what unpacking it would change before it does it; offline, or with no newer version, it says so and
+uses the version you have.
 """
 import os
+import queue
 import subprocess
+import tempfile
+import threading
 import time
+import tkinter as tk
 from tkinter import filedialog, ttk
 
 import standalone
@@ -27,6 +37,7 @@ from saves import is_frozen
 from startup import run_with_progress
 from theme import PALETTE
 from widgets import StyledDialog
+from constants import VERSION
 
 HEADLINE = "Make a standalone program"
 INTRO = ("Builds Word Tier List into one program for this computer, with its source code inside it. It keeps using "
@@ -39,18 +50,78 @@ UNPACK_INTRO = ("Writes the source code this program was built from into a folde
 
 
 class SourceDialog:
-    def __init__(self, app, root_dir=None, source=None, frozen=None):
+    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None):
         """`root_dir`: the project (from source); `source`: the source the program carries, and `frozen`: which
-        side to show (tests pass them; the program finds them itself)."""
+        side to show; `check() -> release or None`: how to find the newest release (tests pass them; the program
+        finds them itself)."""
         self.app = app
         self.frozen = is_frozen() if frozen is None else frozen
+        self.release = None                       # the newest release, once the check has found one
+        self.fetched = None                       # (unpacking) the newer version's source, once downloaded
         if self.frozen:
             self.source = source or standalone.bundled_source()
             self._unpack_page()
         else:
             self.root_dir = root_dir or standalone.ROOT
             self._make_page()
+        if hasattr(self, "update_var"):
+            self._start_check(check or standalone.latest_release)
         self.dlg.show()
+
+    # ---- "Update to the newest version first" (T-8) -------------------------------------------------------------
+    def _update_row(self):
+        """The tick box and the line under it saying what the check found."""
+        dlg = self.dlg
+        self.update_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(dlg.body, text="Update to the newest version first", variable=self.update_var,
+                        command=self._show_update, takefocus=1).pack(anchor="w", pady=(12, 0))
+        self.update_line = ttk.Label(dlg.body, text=f"Version {VERSION}. Checking GitHub for a newer one...",
+                                     foreground=PALETTE["muted"], wraplength=dlg.wrap, justify="left")
+        self.update_line.pack(anchor="w", padx=(24, 0))
+        self.checked = False
+
+    def _start_check(self, check):
+        """Ask GitHub on a worker thread (it never touches the window); the answer is collected every 100 ms."""
+        answer = queue.Queue()
+        threading.Thread(target=lambda: answer.put(check()), daemon=True).start()
+
+        def collect():
+            if not self.dlg.alive():
+                return
+            try:
+                self.release = answer.get_nowait()
+            except queue.Empty:
+                self.dlg.win.after(100, collect)
+                return
+            self.checked = True
+            self._show_update()
+        collect()
+
+    def wants_update(self):
+        """True if ticked and the newest release is newer than this version (and not downloaded yet)."""
+        return self.update_var.get() and standalone.newer(self.release) and not self.fetched
+
+    def _show_update(self):
+        if not self.checked:
+            return
+        r = self.release
+        if self.fetched:
+            text = f"Version {r['version']} downloaded: above is what unpacking it changes."
+        elif not r:
+            text = f"Version {VERSION}. GitHub could not be reached (or has no release yet): using the version you have."
+        elif not standalone.newer(r):
+            text = f"Version {VERSION}: the newest there is."
+        elif self.update_var.get():
+            what = "builds the program from it" if not self.frozen else "downloads it and shows what it changes"
+            text = f"Version {r['version']} is out (you have {VERSION}): {self._action()} {what}."
+        else:
+            text = f"Version {r['version']} is out (you have {VERSION}); unticked, yours is used."
+        self.update_line.config(text=text)
+        self.dlg.refit()
+
+    def _action(self):
+        names = [n for n in self.dlg.buttons if n not in ("Cancel", "Change folder...", "Start it")]
+        return f'"{names[0]}"' if names else "it"
 
     # ---- from source: make the program (T-6) --------------------------------------------------------------------
     def _make_page(self):
@@ -72,6 +143,7 @@ class SourceDialog:
         if state:
             self.state = ttk.Label(dlg.body, text=state, font=font("body"), wraplength=dlg.wrap, justify="left")
             self.state.pack(anchor="w", pady=(10, 0))
+        self._update_row()
         dlg.button("Cancel", dlg.close)
         if self.fresh:
             dlg.button("Build again", self.make)
@@ -85,10 +157,14 @@ class SourceDialog:
         self.dlg.close()
         lines = []
 
+        release = self.release if self.wants_update() else None
+
         def work(log):
             def keep(text):
                 lines.append(str(text))
                 log(text)
+            if release:
+                return standalone.make_program(self.root_dir, keep, release=release)
             return standalone.make_program(self.root_dir, keep)
         try:
             path = run_with_progress(app.root, work, title="Making a standalone program", delay_ms=0,
@@ -98,6 +174,9 @@ class SourceDialog:
                 raise
             app.flash("Stopped: no program was made", ms=3000)
             return None
+        except OSError as exc:                    # the newer version could not be downloaded
+            lines.append(str(exc))
+            path = None
         if not path:
             show_error("Make a standalone program", "The program could not be built. The details below say why; "
                        "your save and the source are unchanged.", details="\n".join(lines[-40:]), parent=app.root,
@@ -128,6 +207,7 @@ class SourceDialog:
         self.where.pack(side="left", anchor="w")
         self.state = ttk.Label(dlg.body, text="", font=font("body"), wraplength=dlg.wrap, justify="left")
         self.state.pack(anchor="w", pady=(10, 0))
+        self._update_row()
         dlg.button("Change folder...", self.change_folder, side="left")
         dlg.button("Cancel", dlg.close)
         dlg.button("Unpack", self.unpack, default=True)
@@ -154,8 +234,33 @@ class SourceDialog:
             self.target = folder
             self._show_plan()
 
+    def fetch(self):
+        """Download the newer version's source behind the progress window, then show what unpacking it changes
+        (the next "Unpack" does it). Returns True if it was downloaded."""
+        release, folder = self.release, tempfile.mkdtemp(prefix="wtl-release-")
+        try:
+            folder = run_with_progress(self.app.root, lambda log: standalone.fetch_source(release, folder, log),
+                              title="Downloading the newest version", delay_ms=0, initial_stage="Connecting...",
+                              intro=f"Version {release['version']}, from GitHub.")
+        except SystemExit as exc:
+            if str(exc) != STOPPED_MESSAGE:
+                raise
+            return False
+        except OSError as exc:
+            show_error("Unpack the source code", f"The newest version could not be downloaded:\n{exc}\n\nUntick "
+                       "the update to unpack the version you have.", parent=self.dlg.win, headline="Not downloaded")
+            return False
+        self.fetched = self.source = folder
+        self._show_plan()
+        self._show_update()
+        return True
+
     def unpack(self):
-        """Unpack (or sync), then open the folder and offer to start tierlist.py from it."""
+        """Unpack (or sync), then open the folder and offer to start tierlist.py from it. Ticked to update and a
+        newer version out: download it first and show what it changes instead (fetch)."""
+        if self.wants_update():
+            self.fetch()
+            return None
         try:
             plan = standalone.unpack(self.source, self.target, self.plan)
         except OSError as exc:

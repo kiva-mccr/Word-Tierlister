@@ -11,19 +11,27 @@ The program carries its complete source (source_files) and the manifest inside i
 program can give the source back (T-7: no decompiling): bundled_source, plan_unpack (what would change: added,
 updated, removed, backed up), unpack (do it, and record it in the folder: UNPACKED), summary (in a line). A build also leaves the manifest beside the program
 (SIDE_FILE), which is how up_to_date knows. PyInstaller builds only for the system it runs on; T-8 covers the
-others. tools/build.py is the command-line way in. No tkinter.
+others. tools/build.py is the command-line way in.
+
+Updates (T-8): latest_release asks GitHub for the newest release, newer says whether it is newer than this
+VERSION, fetch_source downloads its source (the repository at its tag) ready to unpack or build from; the
+programs a release carries are named in RELEASE_ASSETS. No tkinter.
 """
 import hashlib
+import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
+import zipfile
 
 import bundle
-from constants import plan_line
+from constants import OFFLINE_ENV, REPO, VERSION, plan_line
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top of the project (tierlist.py)
 NAME = "word-tierlist"
@@ -159,17 +167,22 @@ def ensure_pyinstaller(python=sys.executable, log=print):
     return False
 
 
+def _write_manifest(root, folder, files=None, version=VERSION):
+    """Write `root`'s manifest (with when it was made and its VERSION) into `folder`; returns it."""
+    m = manifest(root, files)
+    m["made"], m["version"] = time.time(), version
+    with open(os.path.join(folder, MANIFEST), "w", encoding="utf-8") as fh:
+        json.dump(m, fh, indent=1, sort_keys=True)
+    return m
+
+
 def _stage_source(root, folder):
     """Copy the source into `folder` (with its folders) and write its manifest there; returns the manifest."""
     files = source_files(root)
     for f in files:
         os.makedirs(os.path.join(folder, os.path.dirname(f)), exist_ok=True)
         shutil.copy2(os.path.join(root, f), os.path.join(folder, f))
-    m = manifest(root, files)
-    m["made"] = time.time()
-    with open(os.path.join(folder, MANIFEST), "w", encoding="utf-8") as fh:
-        json.dump(m, fh, indent=1, sort_keys=True)
-    return m
+    return _write_manifest(root, folder, files, read_version(root))
 
 
 def build(dist, root=ROOT, log=print, carry_source=True):
@@ -201,14 +214,18 @@ def build(dist, root=ROOT, log=print, carry_source=True):
     return out
 
 
-def make_program(root=ROOT, log=print):
+def make_program(root=ROOT, log=print, release=None):
     """File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next
-    to tierlist.py (replacing an older one), with its manifest beside it. Returns its path, or None if it could
-    not be built (the reason is logged). Run on a worker thread: it takes a minute or two."""
-    log(plan_line((["Installing PyInstaller"] if not has_pyinstaller() else []) + ["Building", "Putting it in place"]))
+    to tierlist.py (replacing an older one), with its manifest beside it. `release` (latest_release): download
+    that version's source first and build from it instead (T-8: "Update to the newest version first"). Returns
+    its path, or None if it could not be built (the reason is logged). Run on a worker thread: it takes a minute
+    or two."""
+    log(plan_line(([f"Downloading version {release['version']}"] if release else [])
+                  + (["Installing PyInstaller"] if not has_pyinstaller() else []) + ["Building", "Putting it in place"]))
     dist = tempfile.mkdtemp(prefix="wtl-dist-")
     try:
-        out = build(dist, root, log)
+        source = fetch_source(release, os.path.join(dist, "release"), log) if release else root
+        out = build(dist, source, log)
         if out is None:
             return None
         log("Putting it in place...")
@@ -356,3 +373,75 @@ def open_folder(path, popen=subprocess.Popen):
         return None
     return popen(["open" if sys.platform == "darwin" else "xdg-open", path],
                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ---- updates (T-8): the newest release on GitHub ---------------------------------------------------------------------
+RELEASES = f"https://api.github.com/repos/{REPO}/releases/latest"
+RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe"}   # (the workflow's names)
+
+
+def version_tuple(text):
+    """(1, 2, 0) for "v1.2.0" (the numbers in it, three at most)."""
+    return tuple(int(n) for n in re.findall(r"\d+", str(text))[:3])
+
+
+def read_version(root=ROOT):
+    """The VERSION in `root`'s src/constants.py (the source being built may be another version than this one)."""
+    try:
+        with open(os.path.join(root, "src", "constants.py"), encoding="utf-8") as fh:
+            m = re.search(r'^VERSION = "([^"]+)"', fh.read(), re.M)
+        return m.group(1) if m else VERSION
+    except OSError:
+        return VERSION
+
+
+def _download(url, timeout=10):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "word-tierlist/" + VERSION})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def latest_release(fetch=_download):
+    """The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when
+    offline, GitHub cannot be reached or there is none yet. `fetch(url) -> bytes` (tests pass their own)."""
+    if os.environ.get(OFFLINE_ENV):
+        return None
+    try:
+        data = json.loads(fetch(RELEASES))
+    except Exception:                       # offline, no release yet (404), rate-limited, an odd answer
+        return None
+    tag = data.get("tag_name") if isinstance(data, dict) else None
+    if not tag or not data.get("zipball_url") or not version_tuple(tag):
+        return None
+    return {"version": tag.lstrip("vV"), "tag": tag, "source": data["zipball_url"], "page": data.get("html_url", "")}
+
+
+def newer(release, version=VERSION):
+    """True if `release` (latest_release) is a newer version than `version`."""
+    return bool(release) and version_tuple(release["version"]) > version_tuple(version)
+
+
+def fetch_source(release, folder, log=print, fetch=_download):
+    """Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest,
+    ready to unpack (plan_unpack) or build from; returns `folder`. Raises OSError if it cannot."""
+    log(f"Downloading version {release['version']}...")
+    try:
+        data = fetch(release["source"], timeout=60)
+    except Exception as exc:
+        raise OSError(f"could not download version {release['version']}: {exc}") from exc
+    log(f"  {len(data) / 1e6:.1f} MB")
+    os.makedirs(folder, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        for name in z.namelist():
+            parts = name.split("/")[1:]              # (GitHub's zip has one folder at the top: owner-repo-commit)
+            if not parts or not parts[-1] or ".." in parts or name.startswith("/"):
+                continue
+            dest = os.path.join(folder, *parts)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with z.open(name) as src, open(dest, "wb") as out:
+                shutil.copyfileobj(src, out)
+    if not os.path.isfile(os.path.join(folder, "tierlist.py")):
+        raise OSError(f"version {release['version']} on GitHub has no tierlist.py")
+    _write_manifest(folder, folder, version=release["version"])
+    return folder

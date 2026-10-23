@@ -53,6 +53,21 @@ app.mem_defs["word9"] = LONG
 app.def_words = ["word9"]
 app.toggle_defs(True); root.update()
 assert int(app.def_text.cget("height")) > app.DEF_LINES and shows_all(app), app.def_text.cget("height")
+# reported after F-2: in a window made bigger (the contents grown, UI-25) the pane slid open at its full height over
+# the word card and the tier buttons; it is shortened instead, and the centre keeps all its room
+root.destroy()
+root, app = make(1150)
+app.toggle_defs(False); root.update()
+root.geometry("1750x1140+0+0")
+for _ in range(10):
+    root.update(); root.after(30, root.quit); root.mainloop()
+assert app.grow > 1, app.grow
+app.mem_defs["word10"] = "\n".join(f"{i}. (noun) sense {i}" for i in range(1, 41))
+app.def_words = ["word10"]
+app.toggle_defs(True); root.update(); app.anim.finish_all(); root.update()
+room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()        # (the centre above the pane)
+assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheight(), room)
+assert app.grow > 1 and root.winfo_height() <= 1150
 root.destroy()
 
 # a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped

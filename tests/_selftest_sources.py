@@ -149,5 +149,51 @@ d = sources.SourceDialog(app, source=None, frozen=True); pump(root)
 S.bundled_source = lambda: None
 d.close(); d = sources.SourceDialog(app, frozen=True); pump(root)
 assert list(d.buttons) == ["Close"]
-d.close(); app.on_close()
+d.close()
+
+# ---- T-8: "Update to the newest version first", ticked to start with ------------------------------------------------
+from constants import VERSION
+def settle(d, n=20):
+    for _ in range(n):
+        if d.checked:
+            break
+        pump(root, 3)
+    assert d.checked
+release = {"version": "9.1.0", "tag": "v9.1.0", "source": "zip", "page": ""}
+d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: None); settle(d)       # offline: says so
+assert d.update_var.get() and "could not be reached" in d.update_line.cget("text")
+d.close()
+d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: dict(release, version=VERSION)); settle(d)
+assert "the newest there is" in d.update_line.cget("text"); d.close()
+# a newer one, unpacking: Unpack downloads it first and shows what unpacking it changes; the next Unpack does it
+v3 = carried({"tierlist.py": "v3\n", "src/a.py": "a3\n", "tests/run_tests.sh": "t\n"})
+fetched = []
+S.fetch_source = lambda rel, folder, log: (fetched.append(rel["version"]), log("Downloading..."), v3)[2]
+target3 = os.path.join(tempfile.mkdtemp(), "Word Tier List source"); S.default_source_folder = lambda program=None: target3
+S.unpack(v2, target3)
+d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
+assert "Version 9.1.0 is out" in d.update_line.cget("text") and '"Unpack" downloads it' in d.update_line.cget("text")
+d.buttons["Unpack"].invoke(); pump(root)
+assert fetched == ["9.1.0"] and d.alive() and "9.1.0 downloaded" in d.update_line.cget("text")
+assert "2 updated" in d.state.cget("text") and "1 removed" in d.state.cget("text"), d.state.cget("text")
+d.buttons["Unpack"].invoke(); pump(root)
+assert open(os.path.join(target3, "tierlist.py")).read() == "v3\n" and fetched == ["9.1.0"] and not d.alive()
+# unticked: the version you have, nothing downloaded
+d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
+d.update_var.set(False); d._show_update()
+assert "unticked, yours is used" in d.update_line.cget("text")
+d.buttons["Unpack"].invoke(); pump(root)
+assert fetched == ["9.1.0"] and open(os.path.join(target3, "tierlist.py")).read() == "v2\n"
+# from source: Make the program builds the newer version (your files untouched); unticked, your source
+made = []
+S.make_program = lambda root_dir, log, release=None: (made.append(release and release["version"]), None)[1]
+sources.show_error = lambda *a, **kw: None
+proj2 = project()
+d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
+assert '"Make the program" builds the program from it' in d.update_line.cget("text")
+d.buttons["Make the program"].invoke(); pump(root, 2)
+d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
+d.update_var.set(False); d.buttons["Make the program"].invoke(); pump(root, 2)
+assert made == ["9.1.0", None], made
+app.on_close()
 print("SOURCES OK")

@@ -568,7 +568,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "8"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "9"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -682,7 +682,8 @@ def results(word, senses, scored, censored, common=False):
 
 def score_saved(saved, censored, wn=None, log=None, zipf=None):
     """{word: results(...)} for {word: its compact senses as JSON text} (the save's table rude, filled from the
-    Wiktionary download): both passes, reporting "(NN%)" through `log` as it goes (under a minute for 150,000 words)."""
+    Wiktionary download): both passes, reporting "(NN%)" through `log` as it goes (under a minute for 150,000 words).
+    Only a word smeared whole keeps its rude kinds (the rest are ordinary words, their rude meanings smeared)."""
     compacts = {w: json.loads(text) for w, text in saved.items()}
     words = {w: [expand(c) for c in cs] for w, cs in compacts.items()}
     pos = {w: [c.get("pos", "") for c in cs] for w, cs in compacts.items()}
@@ -708,4 +709,6 @@ def score_saved(saved, censored, wn=None, log=None, zipf=None):
         targets = {form_target(s) for s in senses}
         if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:
             out[w] = (out[w][0], out[t][1], out[w][2])
-    return out
+    clean = KIND_BITS["clean"]                # (the user's rule: "Obscene words" holds only words smeared whole; one
+    return {w: (bits if whole else clean, whole, smeared)      # rude meaning of many ("can: buttocks") is smeared
+            for w, (bits, whole, smeared) in out.items()}       # in the definitions, the word itself is ordinary)

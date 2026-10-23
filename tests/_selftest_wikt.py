@@ -91,10 +91,10 @@ assert not T.queue_steps(s) and s.get_meta("rude_done") == rudeness.RUDENESS_VER
 B = rudeness.KIND_BITS
 rude = dict(s.db.execute("SELECT word, rude FROM words WHERE rude IS NOT NULL"))
 assert rude == {"shit": B["clean"] | B["crude"], "bastard": B["clean"], "bastards": B["clean"],
-                "bureaucracy": B["clean"], "come": B["clean"] | B["sexual"], "gyp": B["clean"]}, rude
+                "bureaucracy": B["clean"], "come": B["clean"], "gyp": B["clean"]}, rude
 # (a form follows its word's first meaning: bastard's is clean; "sometimes offensive" is hedged to clean; a
 # "derogatory" label on red tape describes no person: no insult; bastard's insult alone needs no censoring, so it is
-# an ordinary word)
+# an ordinary word; so is "come": only its slang meaning is rude, smeared in its definitions, not the word)
 assert s.obscene_words() == {"shit"}, s.obscene_words()          # (an insult is never smeared: obscene.CENSORED)
 assert s.smeared_meanings("come") == ["to orgasm"] and s.smeared_meanings("bastard") == []
 assert s.get_word("gyp")["out"] == 0 and s.get_word("come")["out"] == 0   # (a clean meaning: dealt by its kind)

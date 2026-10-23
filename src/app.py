@@ -536,10 +536,15 @@ class App:
         r = self.root
         if self.show_defs:
             self.def_text.config(height=self._def_want)
-        if not initial and self.grow > 1:
-            cw, ch = self._content_size()
-            if cw <= r.winfo_width() and ch <= r.winfo_height():
-                return       # still fits at the grown size: re-measuring at normal size would flash small text
+        if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
+            for lines in (range(self._def_want, 2, -1) if self.show_defs else (None,)):     # must: re-measuring at
+                if lines:                                                     # normal size would flash small text
+                    self.def_text.config(height=lines)
+                cw, ch = self._content_size()
+                if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
+                    ch += self.def_frame.natural_height()        # left out, it slid open over the word card)
+                if cw <= r.winfo_width() and ch <= r.winfo_height():
+                    return
         f = ui_factor(r)
         area = usable_area(r)
         # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),

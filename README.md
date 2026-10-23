@@ -3,6 +3,12 @@
 Tier-list every English word (S / A / B / C / D / F). Progress autosaves to SQLite after every
 action and resumes automatically, even if you replace these files.
 
+**Download the program** (no Python needed): [for Windows](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-windows.exe)
+· [for Linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-linux)
+· [all releases](https://github.com/kiva-mccr/Word-Tierlister/releases). Put it in a folder of its own: it keeps
+its save beside itself. On Linux, make it runnable first (`chmod +x word-tierlist-linux`). Windows may warn that it
+does not know the program (it is not signed): More info > Run anyway. Or run it from source:
+
     python tierlist.py                 # options: python tierlist.py --help
 
 On the first start it offers to install what it needs (see "Missing packages"), or install it yourself
@@ -50,13 +56,14 @@ either way the save you used last is found again, so switching between the two l
 | File | Job |
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
-| `src/constants.py` | Tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
+| `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
 | `src/obscene.py` | The kinds of rude meaning (Clinical, Crude, Swear word, Insult, Sexual, Slur), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
 | `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards each kind (Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and of rude meaning, the ones left out; ST-6, OB-5), the meanings the rudeness rules read and what they found (OB-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
+| `.github/workflows/build.yml` | Build programs (T-8): builds the Linux and Windows programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
@@ -77,10 +84,10 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
-| `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak). No tkinter. |
-| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py. |
+| `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
+| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py. Either way, ticked to start with: update to the newest version on GitHub first (T-8). |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
-| `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. |
+| `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux and Windows at once on GitHub (T-8). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
@@ -116,9 +123,11 @@ The first start asks three short questions (any time later: Settings > How words
 - **Which words:** nouns, verbs, adjectives, adverbs, obscene words, other, each a tick box with how many
   words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
   Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
-  Sexual and Slurs do not ("Obscene words" shows a minus while only some are). A word comes up if one of its
-  meanings is of a ticked rude kind, or it has a clean meaning and its kind of word is ticked; a word whose
-  meanings are all rude of unticked kinds is left out.
+  Sexual and Slurs do not ("Obscene words" shows a minus while only some are). "Obscene words" holds only the
+  words censored as a whole (the ones smeared on the card); a word with one rude meaning among ordinary ones
+  ("can", "come", "box") is an ordinary word, dealt with its kind of word, and only that meaning is smeared in
+  its definitions. An obscene word comes up if one of its meanings is of a ticked rude kind, or it has a clean
+  meaning and its kind of word is ticked; one whose meanings are all rude of unticked kinds is left out.
   Unticked ones are left out of the queue, never deleted; untick every kind of word but "Obscene words" to
   sort only those.
 - **Censor obscene words** ("blurred, except on hover"): a word is smeared sideways on the cards until the pointer
@@ -138,8 +147,8 @@ not "take"). A very common word (about the 3,000 commonest, by wordfreq) is rare
 Wiktionary labels plainly rude count for it ("box: (vulgar) the vagina", not "top: (slang) fellatio"). A
 "derogatory" label alone is not an insult unless the definition describes a person badly; a euphemism is the
 polite word ("pass water"); a slang meaning that is itself a rude word ("dam: Damn.") is rude like it.
-A word goes into the rude kinds only when one of its meanings needs censoring ("idiot" and "penis" are ordinary
-words). A group's own name is never a slur ("jews", "trans", "gay", "queer"), even where some uses are labelled
+A word goes into the rude kinds only when it is censored as a whole ("idiot" and "penis" are ordinary words, and
+so is "can", whose rude meaning is smeared in its definitions only). A group's own name is never a slur ("jews", "trans", "gay", "queer"), even where some uses are labelled
 offensive; a meaning is a slur when it is marked as one (a slur, ethnic or vulgar label: "kike", "dyke").
 The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, in the save's `rude`
 table) and scores them once at the end of setting up (about a minute; again only when the rules change).
@@ -155,8 +164,17 @@ to check them, is archived (see the roadmap's OB-3 / OB-4).
 Linux, `dist/word-tierlist.exe` on Windows, `dist/Word Tier List.app` on macOS; about 22 MB). It installs
 PyInstaller first if it is missing. Add `--check` to start the new program for a moment afterwards. The program
 keeps its save next to itself (or in your user data folder when that folder is read-only) and finds the save you
-used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one
-(or see the roadmap's T-8 for building on GitHub).
+used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one,
+or on GitHub:
+
+- `python tools/build.py --all` builds for Linux and Windows at once on GitHub's machines (the "Build programs"
+  workflow, `.github/workflows/build.yml`, also on the Actions tab's Run workflow button), waits, and fetches
+  `word-tierlist-linux` and `word-tierlist-windows.exe` into `dist/`. It needs your commits pushed and GitHub's
+  command-line tool logged in (`gh auth login`); without them it says what is missing and builds for this
+  computer only. GitHub only starts the workflow once it is on the repository's default branch.
+- **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py`, commit,
+  then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds both programs,
+  starts each once to check it runs, and attaches them to a new release. (macOS is not built there.)
 
 ## Windows notes
 
@@ -185,6 +203,12 @@ File > Source & Updates... (when running `tierlist.py`) makes Word Tier List int
 so it keeps using the same save and no longer needs Python. It takes a minute or two (the first time it installs
 the builder, PyInstaller, about 15 MB), then starts the new program and closes this window. The program carries its
 complete source inside it. If nothing has changed since the last build, it offers to start that program instead.
+
+Either way the dialog has a tick box, ticked to start with: **Update to the newest version first**. It asks GitHub
+for the newest release and says in a line what it found. Ticked and newer than yours, making the program builds
+it from that version's source (your files are not changed), and unpacking downloads it and shows what it would
+change before doing it, so unpacking is also how you update. Offline, or already the newest: it says so and uses
+the version you have. Your save is never touched.
 
 In the program, the same menu item gives the source back: **Unpack the source code** writes it into a folder
 (beside the program, "Word Tier List source", or one you pick), laid out like this repository. Unpacking into a

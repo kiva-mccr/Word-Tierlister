@@ -238,6 +238,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] F-2  The definitions pane opens as large as it can on the screen (it opened smaller than there was room for).
 #           The cause: folded, the pane unmapped its text, which then could not say how many lines it needs, so
 #           it opened at its usual 9. Folded, it is now placed (clipped) instead: at 1920x1080, 9 -> 16 lines.
+#           Then (reported): in a window made bigger (contents grown, UI-25) it slid open at full height over the
+#           word card and tier buttons: the grown window's quick fit counted the folded pane as 1 px. It now counts
+#           it at its full height and shortens it until the rest fits, keeping the grown size (_fit_window).
 # [x] F-3  A meaning that only names another word ("Alternative spelling of jail", "plural of colour", "Clipping of
 #           homosexual") shows that word's own first meaning on a muted line under it, in the main window's pane
 #           and Browse's (definitions.form_target / main_sense; looked up like any word; smeared while censoring).
@@ -575,6 +578,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           letter-case form ("jew"), or when it names the group by the word itself ("transgender: a transgender
 #           person"); real slurs ("kike", "tranny", "faggot", "dyke", "spic", "hebe") stay (SLUR_MARKS;
 #           RUDENESS_VERSION 8). Measured: 78.7% (78.8%), Slur precision 90.0% (89.5%), recall 54.7% (56.0%).
+#           Then (reported: uncensored words under "Obscene words"; asked: "Only censored words"): only a word
+#           smeared whole keeps its rude kinds (rudeness.score_saved; RUDENESS_VERSION 9); one rude meaning of many
+#           ("can: buttocks", "come", "box": about 1,700 words) leaves the word ordinary, that meaning smeared in its
+#           definitions. (measure_rudeness compares meaning by meaning: unchanged.)
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
@@ -1281,7 +1288,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           changes nothing. tools/build.py and check_release.py now use src/standalone.py (which also took over
 #           tools/bundle.py, now src/bundle.py), so the zip and the program carry the same files. Checked here: a
 #           real build (23 MB), its source and manifest inside it (PyInstaller's archive reader), started with the
-#           same save. Still to come: the "Update to the newest version first" tick (with T-8's releases).
+#           same save. The "Update to the newest version first" tick came with T-8.
 #           _selftest_sources.py, _selftest_build.py.
 # [x] T-7  "Back to source" button (asked for), the reverse of T-6. File > Unpack the source code...
 #           (shown in the built program): writes the exact source files that were bundled (no real
@@ -1304,7 +1311,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           builds from that, so unpacking is also how you update; unticked, it uses exactly the version
 #           you have. Offline or no newer version: it says so in a line and carries on with yours. The
 #           update keeps your save untouched and, like any unpack, only changes files the program owns.
-#           Built (without the update tick, which needs T-8's releases): File > Source & Updates... in the built
+#           Built (the update tick came with T-8): File > Source & Updates... in the built
 #           program shows "Unpack the source code" (src/sources.py): the folder (beside the program, "Word Tier List
 #           source", or Change folder...: the themed folder browser on Linux) and what it will do there, before it
 #           does it. standalone.plan_unpack / unpack: the source the program carries (bundled_source: source/ in
@@ -1317,7 +1324,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Python (the same save: the pointer file); without a Python it says to install one. _selftest_sources.py;
 #           _selftest_build.py takes the source back out of a real build, checks every byte against the manifest,
 #           unpacks it and runs the unpacked copy's core self-test.
-# [ ] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
+# [x] T-8  One command for packaged builds on Linux AND Windows (asked for). `python build.py` builds
 #           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
 #           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
 #           on a Linux and a Windows machine at the same time from the pushed source and attaches
@@ -1325,6 +1332,23 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           into dist/. Needs the code pushed to GitHub and a GitHub login (gh) for --all; without
 #           them it explains and builds for this OS only. Building a Windows .exe on Linux through
 #           Wine was considered and rejected: fragile, and the result would still need testing on Windows.
+#           Built: .github/workflows/build.yml ("Build programs"): on the Actions tab's Run workflow button (or --all)
+#           it builds on ubuntu-22.04 (an older glibc, so newer Linux runs it too) and windows-latest, starts each
+#           program once to check it runs (tools/build.py --check; Linux under xvfb) and keeps them as the run's
+#           downloads, named word-tierlist-linux and word-tierlist-windows.exe (standalone.RELEASE_ASSETS). A pushed
+#           tag v<VERSION> does the same, checks the tag matches constants.VERSION (new: 1.0.0) and publishes a
+#           GitHub Release with both (gh release create): what the README's download links point to (R-1's last
+#           item). tools/build.py --all (build_all): gh installed and logged in, the commit pushed, else it says
+#           which and builds for this computer only; then gh workflow run, finds the run by its commit, gh run
+#           watch, gh run download into dist/ (Linux one made runnable). GitHub starts a workflow by button or gh
+#           only once the file is on the default branch (main). The update tick (T-6 / T-7's last piece): File >
+#           Source & Updates asks GitHub's API for the newest release on a worker thread (standalone.latest_release;
+#           offline / none yet: None) and says in a line what it found. Ticked and newer: from source "Make the
+#           program" downloads that version's source (the repository's zip at its tag: fetch_source, with a
+#           manifest) and builds from it, next to tierlist.py, your files untouched; in the program "Unpack"
+#           downloads it, shows what unpacking it changes, and the next Unpack does it. Not tried for real here:
+#           the workflow on GitHub (no gh login in this container) and a real release (none published yet).
+#           _selftest_updates.py, _selftest_sources.py.
 # [ ] T-9  Introduce the other form on first start (asked for). The first time the program starts as a
 #           script (tierlist.py) it asks once: "Make this a standalone program? It saves, builds, and
 #           reopens as the program" (T-6); the first time the built program starts it asks the reverse:
@@ -1350,7 +1374,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: src/, tests/ (each test starts with `import _paths`), tools/, .claude/; tierlist.py adds
 #           src/ to the import path; check_release.py knows the folders (flags a module left at the top,
 #           ships the tree with its folders, ignores your save / log / export next to tierlist.py).
-#           Still to do with T-8: the README's "Download for Windows / Linux" links to the Releases.
+#           T-8 added the README's "Download for Windows / Linux" links to the newest Release.
 # [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.

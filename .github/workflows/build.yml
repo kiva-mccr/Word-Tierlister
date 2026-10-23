@@ -1,0 +1,76 @@
+# Build programs (T-8): Word Tier List as a program for Linux and Windows, built at the same time on GitHub's
+# machines from the pushed source (PyInstaller builds only for the system it runs on).
+#   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the two programs as downloads of the run
+#   - pushing a tag v<VERSION> (src/constants.py): the same, published as a GitHub Release (the README links there)
+# Each build is started once to check that it runs (tools/build.py --check). macOS is not built here.
+name: Build programs
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04          # (an older Linux: the program then runs on newer ones too)
+            built: dist/word-tierlist
+            asset: word-tierlist-linux
+          - os: windows-latest
+            built: dist/word-tierlist.exe
+            asset: word-tierlist-windows.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The tag matches the version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          version=$(python -c "import sys; sys.path.insert(0, 'src'); import constants; print(constants.VERSION)")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "The tag $GITHUB_REF_NAME does not match VERSION $version in src/constants.py"; exit 1
+          fi
+      - name: A display for the check (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
+      - name: Packages
+        run: python -m pip install -r requirements.txt pyinstaller
+      - name: Build and check (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python tools/build.py --check
+      - name: Build and check (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/build.py --check
+      - name: Name it for the release
+        shell: bash
+        run: mkdir -p out && cp "${{ matrix.built }}" "out/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY"
+          --title "Word Tier List $GITHUB_REF_NAME" --generate-notes
