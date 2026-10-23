@@ -46,6 +46,13 @@ app._render_defs(["word7"]); root.update()
 assert int(app.def_text.cget("height")) == tall               # never shrinks word to word (no jumping page)
 app.toggle_defs(False); root.update(); app.toggle_defs(True); root.update()
 assert int(app.def_text.cget("height")) == app.DEF_LINES      # reopened for a short word: the usual height
+# F-2: opened for a long definition, the pane opens in full straight away (the folded pane keeps its text's width,
+# so the text can say how tall it needs to be)
+app.toggle_defs(False); root.update()
+app.mem_defs["word9"] = LONG
+app.def_words = ["word9"]
+app.toggle_defs(True); root.update()
+assert int(app.def_text.cget("height")) > app.DEF_LINES and shows_all(app), app.def_text.cget("height")
 root.destroy()
 
 # a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped

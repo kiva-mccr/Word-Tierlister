@@ -414,6 +414,22 @@ dr.set_open(True); assert dr.is_open
 small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
 small.configure(size=11)
+# F-3: a meaning that only names another word shows that word's first real meaning under it, muted (once per word)
+defs.update({"apples": "1. (noun) plural of apple\n2. (noun) Alternative form of apple.",
+             "kumquats": "1. (noun) plural of kumquat", "fruits": "1. (noun) plural of fruit"})
+defs["fruit"] = "1. (noun) plural of fruits\n2. (noun) The seed-bearing part of a plant."
+dr.show_words(["apples"], defs.get)
+txt = dr.text.get("1.0", "end")
+assert txt.count("apple (noun): a round fruit") == 1, txt
+assert "base" in tags_at("apple (noun)") and "base" in tags_at("a round fruit")
+dr.show_words(["kumquats"], defs.get)
+assert "kumquat: Looking up definition..." in dr.text.get("1.0", "end")       # (filled in when it arrives)
+dr.show_words(["fruits"], defs.get)
+assert "fruit (noun): The seed-bearing part" in dr.text.get("1.0", "end")    # (its first meaning that is no form)
+from definitions import form_target
+assert form_target("Alternative form of bull dyke.") == "bull dyke" and form_target("A form of government.") is None
+assert form_target("third-person singular simple present indicative of take") == "take"
+assert form_target("Alternative letter-case form of Gypsy (\u201ca member\u201d).") == "Gypsy"
 
 # ---- WordCard.transition_from (UI-16): the old word nudges toward its tier and fades, the new one eases in
 cwin = tk.Toplevel(root)

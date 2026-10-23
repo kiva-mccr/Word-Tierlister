@@ -17,8 +17,13 @@ os.makedirs(SHOTS, exist_ok=True)
 WORDS = [f"w{i:04d}" for i in range(400)]
 s = T.Store(os.path.join(tempfile.mkdtemp(), "smoke.db"))
 s.insert_words(WORDS); s.set_anchors(WORDS[:6])
-root = tk.Tk(); root.geometry("1300x850+0+0")
+root = tk.Tk(); root.withdraw(); root.geometry("1300x850+0+0")
 app = T.App(root, s, T.Definitions(s))
+assert root.state() == "withdrawn"                                    # F-1: built hidden...
+app.open_window()
+assert root.state() == "normal" and app.status_band.winfo_viewable()  # ...and shown complete, drawn straight away
+root.after(80, root.quit); root.mainloop()
+assert float(root.attributes("-alpha")) == 1.0                        # (drawn see-through, then shown)
 errors = []
 root.report_callback_exception = lambda *exc: errors.append(exc)         # any error inside a Tk callback
 shots = []

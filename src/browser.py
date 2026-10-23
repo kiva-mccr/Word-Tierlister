@@ -532,8 +532,11 @@ class Browser:
         # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2, OB-6);
         # the word itself is shown whole here (you picked it)
         store = self.app.store
-        fill_definitions(self.def_text, [(w, self.app.get_def(w), store.smeared_meanings(w))] if w else [],
-                         self.f_body, censor=store.deal_settings()["censor"], animator=self.app.anim)
+
+        def entry(word):
+            return word, self.app.get_def(word), store.smeared_meanings(word)
+        fill_definitions(self.def_text, [entry(w)] if w else [], self.f_body, censor=store.deal_settings()["censor"],
+                         animator=self.app.anim, base=entry)
 
     def move(self, tier):
         """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's

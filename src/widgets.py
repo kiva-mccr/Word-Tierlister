@@ -1294,15 +1294,18 @@ def definition_tags(t, body):
     t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
     t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26, font=italic)
     t.tag_configure("wait", foreground=PALETTE["muted"])
+    t.tag_configure("base", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26, spacing1=1, spacing3=2)
 
 
-def fill_definitions(t, entries, body, censor=False, animator=None):
+def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
     """Fill the definition pane `t` (a tk.Text) with [(heading, definition text or None while it is being looked
     up, the keys of its meanings to smear)]: the heading in bold, then each sense numbered, its part of speech, its
     text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a censored kind (its first
     rudeness.GLOSS_KEY characters among the keys: Store.smeared_meanings) shows its labels, and its text smeared
-    sideways like a censored word, un-smearing under the pointer."""
-    from definitions import parse_definition
+    sideways like a censored word, un-smearing under the pointer. `base` (F-3): base(word) -> the same three for
+    another word; under a meaning that only names one ("Alternative form of bull dyke"), that word's own first
+    meaning, muted."""
+    from definitions import form_target, main_sense, parse_definition
     for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
         c.destroy()
     t._smears = []
@@ -1316,6 +1319,7 @@ def fill_definitions(t, entries, body, censor=False, animator=None):
         if text is None:
             t.insert("end", "Looking up definition...\n", "wait")
             continue
+        shown = set()
         for sense in parse_definition(text):
             prefix = ""
             if sense["num"]:
@@ -1324,18 +1328,38 @@ def fill_definitions(t, entries, body, censor=False, animator=None):
             if sense["pos"]:
                 t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
                 prefix += sense["pos"] + "  "
-            if censor and sense["gloss"][:GLOSS_KEY] in smeared:
-                label = "(" + ", ".join(sense["labels"]) + ") " if sense["labels"] else ""
-                t.insert("end", label, ("pos", "sense"))
-                c = _smeared_text(t, sense["gloss"].strip(), body, animator, body.measure(prefix + label))
-                t.window_create("end", window=c, align="top")
-                t.insert("end", "\n", "sense")
-                t._smears.append(c)
-            else:
-                t.insert("end", sense["text"] + "\n", "sense")
+            _insert_gloss(t, sense, "sense", censor and sense["gloss"][:GLOSS_KEY] in smeared, body, animator, prefix)
             if sense["example"]:
                 t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
+            target = form_target(sense["gloss"]) if base else None
+            if target and target not in shown:          # (each word once: "plural of X" and "past of X" share it)
+                shown.add(target)
+                name, other, keys = base(target)
+                main = main_sense(other) if other else None
+                prefix = name + (f" ({main['pos']})" if main and main["pos"] else "") + ": "
+                t.insert("end", prefix, "base")
+                if other is None:
+                    t.insert("end", "Looking up definition...\n", "base")
+                elif main is None:
+                    t.insert("end", "No definition found.\n", "base")
+                else:
+                    _insert_gloss(t, main, "base", censor and main["gloss"][:GLOSS_KEY] in keys, body, animator,
+                                  " " * 6 + prefix)
     t.config(state="disabled")
+
+
+def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
+    """A sense's text and a line end into the pane `t` under `tag`; `smear`: its labels, then its gloss smeared
+    (_smeared_text; `prefix`: the text already on its line)."""
+    if not smear:
+        t.insert("end", sense["text"] + "\n", tag)
+        return
+    label = "(" + ", ".join(sense["labels"]) + ") " if sense["labels"] else ""
+    t.insert("end", label, ("pos", tag))
+    c = _smeared_text(t, sense["gloss"].strip(), body, animator, body.measure(prefix + label))
+    t.window_create("end", window=c, align="top")
+    t.insert("end", "\n", tag)
+    t._smears.append(c)
 
 
 def _smeared_text(t, text, body, animator, used):
@@ -1387,9 +1411,12 @@ class DefinitionDrawer(tk.Frame):
     def show_words(self, words, get_def, name=None, smeared=None):
         """Fill the pane: for each word, its name (name(word): what to call it, the masked text for a censored
         word) and its senses (get_def(word) -> text, or None while it is still being looked up). `smeared`: while
-        censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6)."""
-        fill_definitions(self.text, [(name(w) if name else w, get_def(w), smeared(w) if smeared else ())
-                                     for w in words], self._body, censor=smeared is not None, animator=self._anim)
+        censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6). A meaning that only
+        names another word shows that word's first meaning under it, looked up the same way (F-3)."""
+        def entry(w):
+            return name(w) if name else w, get_def(w), smeared(w) if smeared else ()
+        fill_definitions(self.text, [entry(w) for w in words], self._body, censor=smeared is not None,
+                         animator=self._anim, base=entry)
 
     @property
     def is_open(self):
@@ -1409,15 +1436,22 @@ class DefinitionDrawer(tk.Frame):
         """Back to sizing from the contents. The explicit height left by the slide must go too (0 = none):
         with both set, Tk flips between the two sizes on every relayout."""
         try:
+            if self._inner.winfo_manager() == "place":          # (folded: back in the packed layout)
+                self._inner.place_forget()
+                self._inner.pack(fill="x", anchor="n")
             super().configure(height=0)
             self.pack_propagate(True)
         except tk.TclError:
             pass
 
     def collapse(self):
-        """Fold to nothing before it is packed for opening, so it never shows at full height first."""
+        """Fold to nothing before it is packed for opening, so it never shows at full height first. The contents
+        are placed, not packed, while folded: clipped rather than unmapped, so the text keeps its real width and
+        can say how tall it needs to be before the pane opens (F-2: it opened at its usual 9 lines, measured 0)."""
         self.pack_propagate(False)
         super().configure(height=1)
+        self._inner.pack_forget()
+        self._inner.place(x=0, y=0, relwidth=1)
 
     def lines_needed(self):
         """How many lines tall the text must be to show all of it at its present width (0 before it is laid

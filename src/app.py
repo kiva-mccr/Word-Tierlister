@@ -154,6 +154,26 @@ class App:
         root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
 
+    def open_window(self):
+        """Show the main window once it is built, sized and filled (F-1): every pending layout is finished while
+        it is still hidden, and it is drawn while see-through (where the system allows it: Windows, macOS, a
+        Linux desktop with a compositor), so it appears complete rather than as a blank frame filling in."""
+        r = self.root
+        r.update_idletasks()
+        try:
+            r.attributes("-alpha", 0.0)
+        except tk.TclError:
+            pass
+        r.deiconify()
+        r.update()                                  # (mapped, exposed and every widget drawn)
+        r.after(30, self._unveil)
+
+    def _unveil(self):
+        try:
+            self.root.attributes("-alpha", 1.0)
+        except tk.TclError:
+            pass
+
     def _startup(self):
         """One-time prompts after the window opens: which save was resumed, merge offers, how words are dealt
         (ST-6: once per save, then in Settings), anchors."""

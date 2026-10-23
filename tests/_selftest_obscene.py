@@ -36,9 +36,9 @@ assert [m["g"] for m in bitch] == ["A female dog.", "A malicious woman."] and bi
 
 # ---- scoring them: the kinds of each word's meanings, smeared whole or meaning by meaning ------------------
 found = find_rude(["bitch", "bitches", "penis", "bonk", "box", "shit"], kept, log=lambda *_: None)
-assert found["penis"] == (B["clinical"], False, []), found["penis"]                  # (Clinical is never smeared)
+assert found["penis"] == (B["clean"], False, []), found["penis"]          # (only Clinical: an ordinary word)
 assert found["bonk"][0] == B["sexual"] and found["bonk"][1], found["bonk"]
-assert found["bitch"] == (B["clean"] | B["insult"], False, []), found["bitch"]   # (an insult: shown as it is)
+assert found["bitch"] == (B["clean"], False, []), found["bitch"]   # (only an insult here: an ordinary word)
 assert found["bitches"][1] == found["bitch"][1]                                      # a form is smeared as its word
 assert "shit" not in found and "box" not in found                                    # (no meanings kept: clean)
 # without kept meanings (a save that has not read them yet) the hand-picked list and the earlier flags stand in

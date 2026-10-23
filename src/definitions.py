@@ -63,6 +63,26 @@ def parse_definition(text):
     return senses
 
 
+# a meaning that only names another word ("Alternative form of bull dyke.", "plural of dog", "Clipping of homosexual."):
+# the pane shows that word's own first meaning under it (F-3)
+_FORM_OF = re.compile(r"^(?:(?:alternative|obsolete|archaic|dated|nonstandard|rare|informal|eye|dialect|pronunciation|"
+                      r"letter-case|simple|past|present|third-person|first-person|second-person|singular|plural|"
+                      r"indicative|and|participle|gerund|superlative|comparative|form|spelling|misspelling|clipping|"
+                      r"abbreviation|initialism|acronym|contraction|ellipsis|synonym|feminine|masculine|tense)[\s,-]+)+"
+                      r"of\s+([^\s,;:()\u201c\"]+(?: [^\s,;:()\u201c\"]+){0,3}?)\s*(?:\(|[.,;:]|$)", re.I)
+
+
+def form_target(gloss):
+    """The word a meaning only names ("Alternative form of bull dyke." -> "bull dyke"), or None."""
+    m = _FORM_OF.match(gloss.strip())
+    return m.group(1).rstrip(".") if m else None
+
+
+def main_sense(text):
+    """A definition's first sense that is not itself only a form of another word (parse_definition), or None."""
+    return next((s for s in parse_definition(text) if not form_target(s["gloss"])), None)
+
+
 class Definitions:
     """Threaded definition lookup. One worker thread; requests and results travel through queues."""
     def __init__(self, store):

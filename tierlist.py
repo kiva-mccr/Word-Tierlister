@@ -231,8 +231,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           loads 1,000 rows a page, not 3,000. The one-off test failure did not come back (7 full runs since).
 #
 # --- Fixes (asked for, after T-7) -------------------------------------------------------------------------------
-# [ ] F-1  Opening the program, the window stays hidden until it is fully loaded in (no half-drawn or resizing
-#           window on the way), then appears complete, as Browse and the dialogs already do.
+# [x] F-1  Opening the program, the window stays hidden until it is fully loaded in (no half-drawn or resizing
+#           window on the way), then appears complete, as Browse and the dialogs already do. App.open_window:
+#           built, sized and filled hidden, then shown and drawn at once while see-through (-alpha, where the
+#           system has it), then made visible. It used to show a blank frame for 150+ ms, its widgets popping in.
+# [x] F-2  The definitions pane opens as large as it can on the screen (it opened smaller than there was room for).
+#           The cause: folded, the pane unmapped its text, which then could not say how many lines it needs, so
+#           it opened at its usual 9. Folded, it is now placed (clipped) instead: at 1920x1080, 9 -> 16 lines.
+# [x] F-3  A meaning that only names another word ("Alternative spelling of jail", "plural of colour", "Clipping of
+#           homosexual") shows that word's own first meaning on a muted line under it, in the main window's pane
+#           and Browse's (definitions.form_target / main_sense; looked up like any word; smeared while censoring).
 #
 # --- Phase S: start-up experience (first run and errors, in the window instead of the console) ----
 # Why: today the first-run progress (the 3 GB Wiktionary download, parsing, compound detection,
@@ -559,6 +567,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           voter committee, chosen on the tuning lists: at best 3% fewer errors held out, smeared meanings
 #           unchanged: the voters share Wiktionary's data, so they share its mistakes. Not built. How words are dealt: "Obscene words" sits before "Other",
 #           and shows a minus while only some kinds under it are ticked (ui_style: the tick box's "alternate").
+#           Then (asked for): a word goes into the rude kinds only when one of its meanings needs censoring
+#           ("idiot", "penis" are ordinary words: rudeness.results; RUDENESS_VERSION 7). And a group's own name is
+#           no slur ("jews", "trans", "gay", "queer"): without a slur marker of its own (a slur / ethnic / vulgar
+#           label, English ethnic slurs), a meaning naming a group is no slur when the word has a plain meaning
+#           that is the group's name (IDENTITY), when it is only "sometimes" rude by one label, when it is a
+#           letter-case form ("jew"), or when it names the group by the word itself ("transgender: a transgender
+#           person"); real slurs ("kike", "tranny", "faggot", "dyke", "spic", "hebe") stay (SLUR_MARKS;
+#           RUDENESS_VERSION 8). Measured: 78.7% (78.8%), Slur precision 90.0% (89.5%), recall 54.7% (56.0%).
 # [x] OB-5  How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
 #           Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
 #           smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
@@ -1552,10 +1568,10 @@ def main():
                 root.destroy()
                 raise
             print(f"{store.count_words():,} words ready.")
-            # --- 5. show the main window; App runs until it is closed
-            root.deiconify()
-            App(root, store, Definitions(store), note=note, other_saves=others,
-                ask_dealing=store.get_meta("dealt_asked") != "1")   # (ST-6: once a save)
+            # --- 5. show the main window, built, sized and filled while still hidden (F-1); App runs until closed
+            app = App(root, store, Definitions(store), note=note, other_saves=others,
+                      ask_dealing=store.get_meta("dealt_asked") != "1")   # (ST-6: once a save)
+            app.open_window()
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

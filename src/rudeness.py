@@ -125,6 +125,17 @@ GROUP = [re.compile(r"\b(of (\w+ )?(\w+ )?(descent|origin|ancestry|extraction|he
          re.compile(r"(^|\b([Aa]n?|[Tt]he) )[A-Z][a-z]+ (person|people|man|woman|men|women)\b"),  # "An Italian person"
          re.compile(r"\b(a|the) native of\b|\bnatives of\b", re.I)]
 GROUP_POINTS = {"slur": 5}
+# A group's own name is no slur, even where Wiktionary marks some uses of it rude ("jews", "trans", "gay", "queer"):
+# a meaning naming a group keeps its slur points only with a slur marker of its own (SLUR_MARKS), when it is not
+#   - a word's name for the group (a plain meaning of it starts with one, IDENTITY: "gay: a homosexual"),
+#   - only "sometimes" rude, by one label and not slang ("queer: (sometimes derogatory, colloquial) homosexual"),
+#   - another spelling or letter case of it ("jew: alternative letter-case form of Jew"), or
+#   - named by the word itself ("transgender: (often offensive) a transgender person")
+SLUR_MARKS = {"slur", "ethnic", "vulgar"}          # (labels; and the category English ethnic slurs)
+_RESPELLING = re.compile(r"^alternative letter-case form\b", re.I)
+IDENTITY = re.compile(r"^((an?|the) )?(homosexual|gay|lesbian|bisexual|trans(gender|sexual)?|jew(s|ish)?|asian|"
+                      r"caucasian|aboriginal|indigenous|muslim|arab|romani?|disabled|deaf)\b", re.I)
+_ONE_RUDE = {"offensive", "derogatory", "pejorative"}
 
 # WordNet (optional): points for a matched meaning that is, or is a kind of, one of these; and for its usage labels
 WORDNET_POINTS = {
@@ -245,10 +256,53 @@ def wordnet_match(word, gloss, pos, wn):
     return best
 
 
-def score_sense(sense, pos="", word="", wn=None):
+def names_group(sense):
+    """True if a meaning's definition names a group of people (GROUP)."""
+    gloss = gloss_of(sense)
+    return any(g.search(gloss) for g in GROUP)
+
+
+def slur_marked(sense):
+    """True if a meaning carries a slur marker of its own (SLUR_MARKS, or the category English ethnic slurs)."""
+    labels = {_label(t) for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))}
+    names = {(c.get("name") if isinstance(c, dict) else str(c)).lower() for c in sense.get("categories", [])}
+    return bool(labels & SLUR_MARKS) or "english ethnic slurs" in names
+
+
+def group_name(sense, word="", respelling=True):
+    """True if a meaning is a group's own name, not a slur for it (see SLUR_MARKS): only "sometimes" rude, another
+    letter case of a name (`respelling`), or naming the group by the word itself."""
+    labels = {_label(t) for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))}
+    gloss = gloss_of(sense)
+    sometimes = "sometimes" in labels and len(labels & _ONE_RUDE) == 1 and "slang" not in labels
+    named = word and not is_form(sense) and re.search(r"\b" + re.escape(word) + r"\b", gloss, re.I)
+    return bool((respelling and _RESPELLING.match(gloss)) or (names_group(sense) and (sometimes or named)))
+
+
+def unslur(points, sense, word, identity, respelling=True):
+    """A meaning's points without Slur when it is a group's own name (SLUR_MARKS, group_name; `identity`: the word
+    is one)."""
+    if points.get("slur") and not slur_marked(sense) and (identity or group_name(sense, word, respelling)):
+        del points["slur"]
+    return points
+
+
+def is_identity(senses, scored):
+    """True if a word is a group's own name: one of its meanings names a group plainly (plain_group_name)."""
+    return any(plain_group_name(s, p) for s, p in zip(senses, scored))
+
+
+def plain_group_name(sense, points):
+    """True if a meaning is a group's name with no rude label or points ("gay: a homosexual"): the word is its name."""
+    labels = {_label(t) for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))}
+    return bool(IDENTITY.match(gloss_of(sense))) and not is_form(sense) and not labels & set(TAG_POINTS) \
+        and sense_points(points) < 1.0
+
+
+def score_sense(sense, pos="", word="", wn=None, identity=False):
     """{kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories",
-    "glosses"); `word`, `wn`: the word and WordNet (or None),
-    for WORDNET_POINTS."""
+    "glosses"); `word`, `wn`: the word and WordNet (or None), for WORDNET_POINTS; `identity`: the word is a group's
+    own name (plain_group_name), so its meanings are no slurs without a marker of their own."""
     points = {}
     labels = list(sense.get("tags", [])) + list(sense.get("raw_tags", []))
     rude_label = False
@@ -304,7 +358,7 @@ def score_sense(sense, pos="", word="", wn=None):
         for k in points:                                               # "pass water", "go potty", "oldest occupation"
             if k != "clinical":
                 points[k] *= SOFTENED
-    return points
+    return unslur(points, sense, word, identity)
 
 
 def sense_kind(points):
@@ -344,7 +398,10 @@ def score_word(senses, pos="", word="", wn=None):
     sense, or one for all); word: the word itself (for its WordNet meanings); wn: WordNet (wordnet()), or None for
     none."""
     poses = pos if isinstance(pos, (list, tuple)) else [pos] * len(senses)
-    return [score_sense(s, p, word, wn) for s, p in zip(senses, poses)]
+    scored = [score_sense(s, p, word, wn) for s, p in zip(senses, poses)]
+    if is_identity(senses, scored):                  # the word is a group's own name (SLUR_MARKS)
+        scored = [score_sense(s, p, word, wn, identity=True) for s, p in zip(senses, poses)]
+    return scored
 
 
 # ---- the links between words: a second pass over the first scores (Wiktionary's synonym lists) -------------------
@@ -487,7 +544,9 @@ def second_pass(word, senses, first, rude, incoming, parents=()):
             p[k] = max(p.get(k, 0.0), MEANING_MIN + 0.5)
         if len(gloss.split()) <= 8 and _BODY.search(gloss):     # a short slang name for a body part or a sex act
             _add(p, {"crude" if _WASTE.search(gloss) else "sexual": SLANG_BODY})   # ("maraca: breasts")
-    return out
+    identity = is_identity(senses, first[word])
+    return [unslur(p, sense, word, identity, respelling=False)   # (links don't make a name a slur; a respelling
+            for p, sense in zip(out, senses)]                    # takes its word's points, as any form)
 
 
 SLANGY = {"slang", "informal", "colloquial", "vulgar", "derogatory", "offensive"}
@@ -509,7 +568,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "6"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "8"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -604,11 +663,14 @@ def meaning_kinds(senses, scored, common=False):
 
 
 def results(word, senses, scored, censored, common=False):
-    """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds), the
+    """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds; none
+    but clean unless one of them is `censored`), the
     whole word smeared while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]:
     smeared in the definitions). `senses`: the kaikki.org-shaped senses that were scored; `common`: the word is
     at least COMMON_ZIPF common."""
     kinds = meaning_kinds(senses, scored, common)
+    if not set(kinds) & set(censored):        # (the user's rule: a word goes into the rude kinds only when one of its
+        kinds = ["clean"] * len(kinds)        # meanings needs censoring: "idiot", "penis" are ordinary words)
     bits = 0
     for k in kinds or ["clean"]:
         bits |= KIND_BITS[k]

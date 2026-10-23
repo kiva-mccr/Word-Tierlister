@@ -173,5 +173,24 @@ assert kept["t"] == ["informal"] and not has_signal({"g": "A table.", "t": ["inf
 saved = {"shithead": json.dumps(c), "shit": json.dumps(compact_entry(
     {"word": "shit", "pos": "noun", "senses": [{"glosses": ["Faeces."], "tags": ["vulgar"]}]}))}
 got = score_saved(saved, {"crude", "swear", "sexual", "slur"})
-assert got["shithead"][0] == KIND_BITS["insult"] and got["shit"][1], got
+assert got["shithead"][0] == KIND_BITS["clean"] and got["shit"][1], got         # (an insult alone: an ordinary word)
+# a word goes into the rude kinds only when one of its meanings needs censoring; then all its kinds count
+both = {"bitch": json.dumps(compact_entry({"word": "bitch", "pos": "noun", "senses": [
+    {"glosses": ["A stupid, contemptible person."], "tags": ["derogatory"]},
+    {"glosses": ["To complain."], "tags": ["vulgar"]}]}))}
+b = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"][0]
+assert b & KIND_BITS["swear"] and b & KIND_BITS["insult"], b
+# a group's own name is no slur (SLUR_MARKS): a word with a plain meaning naming one, "sometimes" rude, a letter-case
+# form, or named by the word itself; a slur label, "ethnic" or "vulgar" still makes one
+def word_kinds(word, senses):
+    return [sense_kind(p) for p in score_word([{"glosses": [g], "tags": list(t)} for g, t in senses], "noun", word)]
+assert word_kinds("gay", [("A homosexual, especially a male homosexual.", ()),
+                          ("Flamboyant or effeminate in behavior.", ("derogatory", "slang"))])[1] != "slur"
+assert kind("Homosexual.", ["colloquial", "derogatory", "sometimes"]) != "slur"                  # ("queer")
+assert kind("Alternative letter-case form of Jew.", ["alt-of", "offensive"]) != "slur"          # ("jew")
+assert word_kinds("transgender", [("A transgender person", ("offensive", "often"))]) != ["slur"]
+assert word_kinds("dyke", [("An earthwork.", ()), ("A lesbian.", ("derogatory", "offensive", "vulgar"))])[1] == "slur"
+assert kind("A Jew.", ["ethnic", "offensive", "slur"]) == "slur"                                 # ("kike")
+assert kind("Alternative form of Hebe (a Jew).", ["alt-of", "derogatory", "offensive"]) == "slur"   # (not case)
+assert kind("A transgender person.", ["derogatory", "offensive", "sometimes"]) == "slur"   # (two labels: "tranner")
 print("RUDENESS OK")
