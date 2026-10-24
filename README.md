@@ -93,7 +93,7 @@ either way the save you used last is found again, so switching between the two l
 | `tools/notes.py` | Keeps each code file's notes (`name.md` beside `name.py`) up to date: regenerates their uses / used by / tests / public API from the code, keeping the hand-written parts; `--check` lists what is missing or stale. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
-| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8). |
+| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, "Update the source only" updates this folder without making the program (T-13). |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux and Windows at once on GitHub (T-8). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -260,6 +260,11 @@ for the newest release and says in a line what it found. Ticked and newer than y
 it from that version's source (your files are not changed), and unpacking downloads it and shows what it would
 change before doing it, so unpacking is also how you update. Offline, or already the newest: it says so and uses
 the version you have. Your save is never touched.
+
+Running from source, a newer version also shows **Update the source only**: it downloads that version and brings
+this folder up to date with it, without making the program (what it will change is shown first; only the
+program's own files change, a file you edited is kept as `.bak` first), then Word Tier List starts again from the
+new source with the same save. In a git checkout, `git pull` is the usual way instead.
 
 In the program, the same menu item gives the source back: **Unpack the source code** writes it into a folder
 (beside the program, "Word Tier List source", or one you pick), laid out like this repository. Unpacking into a

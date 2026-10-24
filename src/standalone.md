@@ -32,12 +32,13 @@ The module docstring has the details; this page is the map.
 - `plan_unpack`: What unpacking `source` (a folder with MANIFEST) into `target` would do, without doing it: {"add": [...], "update": [...], "remove": [...], "backup": [...], "same":...
 - `summary`: "3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
+- `came_from_program`: True if an unpack record (UNPACKED) is of a folder unpacked from the program, not only updated from GitHub.
 - `cleanup_place`: Where a program made from `root` goes when the source is to be cleaned up behind it: the folder holding `root`, when `root` was unpacked from a program (UNPACKED) and...
 - `move_save`: Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...).
 - `remove_source`: Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be closing: on Windows a folder in use cannot be removed, so it...
 - `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tier List source".
 - `existing_source`: A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from that source: T-6 puts it next to tierlist.py), or a folder...
-- `start_source`: Start tierlist.py in `folder` with `python`, on its own (not a child of this program, which then closes).
+- `start_source`: Start tierlist.py in `folder` with `python` (and `args`), on its own (not a child of this program, which then closes).
 - `python_for_source`: A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own Python inside, which cannot run loose source files).
 - `open_folder`: Show a folder in the system's file manager.
 - `version_tuple`: (1, 2, 0) for "v1.2.0" (the numbers in it, three at most).
@@ -62,3 +63,4 @@ The module docstring has the details; this page is the map.
 
 - What ships: `SHIP_DIRS` / `source_files`. Program names: `output_name` and, for releases, `RELEASE_ASSETS` (the workflow's names must match).
 - Release lookups: `latest_release` / `fetch_source` (tests pass their own `fetch`).
+- The unpack record (`UNPACKED`) says whether the folder came from the program (`from_program`; older records: yes, `came_from_program`). Only such a folder is offered to be cleaned up behind or removed (`cleanup_place`, `remove_source`): a source only updated from GitHub (T-13, `unpack(..., from_program=False)`) could be someone's own clone (T-13).

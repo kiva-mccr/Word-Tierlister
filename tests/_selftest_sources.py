@@ -207,6 +207,43 @@ d.buttons["Make the program"].invoke(); pump(root, 2)
 d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
 d.update_var.set(False); d.buttons["Make the program"].invoke(); pump(root, 2)
 assert made == ["9.1.0", None], made
+# from source, "Update the source only" (asked for): only once a newer version is found; it downloads it, says what
+# it changes, brings this folder up to date (an edited file kept as .bak, the save and anything else untouched) and
+# starts again from it with the same save; nothing is built, and the folder is never offered to be cleaned up behind
+d = sources.SourceDialog(app, root_dir=proj2, check=lambda: None); settle(d)
+assert sources.UPDATE_SOURCE not in d.buttons; d.close()                    # (nothing newer: no button)
+open(os.path.join(proj2, "src", "a.py"), "w").write("my edit\n")
+open(os.path.join(proj2, "tierlist.db"), "w").write("my save")
+asked.clear(); popened.clear(); made.clear(); fetched.clear()
+S.start_source = lambda folder, python, args=(): popened.append((folder, list(args)))
+d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
+pump(root, 2); assert sources.UPDATE_SOURCE in d.buttons and d.buttons[sources.UPDATE_SOURCE].winfo_ismapped()
+assert '"Make the program" builds' in d.update_line.cget("text")            # (the default button is still the build)
+save = app.store.path
+d.buttons[sources.UPDATE_SOURCE].invoke(); pump(root, 3)
+assert fetched == ["9.1.0"] and not made                                    # downloaded, nothing built
+head, body = asked[-1][1], asked[-1][2]
+assert head == "Update the source to version 9.1.0?" and "kept as .bak" in body and "same save" in body, asked[-1]
+assert open(os.path.join(proj2, "tierlist.py")).read() == "v3\n" and open(os.path.join(proj2, "src", "a.py")).read() == "a3\n"
+assert open(os.path.join(proj2, "src", "a.py.bak")).read() == "my edit\n"
+assert open(os.path.join(proj2, "tierlist.db")).read() == "my save"
+assert popened == [(proj2, ["--db", save])] and not d.alive()               # started again, the same save
+assert S.cleanup_place(proj2) is None and S.remove_source(proj2) is None    # (not unpacked from the program)
+assert os.path.exists(os.path.join(proj2, "tierlist.py"))
+# a folder unpacked from the program stays one when it is updated this way (so clean up behind still applies)
+from_prog = os.path.join(tempfile.mkdtemp(), "src"); S.unpack(v2, from_prog)
+assert S.cleanup_place(from_prog)
+S.unpack(v3, from_prog, from_program=False)
+assert S.cleanup_place(from_prog)
+# said no: nothing changes
+root, app = window()
+sources.ask_yes_no = lambda *a, **kw: False
+proj3 = project()
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: release); settle(d)
+d.buttons[sources.UPDATE_SOURCE].invoke(); pump(root, 3)
+assert open(os.path.join(proj3, "tierlist.py")).read() == "x = 1\n" and d.alive()
+d.close()
+sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]
 app.on_close()
 
 # ---- T-9: the first start of each form offers the other once, when nothing else is being asked ----------------------

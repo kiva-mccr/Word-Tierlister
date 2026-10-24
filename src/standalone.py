@@ -408,9 +408,12 @@ def summary(plan):
     return text[0].upper() + text[1:] + "."
 
 
-def unpack(source, target, plan=None):
+def unpack(source, target, plan=None, from_program=True):
     """Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
-    Returns the plan carried out."""
+    Returns the plan carried out. `from_program` False: an update of a source folder from GitHub (not from the
+    program): the record then says so, unless the folder was unpacked from the program before, and only a folder
+    that came from the program is ever offered to be cleaned up behind (cleanup_place, remove_source)."""
+    before = read_manifest(target, UNPACKED)
     plan = plan or plan_unpack(source, target)
     os.makedirs(target, exist_ok=True)
     for f in plan["backup"]:
@@ -426,8 +429,19 @@ def unpack(source, target, plan=None):
             os.remove(os.path.join(target, f))
         except OSError:
             pass
-    shutil.copy2(os.path.join(source, MANIFEST), os.path.join(target, UNPACKED))
+    record = read_manifest(source) or {}
+    record[FROM_PROGRAM] = from_program or bool(before and came_from_program(before))
+    with open(os.path.join(target, UNPACKED), "w", encoding="utf-8") as fh:
+        json.dump(record, fh, indent=1, sort_keys=True)
     return plan
+
+
+FROM_PROGRAM = "from_program"      # in UNPACKED: unpacked from the program (a record without it is from before: yes)
+
+
+def came_from_program(record):
+    """True if an unpack record (UNPACKED) is of a folder unpacked from the program, not only updated from GitHub."""
+    return bool(record) and record.get(FROM_PROGRAM, True) is not False
 
 
 # ---- cleaning up behind (T-12): a program made from an unpacked source, the source then removed --------------------
@@ -436,7 +450,7 @@ def cleanup_place(root=ROOT, platform=None):
     `root`, when `root` was unpacked from a program (UNPACKED) and no program sits there; else None (asked for:
     only then is "Clean up behind?" asked)."""
     parent = os.path.dirname(os.path.abspath(root))
-    if not os.path.isfile(os.path.join(root, UNPACKED)) or os.path.exists(program_path(parent, platform)):
+    if not came_from_program(read_manifest(root, UNPACKED)) or os.path.exists(program_path(parent, platform)):
         return None
     return parent
 
@@ -472,7 +486,7 @@ def remove_source(folder, tries=40, wait=0.25):
     yours) stays, and so does the folder then. Never touches a folder without that record. Returns the paths left
     behind, or None."""
     record = read_manifest(folder, UNPACKED)
-    if not record:
+    if not came_from_program(record):
         return None
     listed = set(record.get("files", {}))
 
@@ -535,13 +549,14 @@ def existing_source(program=None):
     return None
 
 
-def start_source(folder, python, popen=subprocess.Popen):
-    """Start tierlist.py in `folder` with `python`, on its own (not a child of this program, which then closes)."""
-    script = os.path.join(folder, "tierlist.py")
+def start_source(folder, python, popen=subprocess.Popen, args=()):
+    """Start tierlist.py in `folder` with `python` (and `args`), on its own (not a child of this program, which then
+    closes)."""
+    cmd = [python, os.path.join(folder, "tierlist.py"), *args]
     if sys.platform.startswith("win"):
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        return popen([python, script], creationflags=flags, close_fds=True, cwd=folder, env=clean_env())
-    return popen([python, script], cwd=folder, start_new_session=True, close_fds=True, env=clean_env(),
+        return popen(cmd, creationflags=flags, close_fds=True, cwd=folder, env=clean_env())
+    return popen(cmd, cwd=folder, start_new_session=True, close_fds=True, env=clean_env(),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 

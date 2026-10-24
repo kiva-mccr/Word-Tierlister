@@ -18,10 +18,14 @@ away (go=True). Either way a tick box, ticked to start with, says "Update to the
 GitHub for the newest release in the background (standalone.latest_release) and says in a line what it found.
 Ticked and newer, "Make the program" downloads that version's source and builds from it, and "Unpack" downloads
 it and shows what unpacking it would change before it does it; offline, or with no newer version, it says so and
-uses the version you have.
+uses the version you have. From source, a newer version also shows "Update the source only" (asked for): it
+downloads that version and brings this folder up to date with it (the same sync as unpacking, shown first), without
+making the program, then starts again from it with the same save. Such a folder is never offered to be cleaned up
+behind (standalone.came_from_program).
 """
 import os
 import queue
+import sys
 import tempfile
 import threading
 import time
@@ -39,6 +43,7 @@ from widgets import StyledDialog
 from constants import VERSION
 
 HEADLINE = "Make a standalone program"
+UPDATE_SOURCE = "Update the source only"
 INTRO = ("Builds Word Tier List into one program for this computer, with its source code inside it. It keeps using "
          "the same save, and Python is no longer needed to run it. It takes a minute or two; the first time, it "
          "asks to install the builder (PyInstaller, about 15 MB) and anything else the program needs.")
@@ -102,6 +107,9 @@ class SourceDialog:
                 return
             self.checked = True
             self._show_update()
+            if not self.frozen and standalone.newer(self.release) and UPDATE_SOURCE not in self.dlg.buttons:
+                self.dlg.button(UPDATE_SOURCE, self.update_source, side="left")      # (asked for: no build)
+                self.dlg.refit()
         collect()
 
     def wants_update(self):
@@ -123,11 +131,13 @@ class SourceDialog:
             text = f"Version {r['version']} is out (you have {VERSION}): {self._action()} {what}."
         else:
             text = f"Version {r['version']} is out (you have {VERSION}); unticked, yours is used."
+        if not self.frozen and standalone.newer(r):
+            text += f' "{UPDATE_SOURCE}" brings this folder up to date without making the program.'
         self.update_line.config(text=text)
         self.dlg.refit()
 
     def _action(self):
-        names = [n for n in self.dlg.buttons if n not in ("Cancel", "Change folder...", "Start it")]
+        names = [n for n in self.dlg.buttons if n not in ("Cancel", "Change folder...", "Start it", UPDATE_SOURCE)]
         return f'"{names[0]}"' if names else "it"
 
     # ---- from source: make the program (T-6) --------------------------------------------------------------------
@@ -201,6 +211,45 @@ class SourceDialog:
         else:
             self.start(path)
         return path
+
+    def update_source(self, fetch=None):
+        """"Update the source only" (asked for): download the newest version's source and bring this folder up to
+        date with it, without making the program, then start again from it with the same save. What it changes is
+        shown first; only the program's own files change (an edited one is kept as .bak first), and the folder is
+        not marked as unpacked from the program (so it is never offered to be cleaned up behind). `fetch`: tests."""
+        app, release = self.app, self.release
+        folder = tempfile.mkdtemp(prefix="wtl-release-")
+        try:
+            folder = run_with_progress(app.root, lambda log: (fetch or standalone.fetch_source)(release, folder, log),
+                                       title="Downloading the newest version", delay_ms=0,
+                                       initial_stage="Connecting...", intro=f"Version {release['version']}, from GitHub.")
+        except SystemExit as exc:
+            if str(exc) != STOPPED_MESSAGE:
+                raise
+            return None
+        except OSError as exc:
+            show_error(HEADLINE, f"The newest version could not be downloaded:\n{exc}", parent=self.dlg.win,
+                       headline="Not updated")
+            return None
+        plan = standalone.plan_unpack(folder, self.root_dir)
+        git = os.path.isdir(os.path.join(self.root_dir, ".git"))
+        if not ask_yes_no("Source & Updates", f"Update the source to version {release['version']}?",
+                          f"{standalone.summary(plan)}\n\nIn {self.root_dir}. Only the program's own files change; "
+                          "your save and anything else there stay as they are. Word Tier List then starts again from "
+                          "the new source, with the same save."
+                          + ("\n\nThis folder is a git checkout: git pull is the usual way to update it." if git else ""),
+                          yes="Update", no="Cancel", parent=self.dlg.win, wrap_chars=60):
+            return None
+        try:
+            standalone.unpack(folder, self.root_dir, plan, from_program=False)
+        except OSError as exc:
+            show_error(HEADLINE, f"The source could not be updated in {self.root_dir}:\n{exc}", parent=self.dlg.win,
+                       headline="Not updated")
+            return None
+        self.dlg.close()
+        standalone.start_source(self.root_dir, sys.executable, args=["--db", app.store.path])
+        app.on_close()                            # (one at a time on a save: the new source takes over)
+        return plan
 
     def start_cleaned(self, path, place):
         """Clean up behind (T-12): close this window and its save, move the save next to the new program if it is

@@ -1605,6 +1605,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           words are dealt when ticked there; every later time from View a toast ("Censoring on · it may miss...").
 #           How words are dealt also says it in a muted line under the tick box, always (constants.CENSOR_CAVEAT*;
 #           App.censor_note never waits).
+# [x] T-13 Asked for: update just the source, without making the program. From source, File > Source & Updates
+#           shows "Update the source only" once GitHub has a newer version: it downloads it, says what it changes
+#           (the T-7 sync: only the program's own files; an edited one kept as .bak first; the save untouched; a git
+#           checkout is told git pull is the usual way), brings this folder up to date, then starts tierlist.py again
+#           from it with the same save (--db) and closes. The unpack record now says whether a folder came from the
+#           program (standalone.came_from_program; older records: yes), so a folder only updated this way is never
+#           offered to be cleaned up behind (T-12) nor removed. (The built program already updated its unpacked
+#           source without building: T-8's tick on its Unpack page.)
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
