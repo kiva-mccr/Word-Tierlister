@@ -203,8 +203,8 @@ class App:
 
     def _offer_other_form(self):
         """Once (remembered in the save, from source and in the program each), when nothing else is going on: from
-        source "Make this a standalone program?", in the program "Unpack the source code next to it?" (T-9). Yes
-        does what File > Source & Updates would (it stays in the menu either way). Waits while a question or
+        source "Make this a standalone program?" (T-9: yes does what File > Source & Updates would); in the
+        program its source is unpacked beside it without asking (T-10, _unpack_beside). Waits while a question or
         settings page is open, while a long job runs and while Wiktionary's meanings are being downloaded."""
         frozen = is_frozen()
         key = self.FORM_ASKED[frozen]
@@ -218,13 +218,8 @@ class App:
         if not frozen and os.path.exists(standalone.program_path(standalone.ROOT)):
             return                                   # (a program is beside tierlist.py already)
         self.store.set_meta(key, "1")                # (asked once, whatever the answer)
-        if frozen:
-            where = standalone.default_source_folder()
-            yes = ask_yes_no("Source & Updates", "Unpack the source code next to it?",
-                             "This program carries the source code it was built from. Unpack it into "
-                             f"\"{os.path.basename(where)}\" beside the program, to read it, change it or run it "
-                             "with Python? You can do it any time from File > Source & Updates.",
-                             yes="Unpack it", no="Not now", parent=self.root)
+        if frozen:                                   # (T-10, asked for: no question; done once, quietly, unless a
+            return self._unpack_beside()             # copy of the source is beside the program already)
         else:
             yes = ask_yes_no("Source & Updates", "Make this a standalone program?",
                              "It builds Word Tier List into one program for this computer, next to tierlist.py "
@@ -234,6 +229,23 @@ class App:
         if yes:
             return SourceDialog(self, go=True)
         return None
+
+    def _unpack_beside(self):
+        """The built program's first start (T-10): its source goes into "Word Tier List source" beside it, unless a
+        copy is there already (standalone.existing_source: tierlist.py beside it, or a folder holding one). Says
+        where in a message; File > Source & Updates can unpack it again, or elsewhere. Returns the folder, or None."""
+        if standalone.existing_source():
+            return None
+        where = standalone.default_source_folder()
+        try:
+            standalone.unpack(standalone.bundled_source(), where)
+        except OSError as exc:
+            self.flash(f"The source code could not be unpacked beside the program ({exc.strerror or exc}); "
+                       "File > Source & Updates can put it elsewhere", ms=6000)
+            return None
+        self.flash(f"The source code is unpacked beside the program, in \"{os.path.basename(where)}\" "
+                   "(File > Source & Updates)", ms=5000)
+        return where
 
     # ---- construction ------------------------------------------------------------------
     def _menu_items(self):

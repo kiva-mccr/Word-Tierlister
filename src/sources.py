@@ -22,7 +22,6 @@ uses the version you have.
 """
 import os
 import queue
-import subprocess
 import tempfile
 import threading
 import time
@@ -297,13 +296,12 @@ class SourceDialog:
             pass                                  # (no file manager: the message below says where it is)
         done = standalone.summary(plan)
         python = standalone.python_for_source()
-        script = os.path.join(self.target, "tierlist.py")
         if python and ask_yes_no("Unpack the source code", "Source unpacked",
                                  f"{done}\n\nIt is in {self.target}. Start tierlist.py from there now? It uses the "
-                                 "same save as this program.", yes="Start it", no="Not now", parent=self.app.root,
-                                 wrap_chars=60):
-            subprocess.Popen([python, script], cwd=self.target, start_new_session=True,
-                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                 "same save as this program, which then closes.", yes="Start it", no="Not now",
+                                 parent=self.app.root, wrap_chars=60):
+            standalone.start_source(self.target, python)
+            self.app.on_close()                   # (asked for: one of them at a time, never two on one save)
         elif not python:
             show_message("Unpack the source code", "Source unpacked",
                          f"{done}\n\nIt is in {self.target}. To run it, install Python 3 (python.org), then start "

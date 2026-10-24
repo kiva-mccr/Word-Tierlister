@@ -11,6 +11,7 @@ import tierlist as T
 import sources
 import standalone as S
 from problems import SetupError
+REAL_DEFAULT = S.default_source_folder      # (parts below replace it)
 
 needs = []                              # (before a build, what it needs is checked: faked here, see the end)
 sources.ensure_packages = lambda root, required, optional=(): (needs.append((required, optional)), True)[1]
@@ -131,13 +132,19 @@ opened, asked, popened = [], [], []
 S.open_folder = lambda path, popen=None: opened.append(path)
 S.python_for_source = lambda: "/usr/bin/python3"
 sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]
-sources.subprocess.Popen = lambda args, **kw: popened.append(args)
+S.start_source = lambda folder, python: popened.append([python, os.path.join(folder, "tierlist.py")])
 d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
 assert list(d.buttons) == ["Change folder...", "Cancel", "Unpack"] and target2 in d.where.cget("text")
 assert "every file is added" in d.state.cget("text")
 d.buttons["Unpack"].invoke(); pump(root)
 assert sorted(os.listdir(os.path.join(target2, "src"))) == ["a.py", "new.py"] and opened == [target2]
 assert asked and popened == [["/usr/bin/python3", os.path.join(target2, "tierlist.py")]]
+try:                                                                # started: this one closed behind it (asked for)
+    closed = not root.winfo_exists()
+except tk.TclError:
+    closed = True
+assert closed
+root, app = window()
 open(os.path.join(target2, "src", "a.py"), "w").write("edited\n")
 d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
 assert "1 updated (1 edited file kept as .bak first)" in d.state.cget("text"), d.state.cget("text")
@@ -231,21 +238,31 @@ assert asked == ["Make this a standalone program?"] and made == [S.ROOT]       #
 assert app.store.get_meta("offered_program") == "1"
 app._offer_other_form(); pump(root)
 assert len(asked) == 1                                            # once only, whatever the answer
-# in the program: "Unpack the source code next to it?", yes unpacks beside it (and offers to start it)
+# in the program (T-10, asked for): its first start unpacks the source beside it without asking, and says where;
+# once only; and not at all where a copy of the source is beside it already (built from it, or unpacked before)
 A.is_frozen = lambda: True
 S.bundled_source = lambda: v2
-beside = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+home = tempfile.mkdtemp()
+beside = os.path.join(home, "Word Tier List source")
 S.default_source_folder = lambda program=None: beside
 sources.is_frozen = lambda: True
-sources.ask_yes_no = lambda *a, **kw: False                       # (then: not starting tierlist.py)
+n = len(asked)
 app._offer_other_form(); pump(root, 4)
-assert asked[-1] == "Unpack the source code next to it?" and os.path.exists(os.path.join(beside, "tierlist.py"))
-assert app.store.get_meta("offered_source") == "1"
-# "Not now": remembered all the same
-app.store.set_meta("offered_source", "0"); answer[0] = False
+assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py"))     # no question; unpacked
+assert "unpacked beside the program" in app.toast.cget("text") and app.store.get_meta("offered_source") == "1"
 shutil.rmtree(beside)
 app._offer_other_form(); pump(root, 4)
-assert not os.path.exists(beside) and app.store.get_meta("offered_source") == "1"
+assert not os.path.exists(beside)                                 # once only
+app.store.set_meta("offered_source", "0")
+os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "tierlist.py"), "w").write("")
+app._offer_other_form(); pump(root, 4)
+assert not os.path.exists(beside) and S.existing_source() == os.path.join(home, "my copy")   # (a copy is there)
+S.default_source_folder = REAL_DEFAULT
+prog = os.path.join(tempfile.mkdtemp(), "word-tierlist")
+assert S.existing_source(prog) is None
+open(os.path.join(os.path.dirname(prog), "tierlist.py"), "w").write("")
+assert S.existing_source(prog) == os.path.dirname(prog)          # (built from source: it sits beside tierlist.py)
+S.default_source_folder = lambda program=None: beside
 
 # before a build: a required package left uninstalled, or an install that failed, stops it with a message
 said = []

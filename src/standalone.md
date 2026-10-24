@@ -32,6 +32,8 @@ The module docstring has the details; this page is the map.
 - `summary`: "3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
 - `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tier List source".
+- `existing_source`: A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from that source: T-6 puts it next to tierlist.py), or a folder...
+- `start_source`: Start tierlist.py in `folder` with `python`, on its own (not a child of this program, which then closes).
 - `python_for_source`: A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own Python inside, which cannot run loose source files).
 - `open_folder`: Show a folder in the system's file manager.
 - `version_tuple`: (1, 2, 0) for "v1.2.0" (the numbers in it, three at most).
@@ -46,6 +48,7 @@ The module docstring has the details; this page is the map.
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
+- `existing_source` decides whether the first start unpacks (T-10): tierlist.py beside the program, or any folder beside it with tierlist.py or the unpack record, counts as a copy already there.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.
 

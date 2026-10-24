@@ -1468,6 +1468,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           showing only if that fails), from the version you have. Not asked when a program already sits next to
 #           tierlist.py, or when the program carries no source. App(offer_form=...) is off unless main() turns it on
 #           (not with --no-install), so tests never see it. _selftest_sources.py.
+# [x] T-10 The built program's first start unpacks its source by itself (asked for: into a folder named for it, "unless
+#           the user has already made something along those lines"): App._unpack_beside writes it into "Word Tier
+#           List source" beside the program and says so in a message, instead of T-9's question; not when a copy is
+#           there already (standalone.existing_source: tierlist.py beside the program, as T-6 builds it, or a folder
+#           beside it holding tierlist.py or an unpack record, whatever its name). Once per save, as T-9. And
+#           starting the other form closes this one (asked for): "Start it" after unpacking starts tierlist.py on its
+#           own (standalone.start_source, detached as standalone.start) and closes the program, as "Start it" after
+#           making the program already did; never two on one save.
 # [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in

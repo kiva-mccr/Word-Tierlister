@@ -401,6 +401,35 @@ def default_source_folder(program=None):
     return os.path.join(where, "Word Tier List source")
 
 
+def existing_source(program=None):
+    """A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from
+    that source: T-6 puts it next to tierlist.py), or a folder beside it holding one (unpacked before, or made by
+    hand, whatever its name). The first start unpacks the source only where none is (T-10)."""
+    where = os.path.dirname(default_source_folder(program))
+    if os.path.isfile(os.path.join(where, "tierlist.py")):
+        return where
+    try:
+        names = sorted(os.listdir(where))
+    except OSError:
+        return None
+    for name in names:
+        folder = os.path.join(where, name)
+        if os.path.isdir(folder) and (os.path.isfile(os.path.join(folder, "tierlist.py"))
+                                      or os.path.isfile(os.path.join(folder, UNPACKED))):
+            return folder
+    return None
+
+
+def start_source(folder, python, popen=subprocess.Popen):
+    """Start tierlist.py in `folder` with `python`, on its own (not a child of this program, which then closes)."""
+    script = os.path.join(folder, "tierlist.py")
+    if sys.platform.startswith("win"):
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        return popen([python, script], creationflags=flags, close_fds=True, cwd=folder)
+    return popen([python, script], cwd=folder, start_new_session=True, close_fds=True,
+                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def python_for_source():
     """A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own
     Python inside, which cannot run loose source files)."""
