@@ -1650,6 +1650,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           terminal gets its prompt back, and a failure right at the start still shows there (deps.should_detach,
 #           detach_terminal, windowless_python). With no pythonw.exe the old FreeConsole stays. Confirmed by the user
 #           on real Windows.
+# [x] IC-3 Reported: on Fedora the icon showed in Files but not in the taskbar. GNOME no longer takes a window's own
+#           icon there: it pairs the window with a launcher by its class. Every window is now named (tk.Tk(className=
+#           "word-tierlist"): X's WM_CLASS "word-tierlist", "Word-tierlist"), the launcher names it (StartupWMClass,
+#           and its file is word-tierlist.desktop), and on Linux every start writes the launcher if there is none,
+#           out of the applications menu (NoDisplay) until File > Add to applications menu, or brings it up to date
+#           (deps.ensure_launcher). Not seen here (no GNOME Shell): confirm on Fedora.
+# [x] T-14 Asked for: making the program did not ask to clean up behind (T-12 asked only for a source unpacked from the
+#           program). Now it asks every time it is made from source, whatever the source: Keep the source (the
+#           default), Zip it (the source packed into <folder>.zip beside it first, never over a file) or Remove it.
+#           Either of the last two puts the program beside the folder, moves the save, and writes down the files
+#           that may go (REMOVE_RECORD: the source's own), so a download or a clone keeps anything else (.git, files
+#           of yours); the new program removes them as it starts (standalone.remove_source).
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
@@ -1690,7 +1702,7 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, VERSION, plan_line  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
@@ -1805,6 +1817,8 @@ def main():
         if getattr(sys, "frozen", False):  # (Linux: its icon on its file in the file manager, reported missing)
             import threading
             threading.Thread(target=standalone.give_icon, args=(sys.executable,), daemon=True).start()
+        deps.ensure_launcher(sys.executable, None if getattr(sys, "frozen", False) else os.path.abspath(__file__))
+        #                                  (Linux: the taskbar's icon comes from a launcher naming the window's class)
         # `current` is the source the list was built from; an older WordNet save is upgraded to
         # Wiktionary in place, keeping all progress.
         existing = store.count_words()
@@ -1855,7 +1869,7 @@ def main():
                 store.reshuffle(seed=args.seed)
 
         def new_root():
-            r = tk.Tk()
+            r = tk.Tk(className=WM_CLASS)   # (named, so a Linux taskbar finds the program's icon: ensure_launcher)
             r.withdraw()                     # stays hidden until set-up is done / the window is built
             init_fonts(r)
             apply_ttk_style(r)

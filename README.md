@@ -239,6 +239,9 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   stays in the terminal and says why.
 - File > Add to applications menu (Linux) puts Word Tier List in your desktop's applications menu, so it
   starts with no terminal at all. Anything that must be installed is then asked in the window.
+- The taskbar shows the program's icon: on Linux every start keeps a launcher for it
+  (`~/.local/share/applications/word-tierlist.desktop`, out of the menu until you add it), which is how desktops
+  such as GNOME know a window's icon.
 
 ## Making it a program
 
@@ -278,10 +281,13 @@ file you edited there is kept as `name.bak` first. What it will do is shown befo
 and it offers to start `tierlist.py` from there (that needs Python on the computer; it uses the same save). Starting
 the other form, from either side, closes the one you started it from, so only one of them uses the save at a time,
 and the one started never inherits the built program's own settings (its Tcl / Tk folders, which vanish when it
-closes), so the unpacked source can build the program again. Making the program from an unpacked source with no
-program beside its folder first asks **Clean up behind?**: yes puts the new program beside the folder, moves your
-save next to it, and the program removes the source folder as it starts (only the program's own files; anything
-you added there stays).
+closes), so the unpacked source can build the program again. Making the program from source always asks first
+**Clean up behind?**, however the source came to you (a download, a clone, or unpacked from the program):
+**Keep the source** (the default) puts the program next to `tierlist.py` as usual; **Zip it** and **Remove it**
+put the program beside the source folder, move your save next to it, pack the source into a zip there first (for
+Zip it), and the program removes the source folder as it starts. Only the source's own files are removed: anything
+you added there stays, and so does a git checkout's history (`.git`). The program carries its source inside it,
+so it can always be unpacked again.
 
 ## Missing packages
 Installing happens in two stages.

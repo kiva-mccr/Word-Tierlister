@@ -39,6 +39,9 @@ def window():
     return root, app
 
 
+behind = []
+sources.ask_buttons = lambda title, headline, *a, **kw: (behind.append(headline), "keep")[1]   # (T-14: asked at
+                                                                                               # every build)
 # the menu offers it from source only (T-7 adds the built program's side)
 root, app = window()
 labels = [it[1] for it in dict(app._menu_items())["File"] if it[0] == "command"]
@@ -242,7 +245,7 @@ assert open(os.path.join(proj2, "tierlist.py")).read() == "v3\n" and open(os.pat
 assert open(os.path.join(proj2, "src", "a.py.bak")).read() == "my edit\n"
 assert open(os.path.join(proj2, "tierlist.db")).read() == "my save"
 assert popened == [(proj2, ["--db", save])] and not d.alive()               # started again, the same save
-assert S.cleanup_place(proj2) is None and S.remove_source(proj2) is None    # (not unpacked from the program)
+assert S.remove_source(proj2) is None                                        # (nothing written down to remove)
 assert os.path.exists(os.path.join(proj2, "tierlist.py"))
 # a folder unpacked from the program stays one when it is updated this way (so clean up behind still applies)
 from_prog = os.path.join(tempfile.mkdtemp(), "src"); S.unpack(v2, from_prog)
@@ -320,9 +323,10 @@ S.default_source_folder = lambda program=None: beside
 home12 = tempfile.mkdtemp()
 src12 = os.path.join(home12, "Word Tier List source")
 S.unpack(v2, src12)
-assert S.cleanup_place(src12) == home12 and S.cleanup_place(project()) is None        # (not unpacked: never)
+assert S.cleanup_place(src12) == home12
+assert S.cleanup_place(project())                                                  # (T-14: any source, asked for)
 open(S.program_path(home12), "w").write("old program")
-assert S.cleanup_place(src12) is None                                                # (a program beside it: no)
+assert S.cleanup_place(src12) == home12                                            # (an older program: replaced)
 os.remove(S.program_path(home12))
 # the helpers alone: only the program's own files go; a save and a file of yours stay (and so does the folder)
 os.makedirs(os.path.join(src12, "src", "__pycache__")); open(os.path.join(src12, "src", "__pycache__", "a.pyc"), "w").write("")
@@ -349,7 +353,7 @@ save12 = os.path.join(src12, "tierlist.db")
 app.store.close(); shutil.copy(app.store.path, save12)
 app.store = T.Store(save12)
 built12, started12, q12 = [], [], []
-sources.ask_yes_no = lambda title, headline, *a, **kw: (q12.append(headline), True)[1]
+sources.ask_buttons = lambda title, headline, *a, **kw: (q12.append(headline), "remove")[1]
 sources.ensure_packages = lambda *a, **kw: True
 sources.remember_save = lambda p: q12.append(("remembered", p))
 S.make_program = lambda root_dir, log, release=None, place=None: (built12.append(place),
@@ -364,6 +368,48 @@ assert ("remembered", os.path.join(home12, "tierlist-3.db")) in q12 and os.path.
 check = T.Store(os.path.join(home12, "tierlist-3.db"))
 assert check.get_meta("offered_source") == "1"                   # (the program will not unpack it again)
 check.close()
+assert os.path.exists(os.path.join(src12, S.REMOVE_RECORD))      # (what the program may remove, written down)
+# T-14 (asked for: offered every time, whatever the source; or zipped): a downloaded or cloned source, with a .git
+# and a file of yours. "Zip it" packs the source beside it first; the new program then removes only the source's
+# own files; "Keep the source" changes nothing; closing the question makes nothing
+import zipfile
+home14 = tempfile.mkdtemp(); src14 = os.path.join(home14, "Word-Tierlister")
+os.makedirs(os.path.join(src14, "src")); os.makedirs(os.path.join(src14, ".git"))
+for f, text in (("tierlist.py", "t\n"), ("src/a.py", "a\n"), ("README.md", "r\n"), (".git/HEAD", "ref\n"),
+                ("my-notes.txt", "mine\n")):
+    open(os.path.join(src14, f), "w").write(text)
+root, app = window()
+q14, built14, started14 = [], [], []
+sources.ask_buttons = lambda title, headline, message, buttons, **kw: (q14.append((headline, message, buttons)), "zip")[1]
+S.make_program = lambda root_dir, log, release=None, place=None: (built14.append(place),
+                                                                 open(S.program_path(place or root_dir), "w").write("p"),
+                                                                 S.program_path(place or root_dir))[2]
+S.start = lambda path, popen=None, args=(): started14.append((path, list(args)))
+d = sources.SourceDialog(app, root_dir=src14, frozen=False, check=lambda: None); settle(d)
+d.buttons["Make the program"].invoke(); pump(root, 2)
+head, message, buttons = q14[-1]
+assert head == "Clean up behind?" and [b[1] for b in buttons] == ["keep", "zip", "remove"] and "git checkout" in message
+assert built14 == [home14] and started14 == [(S.program_path(home14), ["--remove-source", src14])]
+with zipfile.ZipFile(os.path.join(home14, "Word-Tierlister.zip")) as z:
+    names = set(z.namelist())
+assert {"Word-Tierlister/tierlist.py", "Word-Tierlister/src/a.py", "Word-Tierlister/README.md"} <= names
+assert not any(".git" in n or "my-notes" in n for n in names), names
+left = S.remove_source(src14)                                     # (what the new program does as it starts)
+assert sorted(os.path.relpath(p, src14) for p in left) == [os.path.join(".git", "HEAD"), "my-notes.txt"], left
+assert not os.path.exists(os.path.join(src14, "tierlist.py")) and not os.path.exists(os.path.join(src14, "src"))
+assert S.zip_source(project(), home14).endswith(".zip")           # (another one there: never over it)
+root, app = window()
+for answer, nothing_made in (("keep", False), (None, True)):
+    built14.clear(); started14.clear()
+    sources.ask_buttons = lambda *a, answer=answer, **kw: answer
+    proj14 = project()
+    d = sources.SourceDialog(app, root_dir=proj14, frozen=False, check=lambda: None); settle(d)
+    d.buttons["Make the program"].invoke(); pump(root, 2)
+    assert built14 == ([] if nothing_made else [None]), (answer, built14)       # (keep: next to tierlist.py)
+    assert not os.path.exists(os.path.join(proj14, S.REMOVE_RECORD)) and os.path.exists(os.path.join(proj14, "tierlist.py"))
+    if not nothing_made:
+        root, app = window()                                       # (starting it closed this one)
+sources.ask_buttons = lambda *a, **kw: "keep"
 S.make_program = lambda root_dir, log, release=None, place=None: (made.append(root_dir), None)[1]
 root, app = window()
 

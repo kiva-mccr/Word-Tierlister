@@ -34,7 +34,9 @@ The module docstring has the details; this page is the map.
 - `summary`: "3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
 - `came_from_program`: True if an unpack record (UNPACKED) is of a folder unpacked from the program, not only updated from GitHub.
-- `cleanup_place`: Where a program made from `root` goes when the source is to be cleaned up behind it: the folder holding `root`, when `root` was unpacked from a program (UNPACKED) and...
+- `cleanup_place`: Where a program made from `root` goes when the source is to be cleaned up behind it (asked for: offered whenever the program is made, however the source came here;...
+- `mark_for_removal`: Before the program made from `root` removes it (remove_source): write down the files it may remove there, the source's own (source_files), so a folder that was not...
+- `zip_source`: Pack the source in `root` (source_files, with its folders, under one folder named like `root`) into a zip in `folder`, never over a file there ("name (2).zip", ...).
 - `move_save`: Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...).
 - `remove_source`: Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be closing: on Windows a folder in use cannot be removed, so it...
 - `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tier List source".
@@ -66,3 +68,4 @@ The module docstring has the details; this page is the map.
 - Release lookups: `latest_release` / `fetch_source` (tests pass their own `fetch`).
 - The unpack record (`UNPACKED`) says whether the folder came from the program (`from_program`; older records: yes, `came_from_program`). Only such a folder is offered to be cleaned up behind or removed (`cleanup_place`, `remove_source`): a source only updated from GitHub (T-13, `unpack(..., from_program=False)`) could be someone's own clone (T-13).
 - `give_icon` (IC-2) sets GNOME Files' custom icon on a Linux program (gio, to `deps.kept_icon`); it fails quietly where no desktop metadata service runs.
+- Removing a source (T-14) only ever takes the files written down for it: the unpack record's or `REMOVE_RECORD`'s (`mark_for_removal`: `source_files`), plus OURS; a folder with neither is never touched.

@@ -2,7 +2,7 @@
 
 Friendly error and message dialogs and the program-wide safety net (ST-2): every run goes through `run_guarded`, and Tk / thread errors are logged and shown once.
 
-- **Uses:** `fonts`, `problems`, `theme`, `ui_style`, `widgets`
+- **Uses:** `constants`, `fonts`, `problems`, `theme`, `ui_style`, `widgets`
 - **Used by:** `app`, `browser`, `filepicker`, `sources`, `startup`, `stress_ui`, `tierlist`
 - **Tests:** `_selftest_errors`, `_selftest_health`
 
@@ -13,6 +13,7 @@ The module docstring has the details; this page is the map.
 - `show_error`: Show a modal error dialog and wait for it to close (stderr if no window can be made).
 - `show_message`: A plain styled message with an OK button (no error look, no details): a merge result, say.
 - `ask_yes_no`: A small styled question dialog.
+- `ask_buttons`: A styled question with a button per answer: `buttons` are (label, value) pairs, the first the default (on the right, pressed by Enter).
 - `ask_choices`: A styled question with one tick box per choice (ST-4: each package is its own choice).
 - `show_exception`: Dialog for an error the program caught itself (a failed export, say): what we were doing, why, what to try.
 - `watch_freezes`: Write in the log when the window stops answering (asked for: freezes too, not only errors).

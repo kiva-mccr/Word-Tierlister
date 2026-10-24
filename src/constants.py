@@ -9,6 +9,10 @@ TIERS = ["S", "A", "B", "C", "D", "F"]
 DEFAULT_ANCHORS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
 VERSION = "1.0.0"     # this program's version: a release is tagged v + VERSION (T-8; the build workflow checks it)
 REPO = "kiva-mccr/Word-Tierlister"     # on GitHub: its Releases carry the programs and the source (T-8)
+WM_CLASS = "word-tierlist"   # every window's name for the desktop (tk.Tk(className=)): X sees WM_CLASS "word-tierlist",
+WM_CLASS_NAME = "Word-tierlist"   # "Word-tierlist" (Tk lowers it and capitalizes it); a Linux launcher's StartupWMClass
+                             # names the second and its file is word-tierlist.desktop, so the taskbar shows the
+                             # program's icon (reported: none on Fedora's GNOME)
 OFFLINE_ENV = "WORD_TIERLIST_OFFLINE"   # set (the self-tests do): never go online (Wiktionary, definitions)
 FOCUS_ROUNDS = 8  # duels in one "Refine this word" session
 # (key, menu label) for the sorting modes; the key is also what is saved in meta "mode".

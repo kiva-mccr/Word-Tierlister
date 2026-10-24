@@ -34,7 +34,7 @@ from tkinter import filedialog, ttk
 
 import deps
 import standalone
-from errors import ask_yes_no, show_error, show_message
+from errors import ask_buttons, ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
 from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen, remember_save
@@ -172,14 +172,14 @@ class SourceDialog:
         if not self.packages_ready():
             return None
         lines = []
-        place = standalone.cleanup_place(self.root_dir)       # (an unpacked source with no program beside it: T-12)
-        if place and not ask_yes_no(HEADLINE, "Clean up behind?",
-                                    "This source was unpacked from the program. Put the new program beside its folder, "
-                                    f"in {place}, and then remove the source folder? Your save moves next to the "
-                                    "program first; only the program's own files are removed, anything you added "
-                                    "there stays.", yes="Clean up", no="Keep the source", parent=app.root,
-                                    wrap_chars=62):
-            place = None                          # (no: the program goes next to tierlist.py, as always)
+        place = standalone.cleanup_place(self.root_dir)       # (beside the source folder: T-12, T-14)
+        self.behind = None
+        if place:
+            self.behind = self.ask_behind(place)
+            if self.behind is None:
+                return None                       # (closed the question: nothing made)
+            if self.behind == "keep":
+                place = None                      # (the program goes next to tierlist.py, as always)
         release = self.release if self.wants_update() else None
 
         def work(log):
@@ -207,10 +207,24 @@ class SourceDialog:
                        headline="Not built")
             return None
         if place:
-            self.start_cleaned(path, place)
+            self.start_cleaned(path, place, zip_it=self.behind == "zip")
         else:
             self.start(path)
         return path
+
+    def ask_behind(self, place):
+        """"Clean up behind?" (asked for, every time the program is made): "keep", "zip" or "remove", or None when
+        the question is closed. Keeping is the default (Enter)."""
+        git = os.path.isdir(os.path.join(self.root_dir, ".git"))
+        return ask_buttons(
+            HEADLINE, "Clean up behind?",
+            f"The program can go beside this source folder, in {place}, and the folder be removed (or packed into a "
+            "zip there first). The program carries its source inside it, and can unpack it again any time. Your save "
+            "moves next to the program first; only the source's own files are removed, anything you added there "
+            "stays." + (" This folder is a git checkout: its history (.git) stays too." if git else "")
+            + "\n\nKeep the source: the program goes next to tierlist.py, and nothing else changes.",
+            (("Keep the source", "keep"), ("Zip it", "zip"), ("Remove it", "remove")), parent=self.app.root,
+            wrap_chars=62)
 
     def update_source(self, fetch=None):
         """"Update the source only" (asked for): download the newest version's source and bring this folder up to
@@ -251,10 +265,11 @@ class SourceDialog:
         app.on_close()                            # (one at a time on a save: the new source takes over)
         return plan
 
-    def start_cleaned(self, path, place):
-        """Clean up behind (T-12): close this window and its save, move the save next to the new program if it is
-        inside the source folder (it is the one used from now on), then start the program, which removes this
-        source folder as it starts. The save is marked as having given out its source, so the program does not
+    def start_cleaned(self, path, place, zip_it=False):
+        """Clean up behind (T-12, T-14): close this window and its save, move the save next to the new program if it
+        is inside the source folder (it is the one used from now on), pack the source into a zip beside it if asked
+        (`zip_it`), then start the program, which removes this source folder as it starts (only the files written
+        down for it: mark_for_removal). The save is marked as having given out its source, so the program does not
         unpack it again."""
         store = self.app.store
         store.set_meta("offered_source", "1")
@@ -264,6 +279,9 @@ class SourceDialog:
         if os.path.realpath(save).startswith(os.path.realpath(self.root_dir) + os.sep):
             save = standalone.move_save(save, place)
         remember_save(save)
+        if zip_it:
+            standalone.zip_source(self.root_dir, place)
+        standalone.mark_for_removal(self.root_dir)
         standalone.start(path, args=["--remove-source", self.root_dir])
 
     def packages_ready(self, ensure=None):

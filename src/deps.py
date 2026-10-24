@@ -16,7 +16,7 @@ import tempfile
 import threading
 import time
 
-from constants import plan_line
+from constants import WM_CLASS_NAME, plan_line
 
 # import name -> what to hand to pip
 PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
@@ -491,16 +491,50 @@ def kept_icon(home=None):
     return icon
 
 
-def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary"):
+def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary", hidden=False):
     """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
-    program, started by itself); `icon`: a picture's path, or the name of one the desktop has."""
+    program, started by itself); `icon`: a picture's path, or the name of one the desktop has. StartupWMClass
+    names the windows' class (constants.WM_CLASS), which is how the taskbar knows their icon; `hidden`: kept out
+    of the applications menu (NoDisplay: only for the taskbar's icon, ensure_launcher)."""
     q = lambda p: '"' + p.replace("\\", "\\\\").replace('"', '\\"') + '"'
     run = f"{q(python)} {q(script)}" if script else q(python)
     return "\n".join([
         "[Desktop Entry]", "Type=Application", f"Name={name}",
         "Comment=Tier-list every English word, at your own pace",
         f"Exec={run}", f"Path={os.path.dirname(script or python)}", "Terminal=false",
-        f"Icon={icon}", "Categories=Education;Game;", "StartupNotify=true", ""])
+        f"Icon={icon}", "Categories=Education;Game;", "StartupNotify=true", f"StartupWMClass={WM_CLASS_NAME}",
+        *(["NoDisplay=true"] if hidden else []), ""])
+
+
+def launcher_path(home=None):
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    return os.path.join(data, "applications", "word-tierlist.desktop")
+
+
+def ensure_launcher(python, script, home=None, platform=None):
+    """Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a
+    launcher that names its class): write the launcher if there is none, kept out of the applications menu
+    (NoDisplay), or bring the one there up to date (where the program is now, its icon), keeping whether it is in
+    the menu (File > Add to applications menu puts it there). Returns its path, or None (not Linux, or it could not
+    be written); never raises."""
+    if not (platform or sys.platform).startswith("linux"):
+        return None
+    path = launcher_path(home)
+    try:
+        with open(path, encoding="utf-8") as f:
+            hidden = "NoDisplay=true" in f.read()
+    except OSError:
+        hidden = True                             # (none yet: only for the taskbar until it is asked for)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        text = desktop_entry(python, script, icon=kept_icon(home) or "accessories-dictionary", hidden=hidden)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(path, 0o755)
+    except OSError:
+        return None
+    return path
 
 
 def add_to_menu(python, script, home=None):

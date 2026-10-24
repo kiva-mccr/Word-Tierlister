@@ -466,13 +466,39 @@ def came_from_program(record):
 
 # ---- cleaning up behind (T-12): a program made from an unpacked source, the source then removed --------------------
 def cleanup_place(root=ROOT, platform=None):
-    """Where a program made from `root` goes when the source is to be cleaned up behind it: the folder holding
-    `root`, when `root` was unpacked from a program (UNPACKED) and no program sits there; else None (asked for:
-    only then is "Clean up behind?" asked)."""
-    parent = os.path.dirname(os.path.abspath(root))
-    if not came_from_program(read_manifest(root, UNPACKED)) or os.path.exists(program_path(parent, platform)):
+    """Where a program made from `root` goes when the source is to be cleaned up behind it (asked for: offered
+    whenever the program is made, however the source came here; T-12 offered it only for one unpacked from the
+    program): the folder holding `root` (an older program there is replaced). None when there is no such folder
+    to put it in (the top of a disk) or it cannot be written to."""
+    root = os.path.abspath(root)
+    parent = os.path.dirname(root)
+    if not parent or parent == root or not os.access(parent, os.W_OK):
         return None
     return parent
+
+
+REMOVE_RECORD = ".word-tierlist-remove.json"   # in a source folder to be removed: the files that may go (T-14)
+
+
+def mark_for_removal(root=ROOT):
+    """Before the program made from `root` removes it (remove_source): write down the files it may remove there,
+    the source's own (source_files), so a folder that was not unpacked from the program (a download, a clone) loses
+    only those and keeps anything else (a .git, a file of yours)."""
+    with open(os.path.join(root, REMOVE_RECORD), "w", encoding="utf-8") as fh:
+        json.dump({"files": [f.replace(os.sep, "/") for f in source_files(root)]}, fh)
+
+
+def zip_source(root, folder):
+    """Pack the source in `root` (source_files, with its folders, under one folder named like `root`) into a zip in
+    `folder`, never over a file there ("name (2).zip", ...). Returns the zip's path."""
+    name = os.path.basename(os.path.abspath(root))
+    dest, n = os.path.join(folder, name + ".zip"), 2
+    while os.path.exists(dest):
+        dest, n = os.path.join(folder, f"{name} ({n}).zip"), n + 1
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+        for f in source_files(root):
+            z.write(os.path.join(root, f), os.path.join(name, f))
+    return dest
 
 
 def move_save(save, folder):
@@ -496,19 +522,21 @@ def move_save(save, folder):
     return dest
 
 
-OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache")
+OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache", REMOVE_RECORD)
 
 
 def remove_source(folder, tries=40, wait=0.25):
     """Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be
     closing: on Windows a folder in use cannot be removed, so it tries again for a while). Only the program's own
-    files go: those its unpack record lists (UNPACKED), OURS and any __pycache__; anything else (a save, a file of
-    yours) stays, and so does the folder then. Never touches a folder without that record. Returns the paths left
-    behind, or None."""
+    files go: those its unpack record lists (UNPACKED) or the old window wrote down for it (REMOVE_RECORD, T-14:
+    a source that came from anywhere), OURS and any __pycache__; anything else (a save, a file of yours, a .git)
+    stays, and so does the folder then. Never touches a folder with neither record. Returns the paths left behind,
+    or None."""
     record = read_manifest(folder, UNPACKED)
-    if not came_from_program(record):
+    marked = read_manifest(folder, REMOVE_RECORD)
+    if not came_from_program(record) and not marked:
         return None
-    listed = set(record.get("files", {}))
+    listed = set((record or {}).get("files", {})) | set((marked or {}).get("files", []))
 
     def ours(rel):
         parts = rel.split("/")

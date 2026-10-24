@@ -30,6 +30,8 @@ The module docstring has the details; this page is the map.
 - `detach_terminal`: Start the program again on its own, not tied to this terminal, and return the exit code for this one: Linux / macOS in a session of its own (setsid), Windows with...
 - `kept_icon`: The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy is in a folder that is gone once it closes), for a...
 - `desktop_entry`: The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built program, started by itself); `icon`: a picture's path, or the...
+- `launcher_path`: (no docstring)
+- `ensure_launcher`: Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a launcher that names its class): write the launcher if there...
 - `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
 
 ## Rules and pitfalls (fixed before: keep them fixed)
@@ -44,3 +46,4 @@ The module docstring has the details; this page is the map.
 - The launcher's icon is copied to `~/.local/share/icons/word-tierlist.png` (`add_to_menu`): a built program's own copy is in a folder that is gone once it closes.
 - System pieces (ST-8): `SYSTEM_PACKAGES` per package manager; from a window the command goes through `pkexec` (sudo cannot ask for a password without a terminal; no pkexec: no command, the old advice). `ensure_pip` tries Python's own ensurepip first. Tests never run the real ensurepip or an installer (fake them).
 - Windows (ST-9): the console stays open while the py launcher that opened it waits, so letting go of it (FreeConsole) is not enough: the program starts again with `pythonw.exe` (`windowless_python`) and this copy ends. Never rename tierlist.py to .pyw (every sync, manifest and launcher expects tierlist.py).
+- Linux taskbar icons (IC-3): `StartupWMClass` must equal the window's real class, `constants.WM_CLASS_NAME` (Tk lowers the className and capitalizes it: "WordTierList" became "Wordtierlist"); `ensure_launcher` keeps whether the launcher is in the menu.

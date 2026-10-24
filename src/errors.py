@@ -24,6 +24,7 @@ import webbrowser
 from tkinter import ttk
 
 from fonts import font, init_fonts
+from constants import WM_CLASS
 from problems import STOPPED_MESSAGE, SetupError, append_log, describe
 from theme import PALETTE
 from ui_style import apply_ttk_style
@@ -45,7 +46,7 @@ def _window_for(parent):
     """`parent`, or (when None) a hidden, styled window of our own for a dialog, destroyed afterwards."""
     own_root = None
     if parent is None:
-        own_root = parent = tk.Tk()
+        own_root = parent = tk.Tk(className=WM_CLASS)
         own_root.withdraw()
         init_fonts(own_root)
         apply_ttk_style(own_root)
@@ -89,6 +90,20 @@ def ask_yes_no(title, headline, message, yes="OK", no="Cancel", parent=None, wra
     except Exception:
         _stderr(f"{title}: {headline} {message}")
     return answer["yes"]
+
+
+def ask_buttons(title, headline, message, buttons, cancel=None, parent=None, wrap_chars=44):
+    """A styled question with a button per answer: `buttons` are (label, value) pairs, the first the default (on
+    the right, pressed by Enter). Returns the value of the button pressed, or `cancel` for Escape or closing (and
+    when no window can be shown)."""
+    answer = {"yes": False}
+    try:
+        with _window_for(parent) as win:
+            _dialog(win, title, headline, message, None, buttons=tuple(buttons), answer=answer, wrap_chars=wrap_chars)
+    except Exception:
+        _stderr(f"{title}: {headline} {message}")
+        return cancel
+    return cancel if answer["yes"] is False else answer["yes"]
 
 
 def ask_choices(title, headline, message, choices, yes="OK", no="Cancel", parent=None):

@@ -3,7 +3,7 @@
 Shared constants and tiny pure helpers that every layer may use: tiers, modes, kinds of words, queue shapes, the program's `VERSION` and GitHub `REPO`, and the offline switch the tests set.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
+- **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
 - **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

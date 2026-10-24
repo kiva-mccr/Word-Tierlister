@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `SourceDialog`: (no docstring)
-  - methods: wants_update, make, update_source, start_cleaned, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
+  - methods: wants_update, make, ask_behind, update_source, start_cleaned, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -21,3 +21,4 @@ The module docstring has the details; this page is the map.
 - Starting the other form (the program, or tierlist.py after unpacking) always closes this one (`App.on_close`): two on one save would both write it.
 - Making the program checks its packages first (`packages_ready`: the program's own and the builder, `deps.BUILD_PACKAGES`) with the first start's dialog; a required one left out, or a failed install, says why and builds nothing.
 - "Update the source only" (T-13) appears only once the check found a newer version, from source; it restarts with `--db` and the same save, and syncs with `from_program=False`.
+- "Clean up behind?" (T-14) is asked at every build from source, with three answers (`ask_behind`: keep / zip / remove; closing it makes nothing). Tests fake `sources.ask_buttons`, or a build waits on the real question.

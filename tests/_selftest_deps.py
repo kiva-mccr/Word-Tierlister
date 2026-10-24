@@ -342,4 +342,22 @@ icon = os.path.join(home, ".local", "share", "icons", "word-tierlist.png")      
 assert open(path).read() == deps.desktop_entry("/usr/bin/python3", "/x/tierlist.py", icon=icon)
 assert f"Icon={icon}" in open(path).read() and open(icon, "rb").read() == open(deps.ICON, "rb").read()
 assert deps.add_to_menu("/usr/bin/python3", "/y/tierlist.py", home=home)[1] == "updated" and "/y/tierlist.py" in open(path).read()
+# the taskbar's icon (reported: none on Fedora's GNOME, which shows a window's icon only through a launcher naming
+# its class): every launcher names the windows' class; at every start one is written if there is none, kept out
+# of the menu, and an existing one is brought up to date without changing whether it is in the menu
+from constants import WM_CLASS, WM_CLASS_NAME
+assert f"StartupWMClass={WM_CLASS_NAME}" in open(path).read() and "NoDisplay" not in open(path).read()
+assert deps.ensure_launcher("/usr/bin/python3", "/z/tierlist.py", home=home, platform="linux") == path
+assert "/z/tierlist.py" in open(path).read() and "NoDisplay" not in open(path).read()          # (still in the menu)
+home2 = tempfile.mkdtemp()
+p2 = deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="linux")
+text = open(p2).read()
+assert "NoDisplay=true" in text and f"StartupWMClass={WM_CLASS_NAME}" in text and 'Exec="/opt/word-tierlist"' in text
+assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlist.png") in text
+deps.add_to_menu("/opt/word-tierlist", None, home=home2)                                  # (asked for: in the menu)
+assert "NoDisplay" not in open(p2).read()
+assert deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="win32") is None
+# and every window has that class (what the launcher names)
+root = tk.Tk(className=WM_CLASS); assert root.winfo_class() == WM_CLASS_NAME; root.destroy()
+assert os.path.basename(path) == WM_CLASS + ".desktop"                    # (GNOME pairs these too)
 print("DEPS OK")
