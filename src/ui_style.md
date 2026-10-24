@@ -4,7 +4,7 @@ The ttk styling that gives standard widgets the pastel look (UI-3), on the `clam
 
 - **Uses:** `fonts`, `theme`
 - **Used by:** `app`, `errors`, `tierlist`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_startup`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_startup`
 
 The module docstring has the details; this page is the map.
 

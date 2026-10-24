@@ -21,7 +21,7 @@ from keymap import spec_of
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from smooth import arrow_image
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_ROW_TEXT, TIER_TEXT
 from ui_motion import lerp_color
 from widgets import ChoiceButton, RoundButton, Toast, TreeSmears, fill_definitions, refresh_widgets
 
@@ -119,7 +119,7 @@ class Browser:
             self.tree.column(col, anchor=anchor)
         self._show_sort()
         for t in range(len(TIERS)):
-            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
+            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_ROW_TEXT[0])
         self.tree.tag_configure("lookup", foreground=PALETTE["disabled"])    # (W-1: looked up, not placed yet)
         self._temp = []                            # rows shown for the moment (W-1: app.lookups), at the bottom
         self.showing = None                        # a word whose definition shows with no row (not in the list)
@@ -530,7 +530,9 @@ class Browser:
         tag = next((g for g in self.tree.item(iid, "tags") if g.startswith("t")), None)
         if tag:
             t = int(tag[1:])
-            return TIER_TEXT, TIER_COLORS[t] if iid in self.tree.selection() else TIER_ROW[t]
+            if iid in self.tree.selection():
+                return TIER_TEXT, TIER_COLORS[t]
+            return TIER_ROW_TEXT[0], TIER_ROW[t]
         state = ["selected"] if iid in self.tree.selection() else []
         return (self.style.lookup(self.tstyle, "foreground", state) or PALETTE["text"],
                 self.style.lookup(self.tstyle, "background", state) or PALETTE["surface"])

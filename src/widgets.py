@@ -15,7 +15,7 @@ from rudeness import GLOSS_KEY
 from fonts import font
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
-from theme import PALETTE, TIER_COLORS
+from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
 from ui_motion import HURRY_MS, lerp_color
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
@@ -146,14 +146,15 @@ class RoundButton(SmoothCanvas):
     * config(censor=True): the text is smeared sideways until hovered (ST-6, the duel cards; see Unsmear).
     """
 
-    def __init__(self, parent, text, command, bg=PALETTE["neutral"], fg=PALETTE["text"], font=None,
+    def __init__(self, parent, text, command, bg=None, fg=None, font=None,
                  padx=14, pady=8, hint=None, wraplength=0, radius=14, animator=None, canvas_bg=None, lift=0,
                  flat=False, ring=2, hint_font=None):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"],
                          cursor="hand2", takefocus=0)
         self._command = command
         self._text, self._hint, self._wrap = text, hint, wraplength
-        self._fill, self._fg = bg, fg
+        self._fill = PALETTE["neutral"] if bg is None else bg       # (read now, not at import: the look can change)
+        self._fg = fg                    # None: the ink that reads on the fill (theme.ink_on: dark on a pastel)
         self._padx, self._pady, self._radius = padx, pady, radius
         self._lift, self._lifted = lift, False
         self._minwidth = 0               # ChoiceButton keeps a steady width
@@ -208,7 +209,7 @@ class RoundButton(SmoothCanvas):
 
     def cget(self, key):
         return {"text": self._text, "hint": self._hint, "wraplength": self._wrap, "bg": self._fill,
-                "fg": self._fg, "font": self._font, "censor": self._censor}[key] if key in _CUSTOM else super().cget(key)
+                "fg": self._fg or ink_on(self._fill), "font": self._font, "censor": self._censor}[key] if key in _CUSTOM else super().cget(key)
 
     def set_enabled(self, enabled):
         """Grey out / re-enable (a disabled button stays visible but ignores clicks)."""
@@ -235,7 +236,8 @@ class RoundButton(SmoothCanvas):
     # ---- looks ----------------------------------------------------------------------------------
     def _target(self):
         """(fill, outline, outline width, text colour) for the current state."""
-        fill, fg = self._fill, self._fg
+        fill = self._fill
+        fg = self._fg or ink_on(fill)
         edge = lerp_color(fill, PALETTE["text"], 0.14)
         if self._flat:
             base = super().cget("bg")
@@ -253,7 +255,7 @@ class RoundButton(SmoothCanvas):
         if self._pressed:
             return (lerp_color(fill, PALETTE["text"], 0.10), edge, 1, fg)
         if self._hover:
-            return (lerp_color(fill, "#FFFFFF", 0.45), PALETTE["accent"], self._ring, fg)
+            return (lerp_color(fill, "#FFFFFF", 0.45 if is_light(fill) else 0.14), PALETTE["accent"], self._ring, fg)
         return (fill, edge, 1, fg)
 
     def _go(self, target):
@@ -431,10 +433,15 @@ class TierChip(SmoothCanvas):
         h = int(line * 1.5)
         w = max(h, self._font.measure(self._text) + line)
         super().configure(width=w + 2, height=h + 2)
-        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, PALETTE["text"], 0.14))
-        self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=PALETTE["text"])
-
+        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, TIER_TEXT, 0.14))
+        self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=TIER_TEXT)   # (dark ink on a
+                                                                                                 # pastel, dark mode too)
     def refresh(self):
+        self._draw()
+
+    def set_color(self, color):
+        """Another tier colour (Tier colours, UI-61: the pill as it will look)."""
+        self._color = color
         self._draw()
 
 
@@ -1481,10 +1488,11 @@ def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
     t._smears.append(c)
 
 
-def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=PALETTE["text"], hover=True):
+def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=None, hover=True):
     """A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places
     that are not our own canvases (the definition panes, Browse's list). It un-smears while the pointer is over it
     (`hover`), or when the caller says so: canvas.unsmear.hover(on, animator)."""
+    fg = PALETTE["text"] if fg is None else fg
     c = tk.Canvas(parent, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
     item = c.create_text(0, 0, text=text, font=font_, width=width, anchor="nw", fill=fg, tags="gloss")
     x0, y0, x1, y1 = c.bbox(item) or (0, 0, 0, 0)          # (no box for an empty text)

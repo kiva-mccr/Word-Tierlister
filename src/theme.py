@@ -1,9 +1,10 @@
 """Colour palette for the word tier list (UI-1). Pure data + tiny helpers: no tkinter import,
-so it can be tested anywhere. Light theme only; a dark theme can be added later as a second
-dict with the same keys."""
+so it can be tested anywhere. Light by default; a dark one with the same keys (UI-62), and the tier colours can be
+chosen (UI-61). apply(dark, tiers) changes PALETTE, TIER_COLORS and TIER_ROW in place before a window is built
+(the App reopens its window to show a change): take colours from them when drawing, never copy one at import."""
 import colorsys
 
-PALETTE = {
+LIGHT = {
     "bg":       "#FBF7F4",   # warm cream window background
     "surface":  "#FFFFFF",   # cards, rows, entry fields
     "surface2": "#F4EEF8",   # quiet panels, hover fills (faint lilac)
@@ -31,8 +32,40 @@ PALETTE = {
     "required": "#D0364F",   # the classic red asterisk on a required choice (>= 4.5:1 on bg)
 }
 
-TIER_COLORS = ["#FFB3C1", "#FFCBA4", "#FFF0A8", "#BDEBC8", "#A9DDF5", "#D5C6F5"]  # S A B C D F
-TIER_TEXT = PALETTE["text"]     # dark ink reads on every tier colour
+# the dark look (UI-62, asked for; not the default): a soft plum night, the same pastel accents and tiers
+DARK = {
+    "bg":       "#211E29",
+    "surface":  "#2C2836",
+    "surface2": "#373245",
+    "text":     "#ECE7F5",
+    "muted":    "#ABA4BF",
+    "disabled": "#6F6882",
+    "border":   "#443E54",
+    "accent":   "#B8A4F4",
+    "accent_text": "#ECE7F5",
+    "select_bg": "#4A4068",
+    "shadow":   "#18161E",
+    "ok":       ("#234231", "#CDEFD8"),
+    "info":     ("#2C2836", "#ECE7F5"),
+    "warn":     ("#4A3F1A", "#FFE9A8"),
+    "alert":    ("#4C2E1D", "#FFD3BA"),
+    "bad":      ("#4C2431", "#FFC9D3"),
+    "better":   "#2E4B39",
+    "worse":    "#4E2F37",
+    "same":     "#3A3549",
+    "left":     "#2F3B55",
+    "right":    "#4E3A2B",
+    "neutral":  "#3A3549",
+    "required": "#FF7088",
+}
+PALETTE = dict(LIGHT)
+
+DEFAULT_TIERS = ("#FFB3C1", "#FFCBA4", "#FFF0A8", "#BDEBC8", "#A9DDF5", "#D5C6F5")   # S A B C D F
+TIER_COLORS = list(DEFAULT_TIERS)
+# the colours a tier can be given (UI-61): pastels round the colour wheel, each light enough for the dark ink
+SWATCHES = ("#FFB3C1", "#FFB8A8", "#FFCBA4", "#FFDDA0", "#FFF0A8", "#E2F2A8", "#BDEBC8", "#B5EAE3", "#A9DDF5",
+            "#BFCBF7", "#D5C6F5", "#EBC4F0", "#F7C6DE", "#E3DDD5", "#D2D6DC")
+TIER_TEXT = "#3D3A4B"           # dark ink reads on every tier colour (in the dark look too: the tiers stay pastel)
 # The bars of the tier chart (UI-13) use the tier pastels themselves, drawn like the tier pills (a faint
 # edge of the same hue, so even the pale yellow reads on the cream). By choice, they are not tuned for
 # colour-blind separation: every bar has its tier letter under it and its count on top, so no one has to
@@ -47,9 +80,51 @@ def tint(h, amount):
     return "#" + "".join(f"{round(int(h[i:i + 2], 16) + (255 - int(h[i:i + 2], 16)) * amount):02X}" for i in (0, 2, 4))
 
 
+def mix(a, b, t):
+    """#RRGGBB part way (t, 0..1) from `a` to `b`."""
+    ca, cb = (tuple(int(c.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)) for c in (a, b))
+    return "#" + "".join(f"{round(x + (y - x) * t):02X}" for x, y in zip(ca, cb))
+
+
 # Browse rows (UI-23): a lighter wash of each tier colour, so a long list reads soft; the selected row
-# shows the full tier colour.
+# shows the full tier colour. In the dark look a deeper wash under light text (TIER_ROW_TEXT).
 TIER_ROW = [tint(c, 0.55) for c in TIER_COLORS]
+TIER_ROW_TEXT = [TIER_TEXT]
+
+
+def is_light(color):
+    """True for a light colour (a pastel, the light look's surfaces): dark ink reads on it."""
+    h = color.lstrip("#")
+    r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55
+
+
+def ink_on(fill):
+    """The text colour for something filled with `fill`: the dark ink on a light one (every tier colour, in the
+    dark look too), the look's own text colour on a dark one."""
+    return TIER_TEXT if is_light(fill) else PALETTE["text"]
+
+
+def is_hex(text):
+    """True for a colour written #RRGGBB."""
+    t = str(text or "")
+    return len(t) == 7 and t[0] == "#" and all(ch in "0123456789abcdefABCDEF" for ch in t[1:])
+
+
+def apply(dark=False, tiers=None):
+    """Use the dark look or the light one, and these tier colours (six #RRGGBB, else the defaults), in place:
+    everything that reads PALETTE, TIER_COLORS, TIER_ROW (and TIER_ROW_TEXT[0]) from now on gets them. Call it
+    before a window is built; one already built keeps its colours."""
+    PALETTE.clear()
+    PALETTE.update(DARK if dark else LIGHT)
+    good = [c.upper() for c in (tiers or ()) if is_hex(c)]
+    TIER_COLORS[:] = good if len(good) == len(DEFAULT_TIERS) else list(DEFAULT_TIERS)
+    if dark:
+        TIER_ROW[:] = [mix(PALETTE["surface"], c, 0.42) for c in TIER_COLORS]
+        TIER_ROW_TEXT[0] = PALETTE["text"]
+    else:
+        TIER_ROW[:] = [tint(c, 0.55) for c in TIER_COLORS]
+        TIER_ROW_TEXT[0] = TIER_TEXT
 
 
 def tier_blend(x):

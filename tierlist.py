@@ -1534,6 +1534,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
 #          for a Python with a current Tk; Linux depends only on system libraries.
 #
+# --- Looks (asked for after W-1, before the icon) ---------------------------------------------------------------
+# [x] UI-61 Tier colours: Settings > Tier colours... (src/tiercolours.py): each tier's pill as it will look, a strip of
+#           pastel swatches (theme.SWATCHES, every one light enough for the dark ink) and its #RRGGBB to type any
+#           other; Reset to defaults; Apply saves them in the save (meta tier_colors) and reopens the window in them.
+# [x] UI-62 Dark mode (asked for; not the default): View > Dark mode, a soft plum night (theme.DARK, the same roles as
+#           the light look) with the same pastel tiers; Browse's rows are a deeper wash under light text
+#           (TIER_ROW_TEXT). Kept in the save (meta dark_mode). How both show: theme.apply() changes the palette in
+#           place before a window is built (app.apply_look, from the save, before even the start-up window), and a
+#           change reopens the main window with the save still open (App.reopen, app.reopen_while_asked; Browse
+#           closes with it). Nothing copies a colour at import any more (button defaults, the chart's mark lilac);
+#           a button picks its ink from its fill (theme.ink_on: dark ink on a pastel, so tier pills, duel cards and
+#           Browse's Move to read in the dark too). Screenshots of every window in both looks. _selftest_looks.py.
+#
 # --- The very end (asked for: after everything else, W-1 and packaging included) -------------------------
 # [ ] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
@@ -1541,8 +1554,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;
 #             modernize the top (menus, mode switch: UI-10) but keep the bottom bar's current look
-#             (Undo, Browse / edit, Definition, key hints); light theme only (a dark theme can be
-#             added later: theme.py is built so a second palette with the same keys drops in); the
+#             (Undo, Browse / edit, Definition, key hints); the light look by default, with a dark mode
+#             to choose (UI-62: asked for later, so "light theme only" was lifted; not the default); the
 #             session count stays as a muted "+N today", with the pace only in a hover note.
 #   In consideration (shelved, not planned; ask before building):
 #             - Next-up peek (UI-21).
@@ -1584,7 +1597,7 @@ from wordsource import (build_word_list, build_wiktionary, compute_penalties,  #
 try:
     import tkinter as tk
     from tkinter import filedialog  # noqa: F401
-    from app import App
+    from app import App, apply_look, reopen_while_asked
     from fonts import init_fonts
     from errors import install_handlers, run_guarded
     from problems import SetupError, ensure_streams, open_log
@@ -1728,15 +1741,20 @@ def main():
                 log(f"Reshuffling the queue with seed {args.seed}...")
                 store.reshuffle(seed=args.seed)
 
+        def new_root():
+            r = tk.Tk()
+            r.withdraw()                     # stays hidden until set-up is done / the window is built
+            init_fonts(r)
+            apply_ttk_style(r)
+            install_handlers(r, log_path, db_path)      # unexpected errors: log + friendly dialog
+            return r
+
         def launch():
             # --- 4. make sure the save has a word list and a queue order. This is the slow part on a
             #        first run, so it runs on a worker thread behind a progress window (startup.py); the
             #        window only appears if it takes more than a moment. Every message goes through `log`.
-            root = tk.Tk()
-            root.withdraw()                  # stays hidden until set-up is done
-            init_fonts(root)
-            apply_ttk_style(root)
-            install_handlers(root, log_path, db_path)   # unexpected errors: log + friendly dialog
+            apply_look(store)                # dark mode and the tier colours, before any window (UI-61, UI-62)
+            root = new_root()
             try:
                 # packages, stage 2 (ST-4): anything missing is offered in one dialog, one tick box per
                 # package (required and optional each their own choice); only asks when something is missing
@@ -1758,14 +1776,17 @@ def main():
                 root.destroy()
                 raise
             print(f"{store.count_words():,} words ready.")
-            # --- 5. show the main window, built, sized and filled while still hidden (F-1); App runs until closed
-            app = App(root, store, Definitions(store), note=note, other_saves=others,
+            # --- 5. show the main window, built, sized and filled while still hidden (F-1); App runs until closed.
+            #        A new look (App.reopen) closes it with the save still open, and it is built again at once.
+            defs = Definitions(store)
+            app = App(root, store, defs, note=note, other_saves=others,
                       ask_dealing=store.get_meta("dealt_asked") != "1",   # (ST-6: once a save)
                       offer_form=not args.no_install)                     # (T-9: the other form, once)
             app.open_window()
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()
+            reopen_while_asked(app, store, defs, new_root)
 
         # Always guarded: with or without a console, a failure ends in a dialog and a log entry.
         run_guarded(launch, log_path, db_path)

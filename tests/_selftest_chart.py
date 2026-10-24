@@ -156,7 +156,7 @@ sh.mark([]); assert not sh.find_withtag("mark")
 # M-4: a mark wears its word's tier colour (deepened); two tiers in one spine split one triangle down the middle
 import ui_chart as UC
 from theme import TIER_COLORS
-assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC.MARK_COLOR
+assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC._mark_lilac()
 sh.mark([1, 3], [0, 4]); assert sh._mark_colors == {1: (UC.mark_color(0),), 3: (UC.mark_color(4),)}
 sh.mark([2, 2], [1, 3]); assert sh._marks == [2] and sh._mark_colors[2] == (UC.mark_color(1), UC.mark_color(3))
 img = sh.itemcget("mark2", "image")

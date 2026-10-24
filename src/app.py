@@ -30,9 +30,11 @@ from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
+from tiercolours import TierColoursDialog
 from sources import SourceDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
+import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
@@ -60,6 +62,28 @@ def local_midnight(now=None):
     """The start of today, local time, as a timestamp."""
     t = time.localtime(now if now is not None else time.time())
     return time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+
+
+def apply_look(store):
+    """The look the save asks for (UI-61, UI-62): dark mode (meta dark_mode) and the tier colours (meta tier_colors,
+    six #RRGGBB as JSON), applied to theme before a window is built."""
+    try:
+        tiers = json.loads(store.get_meta("tier_colors") or "null")
+    except ValueError:
+        tiers = None
+    theme.apply(dark=store.get_meta("dark_mode") == "1", tiers=tiers if isinstance(tiers, list) else None)
+
+
+def reopen_while_asked(app, store, defs, new_root):
+    """After the window closed: while it closed to reopen (App.reopen: a new look), build it again in that look on a
+    new root (new_root() -> a hidden Tk with fonts and styles), with the save still open; returns the last App."""
+    while app.reopening:
+        apply_look(store)
+        root = new_root()
+        app = App(root, store, defs)
+        app.open_window()
+        root.mainloop()
+    return app
 
 
 class App:
@@ -139,6 +163,7 @@ class App:
         self.auto_var = tk.BooleanVar(value=self.auto_compare)
         self.motion_var = tk.BooleanVar(value=self.reduce_motion)
         self.censor_var = tk.BooleanVar(value=store.deal_settings()["censor"])
+        self.dark_var = tk.BooleanVar(value=store.get_meta("dark_mode") == "1")
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
@@ -273,10 +298,12 @@ class App:
                       ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
                       ("check", "Reduce motion", self.motion_var, self.toggle_motion),
-                      ("check", "Censor obscene words", self.censor_var, self.toggle_censor)]),
+                      ("check", "Censor obscene words", self.censor_var, self.toggle_censor),
+                      ("check", "Dark mode", self.dark_var, self.toggle_dark)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
                           ("command", "How words are dealt...", self.edit_dealing, None),
                           ("command", "Keyboard shortcuts...", self.edit_keys, None),
+                          ("command", "Tier colours...", self.edit_tier_colours, None),
                           ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
         ]
 
@@ -1802,6 +1829,15 @@ class App:
         program, unpack the source code it was built from."""
         return SourceDialog(self)
 
+    def edit_tier_colours(self):
+        """Settings > Tier colours... (UI-61)."""
+        return TierColoursDialog(self)
+
+    def toggle_dark(self):
+        """View > Dark mode (UI-62, not the default): saved, and the window reopens in it."""
+        self.store.set_meta("dark_mode", "1" if self.dark_var.get() else "0")
+        self.reopen()
+
     def edit_keys(self):
         """Settings > Keyboard shortcuts... (UI-48)."""
         return ShortcutsDialog(self)
@@ -1918,6 +1954,17 @@ class App:
             return
         self.flash(f"Exported {len(rows):,} placed words", ms=3000)
 
+    reopening = False         # set by reopen(): main() builds the window again, in the look now chosen
+
+    def reopen(self):
+        """Close this window but keep the save open: main() builds it again at once, so a new look (dark mode, the
+        tier colours: UI-61, UI-62) shows everywhere. Waits while a long job writes the save, as on_close."""
+        if self.busy:
+            self.root.after(200, self.reopen)
+            return
+        self.reopening = True
+        self._shut(close_store=False)
+
     def on_close(self):
         """Close the save cleanly and quit. While a long job writes the save (a reshuffle: App.busy) it waits for
         it to finish (closing then would shut the save under the worker thread). Timers still waiting are dropped
@@ -1925,6 +1972,12 @@ class App:
         if self.busy:
             self.root.after(200, self.on_close)
             return
+        self._shut(close_store=True)
+
+    def _shut(self, close_store):
+        for bw in list(self.browsers):
+            if bw.alive():
+                bw.close()
         self.anim.cancel_all()
         try:
             for job in self.root.tk.splitlist(self.root.tk.call("after", "info")):
@@ -1932,5 +1985,6 @@ class App:
                                                             # still lists, and destroy then fails freeing it again)
         except tk.TclError:
             pass
-        self.store.close()
+        if close_store:
+            self.store.close()
         self.root.destroy()

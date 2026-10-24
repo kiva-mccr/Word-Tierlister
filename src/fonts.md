@@ -3,8 +3,8 @@
 The fonts: one family and named size roles shared as Tk `Font` objects (UI-2).
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `startup`, `tierlist`, `ui_style`, `widgets`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_fonts`, `_selftest_sizing`, `_selftest_startup`, `_selftest_style`, `_selftest_ui`, `_selftest_widgets2`, `_selftest_zoom`
+- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `startup`, `tiercolours`, `tierlist`, `ui_style`, `widgets`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_fonts`, `_selftest_looks`, `_selftest_sizing`, `_selftest_startup`, `_selftest_style`, `_selftest_ui`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 

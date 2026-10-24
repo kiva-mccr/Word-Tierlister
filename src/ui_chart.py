@@ -314,13 +314,16 @@ def leaning(tiers, overall):
     return max((k for k in range(len(tiers)) if overall[k]), key=lambda k: (tiers[k] / total) / (overall[k] / whole))
 
 
-MARK_COLOR = lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)   # the lilac of selections, a little deeper
+def _mark_lilac():
+    """The lilac of selections, a little deeper (read when drawing: the look can change, UI-62)."""
+    return lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)
+
 
 
 def mark_color(tier):
     """A shelf mark's colour: its word's tier pastel, deepened so a small triangle still shows on the page
     (M-4); the lilac for a word with no tier."""
-    return MARK_COLOR if tier is None else lerp_color(TIER_COLORS[tier], PALETTE["text"], 0.3)
+    return _mark_lilac() if tier is None else lerp_color(TIER_COLORS[tier], PALETTE["text"], 0.3)
 
 
 class Bookshelf(SmoothCanvas):
@@ -444,7 +447,7 @@ class Bookshelf(SmoothCanvas):
         mw, mh = self._mark_size()
         for i in self._marks:
             x0, w, _zi = self._x[i]
-            cols = self._mark_colors.get(i, (MARK_COLOR,))
+            cols = self._mark_colors.get(i, (_mark_lilac(),))
             up = min(self.MARK_ROOM, self._lift.get(i, 0.0) * self.MARK_LIFT) if lifted else 0
             self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), self._top - self._rise() - mh - 1 - up,
                               image=self.triangle_image(mw, mh, *cols[:2]), anchor="nw", tags=("mark", f"mark{i}"))

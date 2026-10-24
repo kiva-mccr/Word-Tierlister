@@ -3,7 +3,7 @@
 The program's own widgets: buttons, the word card, tier pills, duel cards, the header menus and drop-downs, toasts, dialog frame, the definitions pane, smeared (censored) words and more. New widgets go here.
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
-- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`
+- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`, `tiercolours`
 - **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
@@ -17,7 +17,7 @@ The module docstring has the details; this page is the map.
   - methods: configure, cget, set_enabled, enabled, set_selected, refresh, invoke, flash
 - `TierRow`: The six tier pills S..F, each with its key hint (1-6), a hover lift and the pressed dip (UI-7).
 - `TierChip`: A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for places that name a tier without being a button: the Anchor words...
-  - methods: refresh
+  - methods: refresh, set_color
 - `DuelCards`: The duel view's controls (UI-8): two big word cards side by side, each with a hover ring and its key hint, and quiet Tie / Skip text buttons under them.
   - methods: buttons, resolve, anim_key, show, set_enabled
 - `AnchorLadder`: The S..F strip shown while a word is placed by comparing it to anchors (UI-9).

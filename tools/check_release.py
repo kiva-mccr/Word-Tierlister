@@ -116,7 +116,7 @@ def check_docs(problems):
 LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["keymap"], ["bundle"], ["standalone"],
           ["store"], ["wordsource", "saves", "definitions"], ["theme"], ["fonts"], ["sizing"], ["ui_style"],
           ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart"], ["browser"], ["filepicker"],
-          ["shortcuts"], ["dealing"], ["sources"], ["app"]]
+          ["shortcuts", "tiercolours"], ["dealing"], ["sources"], ["app"]]
 
 
 def _module_imports(path):
