@@ -1485,6 +1485,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           own at start, for a source an older program started. Reproduced here (PyInstaller fails with exactly that
 #           message under the dead paths) and fixed. The same build log showed GTK (gi) and Qt (PySide6) pulled in from
 #           the computer, the likely 99 MB: every window toolkit but Tk is excluded now (bundle.UNUSED).
+# [x] T-12 "Clean up behind?" (asked for: making the program from an unpacked source with no program beside it).
+#           Asked before the build (standalone.cleanup_place: the source has an unpack record and no program sits
+#           beside its folder). Yes: the program goes beside the source folder; this window closes, the save moves
+#           next to the program if it was inside the folder (standalone.move_save, never over another file; its
+#           -wal / -shm, .bak backups and the log with it) and is remembered; the save notes the source was given
+#           out (offered_source), so the program does not unpack it again; then the program starts with
+#           --remove-source and removes the folder as it starts (standalone.remove_source: on a thread, trying
+#           again while the old window lets go of it, as Windows needs). Only the program's own files go (those the
+#           unpack record lists, __pycache__, .venv, the log): a save or a file of yours stays, and so does the
+#           folder then. No: the program goes next to tierlist.py, as before. Checked for real: tierlist.py
+#           --remove-source on an unpacked copy removed its 117 files and kept one added by hand.
 # [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
@@ -1604,9 +1615,13 @@ def main():
                     help="never offer to pip-install missing packages (they are listed in requirements.txt), "
                          "nor to make a program / unpack the source on the first start")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
+    ap.add_argument("--remove-source", help=argparse.SUPPRESS)  # T-12: the unpacked source this was made from
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
+    if args.remove_source:                    # (cleaning up behind, T-12: in the background, while the old window
+        import threading                      # closes; only the program's own files, never a save)
+        threading.Thread(target=standalone.remove_source, args=(args.remove_source,), daemon=False).start()
     set_dpi_awareness()          # Windows: sharp at 125% / 150% display scaling (before any window opens)
     script_dir = app_dir()          # tierlist.py's folder, or a built program's own (T-1)
     # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a

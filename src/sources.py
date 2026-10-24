@@ -33,7 +33,7 @@ import standalone
 from errors import ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
 from problems import STOPPED_MESSAGE, SetupError
-from saves import is_frozen
+from saves import is_frozen, remember_save
 from startup import ensure_packages, run_with_progress
 from widgets import StyledDialog
 from constants import VERSION
@@ -162,16 +162,24 @@ class SourceDialog:
         if not self.packages_ready():
             return None
         lines = []
-
+        place = standalone.cleanup_place(self.root_dir)       # (an unpacked source with no program beside it: T-12)
+        if place and not ask_yes_no(HEADLINE, "Clean up behind?",
+                                    "This source was unpacked from the program. Put the new program beside its folder, "
+                                    f"in {place}, and then remove the source folder? Your save moves next to the "
+                                    "program first; only the program's own files are removed, anything you added "
+                                    "there stays.", yes="Clean up", no="Keep the source", parent=app.root,
+                                    wrap_chars=62):
+            place = None                          # (no: the program goes next to tierlist.py, as always)
         release = self.release if self.wants_update() else None
 
         def work(log):
             def keep(text):
                 lines.append(str(text))
                 log(text)
+            kw = {"place": place} if place else {}
             if release:
-                return standalone.make_program(self.root_dir, keep, release=release)
-            return standalone.make_program(self.root_dir, keep)
+                return standalone.make_program(self.root_dir, keep, release=release, **kw)
+            return standalone.make_program(self.root_dir, keep, **kw)
         try:
             path = run_with_progress(app.root, work, title="Making a standalone program", delay_ms=0,
                                      initial_stage="Getting ready...", intro="Building the program for this computer.")
@@ -188,8 +196,26 @@ class SourceDialog:
                        "your save and the source are unchanged.", details="\n".join(lines[-40:]), parent=app.root,
                        headline="Not built")
             return None
-        self.start(path)
+        if place:
+            self.start_cleaned(path, place)
+        else:
+            self.start(path)
         return path
+
+    def start_cleaned(self, path, place):
+        """Clean up behind (T-12): close this window and its save, move the save next to the new program if it is
+        inside the source folder (it is the one used from now on), then start the program, which removes this
+        source folder as it starts. The save is marked as having given out its source, so the program does not
+        unpack it again."""
+        store = self.app.store
+        store.set_meta("offered_source", "1")
+        save = store.path
+        self.dlg.close()
+        self.app.on_close()
+        if os.path.realpath(save).startswith(os.path.realpath(self.root_dir) + os.sep):
+            save = standalone.move_save(save, place)
+        remember_save(save)
+        standalone.start(path, args=["--remove-source", self.root_dir])
 
     def packages_ready(self, ensure=None):
         """Before a build: what goes into the program (wordfreq, and nltk if wanted) and the builder (PyInstaller)

@@ -26,12 +26,15 @@ The module docstring has the details; this page is the map.
 - `biggest_parts`: [(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it leaves in its work `folder` (PKG-00.toc: files and...
 - `make_program`: File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next to tierlist.py (replacing an older one), with its manifest...
 - `clean_env`: A copy of the environment fit for starting the other form, Python or the builder: without what a built program sets for itself, which outlives it and points into its...
-- `start`: Start the program at `path` on its own, not as a child of this window (which then closes).
+- `start`: Start the program at `path` on its own, not as a child of this window (which then closes); `args`: its command-line options.
 - `bundled_source`: The source carried inside this program (SOURCE_DIR), or None when running from source or built without it.
 - `read_manifest`: (no docstring)
 - `plan_unpack`: What unpacking `source` (a folder with MANIFEST) into `target` would do, without doing it: {"add": [...], "update": [...], "remove": [...], "backup": [...], "same":...
 - `summary`: "3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
+- `cleanup_place`: Where a program made from `root` goes when the source is to be cleaned up behind it: the folder holding `root`, when `root` was unpacked from a program (UNPACKED) and...
+- `move_save`: Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...).
+- `remove_source`: Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be closing: on Windows a folder in use cannot be removed, so it...
 - `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tier List source".
 - `existing_source`: A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from that source: T-6 puts it next to tierlist.py), or a folder...
 - `start_source`: Start tierlist.py in `folder` with `python`, on its own (not a child of this program, which then closes).
@@ -50,6 +53,7 @@ The module docstring has the details; this page is the map.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
 - Everything started from here (the other form, Python, PyInstaller, pip, the file manager) gets `clean_env()`: a built program's Tcl / Tk paths and library path point into its temporary folder, which is gone once it closes (reported: PyInstaller's "Tk data/library directory ... could not be collected!").
+- Cleaning up behind (T-12): `remove_source` removes only what the unpack record lists, `OURS` and `__pycache__`, and nothing without that record; `move_save` never writes over a file. The deleting is done by the new program (`--remove-source`), never by the window running from the folder (Windows keeps it locked).
 - `existing_source` decides whether the first start unpacks (T-10): tierlist.py beside the program, or any folder beside it with tierlist.py or the unpack record, counts as a copy already there.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.

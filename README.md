@@ -251,7 +251,10 @@ file you edited there is kept as `name.bak` first. What it will do is shown befo
 and it offers to start `tierlist.py` from there (that needs Python on the computer; it uses the same save). Starting
 the other form, from either side, closes the one you started it from, so only one of them uses the save at a time,
 and the one started never inherits the built program's own settings (its Tcl / Tk folders, which vanish when it
-closes), so the unpacked source can build the program again.
+closes), so the unpacked source can build the program again. Making the program from an unpacked source with no
+program beside its folder first asks **Clean up behind?**: yes puts the new program beside the folder, moves your
+save next to it, and the program removes the source folder as it starts (only the program's own files; anything
+you added there stays).
 
 ## Missing packages
 Installing happens in two stages.

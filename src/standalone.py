@@ -260,12 +260,12 @@ def biggest_parts(folder, n=5):
     return [(name, size / 1e6) for name, size in sizes.most_common(n)]
 
 
-def make_program(root=ROOT, log=print, release=None):
+def make_program(root=ROOT, log=print, release=None, place=None):
     """File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next
-    to tierlist.py (replacing an older one), with its manifest beside it. `release` (latest_release): download
-    that version's source first and build from it instead (T-8: "Update to the newest version first"). Returns
-    its path, or None if it could not be built (the reason is logged). Run on a worker thread: it takes a minute
-    or two."""
+    to tierlist.py (replacing an older one), with its manifest beside it; `place`: in that folder instead (T-12:
+    beside an unpacked source that is then cleaned up). `release` (latest_release): download that version's source
+    first and build from it instead (T-8: "Update to the newest version first"). Returns its path, or None if it
+    could not be built (the reason is logged). Run on a worker thread: it takes a minute or two."""
     log(plan_line(([f"Downloading version {release['version']}"] if release else [])
                   + (["Installing PyInstaller"] if not has_pyinstaller() else []) + ["Building", "Putting it in place"]))
     dist = tempfile.mkdtemp(prefix="wtl-dist-")
@@ -275,13 +275,13 @@ def make_program(root=ROOT, log=print, release=None):
         if out is None:
             return None
         log("Putting it in place...")
-        target = program_path(root)
+        target = program_path(place or root)
         if os.path.isdir(target):
             shutil.rmtree(target)
         elif os.path.exists(target):
             os.remove(target)
         shutil.move(out, target)
-        shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(root, SIDE_FILE))   # (not os.replace: the
+        shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace: the
                                                   # temporary folder can be on another disk, reported: Errno 18)
         log(f"  {target}")
         return target
@@ -319,15 +319,16 @@ def clean_env(env=None, frozen=None):
     return env
 
 
-def start(path, popen=subprocess.Popen):
-    """Start the program at `path` on its own, not as a child of this window (which then closes)."""
+def start(path, popen=subprocess.Popen, args=()):
+    """Start the program at `path` on its own, not as a child of this window (which then closes); `args`: its
+    command-line options."""
     exe = executable(path)
     if sys.platform.startswith("win"):
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        return popen([exe], creationflags=flags, close_fds=True, cwd=os.path.dirname(exe), env=clean_env())
+        return popen([exe, *args], creationflags=flags, close_fds=True, cwd=os.path.dirname(exe), env=clean_env())
     if sys.platform == "darwin" and path.endswith(".app"):
-        return popen(["open", path], env=clean_env())
-    return popen([exe], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe), env=clean_env(),
+        return popen(["open", path, *(["--args", *args] if args else [])], env=clean_env())
+    return popen([exe, *args], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe), env=clean_env(),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -422,6 +423,83 @@ def unpack(source, target, plan=None):
             pass
     shutil.copy2(os.path.join(source, MANIFEST), os.path.join(target, UNPACKED))
     return plan
+
+
+# ---- cleaning up behind (T-12): a program made from an unpacked source, the source then removed --------------------
+def cleanup_place(root=ROOT, platform=None):
+    """Where a program made from `root` goes when the source is to be cleaned up behind it: the folder holding
+    `root`, when `root` was unpacked from a program (UNPACKED) and no program sits there; else None (asked for:
+    only then is "Clean up behind?" asked)."""
+    parent = os.path.dirname(os.path.abspath(root))
+    if not os.path.isfile(os.path.join(root, UNPACKED)) or os.path.exists(program_path(parent, platform)):
+        return None
+    return parent
+
+
+def move_save(save, folder):
+    """Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a
+    file already there (then it is saved as tierlist-2.db, ...). Returns the save's new path. The save must be
+    closed."""
+    base, ext = os.path.splitext(os.path.basename(save))
+    dest, n = os.path.join(folder, base + ext), 2
+    while os.path.exists(dest):
+        dest, n = os.path.join(folder, f"{base}-{n}{ext}"), n + 1
+    here = os.path.dirname(os.path.abspath(save))
+    for name in sorted(os.listdir(here)):
+        p = os.path.join(here, name)
+        if name in (os.path.basename(save) + "-wal", os.path.basename(save) + "-shm"):
+            shutil.move(p, dest + name[len(os.path.basename(save)):])
+        elif name.startswith(os.path.basename(save) + ".") and name.endswith(".bak"):
+            shutil.move(p, dest + name[len(os.path.basename(save)):])
+        elif name == "tierlist.log" and not os.path.exists(os.path.join(folder, name)):
+            shutil.move(p, os.path.join(folder, name))
+    shutil.move(save, dest)
+    return dest
+
+
+OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache")
+
+
+def remove_source(folder, tries=40, wait=0.25):
+    """Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be
+    closing: on Windows a folder in use cannot be removed, so it tries again for a while). Only the program's own
+    files go: those its unpack record lists (UNPACKED), OURS and any __pycache__; anything else (a save, a file of
+    yours) stays, and so does the folder then. Never touches a folder without that record. Returns the paths left
+    behind, or None."""
+    record = read_manifest(folder, UNPACKED)
+    if not record:
+        return None
+    listed = set(record.get("files", {}))
+
+    def ours(rel):
+        parts = rel.split("/")
+        return rel in listed or parts[0] in OURS or "__pycache__" in parts
+
+    left = []
+    for _ in range(max(1, tries)):
+        left, stuck = [], False
+        for d, dirs, files in os.walk(folder, topdown=False):
+            for name in files + dirs:
+                p = os.path.join(d, name)
+                rel = os.path.relpath(p, folder).replace(os.sep, "/")
+                try:
+                    if os.path.isdir(p) and not os.path.islink(p):
+                        if not os.listdir(p):
+                            os.rmdir(p)
+                    elif ours(rel):
+                        os.remove(p)
+                    else:
+                        left.append(p)
+                except OSError:
+                    stuck = True                # (still in use: the old window is closing)
+        if not stuck:
+            break
+        time.sleep(wait)
+    try:
+        os.rmdir(folder)
+    except OSError:
+        pass
+    return left
 
 
 def default_source_folder(program=None):

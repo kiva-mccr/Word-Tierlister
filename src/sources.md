@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `SourceDialog`: (no docstring)
-  - methods: wants_update, make, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
+  - methods: wants_update, make, start_cleaned, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 

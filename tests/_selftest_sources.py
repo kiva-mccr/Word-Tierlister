@@ -264,6 +264,58 @@ open(os.path.join(os.path.dirname(prog), "tierlist.py"), "w").write("")
 assert S.existing_source(prog) == os.path.dirname(prog)          # (built from source: it sits beside tierlist.py)
 S.default_source_folder = lambda program=None: beside
 
+# ---- T-12: "Clean up behind?" (asked for): made from an unpacked source with no program beside its folder, the
+# program goes beside the folder, the save moves next to it, and the new program removes the source as it starts
+home12 = tempfile.mkdtemp()
+src12 = os.path.join(home12, "Word Tier List source")
+S.unpack(v2, src12)
+assert S.cleanup_place(src12) == home12 and S.cleanup_place(project()) is None        # (not unpacked: never)
+open(S.program_path(home12), "w").write("old program")
+assert S.cleanup_place(src12) is None                                                # (a program beside it: no)
+os.remove(S.program_path(home12))
+# the helpers alone: only the program's own files go; a save and a file of yours stay (and so does the folder)
+os.makedirs(os.path.join(src12, "src", "__pycache__")); open(os.path.join(src12, "src", "__pycache__", "a.pyc"), "w").write("")
+os.makedirs(os.path.join(src12, ".venv", "bin")); open(os.path.join(src12, ".venv", "bin", "python"), "w").write("")
+open(os.path.join(src12, "notes-of-mine.txt"), "w").write("mine")
+keep = tempfile.mkdtemp(); shutil.copytree(src12, os.path.join(keep, "copy"))
+left = S.remove_source(os.path.join(keep, "copy"))
+assert [os.path.basename(p) for p in left] == ["notes-of-mine.txt"] and os.listdir(os.path.join(keep, "copy")) == ["notes-of-mine.txt"]
+os.remove(os.path.join(keep, "copy", "notes-of-mine.txt")); S.unpack(v2, os.path.join(keep, "copy"))
+assert S.remove_source(os.path.join(keep, "copy")) == [] and not os.path.exists(os.path.join(keep, "copy"))
+plain = project()
+assert S.remove_source(plain) is None and os.path.exists(os.path.join(plain, "tierlist.py"))     # no record: untouched
+os.remove(os.path.join(src12, "notes-of-mine.txt"))
+db = os.path.join(src12, "tierlist.db"); open(db, "w").write("save"); open(db + "-wal", "w").write("w")
+open(db + ".before-merge-1.bak", "w").write("b"); open(os.path.join(home12, "tierlist.db"), "w").write("another save")
+moved = S.move_save(db, home12)
+assert moved == os.path.join(home12, "tierlist-2.db") and open(moved).read() == "save"           # never over a file
+assert os.path.exists(moved + "-wal") and os.path.exists(moved + ".before-merge-1.bak") and not os.path.exists(db)
+assert open(os.path.join(home12, "tierlist.db")).read() == "another save"
+# the dialog: asked before building; yes puts the program beside the folder and starts it with --remove-source
+S.is_frozen = sources.is_frozen = A.is_frozen = lambda: False
+root, app = window()
+save12 = os.path.join(src12, "tierlist.db")
+app.store.close(); shutil.copy(app.store.path, save12)
+app.store = T.Store(save12)
+built12, started12, q12 = [], [], []
+sources.ask_yes_no = lambda title, headline, *a, **kw: (q12.append(headline), True)[1]
+sources.ensure_packages = lambda *a, **kw: True
+sources.remember_save = lambda p: q12.append(("remembered", p))
+S.make_program = lambda root_dir, log, release=None, place=None: (built12.append(place),
+                                                                 open(S.program_path(place or root_dir), "w").write("p"),
+                                                                 S.program_path(place or root_dir))[2]
+S.start = lambda path, popen=None, args=(): started12.append((path, list(args)))
+d = sources.SourceDialog(app, root_dir=src12, frozen=False, check=lambda: None); settle(d)
+d.buttons["Make the program"].invoke(); pump(root, 2)
+assert "Clean up behind?" in q12 and built12 == [home12]
+assert started12 == [(S.program_path(home12), ["--remove-source", src12])]
+assert ("remembered", os.path.join(home12, "tierlist-3.db")) in q12 and os.path.exists(os.path.join(home12, "tierlist-3.db"))
+check = T.Store(os.path.join(home12, "tierlist-3.db"))
+assert check.get_meta("offered_source") == "1"                   # (the program will not unpack it again)
+check.close()
+S.make_program = lambda root_dir, log, release=None, place=None: (made.append(root_dir), None)[1]
+root, app = window()
+
 # before a build: a required package left uninstalled, or an install that failed, stops it with a message
 said = []
 sources.show_message = lambda *a, **kw: said.append(a)
