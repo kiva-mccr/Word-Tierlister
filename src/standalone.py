@@ -17,6 +17,8 @@ Updates (T-8): latest_release asks GitHub for the newest release, newer says whe
 VERSION, fetch_source downloads its source (the repository at its tag) ready to unpack or build from; the
 programs a release carries are named in RELEASE_ASSETS. No tkinter.
 """
+import ast
+import collections
 import hashlib
 import io
 import json
@@ -219,14 +221,41 @@ def build(dist, root=ROOT, log=print, carry_source=True):
             log("The build failed:\n" + r.stderr[-3000:])
             return None
         out = output_path(dist)
+        size = os.path.getsize(out) if os.path.isfile(out) else sum(
+            os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs)
+        log(f"  built {os.path.basename(out)} ({size / 1e6:.0f} MB)")
+        if size > BIG_MB * 1e6:                   # (bigger than it should be: say what made it so)
+            parts = biggest_parts(os.path.join(work, os.path.splitext(os.path.basename(out))[0]))
+            if parts:
+                log("  its biggest parts: " + ", ".join(f"{name} ({mb:.0f} MB)" for name, mb in parts))
         if source:
             shutil.copy2(os.path.join(source, MANIFEST), os.path.join(dist, SIDE_FILE))   # (beside it: up_to_date)
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    size = os.path.getsize(out) if os.path.isfile(out) else sum(
-        os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs)
-    log(f"  built {os.path.basename(out)} ({size / 1e6:.0f} MB)")
     return out
+
+
+BIG_MB = 40                # a build is about 22 MB (Linux); past this its log names its biggest parts
+
+
+def biggest_parts(folder, n=5):
+    """[(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it
+    leaves in its work `folder` (PKG-00.toc: files and libraries; PYZ-00.toc: Python modules, by package). A build
+    of 99 MB was reported where 22 MB is usual: whatever else is installed on the computer can be pulled in."""
+    sizes = collections.Counter()
+    for table, sep in (("PKG-00.toc", "/"), ("PYZ-00.toc", ".")):
+        try:
+            with open(os.path.join(folder, table), encoding="utf-8") as fh:
+                toc = ast.literal_eval(fh.read())
+        except (OSError, ValueError, SyntaxError):
+            continue
+        entries = next((t for t in toc if isinstance(t, list)), [])
+        for entry in entries:
+            name, src, kind = (list(entry) + [None, None])[:3]
+            if kind == "PYZ" or not isinstance(src, str) or not os.path.isfile(src):
+                continue
+            sizes[str(name).replace("\\", "/").split(sep)[0]] += os.path.getsize(src)
+    return [(name, size / 1e6) for name, size in sizes.most_common(n)]
 
 
 def make_program(root=ROOT, log=print, release=None):
@@ -250,7 +279,8 @@ def make_program(root=ROOT, log=print, release=None):
         elif os.path.exists(target):
             os.remove(target)
         shutil.move(out, target)
-        os.replace(os.path.join(dist, SIDE_FILE), os.path.join(root, SIDE_FILE))
+        shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(root, SIDE_FILE))   # (not os.replace: the
+                                                  # temporary folder can be on another disk, reported: Errno 18)
         log(f"  {target}")
         return target
     finally:

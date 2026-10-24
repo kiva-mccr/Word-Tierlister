@@ -43,6 +43,15 @@ rudeness.wordnet()                                  # (None without nltk or its 
 """
 r = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
 assert r.returncode == 0, r.stderr[-2000:]
+# a build much bigger than usual says what is in it (reported: 99 MB where 22 is usual), from PyInstaller's tables
+work = tempfile.mkdtemp()
+big, small = os.path.join(work, "big.so"), os.path.join(work, "small.py")
+open(big, "wb").write(b"x" * 3_000_000); open(small, "wb").write(b"x" * 1_000_000)
+open(os.path.join(work, "PKG-00.toc"), "w").write(repr(("p.pkg", {}, [("PYZ-00.pyz", big, "PYZ"),
+                                                                       ("torch/lib/big.so", big, "BINARY")])))
+open(os.path.join(work, "PYZ-00.toc"), "w").write(repr(("p.pyz", [("numpy.core", small, "PYMODULE"),
+                                                                  ("numpy.linalg", small, "PYMODULE")])))
+assert S.biggest_parts(work) == [("torch", 3.0), ("numpy", 2.0)] and S.biggest_parts(tempfile.mkdtemp()) == []
 assert S.executable("/x/Word Tier List.app", "darwin") == "/x/Word Tier List.app/Contents/MacOS/Word Tier List"
 assert S.executable("/x/word-tierlist", "linux") == "/x/word-tierlist"
 

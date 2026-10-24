@@ -23,6 +23,7 @@ The module docstring has the details; this page is the map.
 - `has_pyinstaller`: (no docstring)
 - `ensure_pyinstaller`: Install PyInstaller if this Python lacks it, or reinstall it if it is there but incomplete (pip; with --break-system-packages on a Python that refuses plain pip...
 - `build`: Build the program into `dist` (installing PyInstaller first if needed): its path, or None if it failed.
+- `biggest_parts`: [(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it leaves in its work `folder` (PKG-00.toc: files and...
 - `make_program`: File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next to tierlist.py (replacing an older one), with its manifest...
 - `start`: Start the program at `path` on its own, not as a child of this window (which then closes).
 - `bundled_source`: The source carried inside this program (SOURCE_DIR), or None when running from source or built without it.
@@ -45,6 +46,8 @@ The module docstring has the details; this page is the map.
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
+- Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
+- A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.
 
 ## Changing it
 

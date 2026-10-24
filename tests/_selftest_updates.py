@@ -67,6 +67,23 @@ S.has_pyinstaller = lambda: True
 assert S.make_program(proj, steps.append, release=r) == S.program_path(proj)
 assert built[0].endswith("release") and "Downloading version 9.1.0" in steps[0]
 assert S.make_program(proj, steps.append) and built[1] == proj           # (unticked: the source you have)
+# the temporary folder on another disk than the project (reported: "[Errno 18] Invalid cross-device link"): a rename
+# from there fails, so everything is moved by copying
+import errno
+real_rename, real_replace = os.rename, os.replace
+def other_disk(a, b, *args, **kw):
+    if str(a).startswith(tempfile.gettempdir()) != str(b).startswith(tempfile.gettempdir()):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+    return real_rename(a, b, *args, **kw)
+os.rename = os.replace = other_disk
+proj = os.path.join(_paths.ROOT, "tests", "_cross_device_check")
+os.makedirs(proj, exist_ok=True)
+try:
+    assert S.make_program(proj, steps.append) == S.program_path(proj) and os.path.exists(os.path.join(proj, S.SIDE_FILE))
+finally:
+    os.rename, os.replace = real_rename, real_replace
+    import shutil
+    shutil.rmtree(proj, ignore_errors=True)
 
 # PyInstaller there but incomplete (reported: "No module named 'PyInstaller.utils'"): the check imports what a build
 # uses, and a broken one is reinstalled, not taken as installed; both run from a neutral folder

@@ -284,6 +284,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-13 Reported: making the program stopped at "Putting it in place" with "[Errno 18] Invalid cross-device link"
+#           (the temporary folder on another disk than the project): the build record is moved with shutil.move,
+#           which copies across disks, like the program itself. The same build was 99 MB (22 MB here): a build over
+#           BIG_MB now names its five biggest parts in the log (standalone.biggest_parts), to see what was pulled in.
 # [x] F-12 Reported: the definitions' un-smear looked bold before snapping to the word; boys, teeth, boots, stones, nuts,
 #           bits, fairy, apples, bum, mayo, hyper, taco, jewels smeared whole; a word that is a slur at all smeared
 #           whole; "skull-fuck"'s noun meaning not smeared; asked for: test a hyphenated word's parts.
