@@ -2050,10 +2050,14 @@ class WordCard(SmoothCanvas):
       magnifier again) puts the word back; note(text, animator) says something under it and shakes the card.
     * ST-6: set(word, sub, censor=True) shows the word smeared sideways (Censor obscene words); with the pointer
       over it, it un-smears (Unsmear; `animator` is the App's, for the easing).
-    * UI-59: set(..., kind="sexual") writes what kind of rude word it is faintly above it, in the card's top margin
-      (the card's size never changes for it).
+    * UI-59: set(..., kind="sexual") writes what kind of rude word it is faintly above it, in a row of its own: the
+      card is KIND_ROOM of a sub-line taller for every word (so its size still never changes) and a word with a
+      kind is drawn at KIND_SCALE of its size (asked for: a little of both, so the kind has room).
     """
     KIND_FADE = 0.45        # how far toward the card the kind's colour is (a see-through look: Tk has no alpha)
+    KIND_ROOM = 0.9         # extra card height for the kind's row, in sub-line heights (on every card)
+    KIND_GAP = 0.3          # clear space between the kind's row and the word's line, in sub-line heights
+    KIND_SCALE = 0.85       # a word with a kind above it is drawn this much smaller
     TYPE_HINT = "Enter: sort it  \u00b7  Esc: back"
     PLACEHOLDER = "type a word"
     SHADOW = 4
@@ -2094,7 +2098,7 @@ class WordCard(SmoothCanvas):
 
     @property
     def _pady(self):
-        return int(self._wfont.metrics("linespace") * 0.28)
+        return int(self._wfont.metrics("linespace") * 0.2)
 
     def box(self):
         """(width, height) of the card for the current fonts and room; the same for every word."""
@@ -2104,7 +2108,7 @@ class WordCard(SmoothCanvas):
             inner = min(inner, self._wrap)
         w = inner + 2 * self.padx + self.SHADOW
         w += w % 2                                 # even: centring it never lands on half a pixel
-        h = line + int(sline * 0.4) + sline + 2 * self._pady + self.SHADOW
+        h = line + int(sline * 0.4) + sline + int(sline * self.KIND_ROOM) + 2 * self._pady + self.SHADOW
         return w, h
 
     @property
@@ -2193,7 +2197,7 @@ class WordCard(SmoothCanvas):
                                width=getattr(self, "_old_wrap", 0), justify="center", anchor="n",
                                tags=("old", "oldword"))
         ob = self.bbox(old)
-        ow = [cx, top + (self._wfont.metrics("linespace") - (ob[3] - ob[1] if ob else 0)) / 2]
+        ow = [cx, top + (self._line - (ob[3] - ob[1] if ob else 0)) / 2]
         self.coords(old, *ow)
         smeared = None
         if self._old_censor and self.smear.clear < 1:   # a censored word leaves as its smear, never readable
@@ -2253,40 +2257,41 @@ class WordCard(SmoothCanvas):
         except tk.TclError:
             pass
 
-    def _draw_kind(self, bw):
-        """The kind, centred in the room between the card's top edge and the tops of the word's letters (the
-        tallest, accents too, stand about 0.8 em above the baseline), its font made smaller if that room is ever too low for
-        it, so it is never cut off nor touches the word (asked for)."""
+    def _size_kind(self):
+        """Size the kind's font (a little smaller than the sub-line's) and return the height of its row, with KIND_GAP
+        clear under it (tall letters reach the top of the word's line: their smear touched the kind)."""
+        sign = -1 if self._sfont.cget("size") < 0 else 1
+        a = self._sfont.actual()
+        self._kind_font.configure(family=a["family"], weight=a["weight"], slant=a["slant"],
+                                  size=sign * max(5, int(round(abs(self._sfont.cget("size")) * 0.85))))
+        return self._kind_font.metrics("linespace") + int(self._sfont.metrics("linespace") * self.KIND_GAP)
+
+    def _draw_kind(self, bw, top):
+        """The kind, in its own row from `top`, kept KIND_GAP clear of the tops of the word's letters (the tallest,
+        accents too, stand about 0.82 em above the baseline: the line's box starts barely above them)."""
         pt = self._fit.cget("size")
         em = -pt if pt < 0 else pt * float(self.tk.call("tk", "scaling"))     # (in pixels)
         ink_top = self._word_xy[1] + self._fit.metrics("ascent") - 0.82 * em
-        room = ink_top - 3 - 3                          # (3 px clear of the card's edge and of the letters)
-        sign = -1 if self._sfont.cget("size") < 0 else 1
-        size = max(5, int(round(abs(self._sfont.cget("size")) * 0.85)))
-        a = self._sfont.actual()
-        self._kind_font.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * size)
-        while size > 5 and self._kind_font.metrics("linespace") > room:
-            size -= 1
-            self._kind_font.configure(size=sign * size)
-        y = max(3 + self._kind_font.metrics("linespace") / 2, (3 + ink_top - 3) / 2)
-        self.create_text(bw / 2, y, text=self._kind, font=self._kind_font, fill=self._kind_color(), anchor="center",
-                         tags="kind")
+        half = self._kind_font.metrics("linespace") / 2
+        y = min(top + half, ink_top - int(self._sfont.metrics("linespace") * self.KIND_GAP) - half)
+        self.create_text(bw / 2, max(3 + half, y), text=self._kind, font=self._kind_font, fill=self._kind_color(),
+                         anchor="center", tags="kind")
 
     def _kind_color(self):
         return lerp_color(PALETTE["muted"], PALETTE["surface"], self.KIND_FADE)
 
-    def _fit_word(self, avail, line):
-        """Size the drawing font for the current word: the full size if it fits on one line in `avail` pixels,
-        else smaller (down to MIN_SCALE), else wrapped at `avail` and as big as still fits in `line` pixels of
-        height. Sets self._fit and self._fit_wrap."""
+    def _fit_word(self, avail, line, scale=1.0):
+        """Size the drawing font for the current word: the full size (times `scale`) if it fits on one line in
+        `avail` pixels, else smaller (down to MIN_SCALE), else wrapped at `avail` and as big as still fits in `line`
+        pixels of height. Sets self._fit and self._fit_wrap."""
         base = self._wfont
         full = base.cget("size")
         sign = -1 if full < 0 else 1               # (a negative size is in pixels)
-        full = abs(full)
+        full = max(6, round(abs(full) * scale))
         a = base.actual()
         self._fit.configure(family=a["family"], weight=a["weight"], slant=a["slant"], size=sign * full)
         self._fit_wrap = 0
-        need = base.measure(self._word)
+        need = self._fit.measure(self._word)
         if need <= avail or not self._word:
             return
         floor = max(6, int(full * self.MIN_SCALE))
@@ -2335,7 +2340,11 @@ class WordCard(SmoothCanvas):
         bw, bh = w - self.SHADOW, h - self.SHADOW
         line, sline = self._wfont.metrics("linespace"), self._sfont.metrics("linespace")
         avail = bw - 2 * self.padx
-        self._fit_word(avail, line)
+        labelled = bool(self._kind) and not self.typing
+        kind_row = self._size_kind() if labelled else 0      # (the kind's own row, above the word's line)
+        if labelled:
+            line = int(line * self.KIND_SCALE)
+        self._fit_word(avail, line, self.KIND_SCALE if labelled else 1.0)
         r = max(6, min(self._radius, bh // 2))
         # the shadow is drawn in the card's own image (one solid image: much cheaper to draw); this invisible
         # item only marks where it is
@@ -2346,7 +2355,7 @@ class WordCard(SmoothCanvas):
                         shadow=(PALETTE["shadow"], self.SHADOW, self.SHADOW))
         # fixed rows: the word's line, a gap, the sub-line's line, the whole block centred in the card
         gap = int(sline * 0.4)
-        top = (bh - (line + gap + sline)) / 2
+        top = (bh - (kind_row + line + gap + sline)) / 2 + kind_row
         word = self.create_text(bw / 2, 0, text=self._word, font=self._fit, fill=PALETTE["text"],
                                 width=self._fit_wrap, justify="center", anchor="n", tags="word")
         wb = self.bbox(word)
@@ -2359,8 +2368,9 @@ class WordCard(SmoothCanvas):
             self.create_text(bw / 2, sub_y, text=self._fit_subline(avail), font=self._fit_sub,
                              fill=PALETTE["muted"], justify="center", anchor="n", tags="sub")
         self._layout = (bw / 2, top, sub_y)          # (transition_from: the word's line and the sub-line)
-        if self._kind and not self.typing:
-            self._draw_kind(bw)
+        self._line = line
+        if labelled:
+            self._draw_kind(bw, top - kind_row)
         self.smear.place(word, self._word if self._censor and not self.typing else None, PALETTE["text"],
                          PALETTE["surface"])
         if self.find_withtag("old"):

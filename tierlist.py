@@ -290,7 +290,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           word while it is hovered. The outgoing word still leaves as its smear.
 #           Also reported: the smear sometimes covered the kind above the word. The outgoing word's smear (its cut-off
 #           strips are the height of its line, in the card's colour) slid up over it on a skip, drawn on top: the
-#           kind is now always on top of the card's smears.
+#           kind is now always on top of the card's smears. Then (screenshots: the kind was crammed against the card's
+#           edge, the smear of tall letters just under it) the user asked for a little of both: a word with a kind is
+#           drawn at KIND_SCALE (85%) of its size and every card has KIND_ROOM (0.9 of a sub-line) more for the
+#           kind's row, paid partly from the top and bottom padding (0.28 -> 0.2 of a line) so a 1366 x 768 laptop
+#           keeps its 110% zoom step: the card is 1-2 px taller, the kind near the sub-line's size, KIND_GAP clear of
+#           the tops of the letters (9 px at 60% zoom, 14 at 100%, 24 at 160%).
 # [x] F-14 Review of everything since F-9 (asked for), file by file: one defect, two nits.
 #           - rudeness (RUDENESS_VERSION 12): in a word smeared whole, a meaning "naming the word itself" matched any
 #             word that merely began with it ("pom: ... pomegranate juice", "jock: a disc jockey", "lav: lavalier

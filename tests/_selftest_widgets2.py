@@ -630,6 +630,16 @@ wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
 assert wc.itemcget("kind", "text") == "sexual" and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
 kb, wb = wc.bbox("kind"), wc.bbox("word")
 assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                      # above the letters, on the card
+# asked for (a little of both): the word is drawn smaller under a kind, the kind is near the sub-line's size, and it
+# stays clear of the tops of the letters (tall ones: b, f, k)
+labelled = abs(wc._fit.cget("size"))
+wc.set("bum-fuck", "frequency rank #7"); root.update()
+assert labelled < abs(wc._fit.cget("size")) and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
+wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
+assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace")
+pt = abs(wc._fit.cget("size")) * float(wc.tk.call("tk", "scaling"))
+ink_top = wc._word_xy[1] + wc._fit.metrics("ascent") - 0.82 * pt
+assert wc.bbox("kind")[3] <= ink_top - 0.25 * font("body").metrics("linespace"), (wc.bbox("kind"), ink_top)
 assert wc.itemcget("kind", "fill") != wc.itemcget("sub", "fill")                  # paler than the sub-line
 # a censored word's smear never covers the kind: not as drawn, not half un-smeared, and not while the outgoing word's
 # smear slides up past it (a skip sends it up; its cut-off strips are the height of its line)
