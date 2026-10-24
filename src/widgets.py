@@ -2368,6 +2368,8 @@ class WordCard(SmoothCanvas):
         self.tag_raise("word")
         self.tag_raise(self.smear.tag)
         self.tag_raise("sub")
+        self.tag_raise("kind")                # over the smear: its cut-off strips, the height of the word's line, hid
+                                              # the ends of a kind wider than the word ("sexual" over "cum")
         if self._frame is not None:           # mid-transition: put the moving words back where they were
             self._frame(self._p)
         self._draw_find(bw, r)

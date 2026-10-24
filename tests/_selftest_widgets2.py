@@ -631,6 +631,26 @@ assert wc.itemcget("kind", "text") == "sexual" and (wc.winfo_reqwidth(), wc.winf
 kb, wb = wc.bbox("kind"), wc.bbox("word")
 assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                      # above the letters, on the card
 assert wc.itemcget("kind", "fill") != wc.itemcget("sub", "fill")                  # paler than the sub-line
+# a censored word's smear never covers the kind: not as drawn, not half un-smeared, and not while the outgoing word's
+# smear slides up past it (a skip sends it up; its cut-off strips are the height of its line)
+def smear_over_kind():
+    """How many smear items over the kind are drawn above it (and how many lie over it at all)."""
+    order, kb = list(wc.find_all()), wc.bbox("kind")
+    over = [i for i in wc.find_overlapping(*kb) if {"smear", "oldsmear"} & set(wc.gettags(i))]
+    return sum(order.index(i) > order.index(wc.find_withtag("kind")[0]) for i in over), len(over)
+wc.set("cum", "frequency rank #8", censor=True, kind="sexual"); root.update()
+assert wc.find_withtag("smear") and smear_over_kind()[0] == 0
+wc.smear.clear = 0.5; wc.smear.paint(); assert smear_over_kind()[0] == 0
+anim, crossed = Animator(root), 0
+wc.set("jizz", "frequency rank #9", censor=True, kind="sexual")
+wc.transition_from("cum", "frequency rank #8", 0, -wc.winfo_reqheight() // 3, anim)
+for _ in range(8):
+    root.update(); time.sleep(0.025)
+    above, there = smear_over_kind()
+    assert above == 0, above
+    crossed += there
+anim.finish_all(); root.update()
+assert crossed                                    # (the outgoing smear did pass over the kind: the case is tested)
 wc.begin_typing(); root.update(); assert not wc.find_withtag("kind")
 wc.destroy()
 root.destroy()
