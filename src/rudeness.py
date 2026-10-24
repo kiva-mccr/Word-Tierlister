@@ -613,7 +613,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "11"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "12"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [], "swear")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -747,10 +747,16 @@ def main_kind(scored, censored):
     return best if best is not None and pts[best] > 0 else None
 
 
+_ENDINGS = {"", "s", "es", "ed", "d", "ing", "ings", "er", "ers", "'s", "y", "ate", "ation"}
+
+
 def _refers_to(gloss, word):
-    """True if `gloss` names `word` itself or a form of it ("an instance of skull-fucking", "one who fucks")."""
-    stem = word.lower()[:-1] if word.lower().endswith("e") and len(word) > 4 else word.lower()
-    return len(stem) >= 3 and any(t.startswith(stem) for t in re.findall(r"[a-z][a-z'-]*", gloss.lower()))
+    """True if `gloss` names `word` itself or a form of it ("an instance of skull-fucking", "one who fucks"): a
+    whole word, the word and an ending, never only its first letters ("pom: ... pomegranate juice")."""
+    w = word.lower()
+    stems = [(w, _ENDINGS), (w[:-1], _ENDINGS) if w.endswith("e") else (w, ()), (w + w[-1:], {"ing", "ings", "ed"})]
+    return len(w) >= 3 and any(t.startswith(st) and t[len(st):] in ends
+                               for t in re.findall(r"[a-z][a-z'-]*", gloss.lower()) for st, ends in stems)
 
 
 def score_saved(saved, censored, wn=None, log=None, zipf=None):

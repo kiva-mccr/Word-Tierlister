@@ -319,7 +319,6 @@ def _mark_lilac():
     return lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)
 
 
-
 def mark_color(tier):
     """A shelf mark's colour: its word's tier pastel, deepened so a small triangle still shows on the page
     (M-4); the lilac for a word with no tier."""

@@ -233,6 +233,8 @@ assert _form_gloss("third-person singular simple present indicative of nut")
 assert not _form_gloss("A mythical being of human form with magical powers, known in many sizes, often in the "
                        "service of folklore")                               # ("fairy": its first meaning, not a form)
 assert _refers_to("an instance of skull-fucking", "skull-fuck") and not _refers_to("A table.", "fuck")
+assert _refers_to("An act of frigging.", "frig") and _refers_to("To urinate.", "urine")
+assert not _refers_to("A cocktail containing pomegranate juice", "pom") and not _refers_to("A disc jockey.", "jock")
 assert kind("A small flat for sale, such as a condominium.") == "clean"    # ("condom" inside "condominium")
 # UI-59: a word smeared whole says what it mostly is (main_kind), shown faintly above it on the card
 from rudeness import main_kind

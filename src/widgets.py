@@ -436,6 +436,7 @@ class TierChip(SmoothCanvas):
         self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, TIER_TEXT, 0.14))
         self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=TIER_TEXT)   # (dark ink on a
                                                                                                  # pastel, dark mode too)
+
     def refresh(self):
         self._draw()
 

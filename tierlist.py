@@ -284,6 +284,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-14 Review of everything since F-9 (asked for), file by file: one defect, two nits.
+#           - rudeness (RUDENESS_VERSION 12): in a word smeared whole, a meaning "naming the word itself" matched any
+#             word that merely began with it ("pom: ... pomegranate juice", "jock: a disc jockey", "lav: lavalier
+#             microphone", "homo: homogenized milk" were smeared); now only the word with an ending (_refers_to)
+#             does; checked over every entry: 11 words change, all for the better;
+#           - a missing blank line in widgets.TierChip, an extra one in ui_chart.
 # [x] F-13 Reported: making the program stopped at "Putting it in place" with "[Errno 18] Invalid cross-device link"
 #           (the temporary folder on another disk than the project): the build record is moved with shutil.move,
 #           which copies across disks, like the program itself. The same build was 99 MB (22 MB here): a build over

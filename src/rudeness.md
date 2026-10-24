@@ -49,6 +49,7 @@ The module docstring has the details; this page is the map.
 
 - Rules only: no fitted weights, no word lists (the user's choice). Measure every change with `tools/measure_rudeness.py`.
 - Bump `RUDENESS_VERSION` whenever a rule changes: that is what makes every save score its words again.
+- A meaning "refers back" to a word smeared whole only by naming it with an ending (`_refers_to`, `_ENDINGS`), never by its first letters: a prefix match made "pom: ... pomegranate juice", "jock: a disc jockey" and "lav: lavalier microphone" rude.
 - Only a word smeared whole keeps rude kinds ("Obscene words" = censored words). One rude meaning among ordinary ones ("can", "come") stays ordinary; that meaning is smeared in the definitions.
 - A group's own name is never a slur ("jews", "trans", "gay", "queer"): only a slur / ethnic / vulgar label or the ethnic-slurs category makes one (`SLUR_MARKS`, `IDENTITY`).
 - Forms follow their word's first meaning ("did" is "do"); common words (`COMMON_ZIPF`) count only strongly labelled meanings; a hedge ("sometimes") weakens all a meaning's labels (kaikki sorts them).
