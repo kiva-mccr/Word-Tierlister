@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`, `tiercolours`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -55,8 +55,8 @@ The module docstring has the details; this page is the map.
 - `watch_focus`: When the whole program loses focus (another program came to the front), close its drop-downs (close_popups) and call on_lost().
 - `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
-  - methods: text, button, clear_buttons, show, refit, close, alive
-- `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized.
+  - methods: text, button, clear_buttons, show, refit, rescale, close, alive
+- `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; an open dialog...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -81,3 +81,4 @@ The module docstring has the details; this page is the map.
 - The kind has a row of its own (F-15, asked for): the word under it is drawn at `KIND_SCALE`, every card is `KIND_ROOM` taller (so the card's size never depends on the word), and the kind stays `KIND_GAP` clear of the letters' measured tops (the line's box starts barely above tall letters). Growing the card more costs the 1366 x 768 laptop its last zoom step (`_selftest_zoom`): take the room from the padding instead.
 - The card's label (`kind`) is any short text: the App passes `constants.card_label` (parts of speech, then the rude kind, UI-63); the card never decides what it says.
 - While typing on the card (UI-51) `set()` only keeps the word for afterwards (`_saved`, with its label); the typing display uses `_put`. A refresh mid-typing used to replace what was typed while keys still went to the typing, and Escape brought the word back without its label (F-16).
+- An open dialog follows a change of the shared fonts (a zoom; maximizing brings back the maximized window's own, UI-57): `refresh_widgets` calls `StyledDialog.rescale`, which re-wraps every wrapped label in proportion, then sizes and centres the dialog again. Without it the text grew inside a window that kept its size and was cut off (F-18).

@@ -2655,6 +2655,8 @@ class StyledDialog:
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(parent)
         self.win.styled_dialog = True            # (a question or message is open: dialog_open)
+        self.win.dialog = self                   # (refresh_widgets: an open dialog follows a new text size)
+        self._wrap_chars = wrap_chars
         # hidden until show() has sized and centred it: built while showing, it appeared where the window
         # manager put it (the parent's top left) and then jumped to the middle
         self.win.withdraw()
@@ -2734,6 +2736,33 @@ class StyledDialog:
         self.win.geometry("")
         keep_on_screen(self.win)
 
+    def rescale(self):
+        """The shared fonts were resized while it is open (the main window's zoom: maximizing brings back its own,
+        UI-57): every wrapped line is re-wrapped in proportion to the new text size, then the dialog is sized to
+        its contents again and centred over its parent, kept on its monitor. Before, the text grew inside a
+        window that kept its size and was cut off (reported)."""
+        wrap = max(380, font("body").measure("n") * self._wrap_chars)
+        ratio = wrap / self.wrap if self.wrap else 1.0
+        self.wrap = wrap
+        if ratio != 1.0:
+            stack = [self.win]
+            while stack:
+                w = stack.pop()
+                stack.extend(w.winfo_children())
+                try:
+                    if isinstance(w, (tk.Label, ttk.Label)) and int(str(w.cget("wraplength")) or 0) > 0:
+                        w.configure(wraplength=max(1, round(int(str(w.cget("wraplength"))) * ratio)))
+                except (tk.TclError, ValueError):
+                    pass
+        def place():                    # (after the parent's own new size is settled: maximizing moves it too)
+            try:
+                if self.win.winfo_viewable():
+                    place_dialog(self.win, self.parent)
+            except tk.TclError:
+                pass
+        place()
+        self.win.after_idle(place)
+
     def close(self):
         try:
             self.win.destroy()
@@ -2749,9 +2778,12 @@ class StyledDialog:
 
 def refresh_widgets(widget):
     """Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under
-    `widget` after shared fonts were resized."""
+    `widget` after shared fonts were resized; an open dialog (StyledDialog) then re-wraps and resizes itself."""
     for child in widget.winfo_children():
         if isinstance(child, tk.Canvas) and callable(getattr(child, "refresh", None)):
             child.refresh()                  # our canvas widgets (here and in ui_chart.py) all have refresh()
         else:
             refresh_widgets(child)
+            dialog = getattr(child, "dialog", None)
+            if isinstance(dialog, StyledDialog):
+                dialog.rescale()

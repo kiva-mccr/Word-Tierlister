@@ -140,5 +140,46 @@ maximize(True, "1880x1020")
 assert app.zoom == z_max and app.grow == 1                            # shown as it was left, not grown
 maximize(False, "1000x700")
 assert app.zoom == z_normal
+# a dialog open while the window is maximized (reported: its text grew with the zoom inside a window that kept its
+# size, and was cut off; restoring put it right): it follows the new size, re-wrapped, fitted and centred again
+from widgets import StyledDialog
+from sizing import usable_area
+maximize(True, "1880x1020")
+for _ in range(4):
+    app.zoom_step(1); pump(3)
+z_big = app.zoom
+maximize(False, "1000x700")
+assert app.zoom == z_normal < z_big
+long = ("It builds Word Tier List into one program for this computer, next to tierlist.py (a minute or two), then "
+        "reopens as the program with the same save; Python is no longer needed to run it.")
+dlg = StyledDialog(root, "Source & Updates", "Make this a standalone program?", long, animator=app.anim)
+dlg.button("Not now", dlg.close); dlg.button("Make it", dlg.close, default=True)
+dlg.show(); pump(4)
+def fits():
+    """Every label and button inside the dialog's window (nothing cut off at the bottom or the side)."""
+    dlg.win.update_idletasks()
+    w, h = dlg.win.winfo_width(), dlg.win.winfo_height()
+    out, stack = [], [dlg.win]
+    while stack:
+        x = stack.pop(); stack.extend(x.winfo_children())
+        if x is not dlg.win and x.winfo_ismapped():
+            right = x.winfo_rootx() - dlg.win.winfo_rootx() + x.winfo_reqwidth()
+            bottom = x.winfo_rooty() - dlg.win.winfo_rooty() + x.winfo_reqheight()
+            if right > w + 1 or bottom > h + 1:
+                out.append((x.winfo_class(), right, bottom, w, h))
+    return out
+assert not fits(), fits()
+small = dlg.win.winfo_height()
+maximize(True, "1880x1020"); pump(4)
+assert app.zoom == z_big
+assert not fits(), fits()                                            # (it was cut off here)
+grew = dlg.win.winfo_height()
+area = usable_area(dlg.win)
+assert dlg.win.winfo_height() <= area[3] and dlg.win.winfo_width() <= area[2]     # still on the screen
+cx = dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2
+assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2              # centred over the window
+maximize(False, "1000x700"); pump(4)
+assert not fits() and dlg.win.winfo_height() != grew and abs(dlg.win.winfo_height() - small) <= 2
+dlg.close()
 app.on_close()
 print("ZOOM OK")

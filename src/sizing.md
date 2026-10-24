@@ -4,7 +4,7 @@ How big windows can be: the usable screen of the monitor in use, Windows dpi awa
 
 - **Uses:** the standard library only
 - **Used by:** `app`, `browser`, `shortcuts`, `startup`, `stress_ui`, `tierlist`, `widgets`
-- **Tests:** `_selftest_sizing`
+- **Tests:** `_selftest_sizing`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 

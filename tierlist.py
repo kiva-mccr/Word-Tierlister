@@ -284,6 +284,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-18 Reported: maximizing the main window with a dialog open (here "Make this a standalone program?") made the
+#           dialog's text grow with the maximized window's zoom (UI-57) inside a dialog that kept its size: cut off,
+#           until the window was restored. Chosen (the usual way: apps whose zoom is the whole app's text size, and
+#           the systems' own display scaling, resize open dialogs to fit): the dialog follows. After a zoom,
+#           refresh_widgets has every open StyledDialog re-wrap its lines in proportion, size itself to its contents
+#           again and centre over its window, kept on its monitor (StyledDialog.rescale).
 # [x] F-17 Testing Browse's search (asked for): a script typed into the real box (under a window manager) and tried
 #           capitals, spaces, accents, apostrophes, % and _, no match, a censored word, every Show and Sort both ways,
 #           paging, the selection, closing mid-typing and reopening, and the keys (digits and Delete typed there stay
