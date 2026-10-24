@@ -3,7 +3,7 @@
 Turning the source into a program and back (T-3, T-6..T-8): the list of source files and their manifest, the PyInstaller build that carries the source inside, unpacking / syncing it into a folder, and the newest release on GitHub (update tick).
 
 - **Uses:** `bundle`, `constants`
-- **Used by:** `app`, `build`, `check_release`, `sources`
+- **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
 - **Tests:** `_selftest_build`, `_selftest_sources`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
@@ -25,6 +25,7 @@ The module docstring has the details; this page is the map.
 - `build`: Build the program into `dist` (installing PyInstaller first if needed): its path, or None if it failed.
 - `biggest_parts`: [(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it leaves in its work `folder` (PKG-00.toc: files and...
 - `make_program`: File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next to tierlist.py (replacing an older one), with its manifest...
+- `clean_env`: A copy of the environment fit for starting the other form, Python or the builder: without what a built program sets for itself, which outlives it and points into its...
 - `start`: Start the program at `path` on its own, not as a child of this window (which then closes).
 - `bundled_source`: The source carried inside this program (SOURCE_DIR), or None when running from source or built without it.
 - `read_manifest`: (no docstring)
@@ -48,6 +49,7 @@ The module docstring has the details; this page is the map.
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
+- Everything started from here (the other form, Python, PyInstaller, pip, the file manager) gets `clean_env()`: a built program's Tcl / Tk paths and library path point into its temporary folder, which is gone once it closes (reported: PyInstaller's "Tk data/library directory ... could not be collected!").
 - `existing_source` decides whether the first start unpacks (T-10): tierlist.py beside the program, or any folder beside it with tierlist.py or the unpack record, counts as a copy already there.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.

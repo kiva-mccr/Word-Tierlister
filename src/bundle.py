@@ -28,7 +28,11 @@ DATA = (
 # one stopped the build (reported: matplotlib installed without Pillow, "No module named 'PIL'")
 UNUSED = ("matplotlib", "PIL", "numpy", "scipy", "pandas", "sklearn", "IPython", "pytest", "datasets",
           "huggingface_hub", "networkx", "requests", "twython", "pygame", "pycrfsuite", "bllipparser", "svgling",
-          "yaml")
+          "yaml",
+          # other window toolkits (the program is Tk only): pulled in from the computer they made a build 99 MB
+          # (reported: GTK through gi, Qt through PySide6)
+          "gi", "PySide2", "PySide6", "shiboken2", "shiboken6", "PyQt5", "PyQt6", "qtpy", "wx", "ipywidgets",
+          "notebook", "jupyter_client", "jupyter_core", "tornado", "zmq")
 EXCLUDE = ("jieba", "MeCab", "ipadic", "mecab_ko_dic", "nltk.test", "tkinter.test", "test") + UNUSED
 
 

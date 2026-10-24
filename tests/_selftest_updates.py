@@ -2,7 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """T-8: the newest release on GitHub (asked for nothing online here: GitHub's answers are stand-ins), downloading a
 release's source ready to unpack or build from, `tools/build.py --all` (the Build programs workflow on GitHub,
 through gh; stand-ins again) and the workflow itself (the names the README's download links and the program use)."""
-import io, json, os, re, tempfile, zipfile
+import io, json, os, re, sys, tempfile, zipfile
 import standalone as S
 from constants import REPO, VERSION
 import importlib.util
@@ -150,4 +150,22 @@ for platform, asset in S.RELEASE_ASSETS.items():
     assert f"asset: {asset}" in text and f"built: dist/{S.output_name(platform)}" in text, asset
     assert f"releases/latest/download/{asset}" in open(os.path.join(_paths.ROOT, "README.md"), encoding="utf-8").read()
 assert re.search(r"tools/build\.py --check", text) and "constants.VERSION" in text and "needs: build" in text
+# T-10: the other form, Python, the builder and the file manager start without a built program's leftovers (its
+# Tcl / Tk folders inside its temporary folder, gone once it closes: "Tk data/library directory ... could not be
+# collected", reported), with the computer's own library path back
+mei = "/tmp/_MEI00003d16rZjImv"
+env = {"TCL_LIBRARY": mei + "/_tcl_data", "TK_LIBRARY": mei + "/_tk_data", "_PYI_ARCHIVE_FILE": "/x/prog",
+       "LD_LIBRARY_PATH": mei, "LD_LIBRARY_PATH_ORIG": "/opt/lib", "HOME": "/home/me", "PATH": "/usr/bin"}
+got = S.clean_env(env, frozen=True)
+assert got == {"LD_LIBRARY_PATH": "/opt/lib", "HOME": "/home/me", "PATH": "/usr/bin",
+               "PYINSTALLER_RESET_ENVIRONMENT": "1"}, got
+got = S.clean_env({k: v for k, v in env.items() if k != "LD_LIBRARY_PATH_ORIG"}, frozen=True)
+assert "LD_LIBRARY_PATH" not in got                                           # (it had none of its own)
+src = S.clean_env({"TCL_LIBRARY": mei + "/_tcl_data", "TK_LIBRARY": tempfile.gettempdir(), "HOME": "/h"}, frozen=False)
+assert src == {"TK_LIBRARY": tempfile.gettempdir(), "HOME": "/h"}, src     # (from source: only the dead paths go)
+seen = []
+S.start("/x/word-tierlist", popen=lambda args, **kw: seen.append(kw.get("env")))
+S.open_folder(tempfile.gettempdir(), popen=lambda args, **kw: seen.append(kw.get("env"))) if not sys.platform.startswith("win") else None
+S.start_source("/x/src", "/usr/bin/python3", popen=lambda args, **kw: seen.append(kw.get("env")))
+assert seen and all(e is not None and not any(k.startswith("_PYI_") for k in e) for e in seen)
 print("UPDATES OK")

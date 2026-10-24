@@ -156,7 +156,8 @@ PYINSTALLER_CHECK = "import PyInstaller.__main__, PyInstaller.utils.hooks"
 def _python_ok(python, code):
     """True if `python -c code` runs, from a neutral folder (the folder the program was started from could hold a
     file that shadows a module: `python -m` and `-c` look there first)."""
-    return subprocess.run([python, "-c", code], capture_output=True, cwd=tempfile.gettempdir()).returncode == 0
+    return subprocess.run([python, "-c", code], capture_output=True, cwd=tempfile.gettempdir(),
+                          env=clean_env()).returncode == 0
 
 
 def has_pyinstaller(python=sys.executable):
@@ -175,7 +176,7 @@ def ensure_pyinstaller(python=sys.executable, log=print):
     repair = ["--force-reinstall", "--upgrade"] if broken else []
     for extra in ([], ["--break-system-packages"]):
         r = subprocess.run([python, "-m", "pip", "install", "--disable-pip-version-check", "pyinstaller", *repair,
-                            *extra], capture_output=True, text=True, cwd=tempfile.gettempdir())
+                            *extra], capture_output=True, text=True, cwd=tempfile.gettempdir(), env=clean_env())
         if r.returncode == 0 and has_pyinstaller(python):
             return True
         if "externally-managed" not in (r.stderr + r.stdout):
@@ -216,7 +217,8 @@ def build(dist, root=ROOT, log=print, carry_source=True):
         log(f"Building {output_name()} for this computer (a minute or two)...")
         log("  PyInstaller is putting Python, the program and its word lists into one file")
         r = subprocess.run([sys.executable, "-m", "PyInstaller", *pyinstaller_args(dist, work, root, source=source)],
-                           capture_output=True, text=True, cwd=work)      # (a neutral folder: see _python_ok)
+                           capture_output=True, text=True, cwd=work,      # (a neutral folder: see _python_ok;
+                           env=clean_env())                               # no built program's Tk paths)
         if r.returncode != 0:
             log("The build failed:\n" + r.stderr[-3000:])
             return None
@@ -287,15 +289,45 @@ def make_program(root=ROOT, log=print, release=None):
         shutil.rmtree(dist, ignore_errors=True)
 
 
+TK_PATHS = ("TCL_LIBRARY", "TK_LIBRARY", "TCLLIBPATH", "TIX_LIBRARY")
+
+
+def clean_env(env=None, frozen=None):
+    """A copy of the environment fit for starting the other form, Python or the builder: without what a built
+    program sets for itself, which outlives it and points into its temporary folder, gone once it closes
+    (PyInstaller: Tcl / Tk's folders, its own library path, its _PYI_ variables; reported: "Tk data/library
+    directory ('/tmp/_MEI.../_tk_data') could not be collected!" when the source it unpacked and started built a
+    program). A Tcl / Tk path is also dropped when it is a built program's or no longer exists, whoever runs this:
+    a source started by an older program still carries them. `frozen`: running as the built program (default:
+    this one)."""
+    env = dict(os.environ if env is None else env)
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    for key in TK_PATHS:
+        val = env.get(key)
+        if val is not None and (frozen or "_MEI" in val or not os.path.exists(val)):
+            del env[key]
+    for key in [k for k in env if k.startswith("_PYI_") or k == "_MEIPASS2"]:
+        del env[key]
+    for key in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH", "LIBPATH"):
+        orig = env.pop(key + "_ORIG", None)     # (PyInstaller keeps the computer's own as NAME_ORIG)
+        if orig is not None:
+            env[key] = orig
+        elif frozen:
+            env.pop(key, None)
+    if frozen:
+        env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"   # (a built program it starts unpacks afresh, not into ours)
+    return env
+
+
 def start(path, popen=subprocess.Popen):
     """Start the program at `path` on its own, not as a child of this window (which then closes)."""
     exe = executable(path)
     if sys.platform.startswith("win"):
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        return popen([exe], creationflags=flags, close_fds=True, cwd=os.path.dirname(exe))
+        return popen([exe], creationflags=flags, close_fds=True, cwd=os.path.dirname(exe), env=clean_env())
     if sys.platform == "darwin" and path.endswith(".app"):
-        return popen(["open", path])
-    return popen([exe], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe),
+        return popen(["open", path], env=clean_env())
+    return popen([exe], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe), env=clean_env(),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -425,8 +457,8 @@ def start_source(folder, python, popen=subprocess.Popen):
     script = os.path.join(folder, "tierlist.py")
     if sys.platform.startswith("win"):
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        return popen([python, script], creationflags=flags, close_fds=True, cwd=folder)
-    return popen([python, script], cwd=folder, start_new_session=True, close_fds=True,
+        return popen([python, script], creationflags=flags, close_fds=True, cwd=folder, env=clean_env())
+    return popen([python, script], cwd=folder, start_new_session=True, close_fds=True, env=clean_env(),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -445,8 +477,8 @@ def open_folder(path, popen=subprocess.Popen):
     if sys.platform.startswith("win"):
         os.startfile(path)                          # noqa: S606  (Windows only)
         return None
-    return popen(["open" if sys.platform == "darwin" else "xdg-open", path],
-                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return popen(["open" if sys.platform == "darwin" else "xdg-open", path], env=clean_env(),
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)    # (the program's library path broke it)
 
 
 # ---- updates (T-8): the newest release on GitHub ---------------------------------------------------------------------

@@ -1476,6 +1476,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           starting the other form closes this one (asked for): "Start it" after unpacking starts tierlist.py on its
 #           own (standalone.start_source, detached as standalone.start) and closes the program, as "Start it" after
 #           making the program already did; never two on one save.
+# [x] T-11 The chain program -> unpack -> start the source -> make the program again (reported: "Tk data/library
+#           directory ('/tmp/_MEI.../_tk_data') could not be collected!"). A built program points Tcl / Tk, and its
+#           library path, into its own temporary folder; the tierlist.py it started inherited that, and so did the
+#           PyInstaller run under it, after the program had closed and its folder was gone. standalone.clean_env drops
+#           those (and PyInstaller's _PYI_ variables; the computer's own library path comes back) for everything one
+#           form starts: the other form, Python, PyInstaller and pip, the file manager; tierlist.py also cleans its
+#           own at start, for a source an older program started. Reproduced here (PyInstaller fails with exactly that
+#           message under the dead paths) and fixed. The same build log showed GTK (gi) and Qt (PySide6) pulled in from
+#           the computer, the likely 99 MB: every window toolkit but Tk is excluded now (bundle.UNUSED).
 # [x] R-1  Repository layout on GitHub (asked for; see the notes, two points were pushed back on):
 #           - Downloads front and centre: the README opens with "Download for Windows / Linux" links to
 #             the newest GitHub Release, whose assets are the T-8 builds. Pushed back: binaries go in
@@ -1531,6 +1540,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 import deps  # noqa: E402  (after the path line above)
+import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
@@ -1565,6 +1575,11 @@ except ImportError as exc:
 
 def main():
     """Start the program: parse options, pick and open the save, build the word list on first run, open the window."""
+    if not getattr(sys, "frozen", False):     # (started by a built program: its Tcl / Tk folders are not ours and
+        clean = standalone.clean_env()        # are gone once it closes; T-10, reported)
+        for key in set(os.environ) - set(clean):
+            del os.environ[key]
+        os.environ.update(clean)
     ap = argparse.ArgumentParser(description="Tier-list every word in the English dictionary.")
     ap.add_argument("--db", default=None,
                     help="save file to use. By default your earlier save is found automatically "

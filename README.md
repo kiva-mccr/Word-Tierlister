@@ -249,7 +249,9 @@ folder you unpacked into before brings it up to date: changed files are updated,
 no longer has removed. Only the program's own files are touched (your save, its log or a .venv never are), and a
 file you edited there is kept as `name.bak` first. What it will do is shown before it does it. Then the folder opens
 and it offers to start `tierlist.py` from there (that needs Python on the computer; it uses the same save). Starting
-the other form, from either side, closes the one you started it from, so only one of them uses the save at a time.
+the other form, from either side, closes the one you started it from, so only one of them uses the save at a time,
+and the one started never inherits the built program's own settings (its Tcl / Tk folders, which vanish when it
+closes), so the unpacked source can build the program again.
 
 ## Missing packages
 Installing happens in two stages.
