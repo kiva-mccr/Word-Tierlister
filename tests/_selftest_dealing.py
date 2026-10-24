@@ -9,7 +9,7 @@ import tkinter as tk
 import tierlist as T
 from rudeness import KIND_BITS as B
 from fonts import font
-from constants import mask_word
+from constants import RUDE_NAMES, card_label, mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"
 
@@ -73,6 +73,10 @@ pump(12)
 card = app.word_card
 assert app.cur_word == "shit" and card.censored
 assert card.find_withtag("smear") and card.itemcget("word", "state") == "hidden"   # the smear, not the letters
+# above it, faintly: its parts of speech, then (a censored word) its kind of rude word (asked for: "noun · sexual")
+assert card.kind == card_label(s.get_word("shit")["kinds"], RUDE_NAMES.get(s.rude_kind("shit"))) and "noun" in card.kind
+assert card_label(1 | 2) == "noun \u00b7 verb" and card_label(1, "sexual") == "noun \u00b7 sexual"
+assert card_label(16) == "" and card_label(None, "crude") == "crude" and card_label(None) == ""   # ("other": nothing)
 assert app.shown("shit") == "s••t" and app.shown("table") == "table"
 # the pointer over the word un-smears it, easing; away again, it smears again
 app.anim.reduce_motion = False

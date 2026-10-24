@@ -79,7 +79,19 @@ KIND_NOTES = {
     "slur": "Slurs: offensive words for a group of people.",
 }
 RUDE_NAMES = {"clinical": "clinical", "crude": "crude", "swear": "swear word", "insult": "insult", "sexual": "sexual",
-              "slur": "slur"}      # one word's kind, faintly above it on the card
+              "slur": "slur"}      # one word's kind, faintly above it on the card (after its parts of speech)
+POS_NAMES = (("noun", 1), ("verb", 2), ("adjective", 4), ("adverb", 8))   # on the card, in this order ("other" is
+                                                                           # too vague to show: pronouns, numbers...)
+
+
+def card_label(kinds, rude=None):
+    """What the word card writes faintly above a word (asked for): its parts of speech, then for a censored word
+    its kind of rude word: "noun · verb", "noun · sexual"; "" when there is nothing to say. `kinds`:
+    words.kinds (KINDS bits, None when not known); `rude`: a RUDE_NAMES value or None."""
+    parts = [name for name, bit in POS_NAMES if (kinds or 0) & bit]
+    return " · ".join(parts + ([rude] if rude else []))
+
+
 RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
                "sexual": "Sexual", "slur": "Slurs"}
 KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "

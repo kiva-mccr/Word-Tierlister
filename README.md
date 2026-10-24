@@ -150,6 +150,7 @@ The first start asks three short questions (any time later: Settings > How words
   (the default: its shape, spread and seed decide how much).
 - **Which words:** nouns, verbs, adjectives, adverbs, obscene words, other, each a tick box with how many
   words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
+  The word card names a word's kinds faintly above it ("noun · verb"; "other" is left out).
   Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
   Sexual and Slurs do not ("Obscene words" shows a minus while only some are). "Obscene words" holds only the
   words censored as a whole (the ones smeared on the card); a word with one rude meaning among ordinary ones
@@ -161,7 +162,7 @@ The first start asks three short questions (any time later: Settings > How words
 - **Censor obscene words** ("blurred, except on hover"; also View > Censor obscene words, a click away): a word is
   smeared sideways on the cards and in Browse's list until the pointer is over it, and reads b•••••d in messages,
   when its first (most common) meaning is rude enough; the word card writes what kind it mostly is (sexual, crude,
-  swear word, slur) faintly above it, censoring or not;
+  swear word, slur) faintly above it, after its parts of speech ("noun · sexual"), censoring or not;
   inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
   pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. Exports keep
   the real words.

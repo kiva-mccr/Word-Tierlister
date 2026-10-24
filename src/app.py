@@ -25,7 +25,7 @@ import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, RUDE_NAMES, TIERS, mask_word
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
@@ -1054,9 +1054,9 @@ class App:
         notes = (" - looked up" if row["word"] == self.looked_up else "") + \
                 (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
                 (" - compound word" if row["pen"] else "")
-        kind = self.store.rude_kind(row["word"])
+        label = card_label(row["kinds"], RUDE_NAMES.get(self.store.rude_kind(row["word"])))     # ("noun · sexual")
         self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}",   # (it fits the word itself)
-                           censor=self.store.censored(row["word"]), kind=RUDE_NAMES.get(kind))
+                           censor=self.store.censored(row["word"]), kind=label or None)
         anchors_ok = all(self.anchors)
         self.compare_btn.set_enabled(anchors_ok)
         if self.cmp is None and self.auto_compare and anchors_ok:

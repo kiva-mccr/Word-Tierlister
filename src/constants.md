@@ -12,6 +12,7 @@ The module docstring has the details; this page is the map.
 
 - `tier_base`: Starting Elo rating for a word placed in tier t: S (0) = 1875 down to F (5) = 1125, 150 apart.
 - `queue_weight`: How likely a word z spreads down the frequency list is to come up early, relative to the top word: e^-z (exponential) or e^-(z^2)/2 (gaussian).
+- `card_label`: What the word card writes faintly above a word (asked for): its parts of speech, then for a censored word its kind of rude word: "noun · verb", "noun · sexual"; ""...
 - `kind_bits`: The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it.
 - `mask_word`: A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d.
 - `plan_line`: A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan).

@@ -1567,6 +1567,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Browse's Move to read in the dark too). Screenshots of every window in both looks. _selftest_looks.py.
 #
 # --- The very end (asked for: after everything else, W-1 and packaging included) -------------------------
+# [x] UI-63 The word card's faint label (asked for: "table" had none) names every word's parts of speech, then for a
+#           word smeared whole its kind of rude word: "noun · verb", "adverb", "noun · sexual" (constants.card_label,
+#           from words.kinds; "other" is too vague to show, so a word that is only "other" or not known yet has no
+#           label and keeps its full size). The label's row and the 85% word are F-15's.
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
