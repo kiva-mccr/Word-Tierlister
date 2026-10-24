@@ -14,7 +14,7 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from constants import KINDS, TIERS
+from constants import KINDS, TIERS, typed_word
 from errors import show_message
 from fonts import family, font
 from keymap import spec_of
@@ -382,7 +382,7 @@ class Browser:
 
     def _query(self, **kw):
         """Ask the Store for a page of words using the current search text, tier filter and sort."""
-        return self.store.list_words(self.search_var.get().strip().lower(), self.filter_var.get(),
+        return self.store.list_words(typed_word(self.search_var.get()).lower(), self.filter_var.get(),
                                      self.sort_var.get(), reverse=self.reverse, **kw)
 
     def sort_by(self, sort, toggle=False):

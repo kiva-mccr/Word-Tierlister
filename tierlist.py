@@ -284,6 +284,18 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-16 Testing the card's search (asked for: UI-51, the magnifier / "/"), a script drove it through capitals, new
+#           words, spaces, odd characters, placed and censored words, undo, tab switches, buttons and menus. Fixed:
+#           - a new word typed with capitals was added as typed ("Zorp"), and then "zorp" was added again: new words
+#             are lower case, like the list;
+#           - runs of spaces did not find a phrase ("ice  cream"), and a "word" of only an emoji or a zero-width space
+#             could be added: what is typed is tidied (constants.typed_word; Browse's search box too) and must hold
+#             a letter or a number ("Type a word" otherwise);
+#           - undoing the placement (or skip) of a looked-up word sent it back into the queue: it comes back onto the
+#             card;
+#           - Edit > Undo while typing left the card in typing mode with the typed text hidden, and after Escape the
+#             card's label (noun · verb) was gone: a word set on the card while typing is kept for afterwards.
+#           Not a bug: typing while a reshuffle writes the save cannot happen (its dialog holds the input).
 # [x] F-15 Asked for: a censored word that appears under a pointer already resting on it (the word card, a duel
 #           card) un-smears at once; before, the pointer had to move a little first (no motion, no event).
 #           WordCard.set checks where the pointer is (_pointer_check, after drawing); RoundButton un-smears a new

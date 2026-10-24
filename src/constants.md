@@ -4,7 +4,7 @@ Shared constants and tiny pure helpers that every layer may use: tiers, modes, k
 
 - **Uses:** the standard library only
 - **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
 
@@ -14,6 +14,7 @@ The module docstring has the details; this page is the map.
 - `queue_weight`: How likely a word z spreads down the frequency list is to come up early, relative to the top word: e^-z (exponential) or e^-(z^2)/2 (gaussian).
 - `card_label`: What the word card writes faintly above a word (asked for): its parts of speech, then for a censored word its kind of rude word: "noun · verb", "noun · sexual"; ""...
 - `kind_bits`: The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it.
+- `typed_word`: A word typed to look up (UI-51): spaces at the ends gone, runs of spaces made one, and characters that show nothing (zero-width spaces, joiners) dropped: " ice cream"...
 - `mask_word`: A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d.
 - `plan_line`: A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan).
 - `parse_plan`: The steps in a plan line, or None if `line` is not one.

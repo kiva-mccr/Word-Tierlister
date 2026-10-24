@@ -87,6 +87,42 @@ for _ in range(10):
 app.anim.finish_all(); pump(2)
 assert len(moved) > 1 and card.coords("card") == before, moved               # it moved, and came back
 key("Escape")
+app.anim.reduce_motion = True
+# found in testing (asked for): a new word typed with capitals is added in lower case, like the list, and is found
+# again in lower case (it was added as "Zorp", then a second "zorp")
+app.start_lookup(); type_word("Zorp"); key("Return"); key("Return"); pump(2)
+assert app.cur_word == "zorp" and not s.has_word("Zorp")
+app.start_lookup(); type_word("zorp"); key("Return"); pump(2)
+assert not card.typing and s.db.execute("SELECT COUNT(*) FROM words WHERE lower(word)='zorp'").fetchone()[0] == 1
+key("u"); pump(2)
+# runs of spaces are one space, and characters that show nothing are dropped; nothing without a letter is added
+from constants import typed_word
+assert typed_word("  ice \u200b cream ") == "ice cream" and typed_word("\u200b") == ""
+s.add_word("ice cream")
+app.start_lookup(); type_word("ice"); key("space", " "); key("space", " "); type_word("cream"); key("Return"); pump(2)
+assert app.cur_word == "ice cream" and not card.typing
+key("u"); pump(2)
+app.start_lookup(); key("x", "\U0001F600"); key("Return"); key("Return"); pump(2)
+assert card.typing and "Type a word" in card.sub and not s.has_word("\U0001F600")
+key("Escape")
+# undoing the placement of a looked-up word brings it back onto the card (it went back to its place in the queue)
+app.start_lookup(); type_word("w0200"); key("Return"); pump(2); key("2"); pump(2)
+assert s.get_word("w0200")["tier"] == 1 and app.cur_word != "w0200"
+app.undo(); pump(2)
+assert app.cur_word == "w0200" and s.get_word("w0200")["tier"] is None and "looked up" in card.sub
+key("u"); pump(2); app.undo(); pump(2); assert app.cur_word == "w0200"             # (a skip too)
+key("u"); pump(2)
+# Edit > Undo while typing puts the word back first (the card stayed in typing mode, the typed text hidden)
+s.place(app.cur_word, 4); app.refresh(); pump(2)
+app.start_lookup(); type_word("qq"); app.undo(); pump(2)
+assert not card.typing and card.word == app.cur_word
+# the card's label comes back after typing (Escape lost it); a refresh while typing keeps what is typed on show
+s.db.execute("UPDATE words SET kinds=3"); s.db.commit(); app.refresh(); pump(2)
+label = card.kind
+assert label == "noun \u00b7 verb"
+app.start_lookup(); type_word("ab"); app.refresh(); pump(2)
+assert card.typing and card.word == "ab" and card.typed == "ab"
+key("Escape"); assert card.word == app.cur_word and card.kind == label
 app.on_close()
 
 # ---- W-1: a word clicked in a definition ----------------------------------------------------------------------------

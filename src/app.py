@@ -25,7 +25,7 @@ import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word, typed_word
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
@@ -126,6 +126,7 @@ class App:
         self._ws = root.tk.call("tk", "windowingsystem")
         self.cur_word = None
         self.looked_up = None        # a word looked up from the card (UI-51): shown until it is placed or skipped
+        self._was_looked_up = None   # the last one placed or skipped: undoing that brings it back to the card
         self._to_add = None          # a word not in the list: Enter again adds it
         self.cmp = None
         self.pair = None
@@ -1026,7 +1027,7 @@ class App:
         if self.looked_up:                            # a looked-up word comes first, until placed or skipped
             row = self.store.get_word(self.looked_up)
             if row is None or row["tier"] is not None:
-                row, self.looked_up = None, None
+                row, self.looked_up, self._was_looked_up = None, None, self.looked_up
         if row is None:
             row = self.store.next_unplaced()
         if row is None:
@@ -1117,7 +1118,7 @@ class App:
         if not word:
             return
         if word == self.looked_up:
-            self.looked_up = None
+            self.looked_up, self._was_looked_up = None, word
         self.store.skip(word)
         self._count_action()
         old_sub = self.word_card.sub
@@ -1377,8 +1378,12 @@ class App:
         """Enter on the card: an unplaced word comes up to sort; a placed one, or one not in the list, shakes the
         card and says so (Enter again adds a word the list does not have)."""
         card = self.word_card
+        text = typed_word(text)
         if not text:
             card.end_typing()
+            return
+        if not any(ch.isalnum() for ch in text):
+            card.note("Type a word: letters or numbers", self.anim)
             return
         row = self.store.get_word(text) or self.store.get_word(text.lower())
         if row is not None and row["tier"] is not None:
@@ -1389,6 +1394,7 @@ class App:
                 self._to_add = text
                 card.note("Not in the word list  \u00b7  Enter again to add it", self.anim)
                 return
+            text = text.lower()                # (the list is all lower case: "Zorp" is the word zorp)
             self.store.add_word(text)
             row = self.store.get_word(text)
             self.flash(f"'{text}' added to the word list", kind="info", ms=1800)
@@ -1429,12 +1435,15 @@ class App:
         if self.mode == "place" and self.cmp and not saved_only:
             self.cmp_back()
             return
+        self.word_card.end_typing()            # (Edit > Undo while typing on the card: the word is back first)
         word = self.store.undo()
         if word is None:
             self.flash("Nothing to undo", kind="info", ms=1500)
             return
         self.session_count = max(0, self.session_count - 1)
         self.cmp = None
+        if word == self._was_looked_up and (self.store.get_word(word) or {"tier": 0})["tier"] is None:
+            self.looked_up = word              # (a looked-up word comes back where it was: on the card, not the queue)
         self.flash(f"Undid last action ({self.shown(word)})", kind="info", ms=1800)
         self.refresh()
 

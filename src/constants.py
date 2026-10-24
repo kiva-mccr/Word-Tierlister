@@ -1,6 +1,7 @@
 """Shared constants: tier names, modes, ranking defaults. Only the standard library, so anything can use it.
 """
 import math
+import unicodedata
 
 
 # Tier index 0..5 everywhere in the code and the database means S..F in this order.
@@ -103,6 +104,13 @@ KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a ver
 def kind_bits(pos):
     """The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it."""
     return KIND_OF_POS.get((pos or "").strip().lower(), 16)
+
+
+def typed_word(text):
+    """A word typed to look up (UI-51): spaces at the ends gone, runs of spaces made one, and characters that show
+    nothing (zero-width spaces, joiners) dropped: "  ice  cream" is "ice cream"."""
+    shown = "".join(ch for ch in str(text or "") if unicodedata.category(ch) != "Cf")
+    return " ".join(shown.split())
 
 
 def mask_word(word):

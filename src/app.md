@@ -35,3 +35,4 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - Building the window: `_build_ui` / `_build_header`. Placing / skipping: `place_word` / `skip_word`. Zoom: `set_zoom` / `zoom_step`.
+- A word looked up on the card (UI-51) is tidied by `constants.typed_word`, needs a letter or a number, and is added in lower case. Undoing its placement or skip brings it back onto the card (`_was_looked_up`); Undo ends typing first (F-16).

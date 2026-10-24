@@ -2129,7 +2129,14 @@ class WordCard(SmoothCanvas):
 
     def set(self, word, sub="", censor=False, kind=None):
         """Show `word` with the muted line `sub` under it; `censor`: smeared until the pointer is over it; `kind`:
-        what kind of rude word it is, written faintly above it."""
+        the faint label above it. While a word is being typed on the card (begin_typing) it is kept for afterwards
+        instead: end_typing shows it (a refresh meanwhile neither hides what is typed nor brings back an old word)."""
+        if self.typing:
+            self._saved = (word, sub, censor, kind)
+            return
+        self._put(word, sub, censor, kind)
+
+    def _put(self, word, sub="", censor=False, kind=None):
         self._kind = kind
         self._old_font.configure(**self._fit.actual())      # (transition_from draws the outgoing word as it was)
         self._old_wrap, self._old_censor = self._fit_wrap, self._censor
@@ -2417,7 +2424,7 @@ class WordCard(SmoothCanvas):
         """The card becomes the place to type a word (the word it showed comes back with end_typing)."""
         if self.typing:
             return
-        self.typing, self._typed, self._saved = True, "", (self._word, self._sub, self._censor)
+        self.typing, self._typed, self._saved = True, "", (self._word, self._sub, self._censor, self._kind)
         self._show_typed(self.TYPE_HINT)
 
     def end_typing(self, restore=True):
@@ -2434,7 +2441,7 @@ class WordCard(SmoothCanvas):
         return self._typed
 
     def _show_typed(self, sub):
-        self.set(self._typed or self.PLACEHOLDER, sub)
+        self._put(self._typed or self.PLACEHOLDER, sub)
 
     def type_key(self, e):
         """A key while typing: letters and the like add to the word, Backspace takes one off, Enter asks
