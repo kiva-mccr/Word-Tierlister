@@ -3,7 +3,7 @@
 The colours: `PALETTE` and the tier colours, plus blending helpers (UI-1). No tkinter.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `startup`, `tiercolours`, `tierlist`, `ui_chart`, `ui_style`, `widgets`
+- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `make_icon`, `shortcuts`, `startup`, `tiercolours`, `tierlist`, `ui_chart`, `ui_style`, `widgets`
 - **Tests:** `_selftest_chart`, `_selftest_deps`, `_selftest_looks`, `_selftest_style`, `_selftest_widgets`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

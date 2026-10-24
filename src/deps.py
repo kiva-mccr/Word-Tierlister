@@ -381,26 +381,36 @@ def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, c
     return 0
 
 
-def desktop_entry(python, script, name="Word Tier List"):
+ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon-256.png")   # (IC-1)
+
+
+def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary"):
     """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
-    program, started by itself)."""
+    program, started by itself); `icon`: a picture's path, or the name of one the desktop has."""
     q = lambda p: '"' + p.replace("\\", "\\\\").replace('"', '\\"') + '"'
     run = f"{q(python)} {q(script)}" if script else q(python)
     return "\n".join([
         "[Desktop Entry]", "Type=Application", f"Name={name}",
         "Comment=Tier-list every English word, at your own pace",
         f"Exec={run}", f"Path={os.path.dirname(script or python)}", "Terminal=false",
-        "Icon=accessories-dictionary", "Categories=Education;Game;", "StartupNotify=true", ""])
+        f"Icon={icon}", "Categories=Education;Game;", "StartupNotify=true", ""])
 
 
 def add_to_menu(python, script, home=None):
-    """Write (or update) the launcher in ~/.local/share/applications. Returns (path, "added" or "updated")."""
+    """Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to
+    ~/.local/share/icons (a built program's own copy is gone once it closes). Returns (path, "added" or "updated")."""
     home = home or os.path.expanduser("~")
-    folder = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), "applications")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    folder = os.path.join(data, "applications")
     os.makedirs(folder, exist_ok=True)
+    icon = "accessories-dictionary"
+    if os.path.exists(ICON):
+        icon = os.path.join(data, "icons", "word-tierlist.png")
+        os.makedirs(os.path.dirname(icon), exist_ok=True)
+        shutil.copyfile(ICON, icon)
     path = os.path.join(folder, "word-tierlist.desktop")
     was = os.path.exists(path)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(desktop_entry(python, script))
+        f.write(desktop_entry(python, script, icon=icon))
     os.chmod(path, 0o755)
     return path, "updated" if was else "added"

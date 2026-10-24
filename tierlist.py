@@ -139,7 +139,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # + chart + the satisfying drop:
 #   ST-1, ST-2 -> UI-5..7 -> UI-13 -> UI-16, UI-17 (UI-0..4 are already built)
 # Added later, in this order after the UI steps: ST-5 (Linux terminal, done), ST-6 (how words are dealt, done), then
-# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon).
+# T-1..T-3 -> T-6, T-7, T-8. First of all: the mini-roadmap M-1..M-11 below. Last of all: IC-1 (the icon, done).
 #
 # --- Now: mini-roadmap (asked for: finish these before anything else, in this order) ----------------
 # [x] M-1  Zoomed all the way in, thin lines show along the top and bottom of the tier pills (Linux and
@@ -1555,8 +1555,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Browse's Move to read in the dark too). Screenshots of every window in both looks. _selftest_looks.py.
 #
 # --- The very end (asked for: after everything else, W-1 and packaging included) -------------------------
-# [ ] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
+# [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
+#           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
+#           mark over C, on the cream tile with rounded corners, the shelf filling most of it. tools/make_icon.py
+#           draws it into src/icons (16..256 px, 1024 px, icon.ico; each size from the shapes, 32 px and under on
+#           whole pixels). ui_style.set_icon (from apply_ttk_style) puts every size on each root, and so on every
+#           window (on Windows also its own taskbar group); a build packs src/icons as "icons" and the Windows
+#           program takes icon.ico as its own; the Linux launcher points at a copy in ~/.local/share/icons.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

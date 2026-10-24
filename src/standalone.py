@@ -62,12 +62,13 @@ def walk(root=ROOT, d=""):
 
 def source_files(root=ROOT):
     """The complete source, with its folders: code, docs, tests, the Claude files and the licence; never saves,
-    logs, caches, exports or a built program (docs/ may hold screenshots)."""
+    logs, caches, exports or a built program (docs/ may hold screenshots; src/icons holds the icon, IC-1)."""
     keep = []
     for f in walk(root):
         top_level = os.sep not in f
         if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f == "LICENSE" or \
-                (f.startswith("docs" + os.sep) and f.endswith(".png")):
+                (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
+                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))):
             if top_level and f.endswith(".txt") and f != "requirements.txt":
                 continue                              # an export (tierlist.txt) next to tierlist.py is yours
             keep.append(f)
@@ -141,6 +142,10 @@ def pyinstaller_args(dist, work, root=ROOT, platform=None, source=None):
             "--onedir" if mac else "--onefile"]
     for src, dest in bundle.datas():
         args += ["--add-data", f"{src}{sep}{dest}"]
+    icons = os.path.join(root, "src", "icons")                     # (the window icon, IC-1: ui_style.set_icon)
+    args += ["--add-data", f"{icons}{sep}icons"]
+    if platform.startswith("win"):                                  # (the .exe file's own icon, in Explorer)
+        args += ["--icon", os.path.join(icons, "icon.ico")]
     if source:
         args += ["--add-data", f"{source}{sep}{SOURCE_DIR}"]
     for mod in bundle.EXCLUDE:

@@ -24,8 +24,8 @@ The module docstring has the details; this page is the map.
 - `wants_terminal_setup`: True when stage 1 should run: an interactive terminal, installs allowed, not a packaged build.
 - `should_detach`: True when the program, started from a terminal on Linux or macOS, should carry on in its own session and give the terminal its prompt back (so closing the terminal no...
 - `detach_terminal`: Start the program again in a session of its own (setsid), not tied to this terminal, and return the exit code for this one.
-- `desktop_entry`: The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built program, started by itself).
-- `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications.
+- `desktop_entry`: The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built program, started by itself); `icon`: a picture's path, or the...
+- `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -36,3 +36,4 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - Where tkinter install commands come from: `tk_install_command`. The window side of installing: `startup.ensure_packages`.
+- The launcher's icon is copied to `~/.local/share/icons/word-tierlist.png` (`add_to_menu`): a built program's own copy is in a folder that is gone once it closes.

@@ -1,6 +1,9 @@
 """ttk / tk styling for the word tier list (UI-3): one place that gives every standard widget the
 pastel look. Call apply_ttk_style(root) after init_fonts(root). Uses the 'clam' theme because it
-is the only built-in ttk theme that honours custom colours on every platform."""
+is the only built-in ttk theme that honours custom colours on every platform. It also gives the program its icon
+(IC-1: set_icon, on every window and the taskbar)."""
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -20,6 +23,7 @@ def apply_ttk_style(root):
         pass
     body = font("body")
     root.configure(bg=P["bg"])
+    set_icon(root)
 
     # ---- plain tk widgets (menus, text panes, dialogs, listboxes) via the option database ----
     for pat, val in {
@@ -151,3 +155,29 @@ def _tick_layout(style, name):
         ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [
             ("Checkbutton.label", {"sticky": "nswe"})]})]})])
     style.configure("TCheckbutton", padding=(2, 3, 2, 3))
+
+
+# the program's icon (IC-1; drawn by tools/make_icon.py): beside this file in src/icons, and in a built program in the
+# folder it unpacks to (PyInstaller puts this module's file there; standalone.pyinstaller_args packs "icons")
+ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
+APP_ID = "WordTierList"          # (Windows: the taskbar groups the program's windows under its own icon, not Python's)
+
+
+def set_icon(root):
+    """The program's icon on `root` and every window opened from it later (iconphoto's default), in each size, so
+    the title bar, taskbar and window switcher each pick a sharp one. Quietly nothing when the files are missing."""
+    if getattr(root, "_icons", None):
+        return
+    try:
+        root._icons = [tk.PhotoImage(master=root, file=os.path.join(ICONS, f"icon-{n}.png")) for n in ICON_SIZES]
+        root.iconphoto(True, *reversed(root._icons))          # (the biggest first: some window managers take it)
+    except (tk.TclError, OSError):
+        root._icons = None
+        return
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (AttributeError, OSError):
+            pass

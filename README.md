@@ -38,10 +38,11 @@ All optional; `python tierlist.py --help` explains each.
 ```
 tierlist.py        run this. Your save (tierlist.db), its log and exports stay next to it.
 requirements.txt   the Python packages (the program offers to install them itself)
-src/               the program's modules
+src/               the program's modules; src/icons/ holds its icon (drawn by tools/make_icon.py)
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
-                   build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules)
+                   build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules),
+                   make_icon.py (draws the icon)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -68,7 +69,8 @@ either way the save you used last is found again, so switching between the two l
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
-| `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes). |
+| `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1). |
+| `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile, the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
 | `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
 | `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`; tick-box choices can link to a web page), global error handlers, `run_guarded` (the whole program runs inside it). |
@@ -86,6 +88,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder, each code file's notes up to date, the import layers); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/speed_check.py` | Times refresh, placing, duels and every Browse sort on a big throwaway save (a million words by default, dense and sparse); fails when something is more than twice its budget (F-9). |
+| `tools/make_icon.py` | Draws the icon into `src/icons/` at every size (each size from the shapes, small ones snapped to whole pixels; needs Pillow). Run it only to change the icon. |
 | `tools/stress_ui.py` | Random actions on the real window (keys, tabs, resizes, Browse, dialogs, censoring) on a pretend small screen; fails on any error or a window bigger than the screen (F-9). |
 | `tools/notes.py` | Keeps each code file's notes (`name.md` beside `name.py`) up to date: regenerates their uses / used by / tests / public API from the code, keeping the hand-written parts; `--check` lists what is missing or stale. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |

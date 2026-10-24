@@ -183,10 +183,11 @@ def shippable_files():
 
 
 def check_stray(problems):
-    """No scratch files in the project (databases, logs, .pyc, .part, screenshots outside docs/); the save and its
-    log next to tierlist.py are allowed."""
+    """No scratch files in the project (databases, logs, .pyc, .part, pictures that do not ship: screenshots outside
+    docs/, anything but the icon in src/icons); the save and its log next to tierlist.py are allowed."""
+    shipped = set(shippable_files())
     for f in _walk(""):
-        if f.endswith(STRAY) and not (f.startswith("docs" + os.sep) and f.endswith(".png")):
+        if f.endswith(STRAY) and f not in shipped:
             if os.sep not in f and f.endswith((".db", ".db-wal", ".db-shm", ".log")):
                 continue                              # your save and its log live next to tierlist.py: not shipped
             problems.append(f"stray file in the project (delete it or keep it out of the zip): {f}")

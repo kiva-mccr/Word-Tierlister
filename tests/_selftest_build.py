@@ -90,6 +90,7 @@ else:
     from PyInstaller.archive.readers import CArchiveReader         # the source and its manifest are inside it
     inside = set(CArchiveReader(out).toc)
     assert "source/manifest.json" in inside and "source/tierlist.py" in inside and "source/src/app.py" in inside
+    assert {f"icons/icon-{n}.png" for n in (16, 32, 256)} <= inside      # (IC-1: the window icon, where ui_style looks)
     built = json.load(open(os.path.join(dist, S.SIDE_FILE)))
     assert built["files"] == S.manifest(_paths.ROOT)["files"]      # (what File > Source & Updates compares)
     # T-7: the source comes back out of the program whole, unpacks, and runs on its own
