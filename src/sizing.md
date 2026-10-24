@@ -18,6 +18,7 @@ The module docstring has the details; this page is the map.
 - `clamp_to_monitor`: (x, y) moved just enough that a w x h pop-up stays on the monitor of the point `at` (default: x, y).
 - `set_dpi_awareness`: Windows: tell the system this program handles display scaling itself (per monitor), before the first window opens.
 - `usable_area`: (x, y, w, h): the part of the monitor a window may occupy.
+- `is_maximized`: True while `win` is maximized: its state is "zoomed" on Windows and macOS; on Linux the window manager says so through the -zoomed attribute (Tk keeps it up to date;...
 - `fit_size`: Window size: the preferred size, but at least the content needs, and never bigger than `area` (w, h).
 - `center_geometry`: Tk geometry string putting a w x h window in the middle of `area` = (x, y, w, h).
 - `keep_on_screen`: After a window grew (a message shown, a row grew): move it, and if need be shrink it, so it stays on its monitor's usable area.

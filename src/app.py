@@ -32,7 +32,7 @@ from saves import app_dir, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from sources import SourceDialog
 import standalone
-from sizing import center_geometry, fit_size, ui_factor, usable_area
+from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
@@ -126,6 +126,7 @@ class App:
         self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
         self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
         self.zoom = store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
+        self._maximized = False   # the window maximized: it shows the zoom kept for that ("zoom_max", UI-57)
         self._chart_ready = False
         self._settled_ready = False
 
@@ -434,22 +435,41 @@ class App:
             self._say_zoom(z)                     # unchanged (Ctrl 0 at 100%, zoom out at the smallest): say so
             return "break"
         old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
+        bigger = z > round(old * self.grow, 2) + 1e-9     # (a zoom in: in a grown window 120% can be a step down)
         cap = self._zoom_cap.get(self._layout_key())
-        if z > old and cap is not None and z >= cap:
+        if bigger and cap is not None and z >= cap:
             z = round(cap - self.ZOOM_STEP, 2)    # known not to fit here: refuse on the spot, nothing tried on screen
             if z <= old and self.grow == 1:
                 self._refuse_zoom()
                 return "break"
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
-        if z > old and now <= before + 1e-9:
+        if bigger and now <= before + 1e-9:
             self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
-        self.store.set_meta("zoom", z)
+        self.store.set_meta(self._zoom_key(), z)
         self._say_zoom(z)
         return "break"
+
+    def _zoom_key(self):
+        """Where the zoom is kept: one for the window maximized, one for it at any other size (UI-57: each comes
+        back as it was left when the window is maximized or restored again, even after a restart)."""
+        return "zoom_max" if is_maximized(self.root) else "zoom"
+
+    def _follow_maximize(self):
+        """The window was just maximized or restored: show the zoom kept for that (UI-57; restored: the usual zoom,
+        100% until one is chosen). Maximized before any zoom was chosen there, the contents simply grow with it
+        (UI-25). True if the zoom changed."""
+        m = is_maximized(self.root)
+        if m == self._maximized:
+            return False
+        self._maximized = m
+        if m and self.store.get_meta("zoom_max") is None:
+            return False
+        self._apply_zoom(self.store.meta_number("zoom_max" if m else "zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX))
+        return True                           # (always: the window's new size is the one that zoom is shown in)
 
     def _say_zoom(self, z):
         """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
@@ -647,7 +667,9 @@ class App:
             x, y = r.winfo_x(), r.winfo_y()          # grown past the screen's edge (the minimum size grows it
             nx = max(area[0], min(x, area[0] + area[2] - w))        # too): moved back onto it
             ny = max(area[1], min(y, area[1] + area[3] - h))
-            if (w, h) != (r.winfo_width(), r.winfo_height()) or (nx, ny) != (x, y):
+            # (never while maximized: the window is bigger than the usable area then, and moving it back onto it
+            # would un-maximize it)
+            if ((w, h) != (r.winfo_width(), r.winfo_height()) or (nx, ny) != (x, y)) and not is_maximized(r):
                 r.geometry(f"{w}x{h}" + (f"+{nx}+{ny}" if (nx, ny) != (x, y) else ""))
             if rebase:
                 self._ref_size = (max(self._ref_size[0], w), max(self._ref_size[1], h))
@@ -675,7 +697,7 @@ class App:
         """Scale every shared font with the window (the word card, pills, buttons, chart and menus follow).
         The minimum size stays the one measured at the normal size, so the window can always shrink back."""
         self._grow_job = None
-        if not self._ref_size:
+        if not self._ref_size or self._follow_maximize():
             return
         g = self._grow_for(self.root.winfo_width(), self.root.winfo_height())
         if g == 1.0 and self.grow > 1:

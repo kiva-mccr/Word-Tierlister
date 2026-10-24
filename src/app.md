@@ -27,6 +27,7 @@ The module docstring has the details; this page is the map.
 - Every word in a message goes through `shown()` (duel results too: they once printed censored words whole).
 - `on_close` waits while `busy` (a worker writing the save) and cancels pending timers before destroying the window.
 - The fit may shrink a big zoom to half the normal size on a small screen (`FIT_LOWEST` applies to the normal size, not the zoom).
+- Two saved zooms (UI-57): `zoom_max` while maximized, `zoom` otherwise (`_zoom_key`); `_follow_maximize` applies the right one when the state changes. A fit never moves or resizes a maximized window (it would un-maximize). A zoom step is "in" only when it is bigger than zoom x grow (in a grown window 120% can be a step down: it was refused as "as big as fits").
 - on_close cancels pending `after` jobs with Tcl's `after cancel`, never `after_cancel` (that deletes a command another widget still owns; root.destroy then raises "can't delete Tcl command").
 
 ## Changing it

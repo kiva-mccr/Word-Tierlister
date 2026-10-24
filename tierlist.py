@@ -1198,6 +1198,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           any smaller font). It only grows from word to word (shrinking for each short one would make the
 #           page jump on every word) and is back to 9 lines when the pane is closed. A window grown past the
 #           screen's edge is now moved back onto it (it grew downward from where it opened).
+# [x] UI-57 A zoom for the maximized window (asked for: "when maximized ... the zoom it last had while maximized,
+#           and vice versa", so every window size keeps its own relative size). The main window keeps two zooms:
+#           "zoom_max" for it maximized, "zoom" for any other size; a zoom chosen while maximized is kept as the
+#           first, and maximizing or restoring brings back the one kept for that state (App._follow_maximize,
+#           sizing.is_maximized: the state "zoomed" on Windows / macOS, the -zoomed attribute on Linux), after a
+#           restart too. Maximized before a zoom was ever chosen there, the contents grow with the window (UI-25).
+#           A fit no longer moves or resizes a maximized window (that un-maximizes it). Found while testing it: in a
+#           grown window, Ctrl - from 130% said "as big as fits" and fell to 100% (a step down to 120% was taken
+#           for a zoom in); now it steps 120%, 110%. Checked for real: Xvfb + openbox, maximize and restore.
 # [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

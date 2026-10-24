@@ -112,4 +112,33 @@ assert app.zoom == z_main and abs(body() - round(12 * z_main)) <= 1, (app.zoom, 
 app.open_browser(); pump(6)
 assert app.browsers[0].zoom == 2
 app.browsers[0].close(); app.on_close()
+
+# UI-57 (asked for): the maximized window keeps a zoom of its own; maximizing or restoring brings back the one kept
+# for it (the first maximize, before any is kept there, grows as UI-25 does); a zoom out of a grown window is a step
+# down from what shows, not "as big as fits" (reported while testing it). (A real maximize under a window manager:
+# checked by hand under openbox; here the state is faked.)
+A.usable_area = lambda r: (0, 0, 1900, 1040)
+s = T.Store(db); s.set_meta("zoom", "1.0"); s.db.execute("DELETE FROM meta WHERE key='zoom_max'"); s.db.commit()
+root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
+state = {"max": False}
+A.is_maximized = lambda w: state["max"]
+def maximize(on, size):
+    state["max"] = on; root.geometry(size); pump(4); app._apply_grow(); pump(4)
+maximize(True, "1880x1020")
+assert app.zoom == 1.0 and app.grow > 1                              # nothing kept yet: it grows
+shown = round(app.zoom * app.grow, 1)
+app.zoom_step(-1); pump(3)
+assert app.zoom == round(shown - 0.1, 1) and app.grow == 1 and app.toast.cget("text") != app.ZOOM_FULL
+z_max = app.zoom
+assert s.get_meta("zoom_max") == str(z_max) and s.get_meta("zoom") == "1.0"      # kept for the maximized window
+maximize(False, "1000x700")
+assert app.zoom == 1.0                                                # restored: its own zoom again
+app.zoom_step(1); pump(3)
+z_normal = app.zoom
+assert s.get_meta("zoom") == str(z_normal) and s.get_meta("zoom_max") == str(z_max)
+maximize(True, "1880x1020")
+assert app.zoom == z_max and app.grow == 1                            # shown as it was left, not grown
+maximize(False, "1000x700")
+assert app.zoom == z_normal
+app.on_close()
 print("ZOOM OK")

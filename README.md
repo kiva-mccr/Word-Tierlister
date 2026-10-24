@@ -116,7 +116,9 @@ missing or out of date, and also checks that each module imports only from the l
 - The order words come in, which kinds, censoring: Settings > How words are dealt (`dealing.py`; the data in
   `Store.deal_settings` / `set_deal`, `Store.reshuffle`).
 - Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved;
-  what fits the screen: `App._fit_window`). Browse has its own (`Browser.zoom_by`).
+  what fits the screen: `App._fit_window`). The maximized window keeps a zoom of its own: maximizing or restoring
+  the window brings back the zoom you last used in that state (`App._follow_maximize`, UI-57). Browse has its
+  own (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 

@@ -10,6 +10,7 @@ Three questions this module answers:
     * How big is "one unit" of UI?    ui_factor(root): 1.0 at the classic 96 dpi; larger on high-dpi
       screens where Tk's point-based fonts are bigger but pixel sizes written in code are not.
     * Where does a window go?         fit_size / center_geometry / place_dialog.
+    * Is it maximized?                is_maximized(win) (the main window keeps a zoom of its own for that).
 
 Layers that call this: App (main window), Browser, StartupWindow and the dialogs. Everything that
 reads the screen goes through usable_area(), so tests can pretend to have a different screen.
@@ -204,6 +205,20 @@ def usable_area(root):
     x, y, w, h = monitor_box(root)
     uw, uh = int(w * WIDTH_USE), int(h * HEIGHT_USE)
     return x + (w - uw) // 2, y + (h - uh) // 2, uw, uh
+
+
+def is_maximized(win):
+    """True while `win` is maximized: its state is "zoomed" on Windows and macOS; on Linux the window manager says
+    so through the -zoomed attribute (Tk keeps it up to date; the state stays "normal" there)."""
+    try:
+        if win.state() == "zoomed":
+            return True
+    except Exception:                        # (a window being destroyed)
+        return False
+    try:
+        return bool(int(win.attributes("-zoomed")))
+    except Exception:                        # (no such attribute on Windows: its state said it already)
+        return False
 
 
 def fit_size(content, preferred, area):
