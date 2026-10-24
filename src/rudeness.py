@@ -98,8 +98,9 @@ WORDING = [(re.compile(p, re.I), pts) for p, pts in (
     (r"\b(sexual intercourse|copulat\w*|have sex|having sex|had sex|sex with|sex act|masturbat\w*|orgasm\w*|"
      r"ejaculat\w*|semen|sperm|fellatio|cunnilingus|blowjob|erect(ion|ed) penis|oral sex|anal sex|sodom\w*|"
      r"sexual (act|activity|activities|favou?rs?|position)|sexually (penetrat\w*|suggestive|aroused|stimulat\w*)|"
-     r"cybersex|anilingus|rimming|virginity|deflower\w*|erotic\w*|condom|aroused|arousal|lecher\w*|horny|"
-     r"pornograph\w*|porn\b|prostitut\w*|brothel|whore|promiscu\w*)", {"sexual": 3, "clinical": 1}),
+     r"cybersex|anilingus|rimming|virginity|deflower\w*|erotic\w*|condoms?|aroused|arousal|lecher\w*|horny|"
+     r"pornograph\w*|porn|prostitut\w*|brothels?|whores?|promiscu\w*)\b", {"sexual": 3, "clinical": 1}),
+     # (whole words: "condom" inside "condominium" made "repo" sexual)
     (r"\b(penis|vagina|vulva|clitoris|testic\w*|scrotum|genital\w*|anus|rectum)\b", {"sexual": 1.5, "clinical": 2}),
     (r"\b(buttocks|breasts?|nipples?|bottom|backside)\b", {"crude": 1, "clinical": 1, "sexual": 0.5}),
     (r"\b(fec(es|al)|faec(es|al)|excrement|dung|urin(e|ate|ating|ation)|defecat\w*|flatulen\w*|fart\w*|"
@@ -251,9 +252,10 @@ def wordnet_match(word, gloss, pos, wn):
         n = len(want & (_content(syn.definition()) - _content(word.replace("-", " "))))
         if want and want <= names:
             n = max(n, len(want) + 1)                   # the gloss is just a synonym
-        if n > best_n:
-            best, best_n = syn, n
-    return best
+        if n > best_n or (n == best_n and best is not None and _synset_signals(best)[0]
+                          and not _synset_signals(syn)[0]):
+            best, best_n = syn, n                        # (a tie goes to a meaning with no rude signs: "taco: a
+    return best                                          # Mexican snack food" is not WordNet's slur for a Mexican)
 
 
 def names_group(sense):
@@ -299,6 +301,9 @@ def plain_group_name(sense, points):
         and sense_points(points) < 1.0
 
 
+_EXAMPLES = re.compile(r"[,;]?\s*\b(such as|e\.g\.|for example|for instance|including)\b.*$", re.I)
+
+
 def score_sense(sense, pos="", word="", wn=None, identity=False):
     """{kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories",
     "glosses"); `word`, `wn`: the word and WordNet (or None), for WORDNET_POINTS; `identity`: the word is a group's
@@ -323,8 +328,9 @@ def score_sense(sense, pos="", word="", wn=None, identity=False):
                  CATEGORY_ALONE if name in RUDE_CATEGORIES and not vouched else 1.0)
     gloss = gloss_of(sense)
     wording = {}
-    for pattern, table in WORDING:
-        if pattern.search(gloss):
+    said = _EXAMPLES.sub("", gloss)          # (what a list of examples names is not the meaning: "goo: any sticky
+    for pattern, table in WORDING:           # substance, such as slime or semen")
+        if pattern.search(said):
             _add(wording, table)
     if not rude_label:                       # "an intensifier" alone is not swearing ("well: (slang) very")
         wording.pop("swear", None)
@@ -354,11 +360,17 @@ def score_sense(sense, pos="", word="", wn=None, identity=False):
         points["insult"] *= 0.5               # of evidence): "landlubber", "a dollar that has lost value"
         if points.get("slur") and not any(g.search(gloss) for g in GROUP):
             points["slur"] *= 0.5
-    if labs & {"euphemistic", "childish"} and "vulgar" not in labs:    # a softener (as clinical text's "no", "mild"):
+    if _softened(sense):                                               # a softener (as clinical text's "no", "mild"):
         for k in points:                                               # "pass water", "go potty", "oldest occupation"
             if k != "clinical":
                 points[k] *= SOFTENED
     return unslur(points, sense, word, identity)
+
+
+def _softened(sense):
+    """True for a euphemistic or childish meaning that is not also vulgar (its rude points count SOFTENED)."""
+    labs = {lab for lab, _w in _hedged(list(sense.get("tags", [])) + list(sense.get("raw_tags", [])))}
+    return bool(labs & {"euphemistic", "childish"}) and "vulgar" not in labs
 
 
 def sense_kind(points):
@@ -373,20 +385,29 @@ def sense_points(points, kinds=RUDE_KINDS):
     return max((points.get(k, 0.0) for k in kinds), default=0.0)
 
 
+FORM_WORDS = 10           # a gloss naming another word is short ("third-person singular simple present indicative of
+                          # nut"); a longer one that happens to end so is a meaning ("fairy: a mythical being of human
+                          # form ... of folklore" was taken for a form, and its slur meaning for its first)
+
+
+def _form_gloss(gloss):
+    """FORM_GLOSS's match on a short gloss (FORM_WORDS), else None."""
+    return FORM_GLOSS.search(gloss) if len(gloss.split()) <= FORM_WORDS else None
+
+
 def is_form(sense):
     """True if a meaning only names another word ("plural of bitch", "alternative spelling of bell end")."""
     gloss = gloss_of(sense)
-    return bool(sense.get("form_of") or sense.get("alt_of") or FORM_GLOSS.search(gloss))
+    return bool(sense.get("form_of") or sense.get("alt_of") or _form_gloss(gloss))
 
 
-def word_points(scored, kinds=RUDE_KINDS, forms=None):
+def word_points(scored, kinds=RUDE_KINDS):
     """The word's points from its meanings' {kind: points} (in order), counting only `kinds` (the censored ones):
-    its first real meaning counts FIRST_WEIGHT, the mean of the rest OTHERS_WEIGHT (each up to OTHERS_CAP).
-    `forms` ([bool] per meaning: is_form) leaves out the meanings that only name another word, unless every
-    one does."""
+    its first meaning counts FIRST_WEIGHT, the mean of the rest OTHERS_WEIGHT (each up to OTHERS_CAP). A meaning
+    that only names another word counts as that word's main meaning (second_pass gives it those points): "boys:
+    plural of boy" first is an ordinary word, whatever slang follows ("the testicles"); "fucks: plural of fuck" is
+    not. (Leaving such meanings out made the slang the first meaning: boys, teeth, nuts, mayo were smeared.)"""
     pts = [sense_points(p, kinds) for p in scored]
-    if forms and not all(forms):
-        pts = [p for p, f in zip(pts, forms) if not f]
     if not pts:
         return 0.0
     rest = [min(p, OTHERS_CAP) for p in pts[1:]]
@@ -525,10 +546,11 @@ def second_pass(word, senses, first, rude, incoming, parents=()):
     points, `rude` / `incoming` from them."""
     added = link_points(word, senses, rude, incoming)
     out = [dict(p) for p in first[word]]
-    for p, a, f in zip(out, added, family_points(word, senses, parents, first)):
-        _add(p, a)
-        _add(p, f)
-    for p, sense in zip(out, senses):
+    soft = [_softened(s) for s in senses]
+    for p, a, f, k in zip(out, added, family_points(word, senses, parents, first), soft):
+        _add(p, a, SOFTENED if k else 1.0)    # (a childish meaning softens what its links bring, as its own points:
+        _add(p, f, SOFTENED if k else 1.0)    # "bum: the buttocks" lists "arse" among its synonyms)
+    for p, sense, softly in zip(out, senses, soft):
         target = form_target(sense)
         if target and target != word and first.get(target):    # a form takes its word's main (first) meaning's
             for k, v in first[target][0].items():               # points: "did" is "do", not its slang meaning
@@ -543,13 +565,36 @@ def second_pass(word, senses, first, rude, incoming, parents=()):
             k = sense_kind(first[ref][0])
             p[k] = max(p.get(k, 0.0), MEANING_MIN + 0.5)
         if len(gloss.split()) <= 8 and _BODY.search(gloss):     # a short slang name for a body part or a sex act
-            _add(p, {"crude" if _WASTE.search(gloss) else "sexual": SLANG_BODY})   # ("maraca: breasts")
+            _add(p, {"crude" if _WASTE.search(gloss) else "sexual": SLANG_BODY},   # ("maraca: breasts")
+                 SOFTENED if softly else 1.0)
+    kind = parts_kind(word, first)
+    if kind:                                  # a hyphenated word made of rude words (asked for): its slang meanings
+        for p, sense in zip(out, senses):     # are as rude as its parts ("fuck-tard"); its plain ones are not
+            labs = {lab for lab, _w in _hedged(list(sense.get("tags", [])) + list(sense.get("raw_tags", [])))}
+            if labs & SLANGY and not is_form(sense):                         # ("tit-for-tat", "doo-wop")
+                p[kind] = max(p.get(kind, 0.0), MEANING_MIN + 0.5)
     identity = is_identity(senses, first[word])
     return [unslur(p, sense, word, identity, respelling=False)   # (links don't make a name a slur; a respelling
             for p, sense in zip(out, senses)]                    # takes its word's points, as any form)
 
 
 SLANGY = {"slang", "informal", "colloquial", "vulgar", "derogatory", "offensive"}
+
+
+def parts_kind(word, first):
+    """For a hyphenated word with a rude word among its parts (asked for; measured: one rude part of two is as
+    telling as two of two, once only slang meanings take it), the kind of that part's main meaning; else None. A
+    part is rude when it would be smeared whole by its own first-pass points (word_points over GLOSS_KINDS)."""
+    parts = [p for p in word.split("-") if p] if "-" in word and " " not in word else []
+    if len(parts) < 2:
+        return None
+    for part in parts:
+        scored = first.get(part)
+        if part != word and scored and word_points(scored, GLOSS_KINDS) >= WHOLE_MIN:
+            return max(sorted(GLOSS_KINDS), key=lambda k: scored[0].get(k, 0.0))
+    return None
+
+
 GLOSS_KINDS = {"crude", "swear", "sexual", "slur"}     # (the kinds smeared while censoring: obscene.CENSORED)
 SLANG_BODY = 2.0
 _LEAD = re.compile(r"^\W*([a-z][a-z'-]+)")
@@ -563,12 +608,12 @@ def form_target(sense):
     f = (sense.get("form_of") or sense.get("alt_of") or [{}])[0]
     if isinstance(f, dict) and f.get("word"):
         return f["word"]
-    m = FORM_GLOSS.search(gloss_of(sense))
+    m = _form_gloss(gloss_of(sense))
     return m.group(1).lower().strip(".'\"") if m else None
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "9"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "10"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -643,10 +688,17 @@ COMMON_ZIPF = 4.5          # a word at least this common (wordfreq's Zipf scale:
 STRONG = {"vulgar", "offensive", "derogatory", "pejorative", "slur"}     # labels that count on a common word
 
 
-def strongly_labelled(sense):
-    """True if Wiktionary marks a meaning plainly rude (STRONG, or a rude category), not only slang."""
+def _hedge(sense):
+    """True if a meaning's labels are hedged ("mildly vulgar", "sometimes offensive")."""
+    return any(_label(t) in HEDGES for t in sense.get("tags", []))
+
+
+def strongly_labelled(sense, firm=False):
+    """True if Wiktionary marks a meaning plainly rude (STRONG, or a rude category), not only slang; `firm`: and
+    without a hedge ("mildly vulgar", "sometimes offensive" are not)."""
     names = {_label(c.get("name") if isinstance(c, dict) else c) for c in sense.get("categories", [])}
-    return bool({lab for lab, _w in _hedged(sense.get("tags", []))} & STRONG or names & RUDE_CATEGORIES)
+    labs = {lab for lab, w in _hedged(sense.get("tags", [])) if w >= 1.0 or not firm}
+    return bool(labs & STRONG or names & RUDE_CATEGORIES)
 
 
 def meaning_kinds(senses, scored, common=False):
@@ -674,10 +726,22 @@ def results(word, senses, scored, censored, common=False):
     bits = 0
     for k in kinds or ["clean"]:
         bits |= KIND_BITS[k]
-    forms = [is_form(s) for s in senses]
-    whole = word_points(scored, censored, forms) >= WHOLE_MIN
+    whole = word_points(scored, censored) >= WHOLE_MIN
+    if whole and common:                      # a common word is smeared whole only for a plainly rude meaning ("what
+        whole = word_points([p if strongly_labelled(s, firm=True) or (is_form(s) and not _hedge(s)) else {}
+                             for s, p in zip(senses, scored)], censored) >= WHOLE_MIN     # the hell" is mildly vulgar;
+                                                                                          # a form is its word's)
+    if whole:                                 # a meaning that only refers back to the word ("skull-fuck: an instance
+        main = next((k for k in kinds if k in censored), None)       # of skull-fucking") is as rude as the word
+        kinds = [main if k == "clean" and _refers_to(gloss_of(s), word) else k for s, k in zip(senses, kinds)]
     smeared = [gloss_of(s)[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
     return bits, whole, smeared
+
+
+def _refers_to(gloss, word):
+    """True if `gloss` names `word` itself or a form of it ("an instance of skull-fucking", "one who fucks")."""
+    stem = word.lower()[:-1] if word.lower().endswith("e") and len(word) > 4 else word.lower()
+    return len(stem) >= 3 and any(t.startswith(stem) for t in re.findall(r"[a-z][a-z'-]*", gloss.lower()))
 
 
 def score_saved(saved, censored, wn=None, log=None, zipf=None):

@@ -52,8 +52,14 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
         c.create_rectangle(box[0], base - SMEAR_BODY * em, box[2], base - 0.02 * em, outline="",
                            fill=lerp_color(paper, col, band), tags=tags)
     steps = max(4, int(2 * half))              # (a pixel apart at most: wider gaps show as combs on small text)
-    for k in range(steps + 1):
-        c.create_text(x - half + 2 * half * k / steps, y, fill=col, tags=tags, **opts)
+    # one copy per whole pixel (Tk draws text at whole pixels: copies landing on the same one stack up and look
+    # bold on small text, reported in the definitions pane); near the end the side copies fade into the paper and
+    # the middle one, drawn last, becomes the word itself, so the last frames end where the plain word starts
+    offsets = sorted({round(-half + 2 * half * k / steps) for k in range(steps + 1)} - {0}, key=abs, reverse=True)
+    side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
+    for dx in offsets:
+        c.create_text(x + dx, y, fill=side, tags=tags, **opts)
+    c.create_text(x, y, fill=col, tags=tags, **opts)
     room = int(half) + 3
     for x0, x1 in ((box[0] - room, box[0]), (box[2], box[2] + room)):
         c.create_rectangle(x0, box[1], x1, box[3], fill=paper, outline="", tags=tags)

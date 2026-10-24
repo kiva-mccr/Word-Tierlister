@@ -153,10 +153,16 @@ six kinds from Wiktionary's labels, its topics and categories, the wording of th
 installed, the links between words (Wiktionary's synonym lists) and word families ("bullshit" is built from
 "shit"); its kind is the one with
 the most points, if it has enough. A word's points come mostly from its first meaning: enough of them and the whole
-word is smeared, otherwise only its rude meanings are. A plural or other form goes with its word's first meaning
-("did" is "do", not its slang meaning), and a Clinical meaning only counts when the word is about it ("penis",
-not "take"). A very common word (about the 3,000 commonest, by wordfreq) is rarely meant rudely: only meanings
-Wiktionary labels plainly rude count for it ("box: (vulgar) the vagina", not "top: (slang) fellatio"). A
+word is smeared, otherwise only its rude meanings are. A plural, a clipping or another form counts as its word's
+first meaning ("did" is "do", not its slang meaning; "boys" and "mayo" are ordinary words, their slang meanings
+smeared in the definitions; "fucks" is not), and a Clinical meaning only counts when the word is about it ("penis",
+not "take"). A slur or other rude meaning that is not a word's usual one smears that meaning only ("fairy"). A very common word (about the 3,000 commonest, by wordfreq) is rarely meant rudely: only meanings
+Wiktionary labels plainly rude count for it ("box: (vulgar) the vagina", not "top: (slang) fellatio"), and a
+hedged label never smears it whole ("what the hell" is only mildly vulgar). A hyphenated word with a rude word
+among its parts makes its slang meanings as rude ("piss-taker"; "doo-wop" and "tit-for-tat" have no slang
+meaning, so they stay as they are). Words a definition only gives as examples ("such as slime or semen") do not
+count; in a word smeared whole, a meaning that names the word itself is smeared too ("an instance of
+skull-fucking"). A
 "derogatory" label alone is not an insult unless the definition describes a person badly; a euphemism is the
 polite word ("pass water"); a slang meaning that is itself a rude word ("dam: Damn.") is rude like it.
 A word goes into the rude kinds only when it is censored as a whole ("idiot" and "penis" are ordinary words, and
@@ -167,7 +173,7 @@ table) and scores them once at the end of setting up (about a minute; again only
 A save from before this, or one made from a word list, reads them from the Wiktionary download in the background
 while you sort (once, resumable; until then its earlier flags and a short list chosen by hand in
 `src/obscene.py` stand in). `tools/measure_rudeness.py` measures the rules against an earlier sorting by Claude
-(78% the same outcome, 80% for the commonest words). That earlier way, Claude sorting the words and a review tab
+(79% the same outcome, 81% for the commonest words). That earlier way, Claude sorting the words and a review tab
 to check them, is archived (see the roadmap's OB-3 / OB-4).
 
 ## Building a program

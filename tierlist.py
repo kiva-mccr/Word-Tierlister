@@ -284,6 +284,26 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-12 Reported: the definitions' un-smear looked bold before snapping to the word; boys, teeth, boots, stones, nuts,
+#           bits, fairy, apples, bum, mayo, hyper, taco, jewels smeared whole; a word that is a slur at all smeared
+#           whole; "skull-fuck"'s noun meaning not smeared; asked for: test a hyphenated word's parts.
+#           - smear_items: one copy per whole pixel (copies on one pixel stacked up: 46% more ink than the word on
+#             small text), and the side copies fade into the paper by half a pixel apart, under a middle copy drawn
+#             last: the last frames end on the plain word (measured: 73 -> 74, was 108 -> 74).
+#           - rudeness (RUDENESS_VERSION 10): a form or clipping counts as its word's first meaning instead of being
+#             left out (that made the slang after "plural of boy" the first meaning); a gloss of over FORM_WORDS words
+#             is never a form ("fairy: a mythical being of human form ... of"); a WordNet tie goes to the clean
+#             meaning ("taco"); a childish meaning softens what its links bring ("bum"); on a common word a hedged
+#             label never smears it whole ("what the hell"); "condom" only as a whole word ("condominium"); words
+#             given as examples ("such as ... semen") do not count ("goo"); in a word smeared whole, a meaning naming
+#             the word itself is smeared ("an instance of skull-fucking"); a hyphenated word with a rude part makes
+#             its slang meanings rude (parts_kind; measured on every hyphenated word: one rude part of two is about
+#             as telling as two of two once only slang meanings take it; "two of two, one of three" alone caught 4
+#             words, any rude part 46, nearly all right: piss-taker, tight-arsed, short-arse).
+#           Measured: 78.7 -> 79.0% the same outcome as Claude's sorting (commonest 80.7 -> 81.3%), words wrongly
+#           smeared whole that should show 127 -> 76, false alarms 0.4% (unchanged). 799 words are no longer
+#           smeared whole (ordinary words with a slang meaning, euphemisms: girls, make love, pass water, gosh),
+#           120 newly are (forms of rude words, rude compounds: doggy-style, gloryhole, nobhead, piss-taker).
 # [x] F-11 Making the program on Windows failed (reported: PyInstaller's matplotlib hook, "No module named 'PIL'").
 #           - nltk mentions matplotlib, numpy, scikit-learn and others it uses only for charts and maths; PyInstaller
 #             packed whatever of them was on the computer, and a broken one (matplotlib without Pillow) stopped the

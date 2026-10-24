@@ -23,7 +23,7 @@ The module docstring has the details; this page is the map.
 - `sense_kind`: The meaning's kind: its best-scoring kind with at least MEANING_MIN points, else "clean" (ties go to the ruder kind, in RUDE_KINDS' order from the end).
 - `sense_points`: A meaning's points towards the given kinds (its best one of them).
 - `is_form`: True if a meaning only names another word ("plural of bitch", "alternative spelling of bell end").
-- `word_points`: The word's points from its meanings' {kind: points} (in order), counting only `kinds` (the censored ones): its first real meaning counts FIRST_WEIGHT, the mean of the...
+- `word_points`: The word's points from its meanings' {kind: points} (in order), counting only `kinds` (the censored ones): its first meaning counts FIRST_WEIGHT, the mean of the rest...
 - `score_word`: [{kind: points} for each meaning] of a word's senses (kaikki.org); pos: their part of speech (one per sense, or one for all); word: the word itself (for its WordNet...
 - `rude_kinds_of`: {word: the set of kinds of its rude meanings} from the first pass ({word: [{kind: points}]}): words with none left out.
 - `incoming_links`: {word: [(kind, definition, from word)]}: each rude meaning (first pass) that lists the word as a synonym.
@@ -33,12 +33,13 @@ The module docstring has the details; this page is the map.
 - `families`: {word: the words it is built from}: from {word: [the words its etymology names]} and {word: [its derived terms]} (Wiktionary's, both).
 - `score_words`: Both passes over many words: {word: [{kind: points} for each meaning]}.
 - `second_pass`: A word's meanings' points after the links (link_points), its family (family_points: `parents`) and its alternative forms ("Alternative form of pum-pum" takes...
+- `parts_kind`: For a hyphenated word with a rude word among its parts (asked for; measured: one rude part of two is as telling as two of two, once only slang meanings take it), the...
 - `form_target`: The word a meaning is a form of ("Alternative form of pum-pum" -> "pum-pum"), or None.
 - `compact`: A kaikki.org sense cut down to what the rules read (the save keeps the meanings of about 150,000 words of a million, with their forms).
 - `compact_entry`: A kaikki.org entry's glossed senses, each compact(), the first also holding the entry's word family: "e" the words its etymology names (FAMILY_TEMPLATES, no affixes),...
 - `expand`: A compact sense back into the shape the rules read.
 - `has_signal`: True if a compact sense shows any sign of rudeness the rules read (a label, a topic or category, the wording): only such words are kept and scored.
-- `strongly_labelled`: True if Wiktionary marks a meaning plainly rude (STRONG, or a rude category), not only slang.
+- `strongly_labelled`: True if Wiktionary marks a meaning plainly rude (STRONG, or a rude category), not only slang; `firm`: and without a hedge ("mildly vulgar", "sometimes offensive" are...
 - `meaning_kinds`: Each meaning's kind (sense_kind), except, for a word whose first real meaning is clean: a Clinical meaning counts as clean (the proper word for something is only a...
 - `results`: What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds; none but clean unless one of them is `censored`), the whole word...
 - `score_saved`: {word: results(...)} for {word: its compact senses as JSON text} (the save's table rude, filled from the Wiktionary download): both passes, reporting "(NN%)" through...
@@ -51,6 +52,10 @@ The module docstring has the details; this page is the map.
 - A group's own name is never a slur ("jews", "trans", "gay", "queer"): only a slur / ethnic / vulgar label or the ethnic-slurs category makes one (`SLUR_MARKS`, `IDENTITY`).
 - Forms follow their word's first meaning ("did" is "do"); common words (`COMMON_ZIPF`) count only strongly labelled meanings; a hedge ("sometimes") weakens all a meaning's labels (kaikki sorts them).
 - Never name a module after a PyPI package (`src/` is first on the path; `packaging` broke pip once).
+- A form or clipping is never left out of the word's points: it counts as its word's first meaning (second_pass gives it those points). Leaving it out made the slang after "plural of boy" the first meaning (boys, teeth, nuts, mayo). A gloss of over `FORM_WORDS` words is never a form ("fairy").
+- A WordNet tie goes to the clean meaning ("taco: a Mexican snack food" is not WordNet's slur); a childish or euphemistic meaning softens what its links bring too ("bum"); a hedged label never smears a common word whole ("what the hell").
+- Wording patterns are whole words (`\b` at both ends: "condom" in "condominium"); a list of examples in a gloss ("such as ... semen", `_EXAMPLES`) is not read.
+- A hyphenated word's rude part (`parts_kind`) only reaches its slang-labelled meanings: many clean words have a rude-looking part (tit-for-tat, doo-wop, honky-tonk, dung-fly).
 
 ## Changing it
 

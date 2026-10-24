@@ -595,5 +595,20 @@ poly = chip.find_withtag("all")[0]
 assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.smooth_image(poly) is not None
 w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
 small.configure(size=11); chip.destroy()
+
+# un-smearing ends on the word itself (reported: small text looked bold, then snapped): one copy per pixel, and
+# near the end the side copies fade into the paper under a middle copy drawn last
+from widgets import smear_items
+cv = tk.Canvas(root, bg="#ffffff"); cv.pack()
+txt = cv.create_text(10, 10, text="a smeared meaning", font=("TkDefaultFont", 11), anchor="nw", fill="#3D3A4B")
+root.update()
+for amount in (1.0, 0.3, 0.05):
+    cv.delete("s"); smear_items(cv, txt, "#3D3A4B", "#ffffff", amount, ("s",))
+    copies = [i for i in cv.find_withtag("s") if cv.type(i) == "text"]
+    xs = [cv.coords(i)[0] for i in copies]
+    assert len(xs) == len(set(xs)) and xs[-1] == 10                     # (no two on one pixel; the middle last)
+    if amount == 0.05:
+        assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
+cv.destroy()
 root.destroy()
 print("WIDGETS2 OK")

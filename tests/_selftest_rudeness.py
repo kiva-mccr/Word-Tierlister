@@ -96,7 +96,7 @@ assert is_form({"glosses": ["present participle and gerund of fist"]})
 assert form_target({"glosses": ["x"], "alt_of": [{"word": "pum-pum"}]}) == "pum-pum"
 assert form_target({"glosses": ["plural of bitch"]}) == "bitch" and form_target({"glosses": ["A dog."]}) is None
 assert word_points([{}, {"sexual": 10.0}]) < WHOLE_MIN                          # one very rude later meaning
-assert word_points([{}, {"sexual": 6.0}], forms=[True, False]) >= WHOLE_MIN     # (the first only names a word)
+assert word_points([{}, {"sexual": 6.0}]) < WHOLE_MIN        # (a first meaning naming a clean word: "boys")
 # word families: a word built from one whose first meaning is rude gains points towards that kind, a booster only
 from rudeness import families
 fam = families({"bullshit": ["bull", "shit"]}, {"shit": ["shithead"], "cock": ["cocktail"]})
@@ -201,4 +201,37 @@ assert word_kinds("dyke", [("An earthwork.", ()), ("A lesbian.", ("derogatory", 
 assert kind("A Jew.", ["ethnic", "offensive", "slur"]) == "slur"                                 # ("kike")
 assert kind("Alternative form of Hebe (a Jew).", ["alt-of", "derogatory", "offensive"]) == "slur"   # (not case)
 assert kind("A transgender person.", ["derogatory", "offensive", "sometimes"]) == "slur"   # (two labels: "tranner")
+
+# reported (v10): a plural or clipping first is the ordinary word, whatever slang follows; a long gloss is never a
+# form; a WordNet tie goes to the clean meaning; a childish meaning softens its links; hedged labels never smear a
+# common word whole; a list of examples is not the meaning; a meaning naming the word itself is as rude as it
+from rudeness import _form_gloss, _refers_to, parts_kind
+C = {"crude", "swear", "sexual", "slur"}
+def entry(word, *senses):
+    return json.dumps(compact_entry({"word": word, "pos": "noun", "senses": [
+        {"glosses": [g], "tags": list(t), **({"form_of": [{"word": f}]} if f else {})} for g, t, f in senses]}))
+cases = {"boys": entry("boys", ("plural of boy", ["form-of"], "boy"), ("The testicles.", ["slang"], None)),
+         "mayo": entry("mayo", ("Clipping of mayonnaise.", ["alt-of"], "mayonnaise"),
+                       ("A white person.", ["derogatory", "ethnic", "offensive", "slur"], None)),
+         "fuck": entry("fuck", ("To have sexual intercourse with.", ["vulgar"], None)),
+         "fucks": entry("fucks", ("plural of fuck", ["form-of"], "fuck"), ("A worthless thing.", ["vulgar"], None)),
+         "skull-fuck": entry("skull-fuck", ("To penetrate a mouth sexually.", ["slang", "vulgar"], None),
+                             ("an instance of skull-fucking", [], None)),
+         "what the hell": entry("what the hell", ("Used as an intensive.", ["mildly", "slang", "vulgar"], None)),
+         "fuck-tard": entry("fuck-tard", ("A stupid person.", ["slang"], None), ("A table.", [], None)),
+         "doo-wop": entry("doo-wop", ("A style of rhythm and blues.", [], None)),
+         "goo": entry("goo", ("Any sticky substance, such as slime or semen.", ["informal"], None))}
+got = score_saved(cases, C, zipf=lambda w: 5.0 if w == "what the hell" else 3.0)
+assert not got["boys"][1] and got["boys"][2] == ["The testicles."]          # the word shown, its slang smeared
+assert not got["mayo"][1] and got["fucks"][1] and got["fuck"][1]
+assert got["skull-fuck"][1] and len(got["skull-fuck"][2]) == 2             # the noun ("an instance of") smeared too
+assert not got["what the hell"][1]                                          # common, only mildly vulgar
+assert got["fuck-tard"][1] and not got["doo-wop"][1] and not got["doo-wop"][2]   # a rude part: its slang meanings
+assert "goo" not in got or not got["goo"][2]                               # ("such as ... semen": an example)
+assert parts_kind("fuck-tard", {"fuck": [{"sexual": 9.0}]}) == "sexual" and parts_kind("tard", {}) is None
+assert _form_gloss("third-person singular simple present indicative of nut")
+assert not _form_gloss("A mythical being of human form with magical powers, known in many sizes, often in the "
+                       "service of folklore")                               # ("fairy": its first meaning, not a form)
+assert _refers_to("an instance of skull-fucking", "skull-fuck") and not _refers_to("A table.", "fuck")
+assert kind("A small flat for sale, such as a condominium.") == "clean"    # ("condom" inside "condominium")
 print("RUDENESS OK")
