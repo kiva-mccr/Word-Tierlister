@@ -2,7 +2,7 @@
 # machines from the pushed source (PyInstaller builds only for the system it runs on).
 #   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the two programs as downloads of the run
 #   - pushing a tag v<VERSION> (src/constants.py): the same, published as a GitHub Release (the README links there)
-# Each build is started once to check that it runs (tools/build.py --check). macOS is not built here.
+# The release's page starts with .github/release-notes.md (T-5: what an unsigned program asks). Each build is started once to check that it runs (tools/build.py --check). macOS is not built here.
 name: Build programs
 
 on:
@@ -64,6 +64,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4              # (for the release notes)
       - uses: actions/download-artifact@v4
         with:
           path: assets
@@ -73,4 +74,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >
           gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY"
-          --title "Word Tier List $GITHUB_REF_NAME" --generate-notes
+          --title "Word Tier List $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes

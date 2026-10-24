@@ -64,6 +64,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `.github/workflows/build.yml` | Build programs (T-8): builds the Linux and Windows programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
+| `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
@@ -206,7 +207,8 @@ or on GitHub:
   computer only. GitHub only starts the workflow once it is on the repository's default branch.
 - **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py`, commit,
   then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds both programs,
-  starts each once to check it runs, and attaches them to a new release. (macOS is not built there.)
+  starts each once to check it runs, and attaches them to a new release, whose page starts with
+  `.github/release-notes.md`. (macOS is not built there.)
 
 ## Windows notes
 

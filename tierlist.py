@@ -1348,7 +1348,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           like its tier buttons. _selftest_lookup.py.
 #
 # --- Packaging as a program (T-6..T-8 asked for; built after the UI steps) ----------------------
-# T-1..T-3 are the groundwork for T-6..T-8; T-4 and T-5 stay notes.
+# T-1..T-3 are the groundwork for T-6..T-8; T-4 was dropped, T-5 is the release's notes.
 # Notes from the discussion: PyInstaller builds only
 # for the OS it runs on (no cross-compiling), so this would be a build.py run once per OS, and only
 # Linux can be tested from here (Windows / macOS builds would need testing on those machines).
@@ -1388,8 +1388,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          save beside itself. Linux build here: 22 MB, about 25 s; the window opens (first-start steps). Windows
 #          and macOS builds are untried (need those machines). _selftest_build.py (a real build when PyInstaller
 #          is installed).
-# [?] T-4  Launchers instead (cheaper): run.bat (Windows) and run.command (macOS) that install the
-#          dependencies once and start the program. Roughly ten lines each, nothing to sign.
+# [-] T-4  Launchers instead (run.bat / run.command): dropped by the user (the program and the first-start
+#          package offer cover it).
 # [x] T-6  "Make a program" button (asked for). File > Make a standalone program... (shown when running
 #           from source): asks first, installs PyInstaller if missing (the ST-4 way), builds a one-file
 #           program for this OS behind the progress window (T-3 is the engine), bundles the complete
@@ -1536,9 +1536,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           src/ to the import path; check_release.py knows the folders (flags a module left at the top,
 #           ships the tree with its folders, ignores your save / log / export next to tierlist.py).
 #           T-8 added the README's "Download for Windows / Linux" links to the newest Release.
-# [?] T-5  Per-OS caveats to document: Windows SmartScreen / antivirus warnings on unsigned
-#          builds; macOS Gatekeeper (right-click > Open unless signed and notarized) and the need
-#          for a Python with a current Tk; Linux depends only on system libraries.
+# [x] T-5  A short note on every release's page (.github/release-notes.md, the user's choice: not a long note):
+#          the programs are unsigned, so Windows' SmartScreen may need "More info > Run anyway" and Linux needs
+#          the download allowed to run (chmod +x). Nothing for Tk on Linux: from source, the first start offers to
+#          install it (deps.py), and the program carries its own.
 #
 # --- Looks (asked for after W-1, before the icon) ---------------------------------------------------------------
 # [x] UI-61 Tier colours: Settings > Tier colours... (src/tiercolours.py): each tier's pill as it will look, a strip of
@@ -1569,8 +1570,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #               per join under them, the join being checked in bold. Last version: ui_chart.SwapStrip in commit
 #               9b78889. The swap counts are still recorded, so it would show the full history if it came back.
 #   Planned:  Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8
-#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 and T-5
-#             stay notes. After the UI steps.
+#             (one command for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 dropped, T-5
+#             the release's notes. After the UI steps.
 #
 # File layout: see the code map in the docstring above. New UI steps add files named for their
 # job: more widgets in widgets.py (UI-5..12), ui_chart.py (UI-13).
