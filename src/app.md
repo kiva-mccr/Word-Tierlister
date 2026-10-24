@@ -4,7 +4,7 @@ The main window (`App`): the header, the three placing views, the duel tabs, the
 
 - **Uses:** `browser`, `constants`, `dealing`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `theme`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -13,7 +13,7 @@ The module docstring has the details; this page is the map.
 - `format_stats`: The status line (UI-15): one quiet line.
 - `local_midnight`: The start of today, local time, as a timestamp.
 - `App`: The main window and the state of what is currently on screen.
-  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, on_close
+  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, look_up, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, on_close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 

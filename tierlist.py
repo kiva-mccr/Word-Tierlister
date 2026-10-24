@@ -1320,12 +1320,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #   Source & Updates ... T-6 / T-7 (later)
 #
 # --- Last: definitions as a way in (asked for; at the very end of the plan) --------------------------
-# [ ] W-1  Click any word inside a definition to look it up. Its definition appears (the drawer and the
+# [x] W-1  Click any word inside a definition to look it up. Its definition appears (the drawer and the
 #           Browse pane), and the word joins the Browse list for the moment as a greyed-out row under F
 #           ("not placed yet"). In Browse you can then sort it straight away with the tier buttons or
 #           the 1-6 keys, which places it for real (it leaves the queue like any placed word); if you
 #           do not, it disappears from the list again when Browse is refreshed or closed. Words that
 #           are not in the word list are offered as "add to the list" first.
+#           Built: in both panes the word under the pointer (in a meaning, an example or a form's line, not a
+#           heading or label: widgets.word_at, LINK_TAGS) is underlined with a hand; a click calls on_word
+#           (fill_definitions). App.look_up keeps it in app.lookups (a word not in the list: "Add it" / "Just show
+#           it", the definition shows either way). The main window's pane shows the clicked word under a "Back to
+#           ..." line (App.def_lookup, until then or the next word); Browse shows waiting words as rows at the
+#           bottom (Browser.show_lookups: an unplaced one greyed with "not placed yet" in the Rating column, which
+#           widens for it), kept at the bottom as more rows load, gone on a refresh or close; clicked in Browse's own
+#           pane, the row is selected. Browse now takes the placing keys (1-6, the keymap's) for the selected word,
+#           like its tier buttons. _selftest_lookup.py.
 #
 # --- Packaging as a program (T-6..T-8 asked for; built after the UI steps) ----------------------
 # T-1..T-3 are the groundwork for T-6..T-8; T-4 and T-5 stay notes.

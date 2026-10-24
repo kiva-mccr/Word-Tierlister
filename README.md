@@ -120,6 +120,11 @@ missing or out of date, and also checks that each module imports only from the l
   the window brings back the zoom you last used in that state (`App._follow_maximize`, UI-57). Browse has its
   own (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
+- Clicking a word in a definition (W-1): any word in a meaning, an example or a form's line is underlined under the
+  pointer; a click shows its definition there (the main window's pane says "Back to ..." to return) and puts it in
+  Browse for the moment, greyed at the bottom ("not placed yet"), where the tier buttons or the placing keys (1-6)
+  place it for real; a refresh or closing Browse lets it go. A word not in the list is offered to add first.
+  (`widgets.word_at` / `fill_definitions(on_word=)`, `App.look_up`, `Browser.look_up` / `show_lookups`.)
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 
 ## Tests

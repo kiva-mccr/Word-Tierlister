@@ -5,6 +5,7 @@ colours then look the same on macOS, Windows and Linux, and corners can be round
 After a shared Font object is resized, call refresh_widgets(window) so they re-measure.
 """
 import math
+import re
 import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
@@ -1302,9 +1303,12 @@ def definition_tags(t, body):
     t.tag_configure("ex", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26, font=italic)
     t.tag_configure("wait", foreground=PALETTE["muted"])
     t.tag_configure("base", foreground=PALETTE["muted"], lmargin1=26, lmargin2=26, spacing1=1, spacing3=2)
+    t.tag_configure("link", underline=True, foreground=PALETTE["text"])     # (W-1: the word under the pointer)
+    t.tag_configure("back", foreground=PALETTE["muted"], underline=True, spacing3=4)
+    t.tag_raise("link")
 
 
-def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
+def fill_definitions(t, entries, body, censor=False, animator=None, base=None, on_word=None, back=None):
     """Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up,
     the keys of its meanings to smear, True if the word itself is censored)]: the word in bold, then each sense
     numbered, its part of speech, its text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a
@@ -1312,16 +1316,22 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
     and its text smeared sideways like a censored word, un-smearing under the pointer. A censored word is smeared
     the same way (not masked), and un-smears while the pointer is anywhere over the pane. `base` (F-3): base(word)
     -> the same four for another word; under a meaning that only names one ("Alternative form of bull dyke"), that
-    word's own first meaning, muted."""
+    word's own first meaning, muted. `on_word` (W-1): on_word(word) when a word in a meaning is clicked (it is
+    underlined under the pointer); `back`: (text, command), a quiet line on top that goes back (after a lookup)."""
     from definitions import form_target, main_sense, parse_definition
     for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
         c.destroy()
-    t._smears, t._words, t._animator = [], [], animator
+    t._smears, t._words, t._animator, t._on_word = [], [], animator, on_word
     _watch_pane(t)
+    _watch_links(t)
     inside = _pointer_inside(t)
     definition_tags(t, body)
     t.config(state="normal")
     t.delete("1.0", "end")
+    t.tag_unbind("back", "<Button-1>")
+    if back:
+        t.insert("end", back[0] + "\n", "back")
+        t.tag_bind("back", "<Button-1>", lambda e: back[1]())
 
     def word(name, hide, font_, tag):
         """The word `name` (a censored one smeared, un-smearing while the pointer is over the pane)."""
@@ -1370,6 +1380,61 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None):
                     _insert_gloss(t, main, "base", censor and main["gloss"][:GLOSS_KEY] in keys, body, animator,
                                   " " * 6 + name + after)
     t.config(state="disabled")
+
+
+LINK_TAGS = ("sense", "ex", "base")     # where a word can be clicked to look it up (W-1): meanings, examples, forms
+_WORD = re.compile(r"[^\W\d_]+(?:['\u2019-][^\W\d_]+)*")
+
+
+def word_at(t, x, y):
+    """(start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning,
+    an example or a form's line (LINK_TAGS), or None (a heading, a label, a number, or no letters there)."""
+    try:
+        idx = t.index(f"@{x},{y}")
+        box = t.bbox(idx)
+    except tk.TclError:
+        return None
+    if not box or not (box[0] <= x < box[0] + box[2] + 1 and box[1] <= y < box[1] + box[3]):
+        return None                                  # (past the end of a line: the nearest letter is not under it)
+    tags = set(t.tag_names(idx))
+    if not tags & set(LINK_TAGS) or tags & {"num", "pos", "head", "back"}:
+        return None
+    line, col = (int(v) for v in idx.split("."))
+    text = t.get(f"{line}.0", f"{line}.end")
+    for m in _WORD.finditer(text):
+        if m.start() <= col < m.end():
+            return f"{line}.{m.start()}", f"{line}.{m.end()}", m.group(0).lower()
+    return None
+
+
+def _watch_links(t):
+    """Once per pane (W-1): the word under the pointer underlined, with a hand, while the pane has an on_word; a
+    click on it calls on_word(word)."""
+    if getattr(t, "_links_watched", False):
+        return
+    t._links_watched = True
+
+    def motion(e):
+        t.tag_remove("link", "1.0", "end")
+        hit = word_at(t, e.x, e.y) if getattr(t, "_on_word", None) else None
+        if hit:
+            t.tag_add("link", hit[0], hit[1])
+        over_back = "back" in t.tag_names(f"@{e.x},{e.y}")
+        t.config(cursor="hand2" if hit or over_back else "arrow")
+
+    def leave(e):
+        t.tag_remove("link", "1.0", "end")
+        t.config(cursor="arrow")
+
+    def click(e):
+        hit = word_at(t, e.x, e.y) if getattr(t, "_on_word", None) else None
+        if hit:
+            t._on_word(hit[2])
+            return "break"
+        return None
+    t.bind("<Motion>", motion, add="+")
+    t.bind("<Leave>", leave, add="+")
+    t.bind("<Button-1>", click, add="+")
 
 
 def _pointer_inside(w):
@@ -1538,15 +1603,16 @@ class DefinitionDrawer(tk.Frame):
         definition_tags(t, body)
         self._shown = False
 
-    def show_words(self, words, get_def, censored=None, smeared=None):
+    def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None):
         """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
         up). `censored(word)`: True for a word shown smeared (until the pointer is over the pane); `smeared`: while
         censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6). A meaning that only
-        names another word shows that word's first meaning under it, looked up the same way (F-3)."""
+        names another word shows that word's first meaning under it, looked up the same way (F-3). `on_word`,
+        `back`: see fill_definitions (W-1)."""
         def entry(w):
             return w, get_def(w), smeared(w) if smeared else (), bool(censored and censored(w))
         fill_definitions(self.text, [entry(w) for w in words], self._body, censor=smeared is not None,
-                         animator=self._anim, base=entry)
+                         animator=self._anim, base=entry, on_word=on_word, back=back)
 
     @property
     def is_open(self):

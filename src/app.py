@@ -113,6 +113,8 @@ class App:
         self._last_action = self.session_start
         self.mem_defs = {}
         self.def_words = []
+        self.def_lookup = None    # a word clicked in the definitions (W-1): the pane shows it until "Back" or the next word
+        self.lookups = []         # words looked up so (W-1), shown in Browse for the moment, at the bottom
         self.browsers = []
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
@@ -1527,14 +1529,56 @@ class App:
         return text
 
     def _render_defs(self, words=None):
-        """Redraw the definition pane for the words on screen (pass `words` to change which; no-op when hidden)."""
+        """Redraw the definition pane for the words on screen (pass `words` to change which; no-op when hidden).
+        A word clicked in it (W-1) shows instead, under a "Back to ..." line, until then or until the words change."""
         if words is not None:
+            if words != self.def_words:
+                self.def_lookup = None
             self.def_words = words
         if not self.show_defs:
             return
-        self.def_frame.show_words(self.def_words, self.get_def, self.store.censored,
-                                  self.store.smeared_meanings if self.store.deal_settings()["censor"] else None)
+        back = None
+        if self.def_lookup:
+            back = ("Back to " + ", ".join(self.shown(w) for w in self.def_words), self._def_back)
+        self.def_frame.show_words([self.def_lookup] if self.def_lookup else self.def_words, self.get_def,
+                                  self.store.censored,
+                                  self.store.smeared_meanings if self.store.deal_settings()["censor"] else None,
+                                  on_word=self._def_clicked, back=back)
         self._fit_defs()
+
+    # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
+    def look_up(self, word, parent=None):
+        """A word clicked in a definition (the drawer, or Browse's pane): True if it is in the word list, and then
+        it waits in Browse for the moment (self.lookups, shown at the bottom until Browse refreshes or closes, so it
+        can be placed there). A word the list does not have is offered to add first; no keeps it out."""
+        if not self.store.has_word(word):
+            if not ask_yes_no("Look up a word", f"'{self.shown(word)}' is not in the word list",
+                              "Add it, so you can sort it in Browse? Its definition shows either way.",
+                              yes="Add it", no="Just show it", parent=parent or self.root):
+                return False
+            self.store.add_word(word)
+            self.flash(f"'{self.shown(word)}' added to the word list", kind="info", ms=1800)
+        if word not in self.lookups:
+            self.lookups.append(word)
+        return True
+
+    def _def_clicked(self, word):
+        """A word clicked in the main window's definitions: shown there in their place, and waiting in Browse."""
+        if self.look_up(word):
+            for bw in self.browsers:
+                if bw.alive():
+                    bw.show_lookups()
+            row = self.store.get_word(word)
+            if row is not None and row["tier"] is None:
+                self.flash(f"'{self.shown(word)}' is in Browse for now, at the bottom, to sort it", kind="info",
+                           ms=2200)
+        self.def_lookup = word
+        self._render_defs()
+
+    def _def_back(self):
+        """The definitions' "Back to ..." line: the words on screen again."""
+        self.def_lookup = None
+        self._render_defs()
 
     DEF_LINES, DEF_LINES_MAX = 9, 40     # the definition pane's usual height in lines, and the most it asks for
 

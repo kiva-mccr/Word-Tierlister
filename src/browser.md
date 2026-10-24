@@ -11,10 +11,11 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `Browser`: Search / browse / edit window.
-  - methods: store, alive, close, zoom_by, sort_by, reload, render_def, move, unplace, undo, refine
+  - methods: store, alive, close, zoom_by, sort_by, reload, show_lookups, look_up, render_def, move, unplace, undo, refine
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- Looked-up words (W-1) live in `app.lookups`; `reload` drops them unless `keep_lookups` (opening the window, or the lookup itself, which may have just added the word and bumped the save's version). Keep the waiting rows last after `_load_more`.
 - Censored words: a blank cell with the word smeared over it (`widgets.TreeSmears`); refresh the smears whenever rows move (`_draw_outline` does).
 - Selection is an outline over the row (the row keeps its tier colour).
 - Its text size is set in one place (`_set_size`); its zoom is separate from the main window's and saved.

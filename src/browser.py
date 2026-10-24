@@ -120,6 +120,9 @@ class Browser:
         self._show_sort()
         for t in range(len(TIERS)):
             self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
+        self.tree.tag_configure("lookup", foreground=PALETTE["disabled"])    # (W-1: looked up, not placed yet)
+        self._temp = []                            # rows shown for the moment (W-1: app.lookups), at the bottom
+        self.showing = None                        # a word whose definition shows with no row (not in the list)
         self.tree.pack(side="left", fill="both", expand=True)
         self.vsb.pack(side="right", fill="y")
         # Selection is shown as an outline round the row (the row keeps its tier colour). Treeview
@@ -165,7 +168,7 @@ class Browser:
         self._apply_scale()
         entry.focus_set()
         state = getattr(app, "browse_state", None)
-        self._restore(state) if state else self.reload()
+        self._restore(state) if state else self.reload(keep_lookups=True)
         self._open()
 
     # ---- window lifecycle ---------------------------------------------------------------------
@@ -187,6 +190,7 @@ class Browser:
         nothing (UI-38; for this run of the program only)."""
         if self in self.app.browsers:
             self.app.browsers.remove(self)
+        self.app.lookups.clear()                     # (looked-up words were only there for the moment, W-1)
         try:
             self.app.browse_state = {"search": self.search_var.get(), "filter": self.filter_var.get(),
                                      "sort": self.sort_var.get(), "reverse": self.reverse, "selected": self.current,
@@ -206,7 +210,7 @@ class Browser:
         self.reverse = state.get("reverse", False)
         self._show_sort()
         self.current, self.loaded = state["selected"], state["loaded"]
-        self.reload(keep_view=True, view=state["view"])
+        self.reload(keep_view=True, view=state["view"], keep_lookups=True)
         if self.current and self.tree.exists(self.current):
             self.render_def()
 
@@ -272,10 +276,16 @@ class Browser:
         return {
             "tier": max(b("Tier") + arrow, m("S")) + pad * 2,
             "word": m("0") * 22,
-            "rating": max(b("Rating") + arrow, m("0000")) + pad,
+            "rating": max(b("Rating") + arrow, m(self.NOT_PLACED) if self._waiting() else 0, m("0000")) + pad,
             "games": max(b("Duels") + arrow, m("0000")) + pad,
             "freq": max(b("Freq #") + arrow, m("000,000,000")) + pad,
         }
+
+    NOT_PLACED = "not placed yet"                 # (W-1: in the Rating column of a looked-up word's row)
+
+    def _waiting(self):
+        """True while a looked-up word that is not placed yet has a row here (its note needs the room)."""
+        return any(self.tree.exists(w) and "lookup" in self.tree.item(w, "tags") for w in getattr(self, "_temp", ()))
 
     def _set_columns(self):
         for col, width in self._col_widths().items():
@@ -327,6 +337,9 @@ class Browser:
         action = self.app.keys.lookup("browse", spec)
         do = {"unplace": self.unplace, "undo": self.undo, "zoom_in": lambda: self.zoom_by(1),
               "zoom_out": lambda: self.zoom_by(-1), "zoom_reset": lambda: self.zoom_by(0)}.get(action)
+        tier = self.app.keys.place_tier(spec) if do is None and not typing else None
+        if tier is not None:                         # (the placing keys move the selected word, as the buttons do)
+            do = lambda: self.move(tier)                                  # noqa: E731
         if do is None:
             return None
         do()
@@ -452,10 +465,13 @@ class Browser:
         else:
             self.count_lbl.config(text=f"{self.total:,} words")
 
-    def reload(self, keep_view=False, view=None):
+    def reload(self, keep_view=False, view=None, keep_lookups=False):
         """Reload the list from the top, or (keep_view) as many rows as were showing, at the same scroll spot
-        (or at `view`, a fraction of the list, when reopening)."""
+        (or at `view`, a fraction of the list, when reopening). The words looked up from a definition (W-1) go,
+        unless `keep_lookups` (opening the window, or the lookup itself)."""
         self._job = None
+        if not keep_lookups:
+            self.app.lookups.clear()
         keep = self.current
         want = max(self.CHUNK, self.loaded) if keep_view else self.CHUNK
         if view is None:
@@ -466,6 +482,7 @@ class Browser:
         self.loaded, self.total = len(rows), total
         self._seen_version = self.store.version
         self._update_count()
+        self._show_lookups()
         if keep and self.tree.exists(keep):
             self.tree.selection_set(keep)
             if not keep_view:
@@ -526,6 +543,9 @@ class Browser:
         try:
             rows, _ = self._query(limit=self.CHUNK, offset=self.loaded, with_total=False)
             self._add_rows(rows)
+            for w in self._temp:                         # (looked-up words stay at the bottom, under F)
+                if self.tree.exists(w):
+                    self.tree.move(w, "", "end")
             self.loaded += len(rows)
             if not rows:
                 self.total = self.loaded
@@ -542,11 +562,60 @@ class Browser:
     def _on_select(self):
         """Selection changed: remember it and show its definition."""
         self.current = self._selected()
+        if self.current:
+            self.showing = None
+        self.render_def()
+
+    # ---- looking up a word from a definition (W-1) ------------------------------------------------------------
+    def _show_lookups(self):
+        """The words looked up from a definition (app.lookups), as rows at the bottom of the list for the moment:
+        an unplaced one greyed, "not placed yet" (the tier buttons or keys place it for real); a placed one not
+        loaded here in its tier's colours. Refreshing or closing Browse lets them go."""
+        self._temp = []
+        hide = self.store.obscene_words() if self.store.deal_settings()["censor"] else ()
+        for w in self.app.lookups:
+            if self.tree.exists(w):
+                continue
+            r = self.store.get_word(w)
+            if r is None:
+                continue
+            placed = r["tier"] is not None
+            self.tree.insert("", "end", iid=w, tags=(f"t{r['tier']}",) if placed else ("lookup",), values=(
+                TIERS[r["tier"]] if placed else "-", "" if w in hide else w,
+                f"{r['rating']:.0f}" if placed else self.NOT_PLACED, r["games"] if placed else "",
+                f"{r['rank'] + 1:,}"))
+            if w in hide:
+                self.smears.words.add(w)
+            self._temp.append(w)
+        self._set_columns()                        # (room for "not placed yet" only while one shows)
+
+    def show_lookups(self):
+        """Show app.lookups now (W-1): reloading first if the list changed meanwhile (a word just added)."""
+        if self.store.version != self._seen_version:
+            self.reload(keep_view=True, keep_lookups=True)
+        else:
+            for w in self._temp:
+                if self.tree.exists(w):
+                    self.tree.delete(w)
+                self.smears.words.discard(w)
+            self._show_lookups()
+
+    def look_up(self, word):
+        """A word clicked in the definition (W-1): its row selected, at the bottom for the moment if it is not
+        loaded (app.look_up: a word not in the list is offered to add first), and its definition shown."""
+        known = self.app.look_up(word, parent=self.win)
+        if known:
+            self.show_lookups()
+            self.tree.selection_set(word)
+            self.tree.see(word)
+            self.current = word
+        else:
+            self.showing = word                    # (not in the list: its definition only)
         self.render_def()
 
     def render_def(self):
         """Fill the definition pane for the selected word (shows 'Looking up...' until the lookup finishes)."""
-        w = self.current
+        w = self.showing or self.current
         # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2, OB-6);
         # a censored word smeared too, un-smearing while the pointer is over the pane
         store = self.app.store
@@ -554,7 +623,7 @@ class Browser:
         def entry(word):
             return word, self.app.get_def(word), store.smeared_meanings(word), store.censored(word)
         fill_definitions(self.def_text, [entry(w)] if w else [], self.f_body, censor=store.deal_settings()["censor"],
-                         animator=self.app.anim, base=entry)
+                         animator=self.app.anim, base=entry, on_word=self.look_up)
 
     def move(self, tier):
         """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's

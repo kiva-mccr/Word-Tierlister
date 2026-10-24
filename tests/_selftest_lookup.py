@@ -1,6 +1,8 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """UI-51: look up any word from the word card (the magnifier, or /), type it on the card, Enter brings it up to sort
-now; a placed word or one not in the list shakes the card and says so; Enter again adds a new word."""
+now; a placed word or one not in the list shakes the card and says so; Enter again adds a new word. W-1: a word
+clicked in a definition (the drawer or Browse's pane) shows its definition there and waits in Browse, greyed at the
+bottom, to be placed with the tier buttons or keys; a word not in the list is offered to add first."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
 import tkinter as tk
@@ -85,5 +87,59 @@ for _ in range(10):
 app.anim.finish_all(); pump(2)
 assert len(moved) > 1 and card.coords("card") == before, moved               # it moved, and came back
 key("Escape")
+app.on_close()
+
+# ---- W-1: a word clicked in a definition ----------------------------------------------------------------------------
+import app as A, widgets as Wd
+s = T.Store(os.path.join(tempfile.mkdtemp(), "w1.db"))
+s.insert_words(WORDS[:12] + ["apple", "orchard", "fruit"]); s.set_anchors(WORDS[:6]); s.set_meta("dealt_asked", "1")
+s.unplace("apple")                                               # (comes up next)
+root = tk.Tk(); app = T.App(root, s, T.Definitions(s)); app.anim.reduce_motion = True
+app.mem_defs.update({"apple": "1. (noun) A round fruit, grown in an orchard.\n   e.g. \"an apple a day\"",
+                     "orchard": "1. (noun) A garden of fruit trees.", "fruit": "1. (noun) The seed-bearing part.",
+                     "zorbleflax": "1. (noun) A made-up thing."})
+pump(10); app.toggle_defs(True); pump(6)
+t = app.def_frame.text
+def spot(text, word):
+    i = text.search(word, "1.0"); x, y, _w, _h = text.bbox(i)
+    return x + 2, y + 2
+assert app.cur_word == "apple"
+x, y = spot(t, "orchard")
+assert Wd.word_at(t, x, y)[2] == "orchard" and Wd.word_at(t, *spot(t, "noun")) is None   # (a label: not a link)
+hx, hy = spot(t, "apple")
+assert Wd.word_at(t, hx, hy) is None                             # (the heading itself: not a link)
+t.event_generate("<Motion>", x=x, y=y); pump(2)
+assert t.tag_ranges("link") and t.cget("cursor") == "hand2"      # underlined under the pointer, with a hand
+t.event_generate("<Button-1>", x=x, y=y); pump(3)
+assert app.lookups == ["orchard"] and t.get("1.0", "2.0").startswith("Back to apple")
+assert "garden of fruit trees" in t.get("1.0", "end")
+bx, by = spot(t, "Back to")
+t.event_generate("<Motion>", x=bx, y=by); pump(1)
+assert t.cget("cursor") == "hand2"
+t.event_generate("<Button-1>", x=bx, y=by); pump(3)               # (the "Back to ..." line)
+assert "round fruit" in t.get("1.0", "end") and app.def_lookup is None
+# in Browse: waiting at the bottom, greyed, "not placed yet"; the placing keys place it for real
+app.open_browser(); pump(6)
+bw = app.browsers[0]
+assert bw.tree.get_children()[-1] == "orchard" and "lookup" in bw.tree.item("orchard", "tags")
+assert bw.tree.item("orchard", "values")[2] == bw.NOT_PLACED
+bw.tree.selection_set("orchard"); pump(2)
+bw._on_key(types.SimpleNamespace(keysym="2", char="2", state=0, widget=bw.tree, keycode=0)); pump(3)
+assert s.get_word("orchard")["tier"] == 1 and app.lookups == []  # placed in A, and no longer waiting
+assert "lookup" not in bw.tree.item("orchard", "tags")
+# clicked in Browse's own pane: its row selected and its definition there; a refresh lets it go
+bt = bw.def_text
+bw.look_up("fruit"); pump(3)
+assert bw.tree.selection() == ("fruit",) and "seed-bearing" in bt.get("1.0", "end") and "fruit" in bw._temp
+bw.reload(keep_view=True); pump(2)
+assert not bw.tree.exists("fruit") and app.lookups == []         # (refreshed: it was only there for the moment)
+# a word not in the list: offered to add first; "Just show it" shows only its definition
+A.ask_yes_no = lambda *a, **kw: False
+bw.look_up("zorbleflax"); pump(3)
+assert not s.has_word("zorbleflax") and "made-up" in bt.get("1.0", "end") and not bw.tree.exists("zorbleflax")
+A.ask_yes_no = lambda *a, **kw: True
+bw.look_up("zorbleflax"); pump(3)
+assert s.has_word("zorbleflax") and bw.tree.selection() == ("zorbleflax",)
+bw.close(); assert app.lookups == []
 app.on_close()
 print("LOOKUP OK")
