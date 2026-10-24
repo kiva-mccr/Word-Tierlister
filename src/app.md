@@ -15,7 +15,7 @@ The module docstring has the details; this page is the map.
 - `apply_look`: The look the save asks for (UI-61, UI-62): dark mode (meta dark_mode) and the tier colours (meta tier_colors, six #RRGGBB as JSON), applied to theme before a window...
 - `reopen_while_asked`: After the window closed: while it closed to reopen (App.reopen: a new look), build it again in that look on a new root (new_root() -> a hidden Tk with fonts and...
 - `App`: The main window and the state of what is currently on screen.
-  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, look_up, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_tier_colours, toggle_dark, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, reopen, on_close
+  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, censor_note, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, look_up, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_tier_colours, toggle_dark, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, reopen, on_close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -36,3 +36,4 @@ The module docstring has the details; this page is the map.
 
 - Building the window: `_build_ui` / `_build_header`. Placing / skipping: `place_word` / `skip_word`. Zoom: `set_zoom` / `zoom_step`.
 - A word looked up on the card (UI-51) is tidied by `constants.typed_word`, needs a letter or a number, and is added in lower case. Undoing its placement or skip brings it back onto the card (`_was_looked_up`); Undo ends typing first (F-16).
+- Turning censoring on calls `censor_note` (UI-64): a dialog once a save (meta `censor_noted`), a toast after. It must never wait (a modal one hung the tests and would block the How words are dealt page it opens over).

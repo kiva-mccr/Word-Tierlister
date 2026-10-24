@@ -114,6 +114,18 @@ item[2].set(False); item[3](); pump(2)
 assert s.deal_settings()["censor"] is False and not card.censored and app.cur_word == "shit"
 item[2].set(True); item[3](); pump(2)
 assert s.deal_settings()["censor"] is True and card.censored and card.find_withtag("smear")
+# turning it on says it may not be fully accurate (asked for): a small dialog the first time in a save, then a toast
+from constants import CENSOR_CAVEAT_SHORT
+assert s.get_meta("censor_noted") == "1"
+tops = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.winfo_viewable()]
+assert any(w.title() == "Censor obscene words" for w in tops), [w.title() for w in tops]
+for w in tops:
+    if w.title() == "Censor obscene words":
+        w.destroy()
+pump(2)
+item[2].set(False); item[3](); item[2].set(True); item[3](); pump(2)
+assert app.toast.cget("text") == CENSOR_CAVEAT_SHORT
+assert not [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words"]
 s.set_censor(False); app.after_external_change(); assert app.censor_var.get() is False     # (changed elsewhere)
 s.set_censor(True); app.after_external_change(); pump(2)
 # the duel cards: smeared until hovered
@@ -252,7 +264,19 @@ assert d.step == 1 and "at least one" in str(d.status.cget("text"))
 d.kind_vs["noun"].set(True); d.buttons["Back"].invoke(); pump(2); assert d.step == 0
 d.order_btns["rank"].invoke(); d.buttons["Next"].invoke(); d.buttons["Next"].invoke(); pump(2)
 assert d.step == 2 and list(d.buttons) == ["Back", "Done"]
-d.censor_v.set(True); d.buttons["Done"].invoke(); pump(2)
+assert "may miss some" in " ".join(str(w.cget("text")) for w in d.sections["censor"].winfo_children()
+                                  if w.winfo_class() == "TLabel")                 # (a line beside the tick, always)
+d.censor_v.set(True); pump(2)                                     # ticked the first time: the note says why, over it
+def censor_notes(w):
+    """The open "Censor obscene words" notes, anywhere under `w`."""
+    found = [w] if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words" else []
+    return found + [n for c in w.winfo_children() for n in censor_notes(c)]
+notes = censor_notes(root)
+assert len(notes) == 1 and s2.get_meta("censor_noted") == "1", notes
+notes[0].destroy(); pump(2)
+d.censor_v.set(False); d.censor_v.set(True); pump(2)               # (once a save: not again)
+assert not censor_notes(root)
+d.buttons["Done"].invoke(); pump(2)
 t_end = time.time() + 20
 while d.alive() and time.time() < t_end:
     pump(2)

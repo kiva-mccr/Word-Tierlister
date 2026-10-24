@@ -1593,6 +1593,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           word smeared whole its kind of rude word: "noun · verb", "adverb", "noun · sexual" (constants.card_label,
 #           from words.kinds; "other" is too vague to show, so a word that is only "other" or not known yet has no
 #           label and keeps its full size). The label's row and the 85% word are F-15's.
+# [x] UI-64 Asked for: turning on Censor obscene words says it may not be fully accurate. The first time in a save
+#           (meta censor_noted) a small dialog: "Censoring is not perfect" (rules, not a person, pick the words out;
+#           they can miss a rude word or smear an ordinary one; censoring never changes what is placed), over How
+#           words are dealt when ticked there; every later time from View a toast ("Censoring on · it may miss...").
+#           How words are dealt also says it in a muted line under the tick box, always (constants.CENSOR_CAVEAT*;
+#           App.censor_note never waits).
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

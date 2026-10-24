@@ -164,7 +164,9 @@ The first start asks three short questions (any time later: Settings > How words
   when its first (most common) meaning is rude enough; the word card writes what kind it mostly is (sexual, crude,
   swear word, slur) faintly above it, after its parts of speech ("noun · sexual"), censoring or not;
   inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
-  pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. Exports keep
+  pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. The words are
+  picked out by rules, not by a person, so it can miss a rude word or smear an ordinary one: turning it on says so
+  (a short note the first time in a save, a toast after that), and so does a line under the tick box. Exports keep
   the real words.
 
 What is rude is decided by rules, not a list (`src/rudeness.py`, OB-6): every meaning earns points towards the

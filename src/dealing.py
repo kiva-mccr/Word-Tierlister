@@ -19,7 +19,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from constants import KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
+from constants import CENSOR_CAVEAT_LINE, KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
 from obscene import RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
@@ -229,6 +229,11 @@ class DealDialog:
         ttk.Checkbutton(f, text="Censor obscene words", variable=self.censor_v, takefocus=1).grid(
             row=1, column=0, sticky="w")
         ttk.Label(f, text=CENSOR_NOTE, foreground=PALETTE["muted"]).grid(row=1, column=1, sticky="w", padx=(12, 0))
+        ttk.Label(f, text=CENSOR_CAVEAT_LINE, foreground=PALETTE["muted"]).grid(row=2, column=0, columnspan=2,
+                                                                               sticky="w", pady=(4, 0))
+        # (ticked: the first time in a save a small dialog says why it may not be fully accurate, asked for)
+        self.censor_v.trace_add("write", lambda *_: self.censor_v.get() and self.app.censor_note(self.dlg.win,
+                                                                                                 toast=False))
         return f
 
     # ---- the first start, one step at a time ------------------------------------------------------------------

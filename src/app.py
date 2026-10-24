@@ -25,7 +25,8 @@ import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word, typed_word
+from constants import (CENSOR_CAVEAT, CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
+                       QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_frozen, write_export
@@ -820,11 +821,30 @@ class App:
         """View > Censor obscene words (asked for: the same switch as in How words are dealt, a click away). Saved;
         the card, the duel cards, the definitions and Browse show it at once, and a comparison carries on."""
         self.store.set_censor(self.censor_var.get())
+        if self.censor_var.get():
+            self.censor_note()
         self.refresh()
         self._render_defs()
         for b in self.browsers:
             if b.alive():
                 b.reload(keep_view=True)
+
+    CENSOR_NOTED = "censor_noted"        # meta: the note on censoring has been shown once in this save
+
+    def censor_note(self, parent=None, toast=True):
+        """Censoring was just turned on (asked for: say it may not be fully accurate). The first time in a save a
+        small dialog explains why (over `parent`, the How words are dealt page when ticked there); after that a
+        short toast (`toast`), or nothing. Never waits: the dialog closes on its own OK."""
+        if self.store.get_meta(self.CENSOR_NOTED) != "1":
+            self.store.set_meta(self.CENSOR_NOTED, "1")
+            dlg = StyledDialog(parent or self.root, "Censor obscene words", CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT,
+                               animator=self.anim)
+            dlg.button("OK", dlg.close, default=True)
+            dlg.show()
+            return dlg
+        if toast:
+            self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
+        return None
 
     def toggle_auto(self):
         """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
