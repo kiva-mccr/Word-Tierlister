@@ -613,9 +613,9 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "10"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "11"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
-LISTED = (KIND_BITS["swear"], True, [])     # results() for a word on the hand-picked list, when no meanings are known
+LISTED = (KIND_BITS["swear"], True, [], "swear")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
 _SIGNAL_TAGS = set(TAG_POINTS) | REGISTER | set(HEDGES)
 _SIGNAL_NAMES = set(TOPIC_POINTS) | RUDE_CATEGORIES
@@ -735,7 +735,16 @@ def results(word, senses, scored, censored, common=False):
         main = next((k for k in kinds if k in censored), None)       # of skull-fucking") is as rude as the word
         kinds = [main if k == "clean" and _refers_to(gloss_of(s), word) else k for s, k in zip(senses, kinds)]
     smeared = [gloss_of(s)[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
-    return bits, whole, smeared
+    return bits, whole, smeared, main_kind(scored, censored)
+
+
+def main_kind(scored, censored):
+    """What a word is mostly (shown faintly above it on the card, asked for: "bum-fuck" sexual): of the `censored`
+    kinds, the one its meanings give most points to, counted as word_points does (its first meaning most), or None
+    when none has any ("shit" crude, "fuck" sexual, "motherfucker" a swear word)."""
+    pts = {k: word_points(scored, {k}) for k in sorted(censored)}
+    best = max(pts, key=pts.get, default=None)
+    return best if best is not None and pts[best] > 0 else None
 
 
 def _refers_to(gloss, word):
@@ -772,7 +781,8 @@ def score_saved(saved, censored, wn=None, log=None, zipf=None):
     for w, senses in words.items():          # a word that is only forms of one other is smeared whole as that one is
         targets = {form_target(s) for s in senses}
         if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:
-            out[w] = (out[w][0], out[t][1], out[w][2])
+            out[w] = (out[w][0], out[t][1], out[w][2], out[t][3])      # (and its main kind: "boobs" is "boob")
     clean = KIND_BITS["clean"]                # (the user's rule: "Obscene words" holds only words smeared whole; one
-    return {w: (bits if whole else clean, whole, smeared)      # rude meaning of many ("can: buttocks") is smeared
-            for w, (bits, whole, smeared) in out.items()}       # in the definitions, the word itself is ordinary)
+    return {w: (bits if whole else clean, whole, smeared, main if whole else None)   # rude meaning of many ("can:
+            for w, (bits, whole, smeared, main) in out.items()}                     # buttocks") is smeared in the
+                                                                                    # definitions, the word ordinary)

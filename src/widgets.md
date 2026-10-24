@@ -47,7 +47,7 @@ The module docstring has the details; this page is the map.
 - `EmptyCard`: A friendly "nothing to do here" card (UI-20): a soft rounded panel with a short title and a line of help, shown instead of greyed-out controls.
   - methods: set, refresh
 - `WordCard`: The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted sub-line under it (frequency rank, "skipped", "compound").
-  - methods: padx, box, word, sub, censored, set, configure, cget, refresh, transition_from, find_box, begin_typing, end_typing, typed, type_key, note
+  - methods: padx, box, word, sub, censored, kind, set, configure, cget, refresh, transition_from, find_box, begin_typing, end_typing, typed, type_key, note
 - `Tooltip`: A small hover note (UI-13 / UI-15 / UI-33): appears after DELAY_MS of hovering, just below what it describes, and stays there (only its text changes over another part...
   - methods: text, show_at, hide
 - `close_popups`: Close every drop-down the program has open (UI-43): all DropMenus (header menus, ChoiceButtons).
@@ -59,6 +59,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- WordCard's kind label (UI-59) lives in the top margin and never changes the card's size; it is placed from the letters' real tops (0.8 em above the baseline) and its font shrinks to fit (asked for: never clipped). Check by pixels at small and large zooms.
 - `smear_items`: one text copy per whole pixel, side copies faded into the paper by half a pixel apart, the middle copy drawn last. Copies stacked on one pixel looked bold on small text and then snapped (the definitions pane); check the last frames' ink against the plain word.
 - A censored word is smeared (`smear_items` / `Unsmear`; `smeared_label` where it is not our canvas; `TreeSmears` over a Treeview), un-smearing under the pointer; never masked where a widget can draw.
 - In a definitions pane the word un-smears while the pointer is anywhere over the pane (`_watch_pane`).

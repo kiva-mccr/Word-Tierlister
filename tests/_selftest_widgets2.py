@@ -610,5 +610,18 @@ for amount in (1.0, 0.3, 0.05):
     if amount == 0.05:
         assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
 cv.destroy()
+
+# UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it
+from fonts import font
+wc = WordCard(root, font("word"), font("body")); wc.pack(); root.update()
+wc.set("table", "frequency rank #9"); root.update(); size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
+assert not wc.find_withtag("kind")
+wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
+assert wc.itemcget("kind", "text") == "sexual" and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
+kb, wb = wc.bbox("kind"), wc.bbox("word")
+assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                      # above the letters, on the card
+assert wc.itemcget("kind", "fill") != wc.itemcget("sub", "fill")                  # paler than the sub-line
+wc.begin_typing(); root.update(); assert not wc.find_withtag("kind")
+wc.destroy()
 root.destroy()
 print("WIDGETS2 OK")

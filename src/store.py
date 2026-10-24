@@ -103,7 +103,8 @@ CREATE TABLE IF NOT EXISTS words(
     kinds INTEGER,
     obscene INTEGER NOT NULL DEFAULT 0,
     out INTEGER NOT NULL DEFAULT 0,
-    rude INTEGER
+    rude INTEGER,
+    rude_main INTEGER
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,6 +163,8 @@ class Store:
         if "rude" not in cols:                   # OB-6: the kinds of its meanings, by the rules (rudeness.py)
             self.db.execute("ALTER TABLE words ADD COLUMN rude INTEGER")
             self.db.execute("UPDATE words SET rude=? WHERE obscene=1", (KIND_BITS["swear"],))   # (until scored)
+        if "rude_main" not in cols:              # what a word smeared whole mostly is (rudeness.main_kind), a bit
+            self.db.execute("ALTER TABLE words ADD COLUMN rude_main INTEGER")
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
         self.db.execute("DROP INDEX IF EXISTS idx_placed_rank")      # (now idx_placed_shelf, which also counts the shelf)
@@ -265,8 +268,9 @@ class Store:
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        rude = LISTED[0] if on_list(word) else None     # (no meanings to read for it: the hand-picked list)
-        self.db.execute("UPDATE words SET rude=?, obscene=? WHERE word=?", (rude, int(bool(rude)), word))
+        listed = on_list(word)                       # (no meanings to read for it: the hand-picked list)
+        self.db.execute("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
+                        (LISTED[0] if listed else None, int(listed), KIND_BITS[LISTED[3]] if listed else None, word))
         sql, args = self._out_sql()
         self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))
         self._obscene = None
@@ -419,18 +423,18 @@ class Store:
 
     def set_rude(self, found, chunk=None):
         """Save what the rules found: {word: (rudeness.KIND_BITS of its meanings, smeared whole while censoring,
-        [the keys of its meanings smeared in the definitions])}; every other word is clean (NULL). Each word's
-        place in the queue follows at once. `chunk`: see _stepped."""
+        [the keys of its meanings smeared in the definitions], its main kind (rudeness.main_kind) or None)}; every
+        other word is clean (NULL). Each word's place in the queue follows at once. `chunk`: see _stepped."""
         def steps():
             old = [r[0] for r in self.db.execute("SELECT word FROM words WHERE rude IS NOT NULL OR obscene=1")]
-            rows = [(w, None, False, None) for w in old if w not in found]
-            rows += [(w, bits, whole, json.dumps(smeared) if smeared else None)
-                     for w, (bits, whole, smeared) in found.items()]
+            rows = [(w, None, False, None, None) for w in old if w not in found]
+            rows += [(w, v[0], v[1], v[3] if len(v) > 3 else None, json.dumps(v[2]) if v[2] else None)
+                     for w, v in found.items()]
             for i in range(0, len(rows), chunk or len(rows) or 1):
                 part = rows[i:i + (chunk or len(rows))]
                 sql, args = self._out_sql()          # (read each time: the settings may change between steps)
-                self.db.executemany("UPDATE words SET rude=?, obscene=? WHERE word=?",
-                                    ((b, int(bool(wh)), w) for w, b, wh, _m in part))
+                self.db.executemany("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
+                                    ((b, int(bool(wh)), KIND_BITS.get(k), w) for w, b, wh, k, _m in part))
                 self.db.executemany(f"UPDATE words SET out = {sql} WHERE word=?", ((*args, w) for w, *_ in part))
                 self.db.executemany("UPDATE rude SET smeared=NULL WHERE word=?", ((w,) for w, *_r, m in part if not m))
                 self.db.executemany("INSERT INTO rude(word, senses, smeared) VALUES(?, '[]', ?) ON CONFLICT(word)"
@@ -440,6 +444,12 @@ class Store:
                 self.version += 1
                 yield
         return self._stepped(steps(), chunk)
+
+    def rude_kind(self, word):
+        """What a word smeared whole mostly is ("sexual", rudeness.main_kind), or None: the card shows it faintly
+        above the word (asked for)."""
+        r = self.db.execute("SELECT rude_main FROM words WHERE word=? AND obscene=1", (word,)).fetchone()
+        return next((k for k, bit in KIND_BITS.items() if r and r[0] == bit), None)
 
     def smeared_meanings(self, word):
         """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring, or []."""

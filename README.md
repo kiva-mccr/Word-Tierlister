@@ -146,7 +146,8 @@ The first start asks three short questions (any time later: Settings > How words
   sort only those.
 - **Censor obscene words** ("blurred, except on hover"; also View > Censor obscene words, a click away): a word is
   smeared sideways on the cards and in Browse's list until the pointer is over it, and reads b•••••d in messages,
-  when its first (most common) meaning is rude enough;
+  when its first (most common) meaning is rude enough; the word card writes what kind it mostly is (sexual, crude,
+  swear word, slur) faintly above it, censoring or not;
   inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
   pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. Exports keep
   the real words.

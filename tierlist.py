@@ -1210,6 +1210,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] UI-58 View > Censor obscene words (asked for): the same switch as in How words are dealt, as a tick in the View
 #           menu (App.toggle_censor). The card, the duel cards, the definitions and Browse follow at once, and a
 #           comparison carries on; a change made in How words are dealt shows in the tick too.
+# [x] UI-59 The kind of a rude word, faintly above it on the card (asked for: "bum-fuck should have sexual right
+#           above it"; kept whole, never clipped). rudeness.main_kind: of the censored kinds, the one the word's
+#           meanings give most points (as word_points counts them: its first meaning most): fuck, cunt, wanker sexual,
+#           shit, piss, bullshit crude, motherfucker a swear word, kike a slur; a word that is only forms of another
+#           takes that one's. Kept in words.rude_main (RUDENESS_VERSION 11: every save scores again once);
+#           Store.rude_kind. WordCard.set(kind=) draws it in the card's top margin, centred between the edge and
+#           the letters' tops (0.8 em above the baseline), its font made smaller if that room is ever too low; the
+#           card's size never changes. Checked pixel by pixel at 50-200% with short, long, wrapped and accented
+#           words: never cut off, never touching the word. Words not smeared whole show nothing.
 # [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

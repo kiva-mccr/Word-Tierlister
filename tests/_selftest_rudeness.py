@@ -150,7 +150,7 @@ assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][2] == ["Fellati
 # "Obscene words" holds only words smeared whole (asked for): one rude meaning of many ("box: the vagina") is smeared
 # in the definitions, and the word itself is an ordinary one
 box = score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["box"]
-assert box == (KIND_BITS_["clean"], False, ["The vagina."]), box
+assert box == (KIND_BITS_["clean"], False, ["The vagina."], None), box
 
 # borrowed ideas, measured on random lists judged by hand (OB-6): a rude label alone is a suspect, not an insult;
 # a euphemism is the polite word; a slang meaning that is a rude word, or a short slang name for a body part, is rude
@@ -182,11 +182,11 @@ assert got["shithead"][0] == KIND_BITS["clean"] and got["shit"][1], got         
 both = {"bitch": json.dumps(compact_entry({"word": "bitch", "pos": "noun", "senses": [
     {"glosses": ["A stupid, contemptible person."], "tags": ["derogatory"]},
     {"glosses": ["To complain."], "tags": ["vulgar"]}]}))}
-b, whole, _ = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"]
+b, whole, _, _k = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"]
 assert not whole and b == KIND_BITS["clean"], b                   # (its first meaning an insult: not smeared whole)
 both["bitch2"] = json.dumps(compact_entry({"word": "bitch2", "pos": "noun", "senses": [
     {"glosses": ["A contemptible woman."], "tags": ["vulgar", "derogatory"]}, {"glosses": ["To complain."], "tags": ["vulgar"]}]}))
-b, whole, _ = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch2"]
+b, whole, _, _k = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch2"]
 assert whole and b & KIND_BITS["swear"] and b & KIND_BITS["insult"], b      # smeared whole: all its kinds count
 # a group's own name is no slur (SLUR_MARKS): a word with a plain meaning naming one, "sometimes" rude, a letter-case
 # form, or named by the word itself; a slur label, "ethnic" or "vulgar" still makes one
@@ -234,4 +234,9 @@ assert not _form_gloss("A mythical being of human form with magical powers, know
                        "service of folklore")                               # ("fairy": its first meaning, not a form)
 assert _refers_to("an instance of skull-fucking", "skull-fuck") and not _refers_to("A table.", "fuck")
 assert kind("A small flat for sale, such as a condominium.") == "clean"    # ("condom" inside "condominium")
+# UI-59: a word smeared whole says what it mostly is (main_kind), shown faintly above it on the card
+from rudeness import main_kind
+assert main_kind([{"crude": 9.0, "swear": 4.0}, {"sexual": 6.0}], C) == "crude"      # (its first meaning most)
+assert main_kind([{}, {"insult": 5.0}], C) is None                                   # (no censored kind at all)
+assert got["skull-fuck"][3] == "sexual" and got["boys"][3] is None                   # (not smeared whole: none)
 print("RUDENESS OK")

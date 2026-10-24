@@ -78,6 +78,8 @@ KIND_NOTES = {
     "sexual": "Sexual: slang for sex and the parts of the body it uses.",
     "slur": "Slurs: offensive words for a group of people.",
 }
+RUDE_NAMES = {"clinical": "clinical", "crude": "crude", "swear": "swear word", "insult": "insult", "sexual": "sexual",
+              "slur": "slur"}      # one word's kind, faintly above it on the card
 RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
                "sexual": "Sexual", "slur": "Slurs"}
 KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "

@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `Store`: All persistence and ranking logic.
-  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, add_word, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, set_kinds, save_rude_senses, rude_senses, set_rude, smeared_meanings, obscene_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, parse_export, merge
+  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, add_word, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, set_kinds, save_rude_senses, rude_senses, set_rude, rude_kind, smeared_meanings, obscene_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, parse_export, merge
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 

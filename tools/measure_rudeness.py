@@ -110,7 +110,7 @@ def outcome(scored, censored, senses, ticked=obscene.TICKED, common=False):
     found = set(kinds) or {"clean"}
     if not ({"clean"} | set(ticked)) & found:
         return "left out", kinds
-    _bits, whole, _smeared = rudeness.results("", senses, scored, censored, common)
+    _bits, whole, _smeared, _main = rudeness.results("", senses, scored, censored, common)
     if whole:
         return "smeared", kinds
     return ("some" if found & censored else "shown"), kinds
