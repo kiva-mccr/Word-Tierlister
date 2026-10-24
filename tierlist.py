@@ -1207,6 +1207,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           A fit no longer moves or resizes a maximized window (that un-maximizes it). Found while testing it: in a
 #           grown window, Ctrl - from 130% said "as big as fits" and fell to 100% (a step down to 120% was taken
 #           for a zoom in); now it steps 120%, 110%. Checked for real: Xvfb + openbox, maximize and restore.
+# [x] UI-58 View > Censor obscene words (asked for): the same switch as in How words are dealt, as a tick in the View
+#           menu (App.toggle_censor). The card, the duel cards, the definitions and Browse follow at once, and a
+#           comparison carries on; a change made in How words are dealt shows in the tick too.
 # [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

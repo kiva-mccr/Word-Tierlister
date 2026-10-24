@@ -144,8 +144,9 @@ The first start asks three short questions (any time later: Settings > How words
   meaning and its kind of word is ticked; one whose meanings are all rude of unticked kinds is left out.
   Unticked ones are left out of the queue, never deleted; untick every kind of word but "Obscene words" to
   sort only those.
-- **Censor obscene words** ("blurred, except on hover"): a word is smeared sideways on the cards until the pointer
-  is over it, and reads b•••••d in messages and Browse, when its first (most common) meaning is rude enough;
+- **Censor obscene words** ("blurred, except on hover"; also View > Censor obscene words, a click away): a word is
+  smeared sideways on the cards and in Browse's list until the pointer is over it, and reads b•••••d in messages,
+  when its first (most common) meaning is rude enough;
   inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
   pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. Exports keep
   the real words.

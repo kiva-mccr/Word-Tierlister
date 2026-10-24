@@ -136,6 +136,7 @@ class App:
         self.defs_var = tk.BooleanVar(value=self.show_defs)
         self.auto_var = tk.BooleanVar(value=self.auto_compare)
         self.motion_var = tk.BooleanVar(value=self.reduce_motion)
+        self.censor_var = tk.BooleanVar(value=store.deal_settings()["censor"])
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
@@ -257,7 +258,8 @@ class App:
                       ("command", "Actual size", lambda: self.set_zoom(1.0), key("zoom_reset")),
                       ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
-                      ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
+                      ("check", "Reduce motion", self.motion_var, self.toggle_motion),
+                      ("check", "Censor obscene words", self.censor_var, self.toggle_censor)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
                           ("command", "How words are dealt...", self.edit_dealing, None),
                           ("command", "Keyboard shortcuts...", self.edit_keys, None),
@@ -772,6 +774,16 @@ class App:
         self.anim.finish_all()
         self.store.set_meta("reduce_motion", int(self.reduce_motion))
 
+    def toggle_censor(self):
+        """View > Censor obscene words (asked for: the same switch as in How words are dealt, a click away). Saved;
+        the card, the duel cards, the definitions and Browse show it at once, and a comparison carries on."""
+        self.store.set_censor(self.censor_var.get())
+        self.refresh()
+        self._render_defs()
+        for b in self.browsers:
+            if b.alive():
+                b.reload(keep_view=True)
+
     def toggle_auto(self):
         """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
         self.auto_compare = self.auto_var.get()
@@ -855,6 +867,7 @@ class App:
     def after_external_change(self):
         """Call after something outside the normal flow changed the save (Browse edits, merge, anchors)."""
         self.cmp = None
+        self.censor_var.set(self.store.deal_settings()["censor"])     # (How words are dealt may have changed it)
         self.refresh()
 
     def _update_stats(self):

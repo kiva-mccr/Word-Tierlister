@@ -13,7 +13,7 @@ The module docstring has the details; this page is the map.
 - `format_stats`: The status line (UI-15): one quiet line.
 - `local_midnight`: The start of today, local time, as a timestamp.
 - `App`: The main window and the state of what is currently on screen.
-  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, on_close
+  - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, rude_read_note, anchors, note_anchor_changes, open_browser, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, source_updates, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, on_close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 

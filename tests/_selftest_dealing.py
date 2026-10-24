@@ -94,6 +94,16 @@ s.unplace("shit"); app.refresh(); pump(2); assert card.censored
 app.start_lookup(); assert not card.find_withtag("smear")
 app.on_key(types.SimpleNamespace(keysym="Escape", char="", time=None, state=0)); pump(1)
 assert card.censored and card.find_withtag("smear")
+# View > Censor obscene words (asked for): the same switch as in How words are dealt; the card follows at once
+view = dict(app._menu_items())["View"]
+item = next(it for it in view if it[0] == "check" and it[1] == "Censor obscene words")
+assert item[2].get() is True
+item[2].set(False); item[3](); pump(2)
+assert s.deal_settings()["censor"] is False and not card.censored and app.cur_word == "shit"
+item[2].set(True); item[3](); pump(2)
+assert s.deal_settings()["censor"] is True and card.censored and card.find_withtag("smear")
+s.set_censor(False); app.after_external_change(); assert app.censor_var.get() is False     # (changed elsewhere)
+s.set_censor(True); app.after_external_change(); pump(2)
 # the duel cards: smeared until hovered
 app.mode_var.set("refine"); app.on_mode_change(); pump(4)
 root.event_generate("<Motion>", warp=True, x=2, y=2); pump(2)       # (a pointer resting on a card would un-smear it)
