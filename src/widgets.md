@@ -76,3 +76,4 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - Test each new widget in `tests/_selftest_widgets2.py`.
+- A censored word shown under a pointer that is not moving gets no pointer event: `WordCard.set` asks where the pointer is (`_pointer_check`) and a hovered `RoundButton` un-smears its new word itself (F-15). The outgoing word is still reset to smeared first, so it never leaves readable.

@@ -89,8 +89,16 @@ assert not card.censored and card.itemcget("word", "state") != "hidden" and not 
 assert card.find_withtag("oldsmear") and card.itemcget("oldword", "state") == "hidden"
 app.anim.finish_all(); pump(2)
 assert app.toast.cget("text") != "" and "shit" not in app.toast.cget("text")
-# typing a word on the card (UI-51) is never smeared, and the word comes back as it was
+# a censored word that appears under a pointer already resting on the card un-smears without the pointer moving
+x0, y0, x1, y1 = card.bbox("word")
+root.event_generate("<Motion>", warp=True, x=card.winfo_rootx() - root.winfo_rootx() + (x0 + x1) // 2,
+                    y=card.winfo_rooty() - root.winfo_rooty() + (y0 + y1) // 2); pump(2)
 s.unplace("shit"); app.refresh(); pump(2); assert card.censored
+app.anim.finish_all(); pump(1)
+assert card.smear.clear == 1 and card.itemcget("word", "state") != "hidden", card.smear.clear
+root.event_generate("<Motion>", warp=True, x=2, y=2); pump(2); app.anim.finish_all(); pump(1)
+assert card.smear.clear == 0
+# typing a word on the card (UI-51) is never smeared, and the word comes back as it was
 app.start_lookup(); assert not card.find_withtag("smear")
 app.on_key(types.SimpleNamespace(keysym="Escape", char="", time=None, state=0)); pump(1)
 assert card.censored and card.find_withtag("smear")
@@ -115,6 +123,12 @@ assert left.smear.clear == 1 and left.itemcget("label", "state") != "hidden"
 left.event_generate("<Leave>"); app.anim.finish_all(); pump(1)
 assert left.smear.clear == 0 and left.find_withtag("smear")
 app.duel.show("table", "moist"); pump(1); assert not left.find_withtag("smear") and left.itemcget("label", "state") != "hidden"
+# a rude word dealt onto the card the pointer rests on un-smears straight away
+root.event_generate("<Motion>", warp=True, x=left.winfo_rootx() - root.winfo_rootx() + left.winfo_width() // 2,
+                    y=left.winfo_rooty() - root.winfo_rooty() + left.winfo_height() // 2); pump(2)
+app.duel.show("bastard", "moist", censor=(True, False)); pump(2); app.anim.finish_all(); pump(1)
+assert left.smear.clear == 1 and left.itemcget("label", "state") != "hidden"
+root.event_generate("<Motion>", warp=True, x=2, y=2); pump(2); app.anim.finish_all(); pump(1)
 app.mode_var.set("place"); app.on_mode_change(); pump(4)
 # Browse (asked for: smeared, not b•••••d): the list leaves its cell blank with the word smeared over it, which
 # un-smears under the pointer and passes clicks on to the list; its definition pane smears it too, un-smearing

@@ -204,6 +204,8 @@ class RoundButton(SmoothCanvas):
                 self._font = f if isinstance(f, tkfont.Font) else tkfont.Font(root=self, font=f)
             self._look = self._target()
             self._draw()
+            if self._censor and self._hover:        # (and un-smears at once under a pointer already on it)
+                self.smear.hover(True, self._anim)
 
     config = configure
 
@@ -2128,18 +2130,31 @@ class WordCard(SmoothCanvas):
         self._old_font.configure(**self._fit.actual())      # (transition_from draws the outgoing word as it was)
         self._old_wrap, self._old_censor = self._fit_wrap, self._censor
         if word != self._word or censor != self._censor:
-            self.smear.clear = self.smear._target = 0.0      # a new word starts smeared, even under the pointer
+            self.smear.clear = self.smear._target = 0.0      # a new word starts smeared (the old one leaves so)...
         self._word, self._sub, self._censor = word, sub, censor
         self._draw()
+        if censor:                                          # ...and un-smears at once if the pointer is already on
+            self.after_idle(self._pointer_check)            # it (asked for: no need to nudge the mouse)
 
     def _on_motion(self, e):
-        """The pointer over the word (its line, a little wider than the text) un-smears a censored one."""
+        self._hover_at(e.x, e.y)
+
+    def _hover_at(self, x, y):
+        """The pointer at (x, y) over the word (its line, a little wider than the text) un-smears a censored one."""
         if not self._censor:
             return
         box = self.bbox(self.smear.tag) or self.bbox("word")
         pad = self._sfont.metrics("linespace") // 2
-        self.smear.hover(bool(box) and box[0] - pad <= e.x <= box[2] + pad and box[1] <= e.y <= box[3],
-                         self.animator)
+        self.smear.hover(bool(box) and box[0] - pad <= x <= box[2] + pad and box[1] <= y <= box[3], self.animator)
+
+    def _pointer_check(self):
+        """Where the pointer is now, without waiting for it to move (a new word appears under a still pointer)."""
+        try:
+            px, py = self.winfo_pointerxy()
+            if self.winfo_containing(px, py) is self:
+                self._hover_at(px - self.winfo_rootx(), py - self.winfo_rooty())
+        except (tk.TclError, KeyError):
+            pass                                            # (closed meanwhile, or the pointer over a menu)
 
     def configure(self, cnf=None, **kw):
         kw = dict(cnf or {}, **kw)

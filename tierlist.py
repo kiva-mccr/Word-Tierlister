@@ -284,6 +284,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-15 Asked for: a censored word that appears under a pointer already resting on it (the word card, a duel
+#           card) un-smears at once; before, the pointer had to move a little first (no motion, no event).
+#           WordCard.set checks where the pointer is (_pointer_check, after drawing); RoundButton un-smears a new
+#           word while it is hovered. The outgoing word still leaves as its smear.
 # [x] F-14 Review of everything since F-9 (asked for), file by file: one defect, two nits.
 #           - rudeness (RUDENESS_VERSION 12): in a word smeared whole, a meaning "naming the word itself" matched any
 #             word that merely began with it ("pom: ... pomegranate juice", "jock: a disc jockey", "lav: lavalier
