@@ -29,3 +29,4 @@ The module docstring has the details; this page is the map.
 
 - Schema changes: `SCHEMA`, plus an `ALTER TABLE` in `Store.__init__` that adds a new column to an older save when it opens.
 - Merge rules for imports live in `merge` / its helpers: a placed word is never overwritten.
+- A search (`list_words` with text) counts its matches in the words' own index, like its rows (without the hint the count read the whole table: 0.9 s in a million). A broad search reads the sort's index and stops after a page (`SEARCH_WINDOW`), only where that index leads straight to the rows: for a kind of word, or a small tier in another order, it could read every placed word (measured: 0.9 s). It must give the same rows as the plain way (`_selftest`) (F-17).

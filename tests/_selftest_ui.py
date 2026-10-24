@@ -251,6 +251,19 @@ key("1")                                                           # main-window
 pump(2)
 bw._maybe_refresh()
 assert bw._seen_version == s.version >= v
+# the search box (F-17): spaces at the ends and runs of them are tidied, capitals do not matter, % and _ are plain
+# letters to skip (never wildcards); keys typed there are text (a digit is not "move to a tier", Delete not
+# "unplace"), and the main window does not hear them
+for typed in ("  SERENDIPITY ", "seren\u200bdipity", "seren%dip_ity"):
+    bw.search_var.set(typed); bw.reload(); pump(2)
+    assert list(bw.tree.get_children()) == ["serendipity"], (typed, bw.tree.get_children())
+bw.search_var.set("serend"); bw.reload(); pump(2); bw.tree.selection_set("serendipity"); pump(2)
+tier_s, cur = s.get_word("serendipity")["tier"], app.cur_word
+bw.entry.focus_force(); bw.entry.icursor("end"); pump(2)
+for ks in ("1", "Home", "Delete"):
+    bw.entry.event_generate("<KeyPress>", keysym=ks); bw.entry.event_generate("<KeyRelease>", keysym=ks); pump(1)
+assert bw.search_var.get() == "erend1" and s.get_word("serendipity")["tier"] == tier_s, bw.search_var.get()
+assert app.cur_word == cur and s.get_word(cur)["tier"] is None
 bw.search_var.set(""); bw.reload(); pump(2)
 
 # screenshots (best effort)

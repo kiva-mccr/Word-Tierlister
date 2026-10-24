@@ -83,6 +83,12 @@ def check(n, placed, folder, slow):
         bw.filter_var.set(show)
         for sort in s.SORTS:
             timed(f"Browse: {show}, {sort}", lambda: (bw.sort_by(sort), root.update()), BROWSE_MS, slow, n=2)
+    for show in ("All placed", "Unplaced", "Tier B"):          # (a search runs whenever the typing pauses: F-17)
+        bw.filter_var.set(show)
+        for text in ("w", "w00", "w0123456", "zz"):
+            bw.search_var.set(text)
+            timed(f"Browse search {text!r}: {show}", lambda: (bw.reload(), root.update()), BROWSE_MS, slow, n=2)
+    bw.search_var.set("")
     root.destroy()
     s.close()
 

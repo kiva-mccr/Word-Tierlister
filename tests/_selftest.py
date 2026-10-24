@@ -211,6 +211,34 @@ assert s.next_unplaced()["word"] == "w050"
 # list / search / export
 rows, total = s.list_words("w05", "All placed")
 assert total >= 1
+# F-17: a search that matches many words reads the sort's own index and stops after a page; it gives exactly the
+# rows the plain way gives, in every filter, order and page (small pages here, so both ways are used). Its own save:
+# here some words share a rank (added in different ways), and tied rows may come in either order either way
+q = T.Store(os.path.join(tempfile.mkdtemp(), "search.db"))
+q.insert_words([f"w{i:04d}" for i in range(400)])
+_rnd = random.Random(2)
+for i in range(0, 400, 2):
+    q.place(f"w{i:04d}", _rnd.randrange(6))
+for text in ("w", "w0", "w01", "w0399", "nothing"):
+    for show in ("All placed", "Unplaced", "Tier B", "Tier S"):
+        for sort in T.Store.SORTS:
+            for rev in (False, True):
+                for limit, offset in ((5, 0), (5, 10), (40, 0)):
+                    fast = [tuple(r) for r in q.list_words(text, show, sort, limit, offset, False, rev)[0]]
+                    q.SEARCH_WINDOW_MAX = -1                     # (the plain way: every match, sorted)
+                    plain = [tuple(r) for r in q.list_words(text, show, sort, limit, offset, False, rev)[0]]
+                    del q.SEARCH_WINDOW_MAX
+                    assert fast == plain, (text, show, sort, rev, limit, offset)
+q.close()
+# the count of a search is read from the words' own index (it read the whole table: 0.9 s in a million)
+plan = []
+real = s.db.execute
+s.db = type("Spy", (), {"execute": lambda self, q, a=(): (plan.append(q), real(q, a))[1],
+                        "__getattr__": lambda self, k: getattr(real.__self__, k)})()
+s.list_words("w", "All placed", limit=3)
+s.db = real.__self__
+count = next(q for q in plan if q.startswith("SELECT COUNT(*)"))
+assert "INDEXED BY idx_placed_word" in count, count
 assert len(s.export_rows()) > 100
 
 # resumable: close, reopen, state intact

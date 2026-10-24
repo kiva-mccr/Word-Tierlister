@@ -284,6 +284,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-17 Testing Browse's search (asked for): a script typed into the real box (under a window manager) and tried
+#           capitals, spaces, accents, apostrophes, % and _, no match, a censored word, every Show and Sort both ways,
+#           paging, the selection, closing mid-typing and reopening, and the keys (digits and Delete typed there stay
+#           text; the main window does not hear them): all right. One real fault, speed: a broad search in a million
+#           words took about 1 s (each pause in typing runs one). The count of matches read the whole table (0.87 s):
+#           it now reads the words' own index, as the rows do. And a search matching many words (one letter) reads the
+#           sort's own index and stops after a page (Store.SEARCH_WINDOW) instead of sorting every match, where that
+#           index leads straight to the rows (All placed, Unplaced, a tier in its Default order). Measured, the
+#           query alone: worst 1,043 -> 179 ms dense, 347 -> 110 ms sparse; the same rows as the plain way in 800
+#           combinations on both million-word saves (and a test of its own); tools/speed_check.py times searches now.
 # [x] F-16 Testing the card's search (asked for: UI-51, the magnifier / "/"), a script drove it through capitals, new
 #           words, spaces, odd characters, placed and censored words, undo, tab switches, buttons and menus. Fixed:
 #           - a new word typed with capitals was added as typed ("Zorp"), and then "zorp" was added again: new words

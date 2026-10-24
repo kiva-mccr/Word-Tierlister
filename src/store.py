@@ -1069,6 +1069,7 @@ class Store:
                "Duels": "games DESC, rank ASC"}
 
     KIND_FILTERS = {label: bit for _, label, bit in KINDS}
+    SEARCH_WINDOW, SEARCH_WINDOW_MAX = 20, 200_000     # (a broad search reads this many words in order per row asked)
     _PLACED_INDEX = {"Default": "idx_placed_order", "Rating": "idx_placed_rating", "Duels": "idx_placed_games",
                      "A-Z": "idx_placed_word", "Frequency": "idx_placed_shelf"}
     _UNPLACED_INDEX = {"Default": "idx_unplaced_queue", "Frequency": "idx_unplaced_rank", "A-Z": "idx_unplaced_word"}
@@ -1115,11 +1116,28 @@ class Store:
         else:
             index = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
         hint = self._hint(index) if index else ""
-        rows = self.db.execute(
-            f"SELECT word, tier, rating, games, skips, rank, pen FROM words{hint} WHERE {clause}"
-            f" ORDER BY {order} LIMIT ? OFFSET ?",
-            args + [limit, offset],
-        ).fetchall()
+        cols = "word, tier, rating, games, skips, rank, pen"
+        rows = None
+        ordered = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
+        window = (offset + limit) * self.SEARCH_WINDOW
+        broad = tier_filter in ("All placed", "Unplaced") or (tier_filter.startswith("Tier ") and sort == "Default")
+        if text and ordered and broad and window <= self.SEARCH_WINDOW_MAX:
+            # a search that matches many words (one letter): read the sort's own index from the top and stop once
+            # a page of matches is found, instead of sorting every match (0.25 s in a million). The first `window`
+            # words in order hold the first matches in order; too few there (a rarer search), the usual way below.
+            # Only where that index leads straight to the rows (a kind of word, or a small tier in another order,
+            # could be spread through all of it)
+            rows = self.db.execute(
+                f"SELECT {cols} FROM (SELECT {cols}, qkey FROM words{self._hint(ordered)} WHERE {' AND '.join(where[:-1])}"
+                f" ORDER BY {order} LIMIT ?) WHERE word LIKE ? ORDER BY {order} LIMIT ? OFFSET ?",
+                args[:-1] + [window, args[-1], limit, offset]).fetchall()
+            if len(rows) < limit:
+                rows = None
+        if rows is None:
+            rows = self.db.execute(
+                f"SELECT {cols} FROM words{hint} WHERE {clause} ORDER BY {order} LIMIT ? OFFSET ?",
+                args + [limit, offset],
+            ).fetchall()
         total = None
         if with_total:
             if offset == 0 and len(rows) < limit:
@@ -1127,6 +1145,8 @@ class Store:
             else:
                 counted = self._hint("idx_placed_kinds") if tier_filter in self.KIND_FILTERS or \
                     tier_filter == "Obscene words" else ""
+                if text and not counted:      # (a search counts in the words' own index, as it lists: without it the
+                    counted = hint            # count read the whole table, 0.9 s of a 1 s search in a million)
                 total = self.db.execute(f"SELECT COUNT(*) FROM words{counted} WHERE {clause}", args).fetchone()[0]
         return rows, total
 
