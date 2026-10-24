@@ -3,7 +3,7 @@
 The third-party packages and installing them (ST-1..ST-5): the terminal step for tkinter before any window, pip installs measured for the install dialog, the private environment fallback, detaching from the terminal, and the Linux applications-menu launcher.
 
 - **Uses:** `constants`
-- **Used by:** `app`, `startup`, `tierlist`
+- **Used by:** `app`, `sources`, `startup`, `tierlist`
 - **Tests:** `_selftest_deps`, `_selftest_install`
 
 The module docstring has the details; this page is the map.

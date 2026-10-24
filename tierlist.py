@@ -284,6 +284,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           - censored words shown whole in duel messages, "Finished refining" and two Browse messages;
 #           - closing during a reshuffle shut the save under the worker (it now waits); timers left at quit;
 #           - an animation whose widget was closed meanwhile raised an error dialog (ui_motion drops it).
+# [x] F-11 Making the program on Windows failed (reported: PyInstaller's matplotlib hook, "No module named 'PIL'").
+#           - nltk mentions matplotlib, numpy, scikit-learn and others it uses only for charts and maths; PyInstaller
+#             packed whatever of them was on the computer, and a broken one (matplotlib without Pillow) stopped the
+#             build. They are never packed now (bundle.UNUSED, a test runs the program with them blocked); the
+#             Linux build went from 23 to 22 MB.
+#           - Before a build, what it needs (PyInstaller, wordfreq; nltk optional) is checked, and anything missing
+#             is offered in one dialog, a tick box each, as on the first start (SourceDialog.packages_ready,
+#             startup.ensure_packages; deps.BUILD_PACKAGES); a required one left out says why nothing was made.
 # [x] F-10 Start-up speed (asked for, after a measured list of what was left). On a million words:
 #           - big writes take the words table's indexes away and build them once afterwards (Store.bulk_write,
 #             WORD_INDEXES): saving a million new words 19.3 -> 12.6 s; the reshuffle also sets aside the second

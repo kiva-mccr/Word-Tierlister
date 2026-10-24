@@ -11,7 +11,9 @@ from fonts import init_fonts
 from ui_style import apply_ttk_style
 
 # ---- detection and the package table (every package has a purpose and a size for the install dialog)
-assert set(deps.SIZE) == set(deps.PACKAGES) == set(deps.PURPOSE) - {"tkinter"}
+assert set(deps.SIZE) == set(deps.PIP_NAMES) == set(deps.DOWNLOAD) == set(deps.PURPOSE) - {"tkinter"} \
+    == set(deps.HOMEPAGE) - {"tkinter"}
+assert not set(deps.BUILD_PACKAGES) & set(deps.PACKAGES)               # (the builder is not in requirements.txt)
 assert deps.missing(["os", "sys"]) == []
 assert deps.missing(["os", "surely_not_installed_pkg_xyz"]) == ["surely_not_installed_pkg_xyz"]
 req = [l.split("#")[0].strip() for l in open(os.path.join(_paths.ROOT, "requirements.txt"))]

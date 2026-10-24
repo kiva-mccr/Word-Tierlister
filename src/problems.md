@@ -4,7 +4,7 @@ What went wrong, in plain words (ST-2), with no tkinter so any layer can raise o
 
 - **Uses:** the standard library only
 - **Used by:** `errors`, `sources`, `startup`, `tierlist`, `wordsource`
-- **Tests:** `_selftest_deps`, `_selftest_errors`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_sources`
 
 The module docstring has the details; this page is the map.
 

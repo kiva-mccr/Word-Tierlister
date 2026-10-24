@@ -354,7 +354,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
                     restart=None, home=None):
     """Make sure the packages in `required` (and, if wanted, `optional`) can be imported (ST-4, stage 2).
 
-    Names are import names (see deps.PACKAGES). Does nothing unless something is missing. Then one
+    Names are import names (see deps.PIP_NAMES). Does nothing unless something is missing. Then one
     dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
     or optional (required ones marked with a red asterisk; all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
     the usual progress window and checks again, without a restart.
@@ -375,7 +375,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
     gone = need + extra
     if not gone or getattr(sys, "frozen", False):
         return not need
-    cmd = "pip install " + " ".join(deps.PACKAGES.get(n, n) for n in gone)
+    cmd = "pip install " + " ".join(deps.PIP_NAMES.get(n, n) for n in gone)
     if not deps.pip_available():
         if not need:
             return True                                   # only optional things missing: not worth an error
@@ -410,7 +410,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
     if not ok or still:
         if set(need) & set(still):
             raise SetupError(f"Could not install {what}.\n\n{tail}\n\nTry running this yourself, then start "
-                             f"the program again:\n    pip install {' '.join(deps.PACKAGES.get(n, n) for n in chosen)}")
+                             f"the program again:\n    pip install {' '.join(deps.PIP_NAMES.get(n, n) for n in chosen)}")
         if still and sys.stderr is not None:
             print(f"Could not install {', '.join(still)} (optional); carrying on without it.", file=sys.stderr)
     return not deps.missing(need)

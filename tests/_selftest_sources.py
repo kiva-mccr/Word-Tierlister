@@ -10,6 +10,10 @@ import tkinter as tk
 import tierlist as T
 import sources
 import standalone as S
+from problems import SetupError
+
+needs = []                              # (before a build, what it needs is checked: faked here, see the end)
+sources.ensure_packages = lambda root, required, optional=(): (needs.append((required, optional)), True)[1]
 
 
 def project():
@@ -47,6 +51,7 @@ assert list(d.buttons) == ["Cancel", "Make the program"] and S.program_path(proj
 S.make_program = lambda root_dir, log: (built.append(root_dir), log("Building..."), S.program_path(root_dir))[2]
 d.buttons["Make the program"].invoke(); pump(root, 2)
 assert built == [proj] and started == [S.program_path(proj)]          # built, started, and this window closed
+assert needs == [(["wordfreq", "PyInstaller"], ["nltk"])]            # the program's packages and the builder
 try:
     root.winfo_exists(); closed = False
 except tk.TclError:
@@ -241,5 +246,22 @@ app.store.set_meta("offered_source", "0"); answer[0] = False
 shutil.rmtree(beside)
 app._offer_other_form(); pump(root, 4)
 assert not os.path.exists(beside) and app.store.get_meta("offered_source") == "1"
+
+# before a build: a required package left uninstalled, or an install that failed, stops it with a message
+said = []
+sources.show_message = lambda *a, **kw: said.append(a)
+sources.show_error = lambda *a, **kw: said.append(a)
+sources.deps.missing = lambda names: ["PyInstaller"]
+d = sources.SourceDialog(app, root_dir=proj2, check=lambda: None); settle(d)
+d.dlg.close()
+made.clear()
+assert d.packages_ready(ensure=lambda *a, **kw: False) is False and "needs PyInstaller" in said[-1][2]
+def failing(*a, **kw):
+    raise SetupError("pip could not reach the internet")
+assert d.packages_ready(ensure=failing) is False and "internet" in said[-1][1]
+sources.ensure_packages = lambda *a, **kw: False
+d = sources.SourceDialog(app, root_dir=project(), frozen=False, check=lambda: None); settle(d)
+d.buttons["Make the program"].invoke(); pump(root, 2)
+assert not made                                                   # nothing was built
 app.on_close()
 print("SOURCES OK")

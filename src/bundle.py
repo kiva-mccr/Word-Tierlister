@@ -23,8 +23,13 @@ DATA = (
     ("nltk", ("VERSION",)),                                                  # read as nltk is imported
 )
 # never bundled: wordfreq's tokenizers for Chinese / Japanese / Korean (it imports them only for those
-# languages), nltk's own tests, and the tkinter test suite
-EXCLUDE = ("jieba", "MeCab", "ipadic", "mecab_ko_dic", "nltk.test", "tkinter.test", "test")
+# languages), nltk's own tests, and the tkinter test suite; and packages the program never uses that nltk only
+# mentions (its charts, its maths), which PyInstaller would otherwise pack if they are on the computer. A broken
+# one stopped the build (reported: matplotlib installed without Pillow, "No module named 'PIL'")
+UNUSED = ("matplotlib", "PIL", "numpy", "scipy", "pandas", "sklearn", "IPython", "pytest", "datasets",
+          "huggingface_hub", "networkx", "requests", "twython", "pygame", "pycrfsuite", "bllipparser", "svgling",
+          "yaml")
+EXCLUDE = ("jieba", "MeCab", "ipadic", "mecab_ko_dic", "nltk.test", "tkinter.test", "test") + UNUSED
 
 
 def package_dir(name):

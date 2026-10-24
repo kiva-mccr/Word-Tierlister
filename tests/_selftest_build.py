@@ -24,6 +24,25 @@ for plat, out, onefile in (("linux", "word-tierlist", True), ("win32", "word-tie
     assert f"/tmp/work/source{sep}source" in added                 # the source inside it (T-7 gives it back)
     assert args[args.index("--additional-hooks-dir") + 1] == os.path.join(_paths.ROOT, "tools", "hooks")
     assert args[args.index("--paths") + 1] == os.path.join(_paths.ROOT, "src")
+    for mod in ("matplotlib", "PIL", "numpy"):                     # never packed, even when on the computer
+        assert args[args.index(mod) - 1] == "--exclude-module", mod
+# ... and the program works without them: importing it and its packages, ranking, WordNet when installed (a broken
+# matplotlib on the build machine stopped a build: "No module named 'PIL'")
+import bundle, subprocess
+probe = f"""
+import importlib.abc, sys
+class Blocked(importlib.abc.MetaPathFinder):
+    def find_spec(self, name, path, target=None):
+        if name.split(".")[0] in {set(bundle.UNUSED)!r}:
+            raise ImportError("not packed: " + name)
+sys.meta_path.insert(0, Blocked())
+sys.path[:0] = [{os.path.join(_paths.ROOT, "src")!r}, {_paths.ROOT!r}]
+import tierlist, wordfreq, rudeness, definitions
+assert wordfreq.zipf_frequency("dog", "en") > 4
+rudeness.wordnet()                                  # (None without nltk or its data; never an import error)
+"""
+r = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+assert r.returncode == 0, r.stderr[-2000:]
 assert S.executable("/x/Word Tier List.app", "darwin") == "/x/Word Tier List.app/Contents/MacOS/Word Tier List"
 assert S.executable("/x/word-tierlist", "linux") == "/x/word-tierlist"
 

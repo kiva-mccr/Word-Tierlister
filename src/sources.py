@@ -29,19 +29,20 @@ import time
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+import deps
 import standalone
 from errors import ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
-from problems import STOPPED_MESSAGE
+from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen
-from startup import run_with_progress
+from startup import ensure_packages, run_with_progress
 from widgets import StyledDialog
 from constants import VERSION
 
 HEADLINE = "Make a standalone program"
 INTRO = ("Builds Word Tier List into one program for this computer, with its source code inside it. It keeps using "
          "the same save, and Python is no longer needed to run it. It takes a minute or two; the first time, it "
-         "also installs the builder (PyInstaller, about 15 MB).")
+         "asks to install the builder (PyInstaller, about 15 MB) and anything else the program needs.")
 UNPACK_HEADLINE = "Unpack the source code"
 UNPACK_INTRO = ("Writes the source code this program was built from into a folder: the program files, the tests and "
                 "the notes, exactly as they were. Into a folder that already has them it brings them up to date, "
@@ -159,6 +160,8 @@ class SourceDialog:
         """Build behind the progress window, then start the new program and close this one."""
         app = self.app
         self.dlg.close()
+        if not self.packages_ready():
+            return None
         lines = []
 
         release = self.release if self.wants_update() else None
@@ -188,6 +191,25 @@ class SourceDialog:
             return None
         self.start(path)
         return path
+
+    def packages_ready(self, ensure=None):
+        """Before a build: what goes into the program (wordfreq, and nltk if wanted) and the builder (PyInstaller)
+        must be installed. Anything missing is offered in one dialog, a tick box each, as on the first start
+        (startup.ensure_packages: required ones marked, so "all" or "only what is needed" is a tick away); an
+        optional one said no to at the first start is offered again (a program is built once, without it for
+        good). True when the build can go ahead; otherwise it says why. `ensure`: tests pass their own."""
+        try:
+            ok = (ensure or ensure_packages)(self.app.root, deps.REQUIRED + list(deps.BUILD_PACKAGES),
+                                             optional=deps.OPTIONAL)
+        except SetupError as exc:
+            show_error(HEADLINE, str(exc), parent=self.app.root, headline="Could not install what the build needs")
+            return False
+        if not ok:
+            gone = deps.missing(deps.REQUIRED + list(deps.BUILD_PACKAGES))
+            show_message(HEADLINE, "Not made", f"The program needs {' and '.join(gone)} to be built, and "
+                         f"{'they were' if len(gone) > 1 else 'it was'} not installed. Your save and the source are "
+                         "unchanged.", parent=self.app.root)
+        return ok
 
     def start(self, path):
         """Start the program next to tierlist.py and close this window (the save is closed cleanly first)."""

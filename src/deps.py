@@ -25,23 +25,30 @@ PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
 REQUIRED = ["wordfreq"]
 OPTIONAL = ["nltk"]
 
+# what making the program (File > Source & Updates, T-6) needs as well: the builder. Not in requirements.txt (the
+# program itself never imports it); offered with the program's own packages before a build (sources.py)
+BUILD_PACKAGES = {"PyInstaller": "pyinstaller"}
+PIP_NAMES = {**PACKAGES, **BUILD_PACKAGES}      # import name -> what to hand to pip, for anything offered
+
 # disk space each one takes in MB, shown next to its tick box. Measured with pip for wordfreq 3.1 (57 MB to
 # download, 70 installed, mostly frequency data) and nltk 3.10 (3 MB download, 23 installed, plus 11 MB of
 # WordNet data on first use), Python 3.12; re-measure when the requirements change.
-SIZE = {"wordfreq": 70, "nltk": 35}
+SIZE = {"wordfreq": 70, "nltk": 35, "PyInstaller": 15}   # (PyInstaller 6.22: 2 MB to download, 15 installed)
 # what pip downloads for each, with the packages it pulls in (MB; measured with pip 24 for wordfreq 3.1 and
 # nltk 3.10): the installing window measures the download against this to show a percentage and a speed
-DOWNLOAD = {"wordfreq": 59, "nltk": 3}
+DOWNLOAD = {"wordfreq": 59, "nltk": 3, "PyInstaller": 3}
 
 # what each one is for, in the words used in the install question
 PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",
-           "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)"}
+           "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)",
+           "PyInstaller": "the builder that turns the program into one file: needed to make the program"}
 
 # each one's own web page (UI-30): a link on its name in the install dialog, printed in the terminal
 HOMEPAGE = {"wordfreq": "https://pypi.org/project/wordfreq/",
             "nltk": "https://www.nltk.org/",
-            "tkinter": "https://docs.python.org/3/library/tkinter.html"}
+            "tkinter": "https://docs.python.org/3/library/tkinter.html",
+            "PyInstaller": "https://pyinstaller.org/"}
 
 
 def missing(names):
@@ -85,7 +92,7 @@ def install(names, log=print, python=None, plan=True):
     tmp = tempfile.mkdtemp(prefix="wordtier-pip-")
     env = dict(os.environ, TMPDIR=tmp, TEMP=tmp, TMP=tmp)
     cmd = [python or sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-           "--no-input", "--progress-bar", "off", *[PACKAGES.get(n, n) for n in names]]
+           "--no-input", "--progress-bar", "off", *[PIP_NAMES.get(n, n) for n in names]]
     state = {"done": 0.0, "current": 0.0, "installing": False, "finished": False}
     watcher = threading.Thread(target=_watch_download, args=(tmp, total, state, log), daemon=True)
     lines = []

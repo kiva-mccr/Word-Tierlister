@@ -212,8 +212,12 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
 
 File > Source & Updates... (when running `tierlist.py`) makes Word Tier List into one program for this computer:
 `word-tierlist` on Linux, `word-tierlist.exe` on Windows, `Word Tier List.app` on macOS, next to `tierlist.py`,
-so it keeps using the same save and no longer needs Python. It takes a minute or two (the first time it installs
-the builder, PyInstaller, about 15 MB), then starts the new program and closes this window. The program carries its
+so it keeps using the same save and no longer needs Python. It takes a minute or two, then starts the new program
+and closes this window. First it checks that what the build needs is installed: the builder (PyInstaller, about
+15 MB), wordfreq, and nltk if you want offline definitions in the program. Anything missing is offered in one
+dialog, a tick box each, as on the first start (untick the optional ones to install only what is needed). Packages
+the program never uses (matplotlib, Pillow, numpy and the like) are always left out of the build, even when they
+are on your computer, so a broken one cannot stop it. The program carries its
 complete source inside it. If nothing has changed since the last build, it offers to start that program instead.
 
 The first time each form starts, it offers the other once, when nothing else is being asked: `tierlist.py` asks
