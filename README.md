@@ -220,10 +220,12 @@ or on GitHub:
 
 ## Windows notes
 
-- Run with `python tierlist.py` (or `pythonw tierlist.py`). The black console window is closed
-  automatically once the program starts, so closing it can no longer end the app. Messages that
-  would have been printed there go to `tierlist.log` next to your save file. If you want the console
-  back for troubleshooting, run `python tierlist.py --console`.
+- Run with `python tierlist.py`, or double-click it (or `pythonw tierlist.py`). The black console window closes
+  by itself a moment after the program starts: it starts itself again with `pythonw.exe` (Python with no
+  console window) and the first copy ends, so a double-clicked console closes and a terminal gets its prompt
+  back. No `.pyw` file is needed, so the same source runs on Linux and macOS unchanged. Messages that would have
+  been printed there go to `tierlist.log` next to your save file. If you want the console back for
+  troubleshooting, run `python tierlist.py --console`.
 - If something goes wrong, a dialog explains it in plain words (with Show details / Copy details) and the technical trace is added to `tierlist.log`. Your progress is saved after every action, so the program keeps running after most errors.
 
 To see the friendly error dialog on purpose, start with `python tierlist.py --crash-test`: three

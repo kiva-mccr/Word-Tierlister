@@ -279,7 +279,17 @@ assert deps.should_detach(env=desk, streams=term, posix=True)
 assert not deps.should_detach(console=True, env=desk, streams=term, posix=True)              # --console keeps it
 assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True)            # output redirected
 assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True)   # never twice
-assert not deps.should_detach(env=desk, streams=term, posix=False)                          # Windows: its own way
+assert not deps.should_detach(env=desk, streams=term, posix=False, windows=False)            # (neither: stays)
+# Windows (reported: the console window stayed open behind it): again with pythonw.exe, which has no console
+assert deps.should_detach(env={}, streams=term, windows=True, pythonw="C:/Python312/pythonw.exe")
+assert not deps.should_detach(env={}, streams=term, windows=True, pythonw="")            # (no pythonw.exe: stays)
+assert not deps.should_detach(console=True, env={}, streams=term, windows=True, pythonw="C:/P/pythonw.exe")
+assert not deps.should_detach(env={deps.DETACHED_ENV: "1"}, streams=term, windows=True, pythonw="C:/P/pythonw.exe")
+assert not deps.should_detach(env={}, streams=(Tty(), Tty(False)), windows=True, pythonw="C:/P/pythonw.exe")
+assert deps.windowless_python("C:/Python312/python.exe", exists=lambda p: True).replace("\\", "/") == \
+    "C:/Python312/pythonw.exe"
+assert deps.windowless_python("C:/Python312/pythonw.exe", exists=lambda p: False) == "C:/Python312/pythonw.exe"
+assert deps.windowless_python("C:/odd/python.exe", exists=lambda p: False) is None
 if sys.platform != "darwin":
     assert not deps.should_detach(env={}, streams=term, posix=True)                         # no desktop: stay put
     assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True)
@@ -295,8 +305,8 @@ class Child:
 
 
 def popen_of(child):
-    def popen(cmd, stdin=None, stdout=None, stderr=None, start_new_session=False, env=None):
-        started.append((cmd, start_new_session, env.get(deps.DETACHED_ENV)))
+    def popen(cmd, stdin=None, stdout=None, stderr=None, start_new_session=False, env=None, **kw):
+        started.append((cmd, start_new_session, env.get(deps.DETACHED_ENV)) + ((kw,) if kw else ()))
         stdout.write(child.text); stdout.flush()
         return child
     return popen
@@ -312,6 +322,13 @@ clock[0] = 0.0
 assert deps.detach_terminal(["tierlist.py"], out=said.append, popen=popen_of(Child(1, 2, b"TclError: no display")),
                          clock=tick, sleep=step) == 1
 assert said[-1] == "TclError: no display"
+# Windows: pythonw.exe, detached from the console (which then closes with this copy), the same arguments and save
+clock[0] = 0.0
+assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
+                            clock=tick, sleep=step, windows=True, pythonw="C:/P/pythonw.exe") == 0
+cmd, new_session, marked, kw = started[-1]
+assert cmd == ["C:/P/pythonw.exe", "tierlist.py", "--db", "x.db"] and marked == "1" and not new_session
+assert kw["creationflags"] & 0x8 and kw["close_fds"]                                   # (DETACHED_PROCESS)
 # File > Add to applications menu: a launcher with no terminal; adding it again updates it
 entry = deps.desktop_entry("/usr/bin/python3", '/home/me/My "Tier" List/tierlist.py')
 assert 'Exec="/usr/bin/python3" "/home/me/My \\"Tier\\" List/tierlist.py"' in entry and "Terminal=false" in entry

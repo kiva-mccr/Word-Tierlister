@@ -398,14 +398,38 @@ DETACHED_ENV = "WORD_TIERLIST_DETACHED"     # set in the copy started in its own
 DETACH_WAIT = 1.5                           # seconds the terminal waits to see the new copy get going
 
 
-def should_detach(console=False, env=None, streams=None, posix=None):
-    """True when the program, started from a terminal on Linux or macOS, should carry on in its own session
-    and give the terminal its prompt back (so closing the terminal no longer closes it). Not with --console,
-    not when output is redirected on purpose, not twice, and on Linux only with a desktop to draw on (else the
-    window could not open, and the message saying so must stay in the terminal). Arguments are for tests."""
+def windowless_python(python=None, exists=os.path.exists):
+    """Windows: pythonw.exe, the Python with no console window, beside this python.exe (every python.org install
+    and every venv has it), or None."""
+    exe = python or sys.executable
+    folder, name = os.path.split(exe)
+    if name.lower() == "pythonw.exe":
+        return exe
+    w = os.path.join(folder, "pythonw.exe")
+    return w if exists(w) else None
+
+
+def should_detach(console=False, env=None, streams=None, posix=None, windows=None, pythonw=None):
+    """True when the program, started from a terminal (or a console window a double-click opened), should carry
+    on without it and let it go (so closing it no longer closes the program): Linux and macOS in a session of
+    their own; Windows with pythonw.exe (reported: the console window stayed open behind it; letting go of it
+    alone is not enough when the py launcher that opened it waits on). Not with --console, not when output is
+    redirected on purpose, not twice, on Linux only with a desktop to draw on (else the window could not open,
+    and the message saying so must stay in the terminal), on Windows only with a pythonw.exe. Arguments are for
+    tests."""
     env = os.environ if env is None else env
+    windows = (os.name == "nt") if windows is None else windows
     posix = (os.name == "posix") if posix is None else posix
-    if console or not posix or env.get(DETACHED_ENV):
+    if console or env.get(DETACHED_ENV):
+        return False
+    if windows:
+        if not (pythonw if pythonw is not None else windowless_python()):
+            return False
+        try:
+            return all(s is not None and s.isatty() for s in (streams or (sys.stdin, sys.stdout)))
+        except (AttributeError, ValueError):
+            return False
+    if not posix:
         return False
     if sys.platform != "darwin" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
         return False
@@ -416,16 +440,23 @@ def should_detach(console=False, env=None, streams=None, posix=None):
 
 
 def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, clock=time.monotonic,
-                    sleep=time.sleep):
-    """Start the program again in a session of its own (setsid), not tied to this terminal, and return the
-    exit code for this one. It waits a moment: if the new copy fails straight away (it could not open its
-    window), what it said is shown here, so a failure is never silent; otherwise the terminal gets its prompt
-    back. The new copy writes its messages to tierlist.log next to the save. The keyword arguments are for
-    tests."""
+                    sleep=time.sleep, windows=None, pythonw=None):
+    """Start the program again on its own, not tied to this terminal, and return the exit code for this one:
+    Linux / macOS in a session of its own (setsid), Windows with pythonw.exe (no console window), detached; this
+    copy then ends, so the console window a double-click opened closes and a terminal gets its prompt back. It
+    waits a moment: if the new copy fails straight away (it could not open its window), what it said is shown
+    here, so a failure is never silent. The new copy writes its messages to tierlist.log next to the save. The
+    keyword arguments are for tests."""
     early = tempfile.TemporaryFile()             # what it says while getting going (shown only if it fails)
     env = dict(os.environ, **{DETACHED_ENV: "1"})
-    child = popen([sys.executable, *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
-                  start_new_session=True, env=env)
+    windows = (os.name == "nt") if windows is None else windows
+    if windows:
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+        child = popen([pythonw or windowless_python(), *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
+                      creationflags=flags, close_fds=True, env=env)
+    else:
+        child = popen([sys.executable, *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
+                      start_new_session=True, env=env)
     end = clock() + wait
     while clock() < end:
         code = child.poll()

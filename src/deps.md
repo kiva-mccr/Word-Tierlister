@@ -25,8 +25,9 @@ The module docstring has the details; this page is the map.
 - `terminal_setup`: Stage 1 of the install (ST-4): in the terminal, before any window, get only what the window itself needs, which is tkinter.
 - `make_private_env`: Make <home>/.venv and pip-install `names` into it, streaming output through `log`.
 - `wants_terminal_setup`: True when stage 1 should run: an interactive terminal, installs allowed, not a packaged build.
-- `should_detach`: True when the program, started from a terminal on Linux or macOS, should carry on in its own session and give the terminal its prompt back (so closing the terminal no...
-- `detach_terminal`: Start the program again in a session of its own (setsid), not tied to this terminal, and return the exit code for this one.
+- `windowless_python`: Windows: pythonw.exe, the Python with no console window, beside this python.exe (every python.org install and every venv has it), or None.
+- `should_detach`: True when the program, started from a terminal (or a console window a double-click opened), should carry on without it and let it go (so closing it no longer closes...
+- `detach_terminal`: Start the program again on its own, not tied to this terminal, and return the exit code for this one: Linux / macOS in a session of its own (setsid), Windows with...
 - `kept_icon`: The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy is in a folder that is gone once it closes), for a...
 - `desktop_entry`: The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built program, started by itself); `icon`: a picture's path, or the...
 - `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
@@ -42,3 +43,4 @@ The module docstring has the details; this page is the map.
 - Where tkinter install commands come from: `tk_install_command`. The window side of installing: `startup.ensure_packages`.
 - The launcher's icon is copied to `~/.local/share/icons/word-tierlist.png` (`add_to_menu`): a built program's own copy is in a folder that is gone once it closes.
 - System pieces (ST-8): `SYSTEM_PACKAGES` per package manager; from a window the command goes through `pkexec` (sudo cannot ask for a password without a terminal; no pkexec: no command, the old advice). `ensure_pip` tries Python's own ensurepip first. Tests never run the real ensurepip or an installer (fake them).
+- Windows (ST-9): the console stays open while the py launcher that opened it waits, so letting go of it (FreeConsole) is not enough: the program starts again with `pythonw.exe` (`windowless_python`) and this copy ends. Never rename tierlist.py to .pyw (every sync, manifest and launcher expects tierlist.py).

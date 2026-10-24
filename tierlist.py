@@ -1642,6 +1642,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           to a copy of the icon in ~/.local/share/icons) when it is built and whenever it starts
 #           (standalone.give_icon). Not seen here (no desktop's metadata service in this container); File > Add to
 #           applications menu gives it a launcher with the icon on any desktop.
+# [x] ST-9 Reported: on Windows the console window stayed open behind the program (on Linux it goes, ST-5). Letting go
+#           of the console (FreeConsole) does not close it while the py launcher that opened it (a double-clicked .py)
+#           waits on. Asked: rename tierlist.py to .pyw on Windows? No: the update sync, the manifest, launchers, git
+#           and the docs all expect tierlist.py (and an update would bring it back). Instead, as on Linux, it starts
+#           itself again with pythonw.exe (no console window), detached, and this copy ends: the console closes, a
+#           terminal gets its prompt back, and a failure right at the start still shows there (deps.should_detach,
+#           detach_terminal, windowless_python). With no pythonw.exe the old FreeConsole stays. Not tried on real
+#           Windows (only faked here).
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
@@ -1762,8 +1770,9 @@ def main():
     # tkinter is needed for the window (everything else works without it)
     if tk is None:
         sys.exit("tkinter is not installed. " + deps.tk_advice())
-    # --- 1b. Linux / macOS (ST-5): nothing more to ask in the terminal, so the program carries on in a session
-    #        of its own and the terminal gets its prompt back (closing it no longer closes the program)
+    # --- 1b. Linux / macOS (ST-5), Windows (ST-9): nothing more to ask in the terminal, so the program carries on
+    #        on its own (a session of its own; on Windows pythonw.exe) and the terminal gets its prompt back, or the
+    #        console window a double-click opened closes (closing it no longer closes the program)
     if deps.should_detach(args.console):
         sys.exit(deps.detach_terminal(restart_argv))
 
