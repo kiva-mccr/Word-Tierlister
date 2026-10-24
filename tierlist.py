@@ -1648,8 +1648,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           and the docs all expect tierlist.py (and an update would bring it back). Instead, as on Linux, it starts
 #           itself again with pythonw.exe (no console window), detached, and this copy ends: the console closes, a
 #           terminal gets its prompt back, and a failure right at the start still shows there (deps.should_detach,
-#           detach_terminal, windowless_python). With no pythonw.exe the old FreeConsole stays. Not tried on real
-#           Windows (only faked here).
+#           detach_terminal, windowless_python). With no pythonw.exe the old FreeConsole stays. Confirmed by the user
+#           on real Windows.
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

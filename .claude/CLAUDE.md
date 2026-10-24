@@ -127,8 +127,8 @@ commit 9b78889; swaps are still counted).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
-- The Windows console hand-off (ST-9: pythonw.exe; `startup.detach_console` as the fallback) was only faked here; confirm on real Windows.
-  ST-5's terminal hand-back was checked on Linux in a pseudo-terminal, not on a Mac.
+- The Windows console hand-off (ST-9: pythonw.exe) works on real Windows (confirmed by the user); the FreeConsole
+  fallback (`startup.detach_console`, no pythonw.exe) was only simulated. ST-5's terminal hand-back was checked on Linux in a pseudo-terminal, not on a Mac.
 - UI-54 (dpi awareness, monitor work areas) was only simulated here; confirm on real Windows 11. Tk 8.6 keeps
   its size when moved to a monitor with a different scaling.
 - On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
