@@ -76,13 +76,20 @@ def apply_look(store):
 
 
 def reopen_while_asked(app, store, defs, new_root):
-    """After the window closed: while it closed to reopen (App.reopen: a new look), build it again in that look on a
-    new root (new_root() -> a hidden Tk with fonts and styles), with the save still open; returns the last App."""
+    """After the window's event loop ended: while it ended to reopen (App.reopen: a new look), build the window again
+    in that look on a new root (new_root() -> a hidden Tk with fonts and styles), with the save still open, while
+    the old one is still on screen; the new one takes its place, size and state (App.take_over) and shows, and only
+    then does the old one close, so the look changes in place instead of the window going away and coming back
+    (reported: jarring). Returns the last App."""
     while app.reopening:
+        old = app
         apply_look(store)
         root = new_root()
+        tk._default_root = root                  # (anything made without a master belongs to the new window)
         app = App(root, store, defs)
+        app.take_over(old)
         app.open_window()
+        root.after(120, app._drop_old)           # (once the new one is drawn over it)
         root.mainloop()
     return app
 
@@ -1073,9 +1080,9 @@ class App:
         self.place_empty.grid_remove()
         self.word_card.grid()
         notes = (" - looked up" if row["word"] == self.looked_up else "") + \
-                (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
-                (" - compound word" if row["pen"] else "")
-        label = card_label(row["kinds"], RUDE_NAMES.get(self.store.rude_kind(row["word"])))     # ("noun · sexual")
+                (" - revisiting a word you skipped" if row["skips"] > 0 else "")
+        label = card_label(row["kinds"], RUDE_NAMES.get(self.store.rude_kind(row["word"])),     # ("noun · sexual";
+                           compound=bool(row["pen"]))                                            # compound: asked for)
         self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}",   # (it fits the word itself)
                            censor=self.store.censored(row["word"]), kind=label or None)
         anchors_ok = all(self.anchors)
@@ -1984,6 +1991,44 @@ class App:
         self.flash(f"Exported {len(rows):,} placed words", ms=3000)
 
     reopening = False         # set by reopen(): main() builds the window again, in the look now chosen
+    _browse_was_open = False
+    _old = None               # the window this one replaces (take_over), until it is closed
+
+    def _drop_old(self):
+        """Close the window this one replaced (its save stays open: it is this one's)."""
+        old, self._old = self._old, None
+        if old is not None:
+            try:
+                old._shut(close_store=False)
+            except tk.TclError:
+                pass
+
+    def take_over(self, old):
+        """Become the window `old` was (reopening in a new look): its place and size, maximized or not, the word
+        looked up on its card and its Browse window (closed there, opened here as it was)."""
+        try:
+            maximized = is_maximized(old.root)
+            geometry = old.root.geometry()
+        except tk.TclError:
+            return
+        self.root.geometry(geometry)
+        if maximized:
+            try:
+                self.root.state("zoomed")            # (Windows, macOS)
+            except tk.TclError:
+                try:
+                    self.root.attributes("-zoomed", True)     # (Linux)
+                except tk.TclError:
+                    pass
+        self._old = old
+        self.looked_up = old.looked_up
+        for bw in list(old.browsers):
+            if bw.alive():
+                bw.close()                           # (it saves what it showed: browse_state)
+        self.browse_state = old.browse_state
+        self.refresh()
+        if old._browse_was_open:
+            self.root.after(150, self.open_browser)
 
     def reopen(self):
         """Close this window but keep the save open: main() builds it again at once, so a new look (dark mode, the
@@ -1992,7 +2037,11 @@ class App:
             self.root.after(200, self.reopen)
             return
         self.reopening = True
-        self._shut(close_store=False)
+        for bw in self.browsers:                 # (a Browse window open now opens again in the new look)
+            if bw.alive():
+                self._browse_was_open = True
+        self.root.after(0, self.root.quit)       # (main() builds the new window over this one, then closes it;
+                                                 # from the event loop: a quit asked before it runs is forgotten)
 
     def on_close(self):
         """Close the save cleanly and quit. While a long job writes the save (a reshuffle: App.busy) it waits for
@@ -2004,6 +2053,7 @@ class App:
         self._shut(close_store=True)
 
     def _shut(self, close_store):
+        self._drop_old()                         # (closed before the window it replaced was: that one goes too)
         for bw in list(self.browsers):
             if bw.alive():
                 bw.close()

@@ -70,6 +70,12 @@ dlg.pick(0, theme.SWATCHES[8])
 def check_reopened():
     """In the reopened window: S is the colour picked; then turn on dark mode, which reopens again."""
     app2 = tk._default_root._app
+    results["geometry"] = app2.root.geometry()
+    results["browse"] = any(b.alive() for b in app2.browsers)
+    try:
+        results["first_gone"] = not first_root.winfo_exists()
+    except tk.TclError:                               # (its interpreter is gone: destroyed)
+        results["first_gone"] = True
     assert theme.TIER_COLORS[0] == theme.SWATCHES[8] and theme.PALETTE["bg"] == theme.LIGHT["bg"]
     assert app2.tier_row.buttons[0]._fill == theme.SWATCHES[8]
     app2.dark_var.set(True); app2.toggle_dark()
@@ -77,6 +83,8 @@ def check_reopened():
 
 A.App._orig_init = A.App.__init__
 def init_and_mark(self, root, *a, **kw):
+    if "old_up" not in results:                     # (the first reopen: the old window is still on screen)
+        results["old_up"] = first_root.winfo_exists() and first_root.winfo_viewable()
     A.App._orig_init(self, root, *a, **kw)
     root._app = self
     steps = getattr(A, "_steps", [])
@@ -103,6 +111,8 @@ def check_light_again():
 
 
 A._steps = [check_reopened, check_dark, check_light_again]
+first_root = root
+root.geometry("980x700+37+41"); app.open_browser(); pump(root, 8)
 dlg.apply()
 root.mainloop()                                                       # (the first window, until it reopens)
 assert app.reopening and s.get_meta("tier_colors") == json.dumps(dlg.colors)
@@ -111,4 +121,8 @@ assert results["dark_bg"] == theme.DARK["bg"] and results["store_open"] == "1", 
 assert results["pill_ink"] == theme.TIER_TEXT                          # (a tier pill keeps the dark ink)
 assert results["light_bg"] == theme.LIGHT["bg"] and not last.reopening
 assert results["meta"] == ("0", theme.SWATCHES[8])
+# asked for (closing and opening again was jarring): the new window is built while the old one is still on screen,
+# takes its place and size and its Browse window, and only then does the old one close
+assert results["old_up"] and results["first_gone"] and results["browse"], results
+assert results["geometry"] == "980x700+37+41", results["geometry"]
 print("LOOKS OK")

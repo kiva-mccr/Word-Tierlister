@@ -1589,8 +1589,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the light look) with the same pastel tiers; Browse's rows are a deeper wash under light text
 #           (TIER_ROW_TEXT). Kept in the save (meta dark_mode). How both show: theme.apply() changes the palette in
 #           place before a window is built (app.apply_look, from the save, before even the start-up window), and a
-#           change reopens the main window with the save still open (App.reopen, app.reopen_while_asked; Browse
-#           closes with it). Nothing copies a colour at import any more (button defaults, the chart's mark lilac);
+#           change reopens the main window with the save still open (App.reopen, app.reopen_while_asked; UI-66: in
+#           place, Browse too). Nothing copies a colour at import any more (button defaults, the chart's mark lilac);
 #           a button picks its ink from its fill (theme.ink_on: dark ink on a pastel, so tier pills, duel cards and
 #           Browse's Move to read in the dark too). Screenshots of every window in both looks. _selftest_looks.py.
 #
@@ -1613,6 +1613,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           program (standalone.came_from_program; older records: yes), so a folder only updated this way is never
 #           offered to be cleaned up behind (T-12) nor removed. (The built program already updated its unpacked
 #           source without building: T-8's tick on its Unpack page.)
+# [x] UI-65 Asked for: "compound word" goes up into the card's faint label (it was on the frequency line): "noun ·
+#           compound word · sexual" (constants.card_label(compound=)).
+# [x] UI-66 Asked for: switching to dark mode (or new tier colours) closed the window and opened it again: jarring
+#           (measured under openbox: about 0.3 s with no window at all, then back in another spot). Now the new window is
+#           built while the old one is still on screen (App.reopen ends the event loop without closing it), takes its
+#           place, size and maximized state, the word looked up on its card and its Browse window (App.take_over),
+#           shows, and only then does the old one close (_drop_old): recorded at 30 frames a second, no frame without
+#           a window, light straight to dark.
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

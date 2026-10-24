@@ -82,7 +82,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
-| `src/tiercolours.py` | Settings > Tier colours... (UI-61): a pastel swatch strip and a #RRGGBB field per tier, with a preview of its pill; Reset to defaults; Apply saves them and reopens the window. |
+| `src/tiercolours.py` | Settings > Tier colours... (UI-61): a pastel swatch strip and a #RRGGBB field per tier, with a preview of its pill; Reset to defaults; Apply saves them and shows them (the window is rebuilt in place). |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
 | `src/app.py` | The main window and all four modes. |
@@ -116,7 +116,8 @@ missing or out of date, and also checks that each module imports only from the l
 
 - A rule about ranking, duels, undo or the queue: `store.py`.
 - Colours: `theme.py` (the light and dark looks, the tier colours and their swatches). Settings > Tier colours...
-  (`tiercolours.py`) and View > Dark mode keep them in the save; the window reopens to show them (`App.reopen`).
+  (`tiercolours.py`) and View > Dark mode keep them in the save; the window is rebuilt in the new look behind the
+  old one, which it then replaces in place, same size and spot, Browse too (`App.reopen`, `App.take_over`).
   Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_key_target`, `next_tab` for Tab, `_show_place`, `_show_pair`).
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
@@ -150,7 +151,8 @@ The first start asks three short questions (any time later: Settings > How words
   (the default: its shape, spread and seed decide how much).
 - **Which words:** nouns, verbs, adjectives, adverbs, obscene words, other, each a tick box with how many
   words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
-  The word card names a word's kinds faintly above it ("noun · verb"; "other" is left out).
+  The word card names a word's kinds faintly above it ("noun · verb"; "other" is left out), and "compound word"
+  for one made of words.
   Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
   Sexual and Slurs do not ("Obscene words" shows a minus while only some are). "Obscene words" holds only the
   words censored as a whole (the ones smeared on the card); a word with one rude meaning among ordinary ones

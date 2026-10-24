@@ -77,6 +77,12 @@ assert card.find_withtag("smear") and card.itemcget("word", "state") == "hidden"
 assert card.kind == card_label(s.get_word("shit")["kinds"], RUDE_NAMES.get(s.rude_kind("shit"))) and "noun" in card.kind
 assert card_label(1 | 2) == "noun \u00b7 verb" and card_label(1, "sexual") == "noun \u00b7 sexual"
 assert card_label(16) == "" and card_label(None, "crude") == "crude" and card_label(None) == ""   # ("other": nothing)
+assert card_label(1, "sexual", compound=True) == "noun \u00b7 compound word \u00b7 sexual"     # (compound: asked for)
+assert card_label(None, compound=True) == "compound word"
+s.db.execute("UPDATE words SET pen=1 WHERE word='shit'"); s.db.commit(); app.refresh(); pump(2)
+assert "compound word" in card.kind and "compound" not in card.sub, (card.kind, card.sub)   # (up in the label now)
+s.db.execute("UPDATE words SET pen=0 WHERE word='shit'"); s.db.commit(); app.refresh(); pump(2)
+assert "compound" not in card.kind
 assert app.shown("shit") == "s••t" and app.shown("table") == "table"
 # the pointer over the word un-smears it, easing; away again, it smears again
 app.anim.reduce_motion = False

@@ -85,12 +85,13 @@ POS_NAMES = (("noun", 1), ("verb", 2), ("adjective", 4), ("adverb", 8))   # on t
                                                                            # too vague to show: pronouns, numbers...)
 
 
-def card_label(kinds, rude=None):
-    """What the word card writes faintly above a word (asked for): its parts of speech, then for a censored word
-    its kind of rude word: "noun · verb", "noun · sexual"; "" when there is nothing to say. `kinds`:
-    words.kinds (KINDS bits, None when not known); `rude`: a RUDE_NAMES value or None."""
+def card_label(kinds, rude=None, compound=False):
+    """What the word card writes faintly above a word (asked for): its parts of speech, "compound word" for one
+    made of words (it was on the frequency line), then for a censored word its kind of rude word: "noun · verb",
+    "noun · compound word · sexual"; "" when there is nothing to say. `kinds`: words.kinds (KINDS bits, None when
+    not known); `rude`: a RUDE_NAMES value or None; `compound`: words.pen (a compound word)."""
     parts = [name for name, bit in POS_NAMES if (kinds or 0) & bit]
-    return " · ".join(parts + ([rude] if rude else []))
+    return " · ".join(parts + (["compound word"] if compound else []) + ([rude] if rude else []))
 
 
 RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
