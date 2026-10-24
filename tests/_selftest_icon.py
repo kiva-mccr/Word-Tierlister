@@ -42,4 +42,20 @@ for platform, ico in (("win32", True), ("linux", False), ("darwin", False)):
     sep = ";" if platform == "win32" else ":"
     assert f"{os.path.join(S.ROOT, 'src', 'icons')}{sep}icons" in args
     assert ("--icon" in args) == ico and (not ico or args[args.index("--icon") + 1].endswith("icon.ico"))
+# Linux (reported: no icon on the built program's file on Fedora): a program file cannot carry one there, so the
+# file manager's custom icon is set with gio, to a copy of the icon that stays (~/.local/share/icons)
+import deps, tempfile
+home = tempfile.mkdtemp()
+os.environ.pop("XDG_DATA_HOME", None)
+ran = []
+def run(cmd, **kw):
+    ran.append(cmd)
+    return type("R", (), {"returncode": 0})()
+assert S.give_icon("/opt/word-tierlist", platform="linux", which=lambda n: "/usr/bin/gio", run=run, home=home)
+kept = os.path.join(home, ".local", "share", "icons", "word-tierlist.png")
+assert ran == [["gio", "set", "/opt/word-tierlist", "metadata::custom-icon", "file://" + kept]]
+assert open(kept, "rb").read() == open(deps.ICON, "rb").read()
+assert not S.give_icon("/opt/x", platform="linux", which=lambda n: None, run=run, home=home)      # (no gio: nothing)
+assert not S.give_icon("C:/x.exe", platform="win32", which=lambda n: "/usr/bin/gio", run=run, home=home)  # (its own)
+assert len(ran) == 1
 print("ICON OK")

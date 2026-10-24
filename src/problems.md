@@ -4,7 +4,7 @@ What went wrong, in plain words (ST-2), with no tkinter so any layer can raise o
 
 - **Uses:** the standard library only
 - **Used by:** `errors`, `sources`, `startup`, `tierlist`, `wordsource`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_sources`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_health`, `_selftest_sources`
 
 The module docstring has the details; this page is the map.
 
@@ -14,6 +14,8 @@ The module docstring has the details; this page is the map.
 - `describe`: (headline, advice) in plain words for an exception.
 - `open_log`: Append-mode text log (restarted when it passes 1 MB); falls back to the null device.
 - `append_log`: Add `text` to the log file at `path`; never raises (a broken log must not hide the real error).
+- `start_session`: Mark the program's start in the log (asked for: everything that goes wrong is in it), with what it runs on; say so when the last session never closed (a crash, a...
+- `end_session`: Mark a clean close in the log (start_session looks for it next time).
 - `ensure_streams`: If started without a console (pythonw, a double-clicked launcher) the standard streams are None and print() would crash: send them to the log instead.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
@@ -24,3 +26,4 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - A new kind of failure: add its headline and advice to `describe`, and a case to `tests/_selftest_errors.py`.
+- `start_session` / `end_session` (F-19) mark each session; a start whose last session has no close says so. The crash handler (faulthandler) keeps its log file open for good.

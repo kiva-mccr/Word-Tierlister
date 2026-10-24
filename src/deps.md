@@ -3,8 +3,8 @@
 The third-party packages and installing them (ST-1..ST-5): the terminal step for tkinter before any window, pip installs measured for the install dialog, the private environment fallback, detaching from the terminal, and the Linux applications-menu launcher.
 
 - **Uses:** `constants`
-- **Used by:** `app`, `sources`, `startup`, `tierlist`
-- **Tests:** `_selftest_deps`, `_selftest_install`
+- **Used by:** `app`, `sources`, `standalone`, `startup`, `tierlist`
+- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`
 
 The module docstring has the details; this page is the map.
 
@@ -14,7 +14,10 @@ The module docstring has the details; this page is the map.
 - `pip_available`: True if `python -m pip` works for this interpreter.
 - `install`: pip-install the packages for the import names `names`, streaming pip's output through `log`.
 - `tk_available`: True if tkinter (and the _tkinter extension under it) can be imported.
-- `tk_install_command`: The system command that installs tkinter for this Python, as a list, or None if we do not know one.
+- `system_install_command`: The system command that installs `what` ("tkinter", "pip", "venv" or "python") for this computer, as a list, or None if there is nothing we know to run.
+- `tk_install_command`: The system command that installs tkinter for this Python in a terminal (see system_install_command).
+- `run_system_install`: Run a system install command (system_install_command), its output through `log`; True if it worked.
+- `ensure_pip`: Python's own way to put pip back (ensurepip: no password, nothing from the system); True if pip works then.
 - `tk_advice`: What to do yourself when tkinter is missing and cannot be installed from here.
 - `venv_python`: The python inside a virtual environment folder (it may not exist yet).
 - `restart`: Start the program again with `python` (after tkinter or a private environment was set up).
@@ -24,6 +27,7 @@ The module docstring has the details; this page is the map.
 - `wants_terminal_setup`: True when stage 1 should run: an interactive terminal, installs allowed, not a packaged build.
 - `should_detach`: True when the program, started from a terminal on Linux or macOS, should carry on in its own session and give the terminal its prompt back (so closing the terminal no...
 - `detach_terminal`: Start the program again in a session of its own (setsid), not tied to this terminal, and return the exit code for this one.
+- `kept_icon`: The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy is in a folder that is gone once it closes), for a...
 - `desktop_entry`: The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built program, started by itself); `icon`: a picture's path, or the...
 - `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
 
@@ -37,3 +41,4 @@ The module docstring has the details; this page is the map.
 
 - Where tkinter install commands come from: `tk_install_command`. The window side of installing: `startup.ensure_packages`.
 - The launcher's icon is copied to `~/.local/share/icons/word-tierlist.png` (`add_to_menu`): a built program's own copy is in a folder that is gone once it closes.
+- System pieces (ST-8): `SYSTEM_PACKAGES` per package manager; from a window the command goes through `pkexec` (sudo cannot ask for a password without a terminal; no pkexec: no command, the old advice). `ensure_pip` tries Python's own ensurepip first. Tests never run the real ensurepip or an installer (fake them).

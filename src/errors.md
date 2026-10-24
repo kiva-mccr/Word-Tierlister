@@ -4,7 +4,7 @@ Friendly error and message dialogs and the program-wide safety net (ST-2): every
 
 - **Uses:** `fonts`, `problems`, `theme`, `ui_style`, `widgets`
 - **Used by:** `app`, `browser`, `filepicker`, `sources`, `startup`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_errors`
+- **Tests:** `_selftest_errors`, `_selftest_health`
 
 The module docstring has the details; this page is the map.
 
@@ -15,10 +15,12 @@ The module docstring has the details; this page is the map.
 - `ask_yes_no`: A small styled question dialog.
 - `ask_choices`: A styled question with one tick box per choice (ST-4: each package is its own choice).
 - `show_exception`: Dialog for an error the program caught itself (a failed export, say): what we were doing, why, what to try.
-- `install_handlers`: Route every unexpected error to the log (and, for the window's own errors, a friendly dialog).
+- `watch_freezes`: Write in the log when the window stops answering (asked for: freezes too, not only errors).
+- `install_handlers`: Route every unexpected error to the log (and, for the window's own errors, a friendly dialog), and note freezes there too (watch_freezes).
 - `run_guarded`: Call fn() so that no failure is silent, whether or not there is a console to read.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - No tk messagebox anywhere: use `show_error` / `show_message` / `ask_yes_no`.
 - Repeats of one error never pile up dialogs; a deliberate stop (`STOPPED_MESSAGE`) is silent.
+- `watch_freezes` (F-19): one worker thread for the program; each window ticks it, a new window takes over, and a closed one pauses it and cancels its waiting tick (else the tick fires into the closed window: a Tcl error).

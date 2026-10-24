@@ -2,7 +2,7 @@
 
 Turning the source into a program and back (T-3, T-6..T-8): the list of source files and their manifest, the PyInstaller build that carries the source inside, unpacking / syncing it into a folder, and the newest release on GitHub (update tick).
 
-- **Uses:** `bundle`, `constants`
+- **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
 - **Tests:** `_selftest_build`, `_selftest_icon`, `_selftest_sources`, `_selftest_updates`
 
@@ -25,6 +25,7 @@ The module docstring has the details; this page is the map.
 - `build`: Build the program into `dist` (installing PyInstaller first if needed): its path, or None if it failed.
 - `biggest_parts`: [(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it leaves in its work `folder` (PKG-00.toc: files and...
 - `make_program`: File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next to tierlist.py (replacing an older one), with its manifest...
+- `give_icon`: Linux: show the program's icon on its file in the file manager (reported: none on Fedora).
 - `clean_env`: A copy of the environment fit for starting the other form, Python or the builder: without what a built program sets for itself, which outlives it and points into its...
 - `start`: Start the program at `path` on its own, not as a child of this window (which then closes); `args`: its command-line options.
 - `bundled_source`: The source carried inside this program (SOURCE_DIR), or None when running from source or built without it.
@@ -64,3 +65,4 @@ The module docstring has the details; this page is the map.
 - What ships: `SHIP_DIRS` / `source_files`. Program names: `output_name` and, for releases, `RELEASE_ASSETS` (the workflow's names must match).
 - Release lookups: `latest_release` / `fetch_source` (tests pass their own `fetch`).
 - The unpack record (`UNPACKED`) says whether the folder came from the program (`from_program`; older records: yes, `came_from_program`). Only such a folder is offered to be cleaned up behind or removed (`cleanup_place`, `remove_source`): a source only updated from GitHub (T-13, `unpack(..., from_program=False)`) could be someone's own clone (T-13).
+- `give_icon` (IC-2) sets GNOME Files' custom icon on a Linux program (gio, to `deps.kept_icon`); it fails quietly where no desktop metadata service runs.

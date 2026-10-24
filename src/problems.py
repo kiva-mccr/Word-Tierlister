@@ -12,6 +12,7 @@ import os
 import socket
 import sqlite3
 import sys
+import time
 import urllib.error
 
 STOPPED_MESSAGE = "Set-up stopped. Run the program again to continue where it left off."
@@ -75,6 +76,51 @@ def append_log(path, text):
             f.write(text if text.endswith("\n") else text + "\n")
     except OSError:
         pass
+
+
+SESSION_START, SESSION_END = "=== started", "=== closed"
+_crash_log = []                       # the open file the crash handler writes into (it must stay open)
+
+
+def start_session(log_path, version="", now=None):
+    """Mark the program's start in the log (asked for: everything that goes wrong is in it), with what it runs on;
+    say so when the last session never closed (a crash, a freeze killed by hand, the power going); and have a hard
+    crash (Python or Tk itself failing: no Python error to catch) write every thread's stack there
+    (faulthandler). Returns True if the last session ended without closing."""
+    import faulthandler
+    import platform
+    unclosed = _last_session_unclosed(log_path)
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now))
+    if unclosed:
+        append_log(log_path, f"--- {stamp}\nThe last session ended without closing (a crash, the program stopped "
+                             "from outside, or the computer shutting down): anything it logged is above.")
+    append_log(log_path, f"{SESSION_START} {stamp}: Word Tier List {version}, Python {platform.python_version()}, "
+                         f"{platform.platform()}{' (built program)' if getattr(sys, 'frozen', False) else ''}")
+    try:
+        handle = open(log_path, "a", encoding="utf-8", errors="replace")
+        faulthandler.enable(file=handle, all_threads=True)
+        _crash_log[:] = [handle]
+    except (OSError, ValueError, RuntimeError):
+        pass
+    return unclosed
+
+
+def end_session(log_path, now=None):
+    """Mark a clean close in the log (start_session looks for it next time)."""
+    append_log(log_path, f"{SESSION_END} {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now))}")
+
+
+def _last_session_unclosed(log_path):
+    """True if the log's last session start has no close after it."""
+    try:
+        with open(log_path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 200_000))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return False
+    start, end = tail.rfind(SESSION_START), tail.rfind(SESSION_END)
+    return start != -1 and end < start
 
 
 def ensure_streams(log_path):

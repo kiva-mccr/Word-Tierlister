@@ -33,6 +33,7 @@ import urllib.request
 import zipfile
 
 import bundle
+import deps
 from constants import OFFLINE_ENV, REPO, VERSION, plan_line
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top of the project (tierlist.py)
@@ -289,9 +290,28 @@ def make_program(root=ROOT, log=print, release=None, place=None):
         shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace: the
                                                   # temporary folder can be on another disk, reported: Errno 18)
         log(f"  {target}")
+        if give_icon(target):
+            log("  with its icon (in the file manager)")
         return target
     finally:
         shutil.rmtree(dist, ignore_errors=True)
+
+
+def give_icon(program, platform=None, which=shutil.which, run=subprocess.run, home=None):
+    """Linux: show the program's icon on its file in the file manager (reported: none on Fedora). A Linux program
+    cannot carry one inside it as a Windows one does; GNOME Files (and others that read gvfs's metadata) show a
+    file's custom icon, set with gio. Done when it is built and again whenever it starts (a copy moved or
+    downloaded gets it too). True if it was set; never raises."""
+    if not (platform or sys.platform).startswith("linux") or not which("gio"):
+        return False
+    icon = deps.kept_icon(home)
+    if not icon:
+        return False
+    try:
+        return run(["gio", "set", program, "metadata::custom-icon", "file://" + icon], capture_output=True,
+                   timeout=5, env=clean_env()).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
 
 
 TK_PATHS = ("TCL_LIBRARY", "TK_LIBRARY", "TCLLIBPATH", "TIX_LIBRARY")

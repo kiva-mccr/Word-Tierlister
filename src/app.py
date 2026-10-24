@@ -15,12 +15,14 @@ import sqlite3
 import sys
 import threading
 import time
+import webbrowser
 
 import tkinter as tk
 from tkinter import filedialog, ttk
 
 import deps
 import rudeness
+from definitions import Online, wiktionary_url
 import wordsource
 from browser import Browser
 from dealing import DealDialog
@@ -150,6 +152,9 @@ class App:
         self.lookups = []         # words looked up so (W-1), shown in Browse for the moment, at the bottom
         self.browsers = []
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
+        self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
+        self._was_online = False
+        root.after(self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
@@ -1606,8 +1611,33 @@ class App:
         self.def_frame.show_words([self.def_lookup] if self.def_lookup else self.def_words, self.get_def,
                                   self.store.censored,
                                   self.store.smeared_meanings if self.store.deal_settings()["censor"] else None,
-                                  on_word=self._def_clicked, back=back)
+                                  on_word=self._def_clicked, back=back, link=self.wiktionary_link())
         self._fit_defs()
+
+    # ---- the word's Wiktionary page, from a definition (asked for: its etymology and the rest) ------------------
+    ONLINE_POLL_MS = 3000
+
+    def wiktionary_link(self):
+        """What a definitions pane's link opens with (open_wiktionary), or None while Wiktionary cannot be reached."""
+        return self.open_wiktionary if self.online.online else None
+
+    def open_wiktionary(self, word):
+        """Open `word`'s Wiktionary page in the browser."""
+        try:
+            webbrowser.open(wiktionary_url(word), new=2)
+        except Exception:                       # (no browser to open: say where it is)
+            self.flash(f"No web browser could be opened: {wiktionary_url(word)}", kind="warn", ms=6000)
+
+    def _watch_online(self):
+        """Every few seconds: when the connection comes or goes, the definitions panes show or hide the link."""
+        now = self.online.online
+        if now != self._was_online:
+            self._was_online = now
+            self._render_defs()
+            for b in self.browsers:
+                if b.alive():
+                    b.render_def()
+        self.root.after(self.ONLINE_POLL_MS, self._watch_online)
 
     # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
     def look_up(self, word, parent=None):
@@ -2053,6 +2083,7 @@ class App:
         self._shut(close_store=True)
 
     def _shut(self, close_store):
+        self.online.stop()
         self._drop_old()                         # (closed before the window it replaced was: that one goes too)
         for bw in list(self.browsers):
             if bw.alive():

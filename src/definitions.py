@@ -17,6 +17,56 @@ from constants import OFFLINE_ENV
 
 
 # --------------------------------------------------------------------------
+# The word's page on Wiktionary (asked for: a link on the definition, for its etymology and the rest), shown only
+# while Wiktionary can be reached
+# --------------------------------------------------------------------------
+WIKTIONARY_PAGE = "https://en.wiktionary.org/wiki/"
+ONLINE_CHECK = "https://en.wiktionary.org/wiki/Special:BlankPage"
+
+
+def wiktionary_url(word):
+    """The English section of `word`'s Wiktionary page."""
+    return WIKTIONARY_PAGE + urllib.parse.quote(word.replace(" ", "_")) + "#English"
+
+
+class Online:
+    """Whether Wiktionary can be reached, checked on a worker thread now and every EVERY seconds (never from the
+    window: it only reads `online`). Never online with WORD_TIERLIST_OFFLINE (the tests). `probe() -> bool`: tests."""
+    EVERY = 60
+
+    def __init__(self, probe=None):
+        self.online = False
+        self._probe = probe or self._reach
+        self._stop = threading.Event()
+        self._thread = None
+
+    @staticmethod
+    def _reach():
+        try:
+            req = urllib.request.Request(ONLINE_CHECK, method="HEAD", headers={"User-Agent": "word-tierlist"})
+            with urllib.request.urlopen(req, timeout=5):
+                return True
+        except urllib.error.HTTPError:
+            return True                                  # (an answer, even a refusal, means it is reachable)
+        except Exception:
+            return False
+
+    def start(self):
+        if os.environ.get(OFFLINE_ENV) or self._thread is not None:
+            return self
+        def run():
+            while not self._stop.is_set():
+                self.online = bool(self._probe())
+                self._stop.wait(self.EVERY)
+        self._thread = threading.Thread(target=run, daemon=True)
+        self._thread.start()
+        return self
+
+    def stop(self):
+        self._stop.set()
+
+
+# --------------------------------------------------------------------------
 # Definitions (WordNet offline, dictionaryapi.dev online fallback, cached)
 # --------------------------------------------------------------------------
 POS_NAMES = {"n": "noun", "v": "verb", "a": "adj", "s": "adj", "r": "adv"}

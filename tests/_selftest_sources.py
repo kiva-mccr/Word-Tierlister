@@ -149,13 +149,27 @@ open(os.path.join(target2, "src", "a.py"), "w").write("edited\n")
 d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
 assert "1 updated (1 edited file kept as .bak first)" in d.state.cget("text"), d.state.cget("text")
 d.close()
-# no Python on this computer: it says how to run the source instead of offering to start it
-told = []
+# no Python on this computer: installing it is offered (asked for); said no (or nothing to install it with), it
+# says how to run the source instead of offering to start it
+told, offered = [], []
 S.python_for_source = lambda: None
 sources.show_message = lambda *a, **kw: told.append(a)
+sources.offer_system_install = lambda root, what, why: (offered.append(what), False)[1]
 d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
 d.buttons["Unpack"].invoke(); pump(root)
-assert told and "install Python" in told[0][2] and len(popened) == 1
+assert offered == ["python"] and told and "install Python" in told[0][2] and len(popened) == 1
+# said yes and it installed: the unpacked tierlist.py is offered to start with the new Python
+def installs_python(root, what, why):
+    S.python_for_source = lambda: "/usr/bin/python3"
+    return True
+sources.offer_system_install = installs_python
+asked.clear()
+d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
+d.buttons["Unpack"].invoke(); pump(root)
+assert asked and asked[-1][1] == "Source unpacked" and len(popened) == 2
+root, app = window()                                             # (starting it closed this one)
+S.python_for_source = lambda: None
+sources.offer_system_install = lambda root, what, why: False
 # built without its source: nothing to unpack
 d = sources.SourceDialog(app, source=None, frozen=True); pump(root)
 S.bundled_source = lambda: None

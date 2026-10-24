@@ -176,6 +176,36 @@ assert not s.has_word("zorbleflax") and "made-up" in bt.get("1.0", "end") and no
 A.ask_yes_no = lambda *a, **kw: True
 bw.look_up("zorbleflax"); pump(3)
 assert s.has_word("zorbleflax") and bw.tree.selection() == ("zorbleflax",)
+# the word's Wiktionary page (asked for: etymology and the rest), from a small icon at the top right of the
+# definition; only while Wiktionary can be reached (checked on a worker thread; the tests are always offline)
+import definitions as D
+opened = []
+A.webbrowser.open = lambda url, new=0: opened.append(url)
+drawer = app.def_frame.text
+def link_shown(t):
+    b = getattr(t, "_link_button", None)
+    return b is not None and b.winfo_ismapped()
+assert not app.online.online and not link_shown(drawer) and not link_shown(bt)          # offline: no link
+app.online.online = True; app._watch_online(); pump(4)
+assert link_shown(drawer) and link_shown(bt), (link_shown(drawer), link_shown(bt))
+b = drawer._link_button
+assert b.winfo_x() > drawer.winfo_width() * 0.7 and b.winfo_y() < 20                    # (top right)
+b.event_generate("<Enter>"); b.event_generate("<ButtonRelease-1>"); pump(2)
+assert opened == [D.wiktionary_url(drawer._link_word)] and opened[0].startswith("https://en.wiktionary.org/wiki/")
+bt._link_button.event_generate("<ButtonRelease-1>"); pump(2)
+assert opened[-1] == D.wiktionary_url(bw.showing or bw.current)
+assert D.wiktionary_url("ice cream") == "https://en.wiktionary.org/wiki/ice_cream#English"
+assert D.wiktionary_url("naïve") == "https://en.wiktionary.org/wiki/na%C3%AFve#English"
+app.online.online = False; app._watch_online(); pump(4)
+assert not link_shown(drawer) and not link_shown(bt)                                    # the connection went: gone
+# the check itself: a probe on a worker thread, again every EVERY seconds; never with WORD_TIERLIST_OFFLINE
+calls = []
+o = D.Online(probe=lambda: calls.append(1) or True)
+assert o.start().online is False and not calls                                          # (the tests: offline)
+saved = os.environ.pop(D.OFFLINE_ENV)
+o.EVERY = 0.05; o.start(); time.sleep(0.3); o.stop()
+os.environ[D.OFFLINE_ENV] = saved
+assert o.online is True and len(calls) >= 2
 bw.close(); assert app.lookups == []
 app.on_close()
 print("LOOKUP OK")

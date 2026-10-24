@@ -295,5 +295,16 @@ Installing happens in two stages.
    installs (Debian, Ubuntu, Homebrew), it offers to make a private `.venv` next to the program,
    installs there, and from then on starts with it automatically.
 
+What comes from the system rather than from pip is offered the same way: pip itself (Python's own `ensurepip`
+first), Python's `venv` module when the private environment needs it (Debian / Ubuntu keep it apart), and Python
+itself when a built program unpacks its source and nothing can run it. From the window your system asks for your
+password with its own prompt (`pkexec`); on Windows, Python comes from `winget`. Git is never needed.
+
 It only asks when something is missing. Started without a terminal (pythonw, a shortcut), only the
 window stage runs. `--no-install` turns all of it off.
+
+## The log
+
+`tierlist.log` sits next to your save. It keeps everything that goes wrong: errors (with a friendly dialog as well),
+a window that stops answering for 10 seconds (and where the program was stuck), a hard crash, and a session that
+ended without closing. Each start is marked with the version and the system it runs on. Send it along with a report.

@@ -1318,7 +1318,62 @@ def definition_tags(t, body):
     t.tag_raise("link")
 
 
-def fill_definitions(t, entries, body, censor=False, animator=None, base=None, on_word=None, back=None):
+class LinkButton(SmoothCanvas):
+    """A small icon (smooth.ICONS) that does something when clicked, muted until hovered, with a hover note: the
+    Wiktionary link at the top right of a definition (asked for).
+
+        LinkButton(parent, "external", command, note="Open on Wiktionary", size=16, bg=PALETTE["surface"])
+    """
+
+    def __init__(self, parent, icon, command, note=None, size=16, bg=None):
+        bg = bg or PALETTE["surface"]
+        super().__init__(parent, width=size + 6, height=size + 6, bd=0, highlightthickness=0, bg=bg, cursor="hand2")
+        self.icon, self.command, self.size = icon, command, size
+        self._hover = False
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.bind("<ButtonRelease-1>", lambda e: self.command and self.command())
+        if note:
+            Tooltip(self, lambda e: note)
+        self._draw()
+
+    def _set_hover(self, on):
+        self._hover = on
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        ink = PALETTE["accent"] if self._hover else PALETTE["muted"]
+        self.create_image(3, 3, image=self.icon_image(self.icon, self.size, ink), anchor="nw")
+
+    def refresh(self):
+        self._draw()
+
+
+WIKTIONARY_NOTE = "Open on Wiktionary: where the word comes from, and more"
+
+
+def _place_link(t, word, link):
+    """The Wiktionary link at the top right of the pane `t` for `word` (link(word) opens it), or none: no word, or
+    `link` None (offline: it only shows while Wiktionary can be reached)."""
+    button = getattr(t, "_link_button", None)
+    if not word or link is None:
+        if button is not None:
+            button.place_forget()
+        t._link_word = None
+        t.tag_configure("head", rmargin=0)
+        return
+    if button is None:
+        size = max(12, int(tkfont.Font(font=t.cget("font")).metrics("linespace") * 0.8))
+        button = t._link_button = LinkButton(t, "external", lambda: t._link and t._link_word and t._link(t._link_word),
+                                             note=WIKTIONARY_NOTE, size=size, bg=t.cget("bg"))
+    t._link, t._link_word = link, word
+    t.tag_configure("head", rmargin=button.size + 12)    # (a long word's line never runs under it)
+    button.place(relx=1.0, x=-6, y=6, anchor="ne")
+    tk.Misc.lift(button)                         # (above the text; a canvas's own lift() raises items)
+
+
+def fill_definitions(t, entries, body, censor=False, animator=None, base=None, on_word=None, back=None, link=None):
     """Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up,
     the keys of its meanings to smear, True if the word itself is censored)]: the word in bold, then each sense
     numbered, its part of speech, its text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a
@@ -1327,10 +1382,13 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
     the same way (not masked), and un-smears while the pointer is anywhere over the pane. `base` (F-3): base(word)
     -> the same four for another word; under a meaning that only names one ("Alternative form of bull dyke"), that
     word's own first meaning, muted. `on_word` (W-1): on_word(word) when a word in a meaning is clicked (it is
-    underlined under the pointer); `back`: (text, command), a quiet line on top that goes back (after a lookup)."""
+    underlined under the pointer); `back`: (text, command), a quiet line on top that goes back (after a lookup).
+    `link`: link(word) opens the first word's Wiktionary page, from a small icon at the top right (None: no icon,
+    as while Wiktionary cannot be reached)."""
     from definitions import form_target, main_sense, parse_definition
     for c in getattr(t, "_smears", ()):          # the smeared senses of the last fill (tk keeps them otherwise)
         c.destroy()
+    _place_link(t, entries[0][0] if entries else None, link)
     t._smears, t._words, t._animator, t._on_word = [], [], animator, on_word
     _watch_pane(t)
     _watch_links(t)
@@ -1656,12 +1714,12 @@ class DefinitionDrawer(tk.Frame):
     def lines(self):
         return int(self.text.cget("height"))
 
-    def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None):
+    def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None, link=None):
         """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
         up). `censored(word)`: True for a word shown smeared (until the pointer is over the pane); `smeared`: while
         censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6). A meaning that only
         names another word shows that word's first meaning under it, looked up the same way (F-3). `on_word`,
-        `back`: see fill_definitions (W-1)."""
+        `back`, `link`: see fill_definitions (W-1; the Wiktionary link on each column's word)."""
         def entry(w):
             return w, get_def(w), smeared(w) if smeared else (), bool(censored and censored(w))
         two = len(words) == 2 and back is None       # (a duel: each word's meanings on its card's side)
@@ -1670,7 +1728,7 @@ class DefinitionDrawer(tk.Frame):
             if t is self.text2 and not two:
                 continue
             fill_definitions(t, [entry(w) for w in ws], self._body, censor=smeared is not None,
-                             animator=self._anim, base=entry, on_word=on_word, back=bk)
+                             animator=self._anim, base=entry, on_word=on_word, back=bk, link=link)
 
     @property
     def is_open(self):

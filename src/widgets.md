@@ -33,6 +33,8 @@ The module docstring has the details; this page is the map.
 - `Toast`: A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
   - methods: cget, hurry, show, wiggle, fling, hide
 - `definition_tags`: The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of speech and examples in italics, senses indented.
+- `LinkButton`: A small icon (smooth.ICONS) that does something when clicked, muted until hovered, with a hover note: the Wiktionary link at the top right of a definition (asked for).
+  - methods: refresh
 - `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
 - `word_at`: (start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning, an example or a form's line (LINK_TAGS), or None (a heading, a...
 - `smeared_label`: A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places that are not our own canvases (the definition panes,...
@@ -82,3 +84,4 @@ The module docstring has the details; this page is the map.
 - The card's label (`kind`) is any short text: the App passes `constants.card_label` (parts of speech, then the rude kind, UI-63); the card never decides what it says.
 - While typing on the card (UI-51) `set()` only keeps the word for afterwards (`_saved`, with its label); the typing display uses `_put`. A refresh mid-typing used to replace what was typed while keys still went to the typing, and Escape brought the word back without its label (F-16).
 - An open dialog follows a change of the shared fonts (a zoom; maximizing brings back the maximized window's own, UI-57): `refresh_widgets` calls `StyledDialog.rescale`, which re-wraps every wrapped label in proportion, then sizes and centres the dialog again. Without it the text grew inside a window that kept its size and was cut off (F-18).
+- The Wiktionary link (UI-67, `_place_link`, `LinkButton`) is placed over the pane's top right; a canvas's `lift()` raises items, so it is raised with `tk.Misc.lift`. The word's line gets a right margin so a long word never runs under it.

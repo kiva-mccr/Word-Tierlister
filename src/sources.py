@@ -38,7 +38,7 @@ from errors import ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
 from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen, remember_save
-from startup import ensure_packages, run_with_progress
+from startup import ensure_packages, offer_system_install, run_with_progress
 from widgets import StyledDialog
 from constants import VERSION
 
@@ -371,6 +371,9 @@ class SourceDialog:
             pass                                  # (no file manager: the message below says where it is)
         done = standalone.summary(plan)
         python = standalone.python_for_source()
+        if not python and offer_system_install(self.app.root, "python", "Running the unpacked source needs Python "
+                                               "on this computer, which it does not have yet."):
+            python = standalone.python_for_source()      # (on Windows a new install may need a new session first)
         if python and ask_yes_no("Unpack the source code", "Source unpacked",
                                  f"{done}\n\nIt is in {self.target}. Start tierlist.py from there now? It uses the "
                                  "same save as this program, which then closes.", yes="Start it", no="Not now",

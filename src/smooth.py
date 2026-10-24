@@ -643,6 +643,10 @@ ICONS = {
     # a magnifier (UI-51): a ring, its hole made by tracing the inner circle back the other way, and a handle
     "search": [_ring(6.5, 6.5, 5.0, 3.0),
                [(9.6, 11.0), (11.0, 9.6), (15.0, 13.6), (13.6, 15.0)]],
+    # "opens elsewhere" (the Wiktionary link on a definition): a box open at its top right, an arrow leaving it
+    "external": [[(1.5, 3.5), (7.0, 3.5), (7.0, 5.2), (3.2, 5.2), (3.2, 12.8), (10.8, 12.8), (10.8, 9.0), (12.5, 9.0),
+                  (12.5, 14.5), (1.5, 14.5)],
+                 [(9.0, 1.5), (14.5, 1.5), (14.5, 7.0), (12.6, 5.1), (7.6, 10.1), (5.9, 8.4), (10.9, 3.4)]],
 }
 
 

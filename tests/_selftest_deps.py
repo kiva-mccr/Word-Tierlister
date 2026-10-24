@@ -83,6 +83,9 @@ state.update(missing=["wordfreq"])
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(True, clears=False)); raise AssertionError          # pip "succeeded" but still missing
 except SetupError as e: assert "Could not install" in str(e)
 state.update(missing=["wordfreq"], pip=False)
+S.deps.ensure_pip = lambda: False                                    # (never the real ensurepip in a test)
+system_install_command = deps.system_install_command
+S.deps.system_install_command = lambda what, window=False: None      # (nothing known to install pip with: told)
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(True)); raise AssertionError
 except SetupError as e: assert "pip is not available" in str(e) and "pip install wordfreq" in str(e)
 state.update(pip=True, missing=["wordfreq"]); n = len(asked)
@@ -141,6 +144,58 @@ state.update(missing=["wordfreq"], venv_ok=False)                               
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
                        restart=restarted.append, home="/prog"); raise AssertionError
 except SetupError as e: assert "-m venv" in str(e) and len(restarted) == 1
+
+# ---- asked for: what comes from the system (pip, venv, Python) is offered too, not only told (the system's
+# package manager; from the window the desktop's own password prompt, pkexec)
+def which_of(tools):
+    return lambda name: f"/usr/bin/{name}" if name in tools else None
+real_euid = deps.os.geteuid
+deps.os.geteuid = lambda: 1000
+assert system_install_command("pip", "linux", which_of({"dnf", "pkexec"}), window=True) == \
+    ["pkexec", "dnf", "install", "-y", "python3-pip"]
+assert system_install_command("venv", "linux", which_of({"apt-get"})) == ["sudo", "apt-get", "install", "-y", "python3-venv"]
+assert system_install_command("venv", "linux", which_of({"dnf"})) is None          # (Fedora's Python has it)
+assert system_install_command("python", "linux", which_of({"pacman", "pkexec"}), window=True)[-2:] == ["python", "tk"]
+assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True) is None   # (no password prompt)
+assert system_install_command("python", "win32", which_of({"winget"}))[:2] == ["winget", "install"]
+assert system_install_command("python", "darwin", which_of({"brew"})) == ["brew", "install", "python-tk"]
+assert system_install_command("tkinter", "linux", which_of({"zypper"})) == ["sudo", "zypper", "--non-interactive",
+                                                                                 "install", "python3-tk"]
+deps.os.geteuid = lambda: 0
+assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True)[0] == "apt-get"     # (as root)
+deps.os.geteuid = real_euid
+assert deps.run_system_install([sys.executable, "-c", "print('done')"], log=installs.append) is True and "  done" in installs
+assert deps.run_system_install(["/nonexistent/tool"], log=installs.append) is False
+# no pip: ensurepip first, then the system's package (asked); a required package then installs as usual
+state.update(missing=["wordfreq"], answer=["wordfreq"], pip=False)
+S.deps.ensure_pip = lambda: False
+S.deps.system_install_command = lambda what, window=False: ["pkexec", "dnf", "install", "-y", f"python3-{what}"]
+yes_no.clear(); ran = []
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), True)[1]
+def system(cmd, log):
+    ran.append(cmd); state["pip"] = True
+    return True
+installs.clear()
+assert S.ensure_packages(root, ["wordfreq"], installer=installer(True), system_installer=system) is True
+assert yes_no == ["Install pip, Python's package installer?"] and ran == [["pkexec", "dnf", "install", "-y", "python3-pip"]]
+assert installs == [["wordfreq"]]
+state.update(missing=["wordfreq"], pip=False); yes_no.clear()               # said no: the old message, nothing run
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), False)[1]
+try: S.ensure_packages(root, ["wordfreq"], installer=installer(True), system_installer=system); raise AssertionError
+except SetupError as e: assert "pip is not available" in str(e) and len(ran) == 1
+# the private environment needs venv (Debian keeps it apart): offered, then made again
+state.update(missing=["wordfreq"], pip=True)
+tries = []
+def venv_missing_once(home, names, log):
+    tries.append(1)
+    return (len(tries) > 1, "Could not make the private environment.", "/nonexistent/venv/bin/python")
+S.deps.make_private_env = venv_missing_once
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), True)[1]
+yes_no.clear(); restarted.clear()
+S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
+                  restart=restarted.append, home="/prog", system_installer=system)
+assert yes_no == ["Make a private environment for the program?", "Install Python's venv module?"] and len(tries) == 2
+assert ran[-1][-1] == "python3-venv" and restarted == ["/nonexistent/venv/bin/python"]
 
 # ---- the real question dialog: buttons, Return, Escape and closing the window all answer
 def walk(w):

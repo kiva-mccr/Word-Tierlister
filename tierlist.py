@@ -1621,6 +1621,27 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           place, size and maximized state, the word looked up on its card and its Browse window (App.take_over),
 #           shows, and only then does the old one close (_drop_old): recorded at 30 frames a second, no frame without
 #           a window, light straight to dark.
+# [x] ST-8 Asked for (git missing was the example): what the program needs from outside Python's packages is offered,
+#           not only told. Git turned out not to be one (Update the source only downloads a zip). Pip (Python's own
+#           ensurepip first, then the system's package), Python's venv module (Debian keeps it apart; for the
+#           private environment) and Python itself (to run a source the built program unpacked) are offered like
+#           tkinter: the system's package manager (apt-get, dnf, pacman, zypper; Homebrew; winget for Python),
+#           from the window through pkexec, the desktop's own password prompt (deps.SYSTEM_PACKAGES,
+#           system_install_command, run_system_install; startup.offer_system_install).
+# [x] UI-67 Asked for: a small "opens elsewhere" icon at the top right of a definition (the drawer, each duel column,
+#           Browse's pane) opens the word's Wiktionary page (its etymology and the rest), only while Wiktionary can
+#           be reached (definitions.Online: a worker thread asks now and every minute; the window checks every 3 s
+#           and shows or hides it; never in the tests).
+# [x] F-19 Asked for: the log keeps everything that goes wrong. Besides Python's errors (as before): each start is
+#           marked with the version and the system, a session that never closed is said on the next start, a hard
+#           crash (Python or Tk failing) writes every thread's stack there (faulthandler), and a window that has not
+#           answered for 10 s is written down with where each thread was, then when it answers again
+#           (problems.start_session / end_session, errors.watch_freezes).
+# [x] IC-2 Reported: the program built on Fedora 42 showed no icon in the file manager. A Linux program cannot carry one
+#           inside (a Windows .exe does); its file gets GNOME Files' custom icon (gio set ... metadata::custom-icon,
+#           to a copy of the icon in ~/.local/share/icons) when it is built and whenever it starts
+#           (standalone.give_icon). Not seen here (no desktop's metadata service in this container); File > Add to
+#           applications menu gives it a launcher with the icon on any desktop.
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf
@@ -1661,7 +1682,7 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, plan_line  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, VERSION, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
@@ -1679,7 +1700,7 @@ try:
     from app import App, apply_look, reopen_while_asked
     from fonts import init_fonts
     from errors import install_handlers, run_guarded
-    from problems import SetupError, ensure_streams, open_log
+    from problems import SetupError, end_session, ensure_streams, open_log, start_session
     from startup import detach_console, ensure_packages, run_with_progress
     from ui_style import apply_ttk_style
     from browser import Browser  # noqa: F401
@@ -1687,7 +1708,7 @@ except ImportError as exc:
     if (getattr(exc, "name", "") or "").split(".")[0] not in ("tkinter", "_tkinter"):
         raise  # a real bug, not a missing tkinter
     tk = App = Browser = None
-    from problems import SetupError, ensure_streams, open_log   # these need no tkinter
+    from problems import SetupError, end_session, ensure_streams, open_log, start_session   # (no tkinter)
 
 
 def main():
@@ -1771,6 +1792,10 @@ def main():
         elif not args.console:
             detach_console(log_path)
         ensure_streams(log_path)          # started without a console at all (pythonw): print() must not crash
+        start_session(log_path, VERSION)  # (in the log: when it started, on what; a hard crash writes its stacks there)
+        if getattr(sys, "frozen", False):  # (Linux: its icon on its file in the file manager, reported missing)
+            import threading
+            threading.Thread(target=standalone.give_icon, args=(sys.executable,), daemon=True).start()
         # `current` is the source the list was built from; an older WordNet save is upgraded to
         # Wiktionary in place, keeping all progress.
         existing = store.count_words()
@@ -1868,7 +1893,10 @@ def main():
             reopen_while_asked(app, store, defs, new_root)
 
         # Always guarded: with or without a console, a failure ends in a dialog and a log entry.
-        run_guarded(launch, log_path, db_path)
+        try:
+            run_guarded(launch, log_path, db_path)
+        finally:
+            end_session(log_path)         # (not reached by a hard crash or a kill: the next start says so)
 
 
     # Everything from opening the save onward is guarded, so even a save that cannot be opened

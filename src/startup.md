@@ -21,8 +21,10 @@ The module docstring has the details; this page is the map.
 - `run_with_progress`: Run `work(log)` on a worker thread and return its result (see the module docstring).
 - `detach_console`: Windows: drop the console window this process was started from, sending print() output to a log.
 - `ensure_packages`: Make sure the packages in `required` (and, if wanted, `optional`) can be imported (ST-4, stage 2).
+- `offer_system_install`: Something the program needs comes from the system, not from pip (deps.SYSTEM_PACKAGES: pip itself, Python's venv module, Python): ask to install it with the system's...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Worker threads never touch tkinter; errors in the work are re-raised in the caller, closing the window raises `SystemExit(STOPPED_MESSAGE)`.
 - A bar with a real percentage always shows an ETA (`EtaTracker` / `format_eta`).
+- `offer_system_install` (ST-8) asks first, then runs the system's command behind the progress window; pip missing tries `deps.ensure_pip` before asking.

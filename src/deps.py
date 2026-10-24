@@ -180,26 +180,86 @@ def tk_available():
         return False
 
 
-def tk_install_command(platform=None, which=None):
-    """The system command that installs tkinter for this Python, as a list, or None if we do not know one.
+# What the system's own package manager installs for each piece the program needs from outside Python's packages
+# (asked for: anything missing is offered, not only told). None: nothing to install there (it comes with Python).
+SYSTEM_PACKAGES = {
+    "apt-get": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": ["python3-venv"],
+                "python": ["python3", "python3-tk"]},
+    "dnf": {"tkinter": ["python3-tkinter"], "pip": ["python3-pip"], "venv": None,
+            "python": ["python3", "python3-tkinter"]},
+    "pacman": {"tkinter": ["tk"], "pip": ["python-pip"], "venv": None, "python": ["python", "tk"]},
+    "zypper": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": None, "python": ["python3", "python3-tk"]},
+}
+_MANAGERS = {"apt-get": ["apt-get", "install", "-y"], "dnf": ["dnf", "install", "-y"],
+             "pacman": ["pacman", "-S", "--noconfirm"], "zypper": ["zypper", "--non-interactive", "install"]}
+SYSTEM_NAMES = {"tkinter": "tkinter", "pip": "pip, Python's package installer", "venv": "Python's venv module",
+                "python": "Python"}
 
-    Linux: the distribution's package manager (only for the system Python, which is what those packages
-    serve). macOS: Homebrew's python-tk for this Python version. Windows: None (tkinter is an option of the
-    python.org installer, not something to install afterwards).
-    """
+
+def system_install_command(what, platform=None, which=None, window=False):
+    """The system command that installs `what` ("tkinter", "pip", "venv" or "python") for this computer, as a
+    list, or None if there is nothing we know to run.
+
+    Linux: the distribution's package manager (only for the system Python, which is what those packages serve),
+    as root: through sudo in a terminal, through pkexec (the desktop's own password prompt) from a `window`.
+    macOS: Homebrew (python-tk brings Python with it). Windows: winget for Python (for this user, no admin);
+    tkinter is an option of the python.org installer, not something to install afterwards."""
     platform = platform or sys.platform
     which = which or shutil.which
     if platform.startswith("linux"):
-        sudo = [] if hasattr(os, "geteuid") and os.geteuid() == 0 else ["sudo"]
-        for tool, cmd in (("apt-get", ["apt-get", "install", "-y", "python3-tk"]),
-                          ("dnf", ["dnf", "install", "-y", "python3-tkinter"]),
-                          ("pacman", ["pacman", "-S", "--noconfirm", "tk"]),
-                          ("zypper", ["zypper", "--non-interactive", "install", "python3-tk"])):
+        root = hasattr(os, "geteuid") and os.geteuid() == 0
+        if root:
+            elevate = []
+        elif window:
+            if not which("pkexec"):
+                return None                          # (no way to ask for the password without a terminal)
+            elevate = ["pkexec"]
+        else:
+            elevate = ["sudo"]
+        for tool, packages in SYSTEM_PACKAGES.items():
             if which(tool):
-                return sudo + cmd
+                names = packages.get(what)
+                return elevate + _MANAGERS[tool] + names if names else None
     elif platform == "darwin" and which("brew"):
-        return ["brew", "install", f"python-tk@{sys.version_info[0]}.{sys.version_info[1]}"]
+        version = f"{sys.version_info[0]}.{sys.version_info[1]}"
+        return {"tkinter": ["brew", "install", f"python-tk@{version}"], "python": ["brew", "install", "python-tk"],
+                "pip": None, "venv": None}.get(what)
+    elif platform.startswith("win") and what == "python" and which("winget"):
+        return ["winget", "install", "-e", "--id", "Python.Python.3.12", "--scope", "user",
+                "--accept-package-agreements", "--accept-source-agreements"]
     return None
+
+
+def tk_install_command(platform=None, which=None):
+    """The system command that installs tkinter for this Python in a terminal (see system_install_command)."""
+    return system_install_command("tkinter", platform, which)
+
+
+def run_system_install(cmd, log=print):
+    """Run a system install command (system_install_command), its output through `log`; True if it worked. Runs
+    on a worker thread behind the progress window (never touches tkinter)."""
+    log("Installing: " + " ".join(cmd))
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                stdin=subprocess.DEVNULL, **_hidden())
+    except OSError as exc:
+        log(f"  could not run it: {exc}")
+        return False
+    for line in proc.stdout:
+        if line.strip():
+            log("  " + line.rstrip()[:200])
+    return proc.wait() == 0
+
+
+def ensure_pip(python=None, run=subprocess.run):
+    """Python's own way to put pip back (ensurepip: no password, nothing from the system); True if pip works then.
+    Debian's Python leaves it out: then the system package is needed (system_install_command("pip"))."""
+    try:
+        run([python or sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True, timeout=300,
+            **_hidden())
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return pip_available()
 
 
 def tk_advice(platform=None):
@@ -384,6 +444,22 @@ def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, c
 ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon-256.png")   # (IC-1)
 
 
+def kept_icon(home=None):
+    """The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy
+    is in a folder that is gone once it closes), for a launcher or a file's custom icon; its path, or None."""
+    if not os.path.exists(ICON):
+        return None
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    icon = os.path.join(data, "icons", "word-tierlist.png")
+    try:
+        os.makedirs(os.path.dirname(icon), exist_ok=True)
+        shutil.copyfile(ICON, icon)
+    except OSError:
+        return None
+    return icon
+
+
 def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary"):
     """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
     program, started by itself); `icon`: a picture's path, or the name of one the desktop has."""
@@ -403,11 +479,7 @@ def add_to_menu(python, script, home=None):
     data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
     folder = os.path.join(data, "applications")
     os.makedirs(folder, exist_ok=True)
-    icon = "accessories-dictionary"
-    if os.path.exists(ICON):
-        icon = os.path.join(data, "icons", "word-tierlist.png")
-        os.makedirs(os.path.dirname(icon), exist_ok=True)
-        shutil.copyfile(ICON, icon)
+    icon = kept_icon(home) or "accessories-dictionary"
     path = os.path.join(folder, "word-tierlist.desktop")
     was = os.path.exists(path)
     with open(path, "w", encoding="utf-8") as f:

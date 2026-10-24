@@ -212,8 +212,75 @@ def _report(exc, tb_text, log_path, save_path, parent):
         _state["open"] = False
 
 
+FREEZE_SECONDS = 10                   # the window not answering this long is written in the log (asked for)
+_watch = {"root": None, "beat": 0.0, "paused": True, "log": None, "limit": FREEZE_SECONDS, "reported": False,
+          "longest": 0.0, "thread": None}
+
+
+def watch_freezes(root, log_path, every_ms=500, limit=FREEZE_SECONDS):
+    """Write in the log when the window stops answering (asked for: freezes too, not only errors). The window's
+    event loop ticks every `every_ms`; a worker thread (which never touches Tk) checks the ticks, and when there
+    has been none for `limit` seconds it writes what every thread was doing then (faulthandler's stacks: where it
+    is stuck), and a line again when the window answers once more. One thread for the program; a new window (a new
+    look) takes over the ticking, and a closed one stops it."""
+    w = _watch
+    w.update(root=root, log=log_path, limit=limit, beat=time.monotonic(), paused=False)
+
+    job = [None]
+
+    def tick():
+        if w["root"] is root:
+            w["beat"] = time.monotonic()
+            try:
+                job[0] = root.after(every_ms, tick)
+            except tk.TclError:
+                pass
+
+    def closed(e):
+        if e.widget is not root:
+            return
+        if w["root"] is root:
+            w["paused"] = True
+        try:                                   # (a tick left waiting would fire into the closed window: an error)
+            root.tk.call("after", "cancel", job[0])
+        except tk.TclError:
+            pass
+    job[0] = root.after(every_ms, tick)
+    root.bind("<Destroy>", closed, add="+")
+    if w["thread"] is None:
+        w["thread"] = threading.Thread(target=_watch_loop, daemon=True)
+        w["thread"].start()
+
+
+def _watch_loop(check_every=1.0):
+    import faulthandler
+    w = _watch
+    while True:
+        time.sleep(check_every)
+        if w["paused"]:
+            w["reported"] = False
+            continue
+        stalled = time.monotonic() - w["beat"]
+        if stalled >= w["limit"] and not w["reported"]:
+            w["reported"], w["longest"] = True, stalled
+            append_log(w["log"], f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\nThe window has not responded for "
+                                 f"{stalled:.0f} s. What each part of the program was doing then:")
+            try:
+                with open(w["log"], "a", encoding="utf-8", errors="replace") as f:
+                    faulthandler.dump_traceback(file=f, all_threads=True)
+            except (OSError, ValueError):
+                pass
+        elif w["reported"]:
+            w["longest"] = max(w["longest"], stalled)
+            if stalled < 2 * check_every:
+                w["reported"] = False
+                append_log(w["log"], f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\nThe window responds again (it "
+                                     f"did not for about {w['longest']:.0f} s).")
+
+
 def install_handlers(root, log_path, save_path=None):
-    """Route every unexpected error to the log (and, for the window's own errors, a friendly dialog)."""
+    """Route every unexpected error to the log (and, for the window's own errors, a friendly dialog), and note
+    freezes there too (watch_freezes)."""
     def fmt(et, ev, tb):
         return "".join(traceback.format_exception(et, ev, tb))
 
@@ -232,6 +299,7 @@ def install_handlers(root, log_path, save_path=None):
     root.report_callback_exception = on_tk
     sys.excepthook = on_main
     threading.excepthook = on_thread
+    watch_freezes(root, log_path)
 
 
 def run_guarded(fn, log_path, save_path=None):
