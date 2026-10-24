@@ -614,11 +614,11 @@ class App:
         """
         r = self.root
         if self.show_defs:
-            self.def_text.config(height=self._def_want)
+            self.def_frame.set_lines(self._def_want)
         if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
             for lines in (range(self._def_want, 2, -1) if self.show_defs else (None,)):     # must: re-measuring at
                 if lines:                                                     # normal size would flash small text
-                    self.def_text.config(height=lines)
+                    self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
                     ch += self.def_frame.natural_height()        # left out, it slid open over the word card)
@@ -646,7 +646,7 @@ class App:
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
             for lines in (range(self._def_want, 2, -1) if self.show_defs else (self.DEF_LINES,)):
-                self.def_text.config(height=lines)
+                self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:
                     ch += self.def_frame.natural_height()
@@ -656,8 +656,8 @@ class App:
                 continue
             break
         self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
-        if not self.show_defs and int(self.def_text.cget("height")) != self.DEF_LINES:
-            self.def_text.config(height=self.DEF_LINES)
+        if not self.show_defs and self.def_frame.lines() != self.DEF_LINES:
+            self.def_frame.set_lines(self.DEF_LINES)
         r.update_idletasks()
         if rescaled:
             self._fit_big_text()               # the fonts changed even if the window size did not
@@ -1593,7 +1593,7 @@ class App:
                 return
             self._def_want = want
             if not self.def_frame.is_open:   # about to slide open: _layout_defs makes room for it at this height
-                self.def_text.config(height=want)
+                self.def_frame.set_lines(want)
                 return
             self.def_frame.settle()          # (a definition arriving while it slides open: fitted against the
             self._fit_window()               # half-open pane, it ended taller than fits, over the word card)

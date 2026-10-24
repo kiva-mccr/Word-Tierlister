@@ -39,7 +39,7 @@ The module docstring has the details; this page is the map.
 - `TreeSmears`: Censored words in one column of a ttk.Treeview (Browse's list), smeared as everywhere else (asked for: no more b•••••d).
   - methods: refresh
 - `DefinitionDrawer`: The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold with its senses numbered, the part of speech in italics and...
-  - methods: show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, open, close
+  - methods: columns, set_lines, lines, show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, open, close
 - `ShapeCard`: One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve (how likely a word is to come up early, from rank #1 to...
   - methods: set, refresh, median_rank
 - `short_rank`: 13,863 -> '13.9k', 250,000 -> '250k', 1,200,000 -> '1.2M', 840 -> '840'.
@@ -60,6 +60,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- The definitions pane's two columns (UI-60) together ask no more width than its one column (each less its padding and the hairline): two plain halves made a zoomed duel tab too wide, so it was shown smaller. Set its height with `set_lines`, never on one text.
 - Definition links (W-1): `word_at` only answers inside `LINK_TAGS` and over a real letter (past a line's end the nearest index is not under the pointer); `_watch_links` binds once per pane, so `on_word` is read from the pane at click time. Text tag bindings (the "Back to" line) follow the last motion: tests send a `<Motion>` first.
 - WordCard's kind label (UI-59) lives in the top margin and never changes the card's size; it is placed from the letters' real tops (0.8 em above the baseline) and its font shrinks to fit (asked for: never clipped). Check by pixels at small and large zooms.
 - `smear_items`: one text copy per whole pixel, side copies faded into the paper by half a pixel apart, the middle copy drawn last. Copies stacked on one pixel looked bold on small text and then snapped (the definitions pane); check the last frames' ink against the plain word.

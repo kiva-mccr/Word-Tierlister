@@ -1219,6 +1219,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the letters' tops (0.8 em above the baseline), its font made smaller if that room is ever too low; the
 #           card's size never changes. Checked pixel by pixel at 50-200% with short, long, wrapped and accented
 #           words: never cut off, never touching the word. Words not smeared whole show nothing.
+# [x] UI-60 A duel's definitions side by side (asked for: "on their respective sides in two column format"). In
+#           Refine, Boundary check and Conflicts the definitions pane shows the left card's word on the left and the
+#           right card's on the right, a hairline between (DefinitionDrawer: a second text, two equal grid columns
+#           sized so together they ask no more room than the one column, so the window never widens; set_lines /
+#           lines for both; lines_needed is the taller one). One word, or a looked-up word (W-1), is one column.
 # [x] UI-48 Keyboard shortcuts menu (asked for): Settings > Keyboard shortcuts... opens a dialog listing every
 #           action that has a key (place in S..F, compare to anchors, don't know, better / same / worse /
 #           back, left / right / tie / skip, undo, definitions, next / previous tab, zoom), grouped by

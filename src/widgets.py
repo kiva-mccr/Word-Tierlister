@@ -1595,13 +1595,55 @@ class DefinitionDrawer(tk.Frame):
         inner = self._inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1,
                                        highlightbackground=PALETTE["border"])
         inner.pack(fill="x", anchor="n")
-        self.text = tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
-                            padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow")
-        self.text.pack(fill="x")
-        t = self.text
-        t.tag_configure("head", font=head, spacing1=2, spacing3=4)
-        definition_tags(t, body)
+        # one column, or two side by side for a duel's two words (asked for: each under its own card)
+        self.texts = [tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
+                              padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow") for _ in range(2)]
+        self.text, self.text2 = self.texts
+        self._rule = tk.Frame(inner, width=1, bg=PALETTE["border"])
+        for t in self.texts:
+            t.tag_configure("head", font=head, spacing1=2, spacing3=4)
+            definition_tags(t, body)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        inner.columnconfigure(0, weight=1)
+        self._columns = 1
         self._shown = False
+
+    COLUMN_CHARS = 80                     # the one column's width in characters; two share it (the window's size
+                                          # never changes for them)
+
+    def _set_columns(self, n):
+        """One column (the left text) or two equal ones side by side with a hairline between."""
+        if n == self._columns:
+            return
+        self._columns = n
+        inner = self._inner
+        if n == 2:                                   # (each half, less its own side padding and the hairline, so
+            c = max(1, self._body.measure("0"))      # the two together ask no more room than the one column)
+            pad = 2 * int(self.text.cget("padx")) + 1
+            for t in self.texts:
+                t.config(width=max(10, (self.COLUMN_CHARS * c - 2 * pad) // (2 * c) - 1))
+            self._rule.grid(row=0, column=1, sticky="ns", pady=10)
+            self.text2.grid(row=0, column=2, sticky="nsew")
+            inner.columnconfigure(0, weight=1, uniform="defs")
+            inner.columnconfigure(2, weight=1, uniform="defs")
+        else:
+            self._rule.grid_remove()
+            self.text2.grid_remove()
+            self.text.config(width=self.COLUMN_CHARS)
+            inner.columnconfigure(0, weight=1, uniform="")
+            inner.columnconfigure(2, weight=0, uniform="")
+
+    @property
+    def columns(self):
+        return self._columns
+
+    def set_lines(self, n):
+        """The pane's height in lines (both columns)."""
+        for t in self.texts:
+            t.config(height=n)
+
+    def lines(self):
+        return int(self.text.cget("height"))
 
     def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None):
         """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
@@ -1611,8 +1653,13 @@ class DefinitionDrawer(tk.Frame):
         `back`: see fill_definitions (W-1)."""
         def entry(w):
             return w, get_def(w), smeared(w) if smeared else (), bool(censored and censored(w))
-        fill_definitions(self.text, [entry(w) for w in words], self._body, censor=smeared is not None,
-                         animator=self._anim, base=entry, on_word=on_word, back=back)
+        two = len(words) == 2 and back is None       # (a duel: each word's meanings on its card's side)
+        self._set_columns(2 if two else 1)
+        for t, ws, bk in ((self.text, words[:1] if two else words, back), (self.text2, words[1:] if two else [], None)):
+            if t is self.text2 and not two:
+                continue
+            fill_definitions(t, [entry(w) for w in ws], self._body, censor=smeared is not None,
+                             animator=self._anim, base=entry, on_word=on_word, back=bk)
 
     @property
     def is_open(self):
@@ -1652,13 +1699,15 @@ class DefinitionDrawer(tk.Frame):
     def lines_needed(self):
         """How many lines tall the text must be to show all of it at its present width (0 before it is laid
         out). Headings and smeared senses are taller than a body line; this counts their pixels."""
-        t = self.text
         self.update_idletasks()
-        if t.winfo_width() <= 1:
-            return 0
-        pixels = t.count("1.0", "end", "update", "ypixels")
-        pixels = pixels[0] if isinstance(pixels, tuple) else pixels
-        return -(-int(pixels or 0) // max(1, self._body.metrics("linespace")))
+        need = 0
+        for t in self.texts[:self._columns]:        # (two columns: the taller one)
+            if t.winfo_width() <= 1:
+                return 0
+            pixels = t.count("1.0", "end", "update", "ypixels")
+            pixels = pixels[0] if isinstance(pixels, tuple) else pixels
+            need = max(need, -(-int(pixels or 0) // max(1, self._body.metrics("linespace"))))
+        return need
 
     def natural_height(self):
         """The height the contents want (whether or not it is folded right now)."""

@@ -393,11 +393,20 @@ defs = {"apple": '1. (noun) a round fruit\n      e.g. "an apple a day"\n2. (verb
 dr.show_words(["apple", "pear"], defs.get)
 txt = dr.text.get("1.0", "end")
 assert txt.startswith("apple\n1.  noun  a round fruit\n\u201can apple a day\u201d\n2.  verb  to pick apples")
-assert "pear\nLooking up definition..." in txt
+assert "pear" not in txt and dr.text2.get("1.0", "end").startswith("pear\nLooking up definition...")
+assert dr.columns == 2 and dr.text2.winfo_manager() == "grid"                 # (two words: side by side, asked for)
+dr.update_idletasks()
+assert dr.text.winfo_reqwidth() + dr.text2.winfo_reqwidth() + 1 <= dr.COLUMN_CHARS * small.measure("0") + 28   # (no
+                                                                                 # wider than the one column)
+dr.set_lines(5); assert dr.lines() == 5 and int(dr.text2.cget("height")) == 5
+dr.show_words(["apple", "pear"], defs.get, back=("Back to x", lambda: None))
+assert dr.columns == 1 and not dr.text2.winfo_manager()                         # (a lookup: one column again)
+dr.set_lines(9)
+dr.show_words(["apple", "pear"], defs.get)
 def tags_at(word):
     i = dr.text.search(word, "1.0"); return set(dr.text.tag_names(i))
 assert "head" in tags_at("apple") and "pos" in tags_at("noun") and "ex" in tags_at("an apple a day")
-assert "wait" in tags_at("Looking up") and "num" in tags_at("2.")
+assert "wait" in dr.text2.tag_names(dr.text2.search("Looking up", "1.0")) and "num" in tags_at("2.")
 assert dr.text.tag_cget("pos", "font") and "italic" in str(tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("slant"))
 assert str(dr.text.cget("state")) == "disabled"
 assert not dr.is_open
@@ -412,6 +421,7 @@ assert not dr.is_open and not closed and dr.winfo_height() > 1                  
 anim.finish_all(); update(); assert closed == [1] and not dr.winfo_manager()
 dr.set_open(True); assert dr.is_open
 small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
+assert dr.columns == 1 and int(dr.text.cget("width")) == dr.COLUMN_CHARS
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
 small.configure(size=11)
 # F-3: a meaning that only names another word shows that word's first real meaning under it, muted (once per word)
