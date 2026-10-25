@@ -55,6 +55,7 @@ for sw, sh, sc in cases:
     steps = [("place", False), ("refine", False), ("refine", True), ("place", True)]
     for mode, defs in steps:
         app.mode_var.set(mode); app.on_mode_change(); app.toggle_defs(defs); root.update(); root.update_idletasks()
+        app.anim.finish_all(); root.update_idletasks()      # (the definitions pane eases to its new height: F-29)
         W, H = root.winfo_width(), root.winfo_height()
         label = f"{sw}x{sh} sc{sc} {mode} defs={defs} win {W}x{H}"
         assert W <= int(sw * 0.96) and H <= int(sh * 0.90), "bigger than screen: " + label

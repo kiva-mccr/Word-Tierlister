@@ -44,4 +44,26 @@ root.after(500, root.quit); root.mainloop()
 assert called == [1], called
 T.App.edit_anchors = orig
 root.destroy()
+
+# found in a review: tierlist.md beside tierlist.py is the program's note (R-1), and a Markdown export saved there
+# would overwrite it: it goes to tierlist-export.md instead (and git tracks the note, never the export)
+import saves, app as A
+assert saves.is_code_note(os.path.join(_paths.ROOT, "tierlist.md"))          # (the real note)
+folder = tempfile.mkdtemp()
+open(os.path.join(folder, "tierlist.py"), "w").write("")
+open(os.path.join(folder, "tierlist.md"), "w").write("# My tier list\n\nS: apple\n")
+assert not saves.is_code_note(os.path.join(folder, "tierlist.md"))           # (an export of yours: free to replace)
+open(os.path.join(folder, "tierlist.md"), "w").write("# `tierlist.py`\n\nThe program's entry point.\n")
+assert saves.is_code_note(os.path.join(folder, "tierlist.md"))
+assert not saves.is_code_note(os.path.join(folder, "other.md"))
+root = tk.Tk(); root.withdraw()
+s3 = T.Store(os.path.join(tempfile.mkdtemp(), "e.db")); s3.insert_words(["apple"])
+app3 = A.App(root, s3, T.Definitions(s3))
+A.use_themed = lambda r: False
+A.filedialog.asksaveasfilename = lambda **kw: os.path.join(folder, "tierlist.md")
+app3.export(); root.update()
+assert open(os.path.join(folder, "tierlist.md")).read().startswith("# `tierlist.py`")         # (the note kept)
+assert os.path.exists(os.path.join(folder, "tierlist-export.md"))
+assert "tierlist-export.md" in app3.toast.cget("text")
+app3.on_close()
 print("TIDY OK")

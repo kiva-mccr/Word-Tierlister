@@ -1888,6 +1888,31 @@ class DefinitionDrawer(tk.Frame):
         except tk.TclError:
             pass
 
+    @property
+    def steady(self):
+        """Open and still: not sliding, held or folded (App._fit_window eases it from here to a new height)."""
+        return self._shown and not (self._sliding or self._folded or self._held)
+
+    def ease_from(self, height):
+        """Its contents just changed its height (shortened or lengthened by the window's fit): show it back at
+        `height` and ease to the new one."""
+        self.update_idletasks()
+        end = self._inner.winfo_reqheight() + self._gap
+        if not self.steady or abs(end - height) < 2:
+            return
+        try:
+            super().configure(height=height)
+        except tk.TclError:
+            return
+
+        def done():
+            self._sliding = self.easing = False
+            self._follow()
+        self.easing = True
+        self._slide(height, end, done)
+
+    easing = False                        # (ease_from running: a fit measuring now would count it half-way)
+
     def hold(self):
         """Open, about to need more room (a longer definition): keep the height it has while the window is fitted
         for its new one (what the window grows by goes to it: give); open() then eases it the rest of the way

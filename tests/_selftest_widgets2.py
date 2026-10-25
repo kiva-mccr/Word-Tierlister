@@ -415,6 +415,20 @@ full = dr.winfo_reqheight()
 dr.open(); update()
 assert dr.is_open and dr.winfo_height() < full                                  # easing open from nothing
 anim.finish_all(); update(); assert abs(dr.winfo_height() - full) <= 2, (dr.winfo_height(), full, dr.winfo_reqheight(), root.winfo_height())
+# F-29 (asked for: comparing shrank it in one jump): a fit that shortens it eases it there from where it was
+dr.set_lines(9); update(); anim.finish_all(); update()
+assert dr.steady
+tall = dr.winfo_height()
+dr.set_lines(4); update()
+dr.ease_from(tall); update()
+mid = dr.winfo_height()
+assert dr.easing and mid >= tall - 2, (tall, mid)                             # (from where it was: not jumped)
+seen = [mid]
+for _ in range(30):
+    root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+assert seen[-1] < tall and all(b <= a for a, b in zip(seen, seen[1:])) and len(set(seen)) > 3, seen
+assert not dr.easing and dr.steady
+dr.set_lines(9); update(); anim.finish_all(); update()
 # F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
 # height it has: taken as its whole height, the pane's top edge and its text dropped a little
 dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()

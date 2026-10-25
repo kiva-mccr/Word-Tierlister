@@ -19,6 +19,9 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- Never try a zoom on screen to see if it fits when it can be known before: `_precheck_zoom` tries the steps while the window is hidden (`open_window`) and `_remember_cap` keeps the limits in the save per screen and version (F-30). Estimating from the page's size failed: it grows 0.5-1.7x as fast as its text.
+- The page keeps room for a one-line message under its contents (`_toast_room`, F-29/UI-72) inside its breathing room (max, not sum: a sum cost the laptop its 110%); `_recenter` keeps the contents above it.
+- A fit that changes an open definitions pane's height eases it (`_fit_window` wraps `_fit_size`; F-29); tests that check the settled layout finish animations first.
 - `_fit_defs` grows an open definitions pane as opening does (F-28): hold it, fit the window counting it at its new height (`folded_drawer=True`) with the room it gains going to it (`_room_from` / `_give_room`), then ease it open the rest of the way.
 - A timer that reads the save checks it is still open (`App.shut`, `Store.closed`): the form offer's fired after closing and failed reading the closed save (F-25).
 - Turning censoring on says it may not be fully accurate in the window it was turned on in (UI-71, asked for: never a window of its own): `censor_note(show=)` hands the whole note to How words are dealt, else a long toast.

@@ -82,6 +82,29 @@ room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()
 assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheight(), room)
 root.destroy()
 
+# F-29 (asked for): comparing to anchors re-fits only when its question would cover something (the pane then eases
+# shorter, App._fit_window), and once it ends, only if the pane was shortened for it
+root, app = make(1150)
+root.geometry("1700x1120")                                      # (room enough for either view)
+for _ in range(10):                                             # (its definitions in and fitted first)
+    root.update(); app.anim.finish_all()
+fits = []
+real_fit = app._fit_window
+app._fit_window = lambda *a, **k: (fits.append(1), real_fit(*a, **k))[1]
+app._toast_room = lambda: 0
+app.start_compare(); root.update()
+assert app.cmp and not fits                                     # (room enough: nothing moves)
+app.cmp = None; app._render_place_state(); root.update()
+assert not fits
+app._toast_room = lambda: 2000                                  # (as if the question did not fit)
+app.start_compare(); root.update()
+assert len(fits) == 1
+app._toast_room = lambda: 0
+app._lines_before_cmp = app.def_frame.lines() + 2               # (the comparison shortened the pane)
+app.cmp = None; app._render_place_state(); root.update()
+assert len(fits) == 2                                           # (over: it may be as tall as before again)
+root.destroy()
+
 # a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped
 root, app = make(560)
 app.mem_defs["word8"] = LONG

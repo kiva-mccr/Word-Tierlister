@@ -551,3 +551,46 @@ def add_to_menu(python, script, home=None):
         f.write(desktop_entry(python, script, icon=icon))
     os.chmod(path, 0o755)
     return path, "updated" if was else "added"
+
+
+# Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu
+ICO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon.ico")
+# (written by Windows' own PowerShell through WScript.Shell: no package needed; the values come in through the
+# environment, so no path is ever quoted inside the script)
+SHORTCUT_PS = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:WTL_LNK); "
+               "$s.TargetPath = $env:WTL_TARGET; $s.Arguments = $env:WTL_ARGS; "
+               "$s.WorkingDirectory = $env:WTL_DIR; $s.IconLocation = $env:WTL_ICON; "
+               "$s.Description = 'Tier-list every English word, at your own pace'; $s.Save()")
+
+
+def start_menu_path(appdata=None):
+    """Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed)."""
+    appdata = appdata or os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+
+
+def shortcut_parts(python, script, exists=os.path.exists):
+    """(target, arguments, working folder, icon) for the shortcut: from source pythonw.exe (no console window,
+    ST-9) running tierlist.py with the program's icon; a built program (`script` None) itself, with its own icon."""
+    if script:
+        target = windowless_python(python, exists=exists) or python
+        return target, f'"{script}"', os.path.dirname(script), ICO + ",0"
+    return python, "", os.path.dirname(python), python + ",0"
+
+
+def add_to_start_menu(python, script, appdata=None, run=subprocess.run):
+    """Write (or update) the Start menu shortcut. Returns (path, "added" or "updated"); raises OSError when it could
+    not be made (the message says why)."""
+    path = start_menu_path(appdata)
+    was = os.path.exists(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    target, args, folder, icon = shortcut_parts(python, script)
+    env = dict(os.environ, WTL_LNK=path, WTL_TARGET=target, WTL_ARGS=args, WTL_DIR=folder, WTL_ICON=icon)
+    try:
+        r = run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+                 SHORTCUT_PS], env=env, capture_output=True, text=True, timeout=60, **_hidden())
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise OSError(f"PowerShell could not be started ({exc})") from exc
+    if r.returncode != 0 or not os.path.exists(path):
+        raise OSError((r.stderr or r.stdout or "").strip() or "the shortcut was not written")
+    return path, "updated" if was else "added"

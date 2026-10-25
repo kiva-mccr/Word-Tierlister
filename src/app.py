@@ -28,10 +28,10 @@ from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import (CENSOR_CAVEAT, CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
-                       QUEUE_SHAPES, RUDE_NAMES, TIERS, card_label, mask_word, typed_word)
+                       QUEUE_SHAPES, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
-from saves import app_dir, is_frozen, write_export
+from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import SourceDialog
@@ -157,6 +157,8 @@ class App:
         root.after(self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._room_from = None    # the window's height before it grew for the opening drawer (_make_room)
+        self._was_comparing = False   # (the place view showed a comparison last time: _render_place_state)
+        self._lines_before_cmp = 0    # the definitions pane's lines when that comparison began
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
         self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
@@ -165,7 +167,9 @@ class App:
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
         self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
-        self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
+        # layout -> the smallest zoom found not to fit there: never tried on screen again (saved for each screen;
+        # asked for: a zoom in that cannot fit grew the window and snapped back the first time)
+        self._zoom_cap = self._saved_caps()
         self.zoom = store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
         kept_max = self._max_zoom(store)
         if kept_max is not None and self.zoom > kept_max:    # (never bigger than when maximized: _keep_compatible)
@@ -210,6 +214,8 @@ class App:
         it is still hidden, and it is drawn while see-through (where the system allows it: Windows, macOS, a
         Linux desktop with a compositor), so it appears complete rather than as a blank frame filling in."""
         r = self.root
+        r.update_idletasks()
+        self._precheck_zoom()
         r.update_idletasks()
         try:
             r.attributes("-alpha", 0.0)
@@ -306,6 +312,8 @@ class App:
                       ("command", "Where is my save file?", self.show_save_location, None),
                       *([("command", "Add to applications menu", self.add_launcher, None)]
                         if sys.platform.startswith("linux") else []),
+                      *([("command", "Add to Start menu", self.add_launcher, None)]
+                        if sys.platform.startswith("win") else []),
                       ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
@@ -510,7 +518,7 @@ class App:
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
         if bigger and now <= before + 1e-9:
-            self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
+            self._remember_cap(z)                     # remember (in the save, for this screen): never tried again
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
@@ -571,15 +579,99 @@ class App:
 
     def _layout_key(self):
         """What decides how big things can get: the tab, the definitions pane and the screen."""
-        return (self.mode, self.show_defs, tuple(usable_area(self.root)))
+        area = usable_area(self.root)
+        return (self.mode, bool(self.show_defs), area[2], area[3])
+
+    ZOOM_CAPS = "zoom_caps"                  # meta: {"mode|defs|screen": zoom}, the zooms that do not fit there
+
+    def _cap_key(self, key):
+        mode, defs, w, h = key
+        return f"{mode}|{int(defs)}|{w}x{h}"
+
+    def _saved_caps(self):
+        """The zoom limits found before on each screen, by this version of the program (a new one may lay the page
+        out differently: it finds them again)."""
+        try:
+            saved = json.loads(self.store.get_meta(self.ZOOM_CAPS, "{}"))
+        except ValueError:
+            saved = {}
+        if saved.pop("version", None) != VERSION:
+            return {}
+        caps = {}
+        for k, z in saved.items():
+            try:
+                mode, defs, wh = k.split("|")
+                w, h = (int(v) for v in wh.split("x"))
+            except ValueError:
+                continue
+            caps[(mode, defs == "1", w, h)] = float(z)
+        return caps
+
+    def _remember_cap(self, z, key=None):
+        key = key or self._layout_key()
+        self._zoom_cap[key] = z
+        try:
+            saved = json.loads(self.store.get_meta(self.ZOOM_CAPS, "{}"))
+        except ValueError:
+            saved = {}
+        if saved.get("version") != VERSION:
+            saved = {"version": VERSION}
+        saved[self._cap_key(key)] = z
+        self.store.set_meta(self.ZOOM_CAPS, json.dumps(saved))
+
+    def _fits_at(self, size, defs):
+        """Would the page fit the screen with its text at `size`, the definitions pane open (at its shortest) or not
+        (`defs`, whether or not it is open now)? Tried and left so: only while the window is still hidden, where no
+        one sees it (_precheck_zoom puts it back)."""
+        r, d = self.root, self.def_frame
+        area = usable_area(r)
+        self.font_scale, self.grow = size / self.zoom, 1.0
+        scale_fonts(size)
+        self._apply_wraps(area[2])
+        refresh_widgets(r)
+        d.set_lines(self.DEF_LINES_MIN)
+        cw, ch = self._content_size()
+        packed = bool(d.winfo_manager())
+        if defs != packed:                    # (counted as if it were open, or not)
+            pane = d.natural_height()
+            ch += pane if defs else -pane
+        return cw <= area[2] and ch <= area[3]
+
+    def _precheck_zoom(self):
+        """While the window is still hidden (open_window): find the first zoom step above the one shown that does
+        not fit this screen, so a zoom in there is refused straight away, never tried on screen (asked for: the
+        first try grew the window and snapped back). Saved for the screen: later starts skip it (~300 ms a try)."""
+        mode, _defs, w, h = self._layout_key()
+        todo = [defs for defs in (False, True) if (mode, defs, w, h) not in self._zoom_cap]
+        if not todo:
+            return
+        d = self.def_frame
+        kept = (self.font_scale, self.grow, self._applied_scale, d.lines())
+        try:
+            for defs in todo:                 # (the pane closed and open: opened later, it is known there too)
+                step = round(round(self.zoom * self.grow, 1) + self.ZOOM_STEP, 2)
+                while step <= self.ZOOM_MAX + 1e-9:
+                    if not self._fits_at(step, defs):
+                        self._remember_cap(step, (mode, defs, w, h))
+                        break
+                    step = round(step + self.ZOOM_STEP, 2)
+        finally:
+            self.font_scale, self.grow, self._applied_scale, lines = kept
+            scale_fonts(self._applied_scale)
+            self._apply_wraps(usable_area(self.root)[2])
+            refresh_widgets(self.root)
+            d.set_lines(lines)
+            self._fit_big_text()
 
     def _refuse_zoom(self):
-        """Zoom in cannot go further: say so once; while that message shows, a repeat just wiggles it."""
+        """Zoom in cannot go further: say so and shake the message "no" (asked for: from the first time; it used
+        to grow the window and snap back); while it shows, a repeat shakes it again."""
         t = getattr(self, "_zoom_note", None)
         if t is not None and t.cget("text") == self.ZOOM_FULL and t.wiggle():
             return
         self.flash(self.ZOOM_FULL, kind="info", ms=1500)
         self._zoom_note = self.toast
+        self.toast.wiggle()
 
     ZOOM_FULL = "This is as big as fits on this screen"
 
@@ -626,6 +718,9 @@ class App:
             # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
             # the content shook by a pixel while the definitions pane slid against its top)
             top = int(free - max(0, min(band / 2, free)))
+            limit = ch - inner.winfo_reqheight() - self._toast_room()
+            if limit >= 0:                        # (centred low on a short page, it sat where messages show)
+                top = min(top, limit)
             inner.place_configure(y=top)
 
     def _fit_big_text(self):
@@ -670,10 +765,29 @@ class App:
         inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
         inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight() + extra)
         width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
-        height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
+        # (breathing room round the contents, at least enough under them for a message: _recenter keeps it there)
+        height = sum(w.winfo_reqheight() for w in rows) + inner_h + max(int(50 * f), self._toast_room())
         return width, height
 
+    def _toast_room(self):
+        """Room kept under the page's contents for a one-line message (asked for: a message never covers the word
+        card, the buttons or the definitions pane): a Toast's pill, 10 px off the bottom, and a little gap."""
+        line = font("label").metrics("linespace")
+        return int(line * 1.9) + 2 + 10 + 6
+
     def _fit_window(self, initial=False, rebase=False, folded_drawer=False):
+        """_fit_size, and an open definitions pane it made shorter or taller eases there from where it was (asked
+        for: comparing to anchors shrank it in one jump), unless the text size changed too (a zoom: it follows)."""
+        d = self.def_frame
+        if d.easing:
+            d.settle()
+        was = d.winfo_reqheight() if not initial and self.show_defs and d.steady else None
+        scale = self._applied_scale
+        self._fit_size(initial, rebase, folded_drawer)
+        if was is not None and self._applied_scale == scale:
+            d.ease_from(was)
+
+    def _fit_size(self, initial=False, rebase=False, folded_drawer=False):
         """Size and place the main window for this screen and these contents.
 
         The contents are shown at the zoom, or at the biggest size in 0.1 steps below it that fits the screen,
@@ -692,8 +806,9 @@ class App:
         if self.show_defs:
             self.def_frame.set_lines(self._def_want)
         if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
-            for lines in (range(self._def_want, 2, -1) if self.show_defs else (None,)):     # must: re-measuring at
-                if lines:                                                     # normal size would flash small text
+            lowest = self.DEF_LINES_MIN - 1   # must (to DEF_LINES_MIN at most): re-measuring at normal size would
+            for lines in (range(self._def_want, lowest, -1) if self.show_defs else (None,)):     # flash small text
+                if lines:
                     self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
@@ -724,7 +839,7 @@ class App:
                 scale_fonts(size)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
-            for lines in (range(self._def_want, 2, -1) if self.show_defs else (self.DEF_LINES,)):
+            for lines in (range(self._def_want, self.DEF_LINES_MIN - 1, -1) if self.show_defs else (self.DEF_LINES,)):
                 self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:
@@ -847,6 +962,20 @@ class App:
             else:
                 d.set_open(False)
                 gone()
+
+    def _refit_if_needed(self):
+        """After the place view changed (comparing to anchors began or ended): the full fit only if the page no
+        longer fits, or, the comparison over, if the definitions pane was shortened for it; the pane eases to its
+        new height (asked for: it had to shrink smoothly so everything fits)."""
+        if not self.root.winfo_exists() or self.shut:
+            return
+        self.root.update_idletasks()
+        inner = self.place_inner
+        over = (inner.winfo_reqheight() + self._toast_room() > self.center.winfo_height()
+                or inner.winfo_reqwidth() > self.center.winfo_width())       # (really covered, not just snug)
+        short = self.show_defs and not self._was_comparing and self.def_frame.lines() < self._lines_before_cmp
+        if over or short:
+            self._fit_window()
 
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
@@ -1162,6 +1291,12 @@ class App:
 
     def _render_place_state(self):
         """Switch the place view between its three states: tier buttons, anchor question, or 'set anchors'."""
+        comparing = bool(self.cmp)
+        if comparing != self._was_comparing:  # (the comparison is taller or shorter than the tier buttons)
+            self._was_comparing = comparing
+            if comparing:
+                self._lines_before_cmp = self.def_frame.lines()
+            self.root.after_idle(self._refit_if_needed)
         if self.cmp:
             mid = self.cmp["mid"]
             anchor = self.anchors[mid]
@@ -1735,6 +1870,7 @@ class App:
         self._render_defs()
 
     DEF_LINES, DEF_LINES_MAX = 9, 40     # the definition pane's usual height in lines, and the most it asks for
+    DEF_LINES_MIN = 3                    # the fit shortens it this far before taking a smaller text size
 
     def _fit_defs(self):
         """Make the definition pane tall enough to show every sense on it (UI-56), growing the window if the
@@ -1944,15 +2080,20 @@ class App:
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
 
-    def add_launcher(self):
-        """File > Add to applications menu (Linux, ST-5): a launcher that starts the program with no terminal."""
+    def add_launcher(self, platform=None):
+        """File > Add to applications menu (Linux, ST-5: a launcher that starts the program with no terminal), or
+        File > Add to Start menu (Windows, asked for: a shortcut, with no console window)."""
+        script = None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py")
+        windows = (platform or sys.platform).startswith("win")
+        menu = "Start menu" if windows else "applications menu"
         try:
-            path, how = deps.add_to_menu(sys.executable, None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py"))
+            path, how = (deps.add_to_start_menu if windows else deps.add_to_menu)(sys.executable, script)
         except OSError as exc:
-            show_exception("Applications menu", exc, self.root, "Could not add Word Tier List to the applications menu.")
+            show_exception(menu[0].upper() + menu[1:], exc, self.root, f"Could not add Word Tier List to the {menu}.")
             return
-        text = ("Word Tier List added to your applications menu (it starts without a terminal)" if how == "added"
-                else "Word Tier List updated in your applications menu")
+        quiet = "a console window" if windows else "a terminal"
+        text = (f"Word Tier List added to your {menu} (it starts without {quiet})" if how == "added"
+                else f"Word Tier List updated in your {menu}")
         self.flash(text, kind="info", ms=2600)
         return path
 
@@ -2078,13 +2219,17 @@ class App:
                 filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
         if not path:
             return
+        note = None
+        if is_code_note(path):                # (tierlist.md beside tierlist.py is its note, never an export's place)
+            path = os.path.join(os.path.dirname(path), "tierlist-export.md")
+            note = f"; saved as {os.path.basename(path)} (tierlist.md there is the program's own notes)"
         rows = self.store.export_rows()
         try:
             write_export(path, rows, self.store.skipped_words())
         except OSError as exc:
             show_exception("Export failed", exc, self.root, f"The tier list could not be saved to\n{path}")
             return
-        self.flash(f"Exported {len(rows):,} placed words", ms=3000)
+        self.flash(f"Exported {len(rows):,} placed words" + (note or ""), ms=3000 if not note else 6000)
 
     reopening = False         # set by reopen(): main() builds the window again, in the look now chosen
     _browse_was_open = False

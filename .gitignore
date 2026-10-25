@@ -226,7 +226,8 @@ __marimo__/
 *.part
 tierlist.txt
 tierlist.csv
-tierlist.md
+/tierlist-export.md
+# (tierlist.md beside tierlist.py is its note: tracked; a Markdown export there goes to tierlist-export.md)
 word_categories.tsv
 word_categories.state.json*
 .word_lists/

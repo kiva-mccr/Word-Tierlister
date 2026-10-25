@@ -197,6 +197,22 @@ if sys.platform.startswith("linux"):
     assert "Terminal=false" in text and "tierlist.py" in text and app.toast.cget("text").startswith("Word Tier List added")
     app.add_launcher(); pump(2); assert app.toast.cget("text") == "Word Tier List updated in your applications menu"
     del os.environ["XDG_DATA_HOME"]
+    assert "Add to Start menu" not in [it[1] for it in app.header.menus["File"] if len(it) > 1]   # (Windows only)
+    # Windows (asked for): the same item, as File > Add to Start menu (the shortcut itself: _selftest_deps)
+    made = []
+    import deps as D
+    keep = D.add_to_start_menu
+    D.add_to_start_menu = lambda python, script: (made.append(script), ("C:\\x\\Word Tier List.lnk", "added"))[1]
+    assert app.add_launcher(platform="win32") == "C:\\x\\Word Tier List.lnk" and made[0].endswith("tierlist.py")
+    pump(2)
+    assert app.toast.cget("text") == "Word Tier List added to your Start menu (it starts without a console window)"
+    D.add_to_start_menu = lambda python, script: (_ for _ in ()).throw(OSError("Access is denied."))
+    import app as A_mod
+    shown = []
+    keep_show = A_mod.show_exception
+    A_mod.show_exception = lambda title, exc, *a, **k: shown.append((title, str(exc)))
+    assert app.add_launcher(platform="win32") is None and shown == [("Start menu", "Access is denied.")]
+    A_mod.show_exception, D.add_to_start_menu = keep_show, keep
     app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons

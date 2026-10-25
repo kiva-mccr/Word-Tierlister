@@ -125,8 +125,11 @@ missing or out of date, and also checks that each module imports only from the l
   `Store.deal_settings` / `set_deal`, `Store.reshuffle`).
 - Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved;
   what fits the screen: `App._fit_window`). The maximized window keeps a zoom of its own: maximizing or restoring
-  the window brings back the zoom you last used in that state (`App._follow_maximize`, UI-57). Browse has its
-  own (`Browser.zoom_by`).
+  the window brings back the zoom you last used in that state (`App._follow_maximize`, UI-57). A zoom in past what
+  fits is refused with a "no" shake of its message, never tried on screen: the limits are found while the window is
+  still hidden as it opens and kept for each screen (`App._precheck_zoom`, F-30). The page keeps room under its
+  contents for a message, so one never covers the word card or the definitions pane (UI-72); comparing to anchors
+  re-fits if it would not fit, the pane easing shorter (F-29). Browse has its own zoom (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
 - Definitions while comparing two words (UI-60): side by side, each under its own card (`DefinitionDrawer`'s two
   columns; one word is one column).
@@ -240,7 +243,9 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   (`--console` keeps the terminal attached and prints there). If the window cannot open (no desktop), it
   stays in the terminal and says why.
 - File > Add to applications menu (Linux) puts Word Tier List in your desktop's applications menu, so it
-  starts with no terminal at all. Anything that must be installed is then asked in the window.
+  starts with no terminal at all. Anything that must be installed is then asked in the window. On Windows the same
+  item is File > Add to Start menu: a shortcut in your own Start menu (no administrator needed), which starts it
+  with no console window and shows its icon (`deps.add_to_start_menu`, made by Windows' own PowerShell).
 - The taskbar shows the program's icon: on Linux every start keeps a launcher for it
   (`~/.local/share/applications/word-tierlist.desktop`, out of the menu until you add it), which is how desktops
   such as GNOME know a window's icon.

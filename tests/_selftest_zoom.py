@@ -27,6 +27,26 @@ def body():
     return font("body").cget("size")
 pump(10)
 b0 = body()
+# asked for: a zoom in that cannot fit is refused untried, from the first time: the window and the text never grow
+# and snap back (_cannot_grow); the message shakes "no" (wiggle)
+sizes, tried = [], []
+real_apply = app._apply_zoom
+app._apply_zoom = lambda z: (tried.append(z), real_apply(z))[1]
+for _ in range(8):
+    before = (app.zoom, root.winfo_height(), body())
+    app.zoom_step(1); pump(2)
+    if app.toast.cget("text") == app.ZOOM_FULL:
+        assert (app.zoom, root.winfo_height(), body()) == before and tried[-1:] != [round(before[0] + 0.1, 1)], before
+        break
+assert app.toast.cget("text") == app.ZOOM_FULL
+import json
+from constants import VERSION
+saved = json.loads(s.get_meta(app.ZOOM_CAPS))                       # (kept in the save for this screen)
+assert saved["version"] == VERSION
+assert app._cap_key(app._layout_key()) in saved and A.App._saved_caps(app) == app._zoom_cap
+wiggled = app.anim.is_running(f"wiggle{id(app.toast)}")
+assert wiggled or app.anim.reduce_motion                            # (the first refusal shakes too)
+app._apply_zoom = real_apply
 for _ in range(8):
     app.zoom_step(1); pump(2)
 top, z_top = body(), app.zoom

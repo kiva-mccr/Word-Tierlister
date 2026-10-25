@@ -201,6 +201,19 @@ def remember_save(path):
         pass
 
 
+def is_code_note(path):
+    """True when `path` is the note beside a code file (tierlist.md beside tierlist.py, R-1's notes), which a
+    Markdown export of the same name would overwrite (found in a review: an export saved beside the save could)."""
+    base, ext = os.path.splitext(path)
+    if ext.lower() != ".md" or not os.path.isfile(base + ".py"):
+        return False
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.readline().startswith("# `" + os.path.basename(base) + ".py`")
+    except OSError:
+        return False
+
+
 def write_export(path, rows, skipped):
     """Write the tier list as .csv, .md or .txt (chosen by the extension).
 

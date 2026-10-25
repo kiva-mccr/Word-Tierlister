@@ -4,7 +4,7 @@ Finding, choosing, remembering and exporting save files, and where a built progr
 
 - **Uses:** `constants`
 - **Used by:** `app`, `filepicker`, `sources`, `tierlist`
-- **Tests:** `_selftest_appdir`
+- **Tests:** `_selftest_appdir`, `_selftest_tidy`
 
 The module docstring has the details; this page is the map.
 
@@ -20,10 +20,12 @@ The module docstring has the details; this page is the map.
 - `find_saves`: Files that might be tier-list saves, in the places people usually keep them.
 - `choose_save`: Pick the save file to open when --db is not given.
 - `remember_save`: Remember which save file is in use, so a replaced or moved tierlist.py finds it again.
+- `is_code_note`: True when `path` is the note beside a code file (tierlist.md beside tierlist.py, R-1's notes), which a Markdown export of the same name would overwrite (found in a...
 - `write_export`: Write the tier list as .csv, .md or .txt (chosen by the extension).
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- A Markdown export never overwrites a code file's note (`is_code_note`: tierlist.md beside tierlist.py is tierlist.py's note); App.export saves it as tierlist-export.md instead (F-31).
 - A built program keeps its save beside itself (never in PyInstaller's temporary folder); a read-only folder falls back to the user data folder.
 - The pointer file in your home folder names the save used last; a stray empty `tierlist.db` never hides the real one.
 

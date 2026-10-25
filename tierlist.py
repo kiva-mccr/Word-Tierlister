@@ -1764,6 +1764,30 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           maximized window the pane's top rises smoothly over ~200 ms and the page above slides up with it; in a
 #           window that must grow, the pane takes exactly what the window gains (its top and the page stay still;
 #           the window's own resize stays one step: resizing it every frame flickered, UI-35).
+# [x] F-29 Asked for: comparing to anchors must shrink the definitions pane smoothly so everything fits. Comparing
+#           never re-fitted the window: its question could run under the pane. Starting or ending a comparison now
+#           re-fits only when the page's contents (and a message's room) really do not fit, or, once it ends, when the
+#           pane was shortened for it (App._refit_if_needed); any fit that changes an open pane's height eases it
+#           there from where it was (App._fit_window -> DefinitionDrawer.ease_from), unless the text size changed too.
+# [x] F-30 Asked for: the first zoom in past what fits grew the window and snapped back (later ones remembered).
+#           Trying a size is the only sure way to know (the page grows 0.5 to 1.7 times as fast as its text, with
+#           fonts in whole points: no estimate held), so it is tried while the window is still hidden as it opens
+#           (App._precheck_zoom: the pane open and closed, ~0.8 s once per screen) and the limit kept in the save for
+#           each screen and version (meta zoom_caps); a limit not known yet is tried once on screen, then kept. A
+#           refused zoom only shakes its message "no", the first time too.
+# [x] UI-72 Asked for: the window keeps room for a message under the page's contents, so one never covers the word
+#           card, the buttons or the definitions pane (App._toast_room: in the page's breathing room, the contents
+#           kept above it by _recenter). Zoom limits stay as before (the 1366 x 768 laptop still reaches 110%).
+# [x] ST-10 Asked for: Add to applications menu on Windows too. File > Add to Start menu writes a shortcut in the
+#           user's own Start menu (no administrator needed), through Windows' own PowerShell (WScript.Shell: no
+#           package; the paths reach it through the environment, never quoted in the script). From source it starts
+#           pythonw.exe with tierlist.py (no console window, ST-9) and shows the icon (src/icons/icon.ico); a built
+#           program starts itself, with its own icon. deps.add_to_start_menu; a failure says why. Never run on real
+#           Windows here (faked in _selftest_deps / _selftest_ui2).
+# [x] F-31 Found in a review of the rounds above: tierlist.md is both tierlist.py's note (R-1) and the default name
+#           of a Markdown export, which .gitignore leaves out: the note had never reached GitHub, and an export saved
+#           beside tierlist.py would have overwritten it. The note is tracked now (only tierlist-export.md is left
+#           out), and an export aimed at a code file's note goes to tierlist-export.md, saying so (saves.is_code_note).
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

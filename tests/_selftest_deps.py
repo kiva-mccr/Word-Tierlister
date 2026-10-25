@@ -357,6 +357,41 @@ assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlist.
 deps.add_to_menu("/opt/word-tierlist", None, home=home2)                                  # (asked for: in the menu)
 assert "NoDisplay" not in open(p2).read()
 assert deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="win32") is None
+# Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu, written by PowerShell (faked
+# here: the values reach it through the environment, so a path with quotes or spaces needs no quoting in the script)
+appdata = tempfile.mkdtemp()
+lnk = deps.start_menu_path(appdata)
+assert lnk == os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+src = os.path.join(os.sep, "Users", "me", 'My "Tier" List', "tierlist.py")      # (this system's separators)
+py = os.path.join(os.sep, "Py", "python.exe")
+assert deps.shortcut_parts(py, src, exists=lambda p: True) == (
+    os.path.join(os.sep, "Py", "pythonw.exe"), f'"{src}"', os.path.dirname(src), deps.ICO + ",0")   # (no console)
+prog = os.path.join(os.sep, "Prog", "word-tierlist.exe")
+assert deps.shortcut_parts(prog, None) == (prog, "", os.path.dirname(prog), prog + ",0")
+ran = []
+def fake_ps(cmd, env=None, **kw):
+    ran.append((cmd, env))
+    open(env["WTL_LNK"], "w").write("lnk")
+    return subprocess.CompletedProcess(cmd, 0, "", "")
+assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps) == (lnk, "added")
+cmd, env = ran[-1]
+assert cmd[0] == "powershell" and cmd[-1] == deps.SHORTCUT_PS and "$env:WTL_TARGET" in cmd[-1]
+assert env["WTL_LNK"] == lnk and env["WTL_TARGET"] == "/opt/word-tierlist" and env["WTL_ICON"] == "/opt/word-tierlist,0"
+assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps)[1] == "updated"
+failed = lambda cmd, env=None, **kw: subprocess.CompletedProcess(cmd, 1, "", "Access is denied.")
+try:
+    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=failed)
+    raise AssertionError("a failed shortcut must say so")
+except OSError as exc:
+    assert "Access is denied" in str(exc)
+def no_ps(cmd, **kw):
+    raise FileNotFoundError("powershell")
+try:
+    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=no_ps)
+    raise AssertionError("no PowerShell must say so")
+except OSError as exc:
+    assert "PowerShell could not be started" in str(exc)
+assert os.path.exists(deps.ICO)                                             # (the icon the shortcut shows, IC-1)
 # and every window has that class (what the launcher names)
 root = tk.Tk(className=WM_CLASS); assert root.winfo_class() == WM_CLASS_NAME; root.destroy()
 assert os.path.basename(path) == WM_CLASS + ".desktop"                    # (GNOME pairs these too)

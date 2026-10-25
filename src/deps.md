@@ -4,7 +4,7 @@ The third-party packages and installing them (ST-1..ST-5): the terminal step for
 
 - **Uses:** `constants`
 - **Used by:** `app`, `sources`, `standalone`, `startup`, `tierlist`
-- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`
+- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_ui2`
 
 The module docstring has the details; this page is the map.
 
@@ -33,10 +33,14 @@ The module docstring has the details; this page is the map.
 - `launcher_path`: (no docstring)
 - `ensure_launcher`: Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a launcher that names its class): write the launcher if there...
 - `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
+- `start_menu_path`: Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed).
+- `shortcut_parts`: (target, arguments, working folder, icon) for the shortcut: from source pythonw.exe (no console window, ST-9) running tierlist.py with the program's icon; a built...
+- `add_to_start_menu`: Write (or update) the Start menu shortcut.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Keep `PACKAGES` in step with `requirements.txt` (a test checks); a new package also needs `SIZE`, `PURPOSE`, `HOMEPAGE`.
+- The Windows Start menu shortcut (ST-10) is written by PowerShell's WScript.Shell with every value passed through the environment (`SHORTCUT_PS` reads `$env:WTL_*`): never put a path inside the script's text (quotes and spaces in folder names). From source its target is pythonw.exe, never python.exe (a console window, ST-9).
 - Re-measure `SIZE` / `DOWNLOAD` with pip if requirements change.
 - Restarts never loop: `REEXEC_ENV` / `DETACHED_ENV` mark the copy that was started.
 
