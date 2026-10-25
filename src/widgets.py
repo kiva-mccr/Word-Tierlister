@@ -12,7 +12,7 @@ from tkinter import ttk
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
-from fonts import font, text_overhang
+from fonts import body_inset, font, text_overhang
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
@@ -32,53 +32,86 @@ _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     """Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one
     pale tone (so none of them stays crisp on top). The smear never reaches past the word (F-33, the user's rules):
-    the first and last letter of each line smear only inward, over the same spread, and the letters between them
-    both ways; so nothing is cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the
+    the first and last letter of each line smear only inward and the letters between them both ways; so nothing is
+    cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the
     same tone fills the letters' body behind them (else the space inside an "e", the gaps between the curves of
     "ss" and the open side of a last "c" show as white slivers and notches). `amount` (0..1) narrows it and darkens
-    it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text: cheap
-    enough to redraw every frame. Returns nothing; the items carry `tags`."""
+    it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text, redrawn
+    every frame from a layout worked out once (_smear_layout). Returns nothing; the items carry `tags`."""
     c = canvas
     box = c.bbox(item)
     if not box:
         return
+    lay = _smear_layout(c, item, box)
+    half = lay["n"] * SMEAR_SPREAD / 2 * amount
+    col = lerp_color(ink, paper, SMEAR_TONE * amount)
+    band = max(0.0, (amount - 0.75) / 0.25)    # gone a quarter of the way into un-smearing (else a pale box shows
+    if lay["band"] and band > 0:                # behind the letters closing in); not on a word wrapped over two lines
+        c.create_rectangle(*lay["band"], outline="", fill=lerp_color(paper, col, band), tags=tags)
+    # a copy every `gap` whole pixels (Tk draws text at whole pixels: copies landing on the same one stack up and look
+    # bold on small text, reported in the definitions pane; on small text wider gaps show as combs, while big text's
+    # thick strokes hide them, and half the copies is half the drawing each frame: F-36); near the end the side copies
+    # fade into the paper and the middle one, drawn last, becomes the word itself, so the last frames end where the
+    # plain word starts
+    gap = lay["gap"]
+    steps = max(4, int(2 * half / gap))
+    offsets = sorted({round(-half + 2 * half * k / steps) for k in range(steps + 1)} - {0}, key=abs, reverse=True)
+    side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
+    make = tk.Canvas.create_text                # (plain items: the guard below repaints their reach, once: F-36)
+    fnt = lay["font"]
+    # (F-33) a copy moved right leaves out the line's last letter, one moved left its first: so the end letters only
+    # move inward and the letters between both ways, still one item a copy
+    for dx in offsets:
+        for line, x, y, head, tail_x, tail in lay["lines"]:
+            if dx > 0 and head:
+                make(c, x + dx, y, text=head, font=fnt, anchor="nw", fill=side, tags=tags)
+            elif dx < 0 and tail:
+                make(c, tail_x + dx, y, text=tail, font=fnt, anchor="nw", fill=side, tags=tags)
+    for line, x, y, _head, _tail_x, _tail in lay["lines"]:
+        make(c, x, y, text=line, font=fnt, anchor="nw", fill=col, tags=tags)
+    # an invisible shape over everything the smear can reach: drawn with it, so deleting it with the smear's next frame
+    # makes Tk repaint all of it (letters reaching past their boxes, F-32), without a guard for every copy
+    g = lay["reach"]
+    tk.Canvas.create_rectangle(c, g[0] - half - 2, g[1], g[2] + half + 2, g[3], outline="", fill="", tags=tags)
+
+
+def _smear_layout(c, item, box):
+    """What a smear of text `item` needs that stays the same from frame to frame (kept per canvas for the text, its
+    font and its box, so an un-smearing redraws without measuring again: F-36): its lines, each without its last
+    letter and without its first (F-33), the band behind the letters' bodies (F-35), the font's "n" width, the
+    copies' gap and the smear's whole reach."""
     opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
     fnt = opts["font"]
-    half = SMEAR_SPREAD * float(c.tk.call("font", "measure", fnt, "n")) / 2 * amount
-    col = lerp_color(ink, paper, SMEAR_TONE * amount)
+    key = (item, tuple(opts.values()), tuple(box), tuple(c.coords(item)[:2]))
+    cache = c.__dict__.setdefault("_smear_cache", {})
+    if key in cache:
+        return cache[key]
     size = float(c.tk.call("font", "actual", fnt, "-size"))
     em = -size if size < 0 else size * float(c.tk.call("tk", "scaling"))
     linespace = float(c.tk.call("font", "metrics", fnt, "-linespace"))
     lines = _smear_lines(c, item, opts, box, linespace)
-    band = max(0.0, (amount - 0.75) / 0.25)    # gone a quarter of the way into un-smearing (else a pale box shows
-    if len(lines) == 1 and band > 0:            # behind the letters closing in); not on a word wrapped over two lines
-        base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
-        c.create_rectangle(box[0], base - SMEAR_BODY * em, box[2], base - 0.02 * em, outline="",
-                           fill=lerp_color(paper, col, band), tags=tags)
-    steps = max(4, int(2 * half))              # (a pixel apart at most: wider gaps show as combs on small text)
-    # one copy per whole pixel (Tk draws text at whole pixels: copies landing on the same one stack up and look
-    # bold on small text, reported in the definitions pane); near the end the side copies fade into the paper and
-    # the middle one, drawn last, becomes the word itself, so the last frames end where the plain word starts
-    both = sorted({round(-half + 2 * half * k / steps) for k in range(steps + 1)} - {0}, key=abs, reverse=True)
-    inward = sorted({round(2 * half * k / steps) for k in range(steps + 1)} - {0}, reverse=True)
-    side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
-    pieces = []                                # (text, x, y, offsets): each line's ends apart from its middle
+    rows = []                                  # (line, x, y, it less its last letter, where and it less its first)
     for text, x, y in lines:
-        if len(text) < 2:
-            pieces.append((text, x, y, both))
+        if not text.strip():
             continue
-        first, last = text[0], text[-1]
-        pieces.append((first, x, y, inward))
-        pieces.append((text[1:-1], x + _measure(c, fnt, first), y, both))
-        pieces.append((last, x + _measure(c, fnt, text[:-1]), y, [-dx for dx in inward]))
-    for text, x, y, offsets in pieces:
-        if text.strip():
-            for dx in offsets:
-                c.create_text(x + dx, y, text=text, font=fnt, anchor="nw", fill=side, tags=tags)
-    for text, x, y, _offsets in pieces:
-        if text.strip():
-            c.create_text(x, y, text=text, font=fnt, anchor="nw", fill=col, tags=tags)
-
+        if len(text) < 2:                       # (one letter: it smears both ways)
+            rows.append((text, x, y, text, x, text))
+            continue
+        rows.append((text, x, y, text[:-1], x + _measure(c, fnt, text[0]), text[1:]))
+    band = None
+    if len(lines) == 1:
+        base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
+        x, line = lines[0][1], lines[0][0]           # (from the end letters' bodies, never the box's edges: F-35)
+        left, right = body_inset(c, fnt, line)
+        band = (x + left, base - SMEAR_BODY * em, x + _measure(c, fnt, line) - right, base - 0.02 * em)
+    out, right = text_overhang(c, fnt, opts["text"])
+    lay = {"font": fnt, "lines": rows, "band": band,
+           "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)),
+           "reach": (box[0] - out - 2, box[1] - 1, box[2] + right + 2, box[3] + 1)}
+    if len(cache) > 64:
+        cache.clear()
+    cache[key] = lay
+    return lay
 
 def _measure(c, fnt, text):
     return float(c.tk.call("font", "measure", fnt, text))
@@ -2535,6 +2568,7 @@ class WordCard(SmoothCanvas):
             q = gone
             back = rise * (1 - q)                # it rises into place (from the latest layout)
             wx, wy, sy = self._word_xy[0], self._word_xy[1], self._layout[2]
+            moved = round(wy + back) - round(self.coords("word")[1]) if self.coords("word") else 0
             self.coords("word", wx, wy + back)
             if sy is not None:
                 self.coords("sub", wx, sy + back)
@@ -2551,8 +2585,8 @@ class WordCard(SmoothCanvas):
             self.itemconfigure("word", fill=lerp_color(card, PALETTE["text"], q))
             self.itemconfigure("sub", fill=lerp_color(card, PALETTE["muted"], q))
             self.itemconfigure("kind", fill=lerp_color(card, self._kind_color(), q))
-            if self._censor:                      # (the smear rises with its word)
-                self.smear.paint()
+            if self._censor and moved:            # (the smear rises with its word: moved, not drawn again, F-36)
+                self.move(self.smear.tag, 0, moved)
 
         def done():
             if self._frame is frame:              # (a newer transition, started over this one, cleans up itself)

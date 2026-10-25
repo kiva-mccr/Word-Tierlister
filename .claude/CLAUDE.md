@@ -129,7 +129,8 @@ UI-79 (the shelf's spines one width), UI-73 (typefaces), UI-75 (GitHub link), UI
 rounds of mock-ups (a Design canvas artifact, each board beside the real window) and kept buttons, card and labels.
 UI-78 (borders: of six slight changes, only softer button and pill edges, widgets.EDGE; the user is attached to the
 current style), F-32 (letters reaching past their boxes: smeared and repainted whole), F-33 (smears never reach past
-the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar). Next: nothing planned. Dropped: UI-21 (next-up peek), UI-74 (film grain)
+the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar), F-35 (no ledge under a smear),
+F-36 (smear frames cheap again: layout once, one item a copy, one guard). Next: nothing planned. Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.

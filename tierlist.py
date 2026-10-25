@@ -1806,6 +1806,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
+# [x] F-35 Reported (with pictures): a horizontal ledge under every smear. The band that fills the letters' body
+#           behind the smear spanned the word's whole box (side bearings, serif feet); once the ends smeared only
+#           inward (F-33) its flat ends stuck out. It now starts and ends at the end letters' bodies, measured from
+#           the font files above the serifs (overhang.json's body tables, fonts.body_inset).
+# [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
+#           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
+#           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
+#           copies on big text a few pixels apart, and a card sliding in moves its smear instead of redrawing it.
+#           A card frame 2.1 -> 0.7 ms here (1.0 before F-32); Xvfb only: never measured on a real desktop.
 # [x] UI-73 Typefaces: Young Serif for the words (the card, a duel, a definition's heading) and Atkinson
 #           Hyperlegible for everything else, shipped in src/typefaces (SIL Open Font Licence, the licences beside
 #           them) and loaded for this program only (fonts.load_typefaces: fontconfig, a private GDI font,

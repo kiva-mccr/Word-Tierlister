@@ -68,10 +68,66 @@ FACES = {"YoungSerif-Regular": ("Young Serif", "normal", "roman"),
          "AtkinsonHyperlegible-BoldItalic": ("Atkinson Hyperlegible", "bold", "italic")}
 
 
+BODY = (100, 480)         # the letters' bodies, in 1/1000 em above the baseline: over the serifs, up to the smear's band's top
+#                           (widgets.SMEAR_BODY)
+
+
+def body_extent(glyphs, name, lo=BODY[0], hi=BODY[1]):
+    """(left, right) x of a glyph's ink between heights lo and hi (its body, where the smear's band lies), or None:
+    its outline flattened into short lines, each clipped to that slab."""
+    from fontTools.pens.basePen import BasePen
+
+    class Slab(BasePen):
+        def __init__(self, gs):
+            super().__init__(gs)
+            self.xs, self.at = [], (0, 0)
+
+        def _seg(self, a, b):
+            (x0, y0), (x1, y1) = a, b
+            if y0 > y1:
+                (x0, y0), (x1, y1) = (x1, y1), (x0, y0)
+            if y1 < lo or y0 > hi:
+                return
+            if y0 == y1:
+                self.xs += [x0, x1]
+                return
+            for y in (max(y0, lo), min(y1, hi)):
+                self.xs.append(x0 + (x1 - x0) * (y - y0) / (y1 - y0))
+
+        def _moveTo(self, p):
+            self.at = p
+
+        def _lineTo(self, p):
+            self._seg(self.at, p)
+            self.at = p
+
+        def _curveToOne(self, p1, p2, p3):
+            p0, n = self.at, 16
+            pts = [tuple((1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t ** 2 * c + t ** 3 * d
+                         for a, b, c, d in zip(p0, p1, p2, p3)) for t in (k / n for k in range(1, n + 1))]
+            for q in pts:
+                self._seg(self.at, q)
+                self.at = q
+
+        def _qCurveToOne(self, p1, p2):
+            p0, n = self.at, 16
+            pts = [tuple((1 - t) ** 2 * a + 2 * (1 - t) * t * b + t ** 2 * c for a, b, c in zip(p0, p1, p2))
+                   for t in (k / n for k in range(1, n + 1))]
+            for q in pts:
+                self._seg(self.at, q)
+                self.at = q
+
+    pen = Slab(glyphs)
+    glyphs[name].draw(pen)
+    return (min(pen.xs), max(pen.xs)) if pen.xs else None
+
+
 def write_overhangs(folder=OUT):
     """overhang.json: for each face ("family|weight|slant"), the letters whose ink reaches past their own box, as
     {letter: [left, right]} in 1/1000 em (Young Serif's j reaches 0.125 em left, its f 0.09 em right). Tk measures
-    and repaints text by those boxes, so fonts.text_overhang reads this to smear and repaint the rest (F-32)."""
+    and repaints text by those boxes, so fonts.text_overhang reads this to smear and repaint the rest (F-32). And
+    under "body|..." each letter's room either side of its body (the ink between BODY's heights), so the smear's band
+    starts and ends inside the end letters (F-35: at the box's edges it showed as a flat ledge under the smear)."""
     import json
     from fontTools.pens.boundsPen import BoundsPen
     from fontTools.ttLib import TTFont
@@ -79,7 +135,7 @@ def write_overhangs(folder=OUT):
     for name, (family, weight, slant) in FACES.items():
         f = TTFont(os.path.join(folder, name + ".ttf"))
         glyphs, hmtx, upm = f.getGlyphSet(), f["hmtx"], f["head"].unitsPerEm
-        found = {}
+        found, body = {}, {}
         for code, glyph in f.getBestCmap().items():
             if not chr(code).isprintable() or chr(code).isspace():
                 continue
@@ -91,7 +147,11 @@ def write_overhangs(folder=OUT):
             right = max(0, pen.bounds[2] - hmtx[glyph][0]) * 1000 / upm
             if left >= 5 or right >= 5:
                 found[chr(code)] = [round(left), round(right)]
+            ext = body_extent(glyphs, glyph, BODY[0] * upm / 1000, BODY[1] * upm / 1000) if code < 0x250 else None
+            if ext:                                         # (Latin letters: the ones words begin and end with)
+                body[chr(code)] = [round(ext[0] * 1000 / upm), round((hmtx[glyph][0] - ext[1]) * 1000 / upm)]
         out[f"{family}|{weight}|{slant}"] = found
+        out[f"body|{family}|{weight}|{slant}"] = body
     with open(os.path.join(folder, "overhang.json"), "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 

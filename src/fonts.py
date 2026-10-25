@@ -118,7 +118,8 @@ def _overhangs():
                 _overhang = {face: {ch: tuple(v) for ch, v in table.items()} for face, table in json.load(fh).items()}
         except (OSError, ValueError):
             _overhang = {}
-        _overhang["letters"] = set().union(*(t.keys() for t in _overhang.values())) if _overhang else set()
+        reach = [t for face, t in _overhang.items() if not face.startswith("body|")]
+        _overhang["letters"] = set().union(*(t.keys() for t in reach)) if reach else set()
     return _overhang
 
 
@@ -132,19 +133,43 @@ def text_overhang(widget, font, text):
     words = str(text or "").split()
     if not words or not table["letters"] & ({w[0] for w in words} | {w[-1] for w in words}):
         return 0, 0
-    try:
-        a = widget.tk.call("font", "actual", font)
-        actual = dict(zip(a[0::2], a[1::2]))
-        face = table.get(f"{actual['-family']}|{actual['-weight']}|{actual['-slant']}")
-        if not face:
-            return 0, 0
-        size = float(actual["-size"])
-        em = -size if size < 0 else size * float(widget.tk.call("tk", "scaling"))
-    except (tkinter.TclError, KeyError, ValueError):
+    face, em = _face(widget, font, table)
+    if not face:
         return 0, 0
     left = max(face.get(w[0], (0, 0))[0] for w in words)
     right = max(face.get(w[-1], (0, 0))[1] for w in words)
     return left * em / 1000, right * em / 1000
+
+
+def _face(widget, font, table, prefix=""):
+    """(the table's entry for `font`'s face, its em in pixels), or (None, 0) for a font not bundled."""
+    try:
+        a = widget.tk.call("font", "actual", font)
+        actual = dict(zip(a[0::2], a[1::2]))
+        size = float(actual["-size"])
+        return (table.get(f"{prefix}{actual['-family']}|{actual['-weight']}|{actual['-slant']}"),
+                -size if size < 0 else size * float(widget.tk.call("tk", "scaling")))
+    except (tkinter.TclError, KeyError, ValueError):
+        return None, 0
+
+
+def body_inset(widget, font, text):
+    """(left, right): how many pixels in from the ends of `text`'s box its first letter's body starts and its last
+    letter's ends (their ink a little above the baseline: no serifs, no side bearing). The smear's band behind the
+    letters goes from one to the other; from the box's edges it stuck out under the smear as a flat ledge (F-35).
+    For a font not bundled, a fifth of each end letter."""
+    text = str(text or "").strip()
+    if not text:
+        return 0, 0
+    face, em = _face(widget, font, _overhangs(), "body|")
+    first, last = text[0], text[-1]
+    if face and first in face and last in face:
+        return face[first][0] * em / 1000, face[last][1] * em / 1000
+    measure = lambda ch: float(widget.tk.call("font", "measure", font, ch))
+    try:
+        return measure(first) / 5, measure(last) / 5
+    except tkinter.TclError:
+        return 0, 0
 
 
 def pick_font_family(available, preferred=PREFERRED, fallback=FALLBACK):

@@ -646,31 +646,39 @@ box = cv.bbox(txt)
 for amount in (1.0, 0.3, 0.05):
     cv.delete("s"); smear_items(cv, txt, "#3D3A4B", "#ffffff", amount, ("s",))
     copies = [i for i in cv.find_withtag("s") if cv.type(i) == "text"]
-    pieces = {}
+    xs = {}
     for i in copies:
-        pieces.setdefault(cv.itemcget(i, "text"), []).append(i)
-    assert set(pieces) == {"a", " smeared meanin", "g"}            # F-33: each line's ends apart from its middle
-    for piece, items in pieces.items():
-        xs = [cv.coords(i)[0] for i in items]
-        assert len(xs) == len(set(xs)), piece                           # (no two on one pixel)
-        if amount == 0.05:                                              # side copies gone into the paper; the
-            assert all(cv.itemcget(i, "fill") == "#ffffff" for i in items[:-1])   # piece itself drawn last
-    assert cv.coords(pieces["a"][-1])[0] == 10                          # (each piece last where it is in the word)
-    # the user's rules: the first letter smears only inward, the last only inward, the middle both ways; so nothing
-    # reaches past the word (it was cut off straight there, and cropped by a canvas only as wide as the word)
-    assert min(cv.coords(i)[0] for i in pieces["a"]) == 10
-    assert max(cv.bbox(i)[2] for i in pieces["g"]) <= box[2] + 1
-    mid = [cv.coords(i)[0] for i in pieces[" smeared meanin"]]
-    if amount == 1.0:
-        assert min(mid) < max(mid[-1:]) < max(mid)                      # (both ways)
-        assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.coords(i)[0] < box[0]]
+        xs.setdefault(cv.itemcget(i, "text"), []).append(cv.coords(i)[0])
+    # F-33 (the user's rules): a copy moved right leaves out the last letter, one moved left the first, so the end
+    # letters only move inward and the letters between both ways: nothing reaches past the word (it was cut off
+    # straight there, and cropped by a canvas only as wide as the word)
+    if amount > 0.1:                                                    # (at the very end: only the word itself)
+        assert set(xs) == {"a smeared meanin", " smeared meaning", "a smeared meaning"}, set(xs)
+        assert all(x > 10 for x in xs["a smeared meanin"])
+    assert xs["a smeared meaning"] == [10]                              # (the word, drawn last)
+    assert cv.itemcget(copies[-1], "text") == "a smeared meaning"
+    for texts in xs.values():
+        assert len(texts) == len(set(texts))                            # (no two on one pixel)
+    assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in copies)
+    if amount == 0.05:
+        assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
+    assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill") == "#ffffff"]
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
 box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
-texts = [cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"]
-assert {"o", "t", "r", "f", "x"} <= set(texts) and "ne tw" in texts                # (each line's ends: one two / three four ..)
+texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
+assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
 assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
+# F-35: the band behind the letters starts and ends at the end letters' bodies, never the box's edges (it showed as
+# a flat ledge under the smear, wider than the letters above it)
+from fonts import init_fonts as _init, font as _font
+_init(root)
+cv.delete("all")
+big = cv.create_text(20, 10, text="fuck", font=_font("word"), anchor="nw"); root.update()
+bb = cv.bbox(big); smear_items(cv, big, "#3D3A4B", "#ffffff", 1.0, ("s",))
+band = [cv.coords(i) for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
+assert len(band) == 1 and band[0][0] > bb[0] + 2 and band[0][2] < bb[2] - 5, (band, bb)   # (f's stem, k's arm)
 cv.destroy()
 
 # UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it

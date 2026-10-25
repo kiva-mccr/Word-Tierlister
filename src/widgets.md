@@ -62,6 +62,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- The smear's band behind the letters starts and ends at the end letters' bodies (`fonts.body_inset`), never the box's edges: there it stuck out under the smear as a flat ledge once the ends smeared only inward (F-35).
+- A smear frame must stay cheap (F-36, reported as lag): its layout is worked out once per text and box (`_smear_layout`), its copies are plain items (tk.Canvas.create_text, no overhang tracking each) under one invisible guard over its whole reach, copies on big text sit `em / 40` pixels apart, and a card sliding in moves its smear instead of drawing it again. A copy moved right is the line less its last letter, one moved left less its first: one item a copy.
 - A smear never reaches past its word (F-33, the user's rules): each line's first and last letter smear only inward over the same spread, the letters between both ways (`smear_items`, `_smear_lines`). The straight cut-off strips it had cut through letters that reach past their boxes (Young Serif's j and f), and a smeared label's canvas, only as wide as its text, cropped the outer copies (the definitions pane).
 - A button's and a pill's edge is its fill `EDGE` (0.07) of the way to the ink (UI-78: the user chose it softer from mock-ups); keep RoundButton and TierChip on the same constant.
 - The definitions pane's two columns (UI-60) together ask no more width than its one column (each less its padding and the hairline): two plain halves made a zoomed duel tab too wide, so it was shown smaller. Set its height with `set_lines`, never on one text.
