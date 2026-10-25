@@ -75,7 +75,7 @@ def source_files(root=ROOT):
         if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f in REPO_FILES or \
                 (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
                 (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))) or \
-                (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith(".ttf")):
+                (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json"))):
             if top_level and f.endswith(".txt") and f != "requirements.txt":
                 continue                              # an export (tierlist.txt) next to tierlist.py is yours
             keep.append(f)

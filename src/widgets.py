@@ -12,7 +12,7 @@ from tkinter import ttk
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
-from fonts import font
+from fonts import font, text_overhang
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
@@ -31,39 +31,86 @@ _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
 def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     """Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one
-    pale tone (so none of them stays crisp on top), cut off straight at its first and last letter by strips in the
-    `paper` colour. A band in the same tone fills the letters' body behind them (else the space inside an "e", the
-    gaps between the curves of "ss" and the open side of a last "c" show as white slivers and notches). `amount`
-    (0..1) narrows it and darkens it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies
-    are plain canvas text: cheap enough to redraw every frame. Returns nothing; the items carry `tags`."""
+    pale tone (so none of them stays crisp on top). The smear never reaches past the word (F-33, the user's rules):
+    the first and last letter of each line smear only inward, over the same spread, and the letters between them
+    both ways; so nothing is cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the
+    same tone fills the letters' body behind them (else the space inside an "e", the gaps between the curves of
+    "ss" and the open side of a last "c" show as white slivers and notches). `amount` (0..1) narrows it and darkens
+    it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text: cheap
+    enough to redraw every frame. Returns nothing; the items carry `tags`."""
     c = canvas
     box = c.bbox(item)
     if not box:
         return
-    x, y = c.coords(item)[:2]
     opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
-    half = SMEAR_SPREAD * float(c.tk.call("font", "measure", opts["font"], "n")) / 2 * amount
+    fnt = opts["font"]
+    half = SMEAR_SPREAD * float(c.tk.call("font", "measure", fnt, "n")) / 2 * amount
     col = lerp_color(ink, paper, SMEAR_TONE * amount)
-    size = float(c.tk.call("font", "actual", opts["font"], "-size"))
+    size = float(c.tk.call("font", "actual", fnt, "-size"))
     em = -size if size < 0 else size * float(c.tk.call("tk", "scaling"))
-    lines = max(1, round((box[3] - box[1]) / float(c.tk.call("font", "metrics", opts["font"], "-linespace"))))
+    linespace = float(c.tk.call("font", "metrics", fnt, "-linespace"))
+    lines = _smear_lines(c, item, opts, box, linespace)
     band = max(0.0, (amount - 0.75) / 0.25)    # gone a quarter of the way into un-smearing (else a pale box shows
-    if lines == 1 and band > 0:                 # behind the letters closing in); not on a word wrapped over two lines
-        base = box[1] + float(c.tk.call("font", "metrics", opts["font"], "-ascent"))
+    if len(lines) == 1 and band > 0:            # behind the letters closing in); not on a word wrapped over two lines
+        base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
         c.create_rectangle(box[0], base - SMEAR_BODY * em, box[2], base - 0.02 * em, outline="",
                            fill=lerp_color(paper, col, band), tags=tags)
     steps = max(4, int(2 * half))              # (a pixel apart at most: wider gaps show as combs on small text)
     # one copy per whole pixel (Tk draws text at whole pixels: copies landing on the same one stack up and look
     # bold on small text, reported in the definitions pane); near the end the side copies fade into the paper and
     # the middle one, drawn last, becomes the word itself, so the last frames end where the plain word starts
-    offsets = sorted({round(-half + 2 * half * k / steps) for k in range(steps + 1)} - {0}, key=abs, reverse=True)
+    both = sorted({round(-half + 2 * half * k / steps) for k in range(steps + 1)} - {0}, key=abs, reverse=True)
+    inward = sorted({round(2 * half * k / steps) for k in range(steps + 1)} - {0}, reverse=True)
     side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
-    for dx in offsets:
-        c.create_text(x + dx, y, fill=side, tags=tags, **opts)
-    c.create_text(x, y, fill=col, tags=tags, **opts)
-    room = int(half) + 3
-    for x0, x1 in ((box[0] - room, box[0]), (box[2], box[2] + room)):
-        c.create_rectangle(x0, box[1], x1, box[3], fill=paper, outline="", tags=tags)
+    pieces = []                                # (text, x, y, offsets): each line's ends apart from its middle
+    for text, x, y in lines:
+        if len(text) < 2:
+            pieces.append((text, x, y, both))
+            continue
+        first, last = text[0], text[-1]
+        pieces.append((first, x, y, inward))
+        pieces.append((text[1:-1], x + _measure(c, fnt, first), y, both))
+        pieces.append((last, x + _measure(c, fnt, text[:-1]), y, [-dx for dx in inward]))
+    for text, x, y, offsets in pieces:
+        if text.strip():
+            for dx in offsets:
+                c.create_text(x + dx, y, text=text, font=fnt, anchor="nw", fill=side, tags=tags)
+    for text, x, y, _offsets in pieces:
+        if text.strip():
+            c.create_text(x, y, text=text, font=fnt, anchor="nw", fill=col, tags=tags)
+
+
+def _measure(c, fnt, text):
+    return float(c.tk.call("font", "measure", fnt, text))
+
+
+def _smear_lines(c, item, opts, box, linespace):
+    """[(line's text, its left x, its top y)] as Tk laid out text `item` (wrapped at its width, if any): where each
+    line starts is the letter Tk finds at its left end; where it sits, from the item's anchor point, the widest
+    line and its justify (its bbox is a pixel wider than the letters)."""
+    text, justify, fnt = opts["text"], opts["justify"], opts["font"]
+    n = max(1, round((box[3] - box[1]) / linespace))
+    if n == 1:
+        starts = [0]
+    else:
+        starts = []
+        for k in range(n):
+            try:
+                i = int(c.index(item, f"@{box[0] - 10},{box[1] + (k + 0.5) * linespace}"))
+            except (tk.TclError, ValueError):
+                i = starts[-1] if starts else 0
+            if not starts or i > starts[-1]:
+                starts.append(i)
+    rows = [text[i:starts[k + 1] if k + 1 < len(starts) else len(text)].rstrip("\n").rstrip()
+            for k, i in enumerate(starts)]
+    widths = [_measure(c, fnt, r) for r in rows]
+    wide, high = max(widths), len(rows) * linespace
+    ax, ay = c.coords(item)[:2]
+    anchor = opts["anchor"] or "center"
+    left = ax - wide * (0.0 if "w" in anchor else 1.0 if "e" in anchor else 0.5)
+    top = ay - high * (0.0 if "n" in anchor else 1.0 if "s" in anchor else 0.5)
+    j = {"center": 0.5, "right": 1.0}.get(justify, 0.0)
+    return [(r, round(left + (wide - w) * j), round(top + k * linespace)) for k, (r, w) in enumerate(zip(rows, widths))]
 
 
 EDGE = 0.07     # a button's or pill's edge: its fill this far toward the ink (UI-78: softer, asked for; it was 0.14)
@@ -1771,6 +1818,15 @@ class DefinitionDrawer(tk.Frame):
         for t in self.texts:
             t.tag_configure("head", font=head, spacing1=2, spacing3=4)
             definition_tags(t, body)
+        # a slim scroll bar beside each column, only while its meanings do not all fit (F-34, asked for: there was
+        # none); its column keeps the bar's width either way, so showing it never re-wraps the text or resizes the pane
+        self.bars = [ttk.Scrollbar(inner, orient="vertical", command=t.yview) for t in self.texts]
+        for t, bar, col in zip(self.texts, self.bars, (1, 4)):
+            t.configure(yscrollcommand=lambda first, last, b=bar: self._scrolled(b, first, last))
+            bar.grid(row=0, column=col, sticky="ns", pady=6)
+            bar.grid_remove()
+        self._bar_w = self.bars[0].winfo_reqwidth()
+        inner.columnconfigure(1, minsize=self._bar_w)
         self.text.grid(row=0, column=0, sticky="nsew")
         inner.columnconfigure(0, weight=1)
         self._columns = 1
@@ -1787,25 +1843,38 @@ class DefinitionDrawer(tk.Frame):
             return
         self._columns = n
         inner = self._inner
-        if n == 2:                                   # (each half, less its own side padding and the hairline, so
-            c = max(1, self._body.measure("0"))      # the two together ask no more room than the one column)
-            pad = 2 * int(self.text.cget("padx")) + 1
+        if n == 2:                                   # (each half, less its own side padding, its scroll bar's room
+            c = max(1, self._body.measure("0"))      # and the hairline, so the two together ask no more room than
+            pad = 2 * int(self.text.cget("padx")) + 1 + self._bar_w      # the one column)
             for t in self.texts:
                 t.config(width=max(10, (self.COLUMN_CHARS * c - 2 * pad) // (2 * c) - 1))
-            self._rule.grid(row=0, column=1, sticky="ns", pady=10)
-            self.text2.grid(row=0, column=2, sticky="nsew")
+            self._rule.grid(row=0, column=2, sticky="ns", pady=10)
+            self.text2.grid(row=0, column=3, sticky="nsew")
             inner.columnconfigure(0, weight=1, uniform="defs")
-            inner.columnconfigure(2, weight=1, uniform="defs")
+            inner.columnconfigure(3, weight=1, uniform="defs")
+            inner.columnconfigure(4, minsize=self._bar_w)
         else:
             self._rule.grid_remove()
             self.text2.grid_remove()
+            self.bars[1].grid_remove()
             self.text.config(width=self.COLUMN_CHARS)
             inner.columnconfigure(0, weight=1, uniform="")
-            inner.columnconfigure(2, weight=0, uniform="")
+            inner.columnconfigure(3, weight=0, uniform="")
+            inner.columnconfigure(4, minsize=0)
 
     @property
     def columns(self):
         return self._columns
+
+    def _scrolled(self, bar, first, last):
+        """A column's view moved or its meanings changed: its bar follows, shown only while they do not all fit."""
+        try:
+            bar.set(first, last)
+            need = (float(first) > 0.0 or float(last) < 1.0) and (bar is self.bars[0] or self._columns == 2)
+            if need != bool(bar.winfo_manager()):
+                bar.grid() if need else bar.grid_remove()
+        except (tk.TclError, ValueError):
+            pass
 
     def set_lines(self, n):
         """The pane's height in lines (both columns)."""

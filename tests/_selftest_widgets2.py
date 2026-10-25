@@ -642,13 +642,35 @@ from widgets import smear_items
 cv = tk.Canvas(root, bg="#ffffff"); cv.pack()
 txt = cv.create_text(10, 10, text="a smeared meaning", font=("TkDefaultFont", 11), anchor="nw", fill="#3D3A4B")
 root.update()
+box = cv.bbox(txt)
 for amount in (1.0, 0.3, 0.05):
     cv.delete("s"); smear_items(cv, txt, "#3D3A4B", "#ffffff", amount, ("s",))
     copies = [i for i in cv.find_withtag("s") if cv.type(i) == "text"]
-    xs = [cv.coords(i)[0] for i in copies]
-    assert len(xs) == len(set(xs)) and xs[-1] == 10                     # (no two on one pixel; the middle last)
-    if amount == 0.05:
-        assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
+    pieces = {}
+    for i in copies:
+        pieces.setdefault(cv.itemcget(i, "text"), []).append(i)
+    assert set(pieces) == {"a", " smeared meanin", "g"}            # F-33: each line's ends apart from its middle
+    for piece, items in pieces.items():
+        xs = [cv.coords(i)[0] for i in items]
+        assert len(xs) == len(set(xs)), piece                           # (no two on one pixel)
+        if amount == 0.05:                                              # side copies gone into the paper; the
+            assert all(cv.itemcget(i, "fill") == "#ffffff" for i in items[:-1])   # piece itself drawn last
+    assert cv.coords(pieces["a"][-1])[0] == 10                          # (each piece last where it is in the word)
+    # the user's rules: the first letter smears only inward, the last only inward, the middle both ways; so nothing
+    # reaches past the word (it was cut off straight there, and cropped by a canvas only as wide as the word)
+    assert min(cv.coords(i)[0] for i in pieces["a"]) == 10
+    assert max(cv.bbox(i)[2] for i in pieces["g"]) <= box[2] + 1
+    mid = [cv.coords(i)[0] for i in pieces[" smeared meanin"]]
+    if amount == 1.0:
+        assert min(mid) < max(mid[-1:]) < max(mid)                      # (both ways)
+        assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.coords(i)[0] < box[0]]
+# a wrapped text's every line keeps its ends inward
+cv.delete("all")
+txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
+box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
+texts = [cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"]
+assert {"o", "t", "r", "f", "x"} <= set(texts) and "ne tw" in texts                # (each line's ends: one two / three four ..)
+assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 cv.destroy()
 
 # UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it
@@ -672,7 +694,7 @@ ink_top = wc._word_xy[1] + wc._fit.metrics("ascent") - 0.82 * pt
 assert wc.bbox("kind")[3] <= ink_top - 0.25 * font("body").metrics("linespace"), (wc.bbox("kind"), ink_top)
 assert wc.itemcget("kind", "fill") != wc.itemcget("sub", "fill")                  # paler than the sub-line
 # a censored word's smear never covers the kind: not as drawn, not half un-smeared, and not while the outgoing word's
-# smear slides up past it (a skip sends it up; its cut-off strips are the height of its line)
+# smear slides up past it (a skip sends it up; its tall letters reach the kind's row)
 def smear_over_kind():
     """How many smear items over the kind are drawn above it (and how many lie over it at all)."""
     order, kb = list(wc.find_all()), wc.bbox("kind")
@@ -682,14 +704,17 @@ wc.set("cum", "frequency rank #8", censor=True, kind="sexual"); root.update()
 assert wc.find_withtag("smear") and smear_over_kind()[0] == 0
 wc.smear.clear = 0.5; wc.smear.paint(); assert smear_over_kind()[0] == 0
 anim, crossed = Animator(root), 0
+wc.set("bollocks", "frequency rank #8", censor=True, kind="crude"); root.update()     # (tall letters: they reach up)
 wc.set("jizz", "frequency rank #9", censor=True, kind="sexual")
-wc.transition_from("cum", "frequency rank #8", 0, -wc.winfo_reqheight() // 3, anim)
-for _ in range(8):
-    root.update(); time.sleep(0.025)
+wc.transition_from("bollocks", "frequency rank #8", 0, -wc.winfo_reqheight(), anim)
+frame_at = wc._frame
+anim.cancel_all()
+for k in range(1, 8):                             # (frame by frame, early on, while the outgoing smear shows)
+    frame_at(k * 0.05); root.update()
     above, there = smear_over_kind()
     assert above == 0, above
     crossed += there
-anim.finish_all(); root.update()
+wc.delete("old"); root.update()
 assert crossed                                    # (the outgoing smear did pass over the kind: the case is tested)
 wc.begin_typing(); root.update(); assert not wc.find_withtag("kind")
 # UI-70: the typing caret blinks (shown on every key), and stops, shown, after a while without one

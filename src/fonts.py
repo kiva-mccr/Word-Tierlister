@@ -8,8 +8,10 @@ The typefaces are loaded for this program only (load_typefaces: fontconfig on Li
 CoreText on macOS), never installed. Where that fails the old choice of installed fonts stands in."""
 import ctypes
 import ctypes.util
+import json
 import os
 import sys
+import tkinter
 import tkinter.font as tkfont
 
 # the bundled typefaces: beside this file, and in a built program in the folder it unpacks to (PyInstaller puts this
@@ -100,6 +102,49 @@ def load_typefaces(files=None, platform=None):
             ok = False
     _loaded = ok
     return ok
+
+
+# the letters whose ink reaches past their own box (written by tools/make_typefaces.py; F-32)
+OVERHANG_FILE = os.path.join(TYPEFACES, "overhang.json")
+_overhang = None
+
+
+def _overhangs():
+    """{"family|weight|slant": {letter: (left, right) in 1/1000 em}} (empty if the file is missing)."""
+    global _overhang
+    if _overhang is None:
+        try:
+            with open(OVERHANG_FILE, encoding="utf-8") as fh:
+                _overhang = {face: {ch: tuple(v) for ch, v in table.items()} for face, table in json.load(fh).items()}
+        except (OSError, ValueError):
+            _overhang = {}
+        _overhang["letters"] = set().union(*(t.keys() for t in _overhang.values())) if _overhang else set()
+    return _overhang
+
+
+def text_overhang(widget, font, text):
+    """(left, right): how many pixels `text` in `font` reaches past the box Tk measures for it. Tk lays text out by
+    each letter's box, but a letter's ink can reach outside it (Young Serif's j to the left, its f to the right):
+    there it is neither measured nor repainted, so a smear's straight ends cut through it and, moved or gone, it
+    stayed on screen (F-32). Only the letters that start and end a word count (inside a word the overhang lies
+    over its neighbour). (0, 0) for fonts not bundled, and without asking Tk when no such letter is there."""
+    table = _overhangs()
+    words = str(text or "").split()
+    if not words or not table["letters"] & ({w[0] for w in words} | {w[-1] for w in words}):
+        return 0, 0
+    try:
+        a = widget.tk.call("font", "actual", font)
+        actual = dict(zip(a[0::2], a[1::2]))
+        face = table.get(f"{actual['-family']}|{actual['-weight']}|{actual['-slant']}")
+        if not face:
+            return 0, 0
+        size = float(actual["-size"])
+        em = -size if size < 0 else size * float(widget.tk.call("tk", "scaling"))
+    except (tkinter.TclError, KeyError, ValueError):
+        return 0, 0
+    left = max(face.get(w[0], (0, 0))[0] for w in words)
+    right = max(face.get(w[-1], (0, 0))[1] for w in words)
+    return left * em / 1000, right * em / 1000
 
 
 def pick_font_family(available, preferred=PREFERRED, fallback=FALLBACK):

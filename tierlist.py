@@ -1789,6 +1789,20 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           of a Markdown export, which .gitignore leaves out: the note had never reached GitHub, and an export saved
 #           beside tierlist.py would have overwritten it. The note is tracked now (only tierlist-export.md is left
 #           out), and an export aimed at a code file's note goes to tierlist-export.md, saying so (saves.is_code_note).
+# [x] F-32 Reported (with pictures): a censored "j" or "f" smeared oddly, and bits of it stayed on screen after the
+#           next, shorter word came. Young Serif's j reaches 0.125 em left of its box and its f 0.09 em right; Tk
+#           measures and repaints text by those boxes, so the smear's straight ends cut them and, as the word moved,
+#           faded or went, the parts outside were never repainted. tools/make_typefaces.py writes
+#           src/typefaces/overhang.json (the letters that reach out, per face); fonts.text_overhang reads it; a
+#           SmoothCanvas gives such text an invisible guard over its whole reach, set again after every change (a
+#           shape made and dropped at once does not make Tk repaint; one it has drawn does).
+# [x] F-33 Asked for: the definitions pane's smears were cropped at their left and right (each smeared word is a
+#           canvas only as wide as the word; the smear's straight end strips cut it too). The user's rules: a line's
+#           first and last letter smear only inward, the letters between both ways (a second letter's outward reach,
+#           a third of a letter, is well inside the one-letter limit). Nothing reaches past the word, anywhere it is
+#           smeared (card, duel, panes, Browse), so the strips are gone (widgets.smear_items, _smear_lines).
+# [x] F-34 Asked for: the definitions pane had no scroll bar. A slim one beside each column, only while its meanings
+#           do not all fit; its room is kept, so showing it never re-wraps the text or resizes the pane.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---

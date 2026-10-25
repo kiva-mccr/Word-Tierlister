@@ -9,7 +9,8 @@ The change: as shipped, their lines are tall (Atkinson 1.24 em, Young Serif 1.41
 fonts), and much of the layout is measured in lines, so the window grew by a quarter. Each file's ascent and
 descent (hhea, OS/2 typo and win) are set to LINE below: still above every accented capital Atkinson has and below
 its deepest descender, and in Young Serif above every ascender (accented capitals reach a little higher; they are
-drawn, never cut). Atkinson's digits are made all one width (tabular_digits). Run it again only to change the typefaces; the program reads the files.
+drawn, never cut). Atkinson's digits are made all one width (tabular_digits). overhang.json lists the letters whose ink
+reaches past their own box (write_overhangs). Run it again only to change the typefaces; the program reads the files.
 """
 import os
 import sys
@@ -60,6 +61,41 @@ def tabular_digits(f):
                     table.cmap[ord("0") + i] = n + ".tf"
 
 
+FACES = {"YoungSerif-Regular": ("Young Serif", "normal", "roman"),
+         "AtkinsonHyperlegible-Regular": ("Atkinson Hyperlegible", "normal", "roman"),
+         "AtkinsonHyperlegible-Bold": ("Atkinson Hyperlegible", "bold", "roman"),
+         "AtkinsonHyperlegible-Italic": ("Atkinson Hyperlegible", "normal", "italic"),
+         "AtkinsonHyperlegible-BoldItalic": ("Atkinson Hyperlegible", "bold", "italic")}
+
+
+def write_overhangs(folder=OUT):
+    """overhang.json: for each face ("family|weight|slant"), the letters whose ink reaches past their own box, as
+    {letter: [left, right]} in 1/1000 em (Young Serif's j reaches 0.125 em left, its f 0.09 em right). Tk measures
+    and repaints text by those boxes, so fonts.text_overhang reads this to smear and repaint the rest (F-32)."""
+    import json
+    from fontTools.pens.boundsPen import BoundsPen
+    from fontTools.ttLib import TTFont
+    out = {}
+    for name, (family, weight, slant) in FACES.items():
+        f = TTFont(os.path.join(folder, name + ".ttf"))
+        glyphs, hmtx, upm = f.getGlyphSet(), f["hmtx"], f["head"].unitsPerEm
+        found = {}
+        for code, glyph in f.getBestCmap().items():
+            if not chr(code).isprintable() or chr(code).isspace():
+                continue
+            pen = BoundsPen(glyphs)
+            glyphs[glyph].draw(pen)
+            if not pen.bounds:
+                continue
+            left = max(0, -pen.bounds[0]) * 1000 / upm
+            right = max(0, pen.bounds[2] - hmtx[glyph][0]) * 1000 / upm
+            if left >= 5 or right >= 5:
+                found[chr(code)] = [round(left), round(right)]
+        out[f"{family}|{weight}|{slant}"] = found
+    with open(os.path.join(folder, "overhang.json"), "w", encoding="utf-8") as fh:
+        json.dump(out, fh, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     for name, folder in LICENCES.items():
@@ -71,6 +107,8 @@ def main():
             fh.write(fetch(folder, name))
         tighten(path, *LINE[name.split("-")[0]])
         print("wrote", os.path.relpath(path, ROOT))
+    write_overhangs()
+    print("wrote", os.path.relpath(os.path.join(OUT, "overhang.json"), ROOT))
     return 0
 
 

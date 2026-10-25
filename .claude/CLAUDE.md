@@ -93,8 +93,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
-- Censored (obscene) words: copies of the word side by side over 0.625 letter widths, cut straight at its ends
-  (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
+- Censored (obscene) words: copies of the word side by side over 0.625 letter widths, each line's end letters smeared
+  only inward so nothing reaches past the word (F-33, the user's rules) (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
   (`widgets.smeared_label`; the word un-smears while the pointer is over the pane) and Browse's list too
   (`widgets.TreeSmears` over a blank cell). Route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
@@ -128,7 +128,8 @@ draws src/icons; ui_style.set_icon on every window; .ico for the Windows program
 UI-79 (the shelf's spines one width), UI-73 (typefaces), UI-75 (GitHub link), UI-76 (contrast), UI-77 (Dusk dark mode): the user picked these from two
 rounds of mock-ups (a Design canvas artifact, each board beside the real window) and kept buttons, card and labels.
 UI-78 (borders: of six slight changes, only softer button and pill edges, widgets.EDGE; the user is attached to the
-current style). Next: the user has smearing bugs to report. Dropped: UI-21 (next-up peek), UI-74 (film grain)
+current style), F-32 (letters reaching past their boxes: smeared and repainted whole), F-33 (smears never reach past
+the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar). Next: nothing planned. Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.

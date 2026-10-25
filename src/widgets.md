@@ -4,13 +4,13 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`, `tiercolours`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
 ## Public API
 
-- `smear_items`: Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one pale tone (so none of them stays crisp on top), cut off...
+- `smear_items`: Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one pale tone (so none of them stays crisp on top).
 - `Unsmear`: A censored word (ST-6) on one of our canvases: its text item is hidden behind a sideways smear (smear_items); `clear` (0 = smeared, 1 = the word itself) eases toward...
   - methods: place, paint, hover
 - `RoundButton`: A rounded, pastel button with a hover tint, a pressed 'dip', a disabled look and a key hint.
@@ -62,6 +62,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- A smear never reaches past its word (F-33, the user's rules): each line's first and last letter smear only inward over the same spread, the letters between both ways (`smear_items`, `_smear_lines`). The straight cut-off strips it had cut through letters that reach past their boxes (Young Serif's j and f), and a smeared label's canvas, only as wide as its text, cropped the outer copies (the definitions pane).
 - A button's and a pill's edge is its fill `EDGE` (0.07) of the way to the ink (UI-78: the user chose it softer from mock-ups); keep RoundButton and TierChip on the same constant.
 - The definitions pane's two columns (UI-60) together ask no more width than its one column (each less its padding and the hairline): two plain halves made a zoomed duel tab too wide, so it was shown smaller. Set its height with `set_lines`, never on one text.
 - Definition links (W-1): `word_at` only answers inside `LINK_TAGS` and over a real letter (past a line's end the nearest index is not under the pointer); `_watch_links` binds once per pane, so `on_word` is read from the pane at click time. Text tag bindings (the "Back to" line) follow the last motion: tests send a `<Motion>` first.
@@ -80,7 +81,7 @@ The module docstring has the details; this page is the map.
 
 - Test each new widget in `tests/_selftest_widgets2.py`.
 - A censored word shown under a pointer that is not moving gets no pointer event: `WordCard.set` asks where the pointer is (`_pointer_check`) and a hovered `RoundButton` un-smears its new word itself (F-15). The outgoing word is still reset to smeared first, so it never leaves readable.
-- The kind above a rude word (UI-59) stays on top of every smear on the card (`WordCard._draw` raises it last): the smear's cut-off strips are cream boxes the height of the word's line, and the outgoing word's smear slid up over the kind on a skip (F-15).
+- The kind above a rude word (UI-59) stays on top of every smear on the card (`WordCard._draw` raises it last): the outgoing word's smear slides up over the kind on a skip (F-15; its cut-off strips, the height of the word's line, are gone since F-33).
 - The kind has a row of its own (F-15, asked for): the word under it is drawn at `KIND_SCALE`, every card is `KIND_ROOM` taller (so the card's size never depends on the word), and the kind stays `KIND_GAP` clear of the letters' measured tops (the line's box starts barely above tall letters). Growing the card more costs the 1366 x 768 laptop its last zoom step (`_selftest_zoom`): take the room from the padding instead.
 - The card's label (`kind`) is any short text: the App passes `constants.card_label` (parts of speech, then the rude kind, UI-63); the card never decides what it says.
 - While typing on the card (UI-51) `set()` only keeps the word for afterwards (`_saved`, with its label); the typing display uses `_put`. A refresh mid-typing used to replace what was typed while keys still went to the typing, and Escape brought the word back without its label (F-16).

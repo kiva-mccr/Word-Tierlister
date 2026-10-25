@@ -113,4 +113,30 @@ try:
 finally:
     if wm:
         wm.terminate()
+# F-34 (asked for: the pane had no scroll bar): a slim one beside a column only while its meanings do not all fit;
+# showing it never changes the pane's width (its room is kept) or the text's wrapping
+import tkinter as tk
+from fonts import init_fonts, font
+from widgets import DefinitionDrawer
+r = tk.Tk(); init_fonts(r)
+d = DefinitionDrawer(r, {"body": font("body"), "head": font("heading")}); d.pack(fill="x")
+d.show_words(["table"], lambda w: "1. (noun) short"); d.set_open(True)
+for _ in range(5):
+    r.update()
+assert not d.bars[0].winfo_manager()
+w0, wrap0 = d._inner.winfo_reqwidth(), d.text.cget("width")
+long = "\n".join(f"{i}. (noun) meaning number {i}, long enough to read like a definition" for i in range(1, 15))
+d.show_words(["table"], lambda w: long); d.set_lines(5)
+for _ in range(5):
+    r.update()
+assert d.bars[0].winfo_manager() and (d._inner.winfo_reqwidth(), d.text.cget("width")) == (w0, wrap0)
+d.show_words(["table", "chair"], lambda w: long)                   # a duel: one bar per column
+for _ in range(5):
+    r.update()
+assert d.columns == 2 and all(b.winfo_manager() for b in d.bars) and d._inner.winfo_reqwidth() <= w0 + 2
+d.show_words(["table"], lambda w: "1. (noun) short")
+for _ in range(5):
+    r.update()
+assert not any(b.winfo_manager() for b in d.bars)
+r.destroy()
 print("DRAWER OK" + ("" if wm else " (no openbox: checked without a window manager)"))
