@@ -415,6 +415,15 @@ full = dr.winfo_reqheight()
 dr.open(); update()
 assert dr.is_open and dr.winfo_height() < full                                  # easing open from nothing
 anim.finish_all(); update(); assert abs(dr.winfo_height() - full) <= 2, (dr.winfo_height(), full, dr.winfo_reqheight(), root.winfo_height())
+# F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
+# height it has: taken as its whole height, the pane's top edge and its text dropped a little
+dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()
+dr.open(); update()
+was = dr.winfo_height()
+dr.give(30); update()
+assert dr.winfo_height() == min(full, was + 30), (was, dr.winfo_height(), full)
+dr.give(5000); update(); assert dr.winfo_height() <= full                       # (never past its own height)
+anim.finish_all(); update()
 closed = []
 dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()
 assert not dr.is_open and not closed and dr.winfo_height() > 1                   # still closing
@@ -662,6 +671,20 @@ for _ in range(8):
 anim.finish_all(); root.update()
 assert crossed                                    # (the outgoing smear did pass over the kind: the case is tested)
 wc.begin_typing(); root.update(); assert not wc.find_withtag("kind")
+# UI-70: the typing caret blinks (shown on every key), and stops, shown, after a while without one
+caret = lambda: wc.itemcget(wc.find_withtag("caret")[0], "state")
+def wait(ms):
+    end = time.time() + ms / 1000
+    while time.time() < end:
+        root.update(); time.sleep(0.01)
+assert caret() == "normal"
+wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+wc.type_key(types.SimpleNamespace(keysym="a", char="a")); root.update(); assert caret() == "normal"   # (a key: shown)
+wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+wc.BLINK_FOR_MS = 2 * WordCard.BLINK_MS
+wc.type_key(types.SimpleNamespace(keysym="b", char="b")); wait(3 * WordCard.BLINK_MS)
+assert caret() == "normal" and wc._blink_job is None                  # (still now, and shown)
+wc.end_typing(); assert wc._blink_job is None and not wc.find_withtag("caret")
 wc.destroy()
 root.destroy()
 print("WIDGETS2 OK")

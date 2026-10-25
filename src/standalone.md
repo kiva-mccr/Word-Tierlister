@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `walk`: Files under `d` (relative to `root`), skipping version control, environments and caches; at the top only the folders that ship (SHIP_DIRS).
-- `source_files`: The complete source, with its folders: code, docs, tests, the Claude files and the licence; never saves, logs, caches, exports or a built program (docs/ may hold...
+- `source_files`: The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists (REPO_FILES); never saves, logs, caches, exports or a...
 - `manifest`: {"files": {path ("/" between folders): sha256 of its bytes}} for `files` (default: source_files).
 - `output_name`: (no docstring)
 - `output_path`: Where the built program ends up in `dist` for `platform` (sys.platform).
@@ -57,7 +57,7 @@ The module docstring has the details; this page is the map.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
 - Everything started from here (the other form, Python, PyInstaller, pip, the file manager) gets `clean_env()`: a built program's Tcl / Tk paths and library path point into its temporary folder, which is gone once it closes (reported: PyInstaller's "Tk data/library directory ... could not be collected!").
-- Cleaning up behind (T-12): `remove_source` removes only what the unpack record lists, `OURS` and `__pycache__`, and nothing without that record; `move_save` never writes over a file. The program goes where the source was, in its folder (T-15, asked for: not the folder holding it); `remove_source` keeps a program in the folder, its build record (`SIDE_FILE`) and the log. Only a folder unpacked from a program beside it replaces that program (`cleanup_place`). The deleting is done by the new program (`--remove-source`), never by the window running from the folder (Windows keeps it locked).
+- Cleaning up behind (T-12): `remove_source` removes only what the unpack record lists, `OURS` and `__pycache__`, and nothing without that record; `move_save` never writes over a file. The program goes where the source was, in its folder (T-15, asked for: not the folder holding it); `remove_source` keeps a program in the folder, its build record (`SIDE_FILE`) and the log. Only a folder unpacked from a program beside it replaces that program (`cleanup_place`). `.gitignore` and `.gitattributes` are source files (`REPO_FILES`, F-24): in every download and clone, left out they kept a removed source's folder alive. Checked for real: a built program removed its source and kept itself, the save, the log and the build record. The deleting is done by the new program (`--remove-source`), never by the window running from the folder (Windows keeps it locked).
 - `existing_source` decides whether the first start unpacks (T-10): tierlist.py beside the program, or any folder beside it with tierlist.py or the unpack record, counts as a copy already there.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.

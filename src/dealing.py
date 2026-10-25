@@ -229,12 +229,18 @@ class DealDialog:
         ttk.Checkbutton(f, text="Censor obscene words", variable=self.censor_v, takefocus=1).grid(
             row=1, column=0, sticky="w")
         ttk.Label(f, text=CENSOR_NOTE, foreground=PALETTE["muted"]).grid(row=1, column=1, sticky="w", padx=(12, 0))
-        ttk.Label(f, text=CENSOR_CAVEAT_LINE, foreground=PALETTE["muted"]).grid(row=2, column=0, columnspan=2,
-                                                                               sticky="w", pady=(4, 0))
-        # (ticked: the first time in a save a small dialog says why it may not be fully accurate, asked for)
-        self.censor_v.trace_add("write", lambda *_: self.censor_v.get() and self.app.censor_note(self.dlg.win,
+        self.caveat = ttk.Label(f, text=CENSOR_CAVEAT_LINE, foreground=PALETTE["muted"], justify="left")
+        self.caveat.grid(row=2, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        # (ticked: the first time in a save that line says in full why it may not be fully accurate, asked for:
+        # in this window, not one of its own)
+        self.censor_v.trace_add("write", lambda *_: self.censor_v.get() and self.app.censor_note(self._caveat_in_full,
                                                                                                  toast=False))
         return f
+
+    def _caveat_in_full(self, text):
+        wrap = self.dlg.wrap if self.first else font("body").measure("n") * 44
+        self.caveat.config(text=text, foreground=PALETTE["text"], wraplength=wrap)
+        self.dlg.refit()
 
     # ---- the first start, one step at a time ------------------------------------------------------------------
     def _show_step(self, i):

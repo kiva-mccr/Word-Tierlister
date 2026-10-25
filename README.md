@@ -70,7 +70,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
 | `src/fonts.py` | Typography: font family and named size roles. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1). |
-| `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile, the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
+| `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile with a slightly darker border (IC-4), the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
 | `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
 | `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`; tick-box choices can link to a web page), global error handlers, `run_guarded` (the whole program runs inside it). |
@@ -78,7 +78,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows). |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now; a censored word is smeared sideways and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` (the definitions pane: it opens tall enough to show every sense when the screen has room; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `DefinitionDrawer` (the definitions pane: it opens tall enough to show every sense when the screen has room; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
@@ -166,10 +166,12 @@ The first start asks three short questions (any time later: Settings > How words
   when its first (most common) meaning is rude enough; the word card writes what kind it mostly is (sexual, crude,
   swear word, slur) faintly above it, after its parts of speech ("noun · sexual"), censoring or not;
   inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
-  pointer. Only Crude, Swear word, Sexual and Slur meanings are smeared, never Clinical or Insult. The words are
-  picked out by rules, not by a person, so it can miss a rude word or smear an ordinary one: turning it on says so
-  (a short note the first time in a save, a toast after that), and so does a line under the tick box. Exports keep
-  the real words.
+  pointer (when the word itself is smeared, the pointer anywhere over the pane shows it and all its meanings), and
+  once it shows its words can be clicked like any other. Only Crude, Swear word, Sexual and Slur meanings are
+  smeared, never Clinical or Insult. The words are picked out by rules, not by a person, so it can miss a rude word
+  or smear an ordinary one: turning it on says so in the window it was turned on in (the whole note the first time
+  in a save, under the tick box in How words are dealt or as a message in the main window; a short message after
+  that), and so does a line under the tick box. Exports keep the real words.
 
 What is rude is decided by rules, not a list (`src/rudeness.py`, OB-6): every meaning earns points towards the
 six kinds from Wiktionary's labels, its topics and categories, the wording of the definition, WordNet when it is

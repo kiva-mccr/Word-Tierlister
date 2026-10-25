@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Draw the program's icon (IC-1) into src/icons/: the progress shelf's six spines in the tier colours, S to F, on
-the cream tile with rounded corners, the lilac shelf mark over the fourth spine. The user chose this design.
+the cream tile with rounded corners and a slightly darker border, the lilac shelf mark over the fourth spine. The user
+chose this design.
 
     python tools/make_icon.py          # icon-16.png .. icon-256.png, icon-1024.png and icon.ico (needs Pillow)
 
@@ -19,6 +20,7 @@ from theme import DEFAULT_TIERS, LIGHT, mix  # noqa: E402
 OUT = os.path.join(ROOT, "src", "icons")
 SIZES = (16, 24, 32, 48, 64, 128, 256)          # the window / taskbar sizes, and the .ico's
 BIG = 1024                                      # for the Linux launcher and anything larger
+EDGE = mix(LIGHT["bg"], LIGHT["text"], 0.22)    # the tile's border: the cream, a little darker (IC-4)
 
 
 def rgb(h):
@@ -51,7 +53,9 @@ def draw(size, ss=4):
         mh = mw / 2 + ss / 2
     im = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle([0, 0, S - 1, S - 1], radius=round(S * 0.22), fill=rgb(LIGHT["bg"]))
+    edge = max(ss, round(S * 0.024))               # a slightly darker border (IC-4, asked for: it stands out on
+    d.rounded_rectangle([0, 0, S - 1, S - 1], radius=round(S * 0.22), fill=rgb(LIGHT["bg"]),     # any background)
+                        outline=rgb(EDGE), width=edge)
     for k, col in enumerate(DEFAULT_TIERS):
         x1 = x0 + k * sw
         full = hmax - (k % 3) * step

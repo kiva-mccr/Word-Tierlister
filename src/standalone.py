@@ -61,13 +61,18 @@ def walk(root=ROOT, d=""):
     return out
 
 
+REPO_FILES = ("LICENSE", ".gitignore", ".gitattributes")      # (in every download and clone: left out, a removed
+                                                               # source left its folder behind for one hidden file)
+
+
 def source_files(root=ROOT):
-    """The complete source, with its folders: code, docs, tests, the Claude files and the licence; never saves,
-    logs, caches, exports or a built program (docs/ may hold screenshots; src/icons holds the icon, IC-1)."""
+    """The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists
+    (REPO_FILES); never saves, logs, caches, exports or a built program (docs/ may hold screenshots; src/icons
+    holds the icon, IC-1)."""
     keep = []
     for f in walk(root):
         top_level = os.sep not in f
-        if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f == "LICENSE" or \
+        if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f in REPO_FILES or \
                 (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
                 (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))):
             if top_level and f.endswith(".txt") and f != "requirements.txt":
@@ -527,7 +532,7 @@ def move_save(save, folder):
 OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache", REMOVE_RECORD)
 
 
-def remove_source(folder, tries=40, wait=0.25):
+def remove_source(folder, tries=120, wait=0.25):
     """Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be
     closing: on Windows a folder in use cannot be removed, so it tries again for a while). Only the program's own
     files go: those its unpack record lists (UNPACKED) or the old window wrote down for it (REMOVE_RECORD, T-14:

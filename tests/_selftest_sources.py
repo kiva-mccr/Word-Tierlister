@@ -381,7 +381,7 @@ import zipfile
 home14 = tempfile.mkdtemp(); src14 = os.path.join(home14, "Word-Tierlister")
 os.makedirs(os.path.join(src14, "src")); os.makedirs(os.path.join(src14, ".git"))
 for f, text in (("tierlist.py", "t\n"), ("src/a.py", "a\n"), ("README.md", "r\n"), (".git/HEAD", "ref\n"),
-                ("my-notes.txt", "mine\n")):
+                ("my-notes.txt", "mine\n"), (".gitignore", "*.db\n")):       # (F-24: in every download and clone)
     open(os.path.join(src14, f), "w").write(text)
 root, app = window()
 save14 = os.path.join(src14, "tierlist.db")
@@ -403,7 +403,7 @@ assert built14 == [src14] and started14 == [(S.program_path(src14), ["--remove-s
 with zipfile.ZipFile(os.path.join(src14, "Word-Tierlister.zip")) as z:
     names = set(z.namelist())
 assert {"Word-Tierlister/tierlist.py", "Word-Tierlister/src/a.py", "Word-Tierlister/README.md"} <= names
-assert not any(".git" in n or "my-notes" in n for n in names), names
+assert not any(".git/" in n or "my-notes" in n for n in names) and "Word-Tierlister/.gitignore" in names, names
 open(os.path.join(src14, "tierlist.log"), "w").write("log")
 left = S.remove_source(src14)                                     # (what the new program does as it starts)
 kept14 = sorted({os.path.relpath(p, src14) for p in left})

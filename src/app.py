@@ -861,9 +861,11 @@ class App:
             self._give_room(r.winfo_height())         # it never flashes open first)
 
     def _give_room(self, height):
-        """The window is `height` tall now; opening the drawer made it grow: the drawer takes what it gained."""
-        if self._room_from is not None:
-            self.def_frame.at_least(height - self._room_from)
+        """The window is `height` tall now; opening the drawer made it grow: the drawer takes what it gained since
+        last time (a window manager may grow it in steps, or only after the slide has begun)."""
+        if self._room_from is not None and height > self._room_from:
+            self.def_frame.give(height - self._room_from)
+            self._room_from = height
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
@@ -898,17 +900,19 @@ class App:
 
     CENSOR_NOTED = "censor_noted"        # meta: the note on censoring has been shown once in this save
 
-    def censor_note(self, parent=None, toast=True):
-        """Censoring was just turned on (asked for: say it may not be fully accurate). The first time in a save a
-        small dialog explains why (over `parent`, the How words are dealt page when ticked there); after that a
-        short toast (`toast`), or nothing. Never waits: the dialog closes on its own OK."""
+    def censor_note(self, show=None, toast=True):
+        """Censoring was just turned on (asked for: say it may not be fully accurate). The first time in a save the
+        whole note, in the window it was turned on in (asked for: never a window of its own): show(text), as the
+        How words are dealt page does under its tick box, or else a longer toast; after that a short toast
+        (`toast`), or nothing."""
         if self.store.get_meta(self.CENSOR_NOTED) != "1":
             self.store.set_meta(self.CENSOR_NOTED, "1")
-            dlg = StyledDialog(parent or self.root, "Censor obscene words", CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT,
-                               animator=self.anim)
-            dlg.button("OK", dlg.close, default=True)
-            dlg.show()
-            return dlg
+            text = f"{CENSOR_CAVEAT_HEAD}. {CENSOR_CAVEAT}"
+            if show:
+                show(text)
+            else:
+                self.flash(text, kind="info", ms=9000)
+            return text
         if toast:
             self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
         return None

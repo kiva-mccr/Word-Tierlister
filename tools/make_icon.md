@@ -20,3 +20,4 @@ The module docstring has the details; this page is the map.
 - 32 px and under: edges snapped to whole pixels, no outlines; 16 px has two-pixel spines side by side (no gap) and a three-pixel mark.
 - The colours are the light look's defaults, whatever a save picked: the icon is the program's.
 - Run it again only to change the icon, and commit the files it writes (`_selftest_icon` checks every size is there).
+- The tile has a slightly darker border (`EDGE`, IC-4, asked for: it stands out on light and dark backgrounds), at least a pixel wide at every size.

@@ -1402,16 +1402,22 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
         t.tag_bind("back", "<Button-1>", lambda e: back[1]())
 
     def word(name, hide, font_, tag):
-        """The word `name` (a censored one smeared, un-smearing while the pointer is over the pane)."""
+        """The word `name` (a censored one smeared, un-smearing while the pointer is over the pane; a form's word
+        can still be clicked, W-2)."""
         if not hide:
             t.insert("end", name, tag)
             return
-        c = smeared_label(t, name, font_, t.cget("bg"), animator, hover=False)
+        c = smeared_label(t, name, font_, t.cget("bg"), animator, hover=False,
+                          on_word=(lambda w: t._on_word and t._on_word(w)) if tag == "base" else None)
         t.window_create("end", window=c, align="center")
+        by_pane(c)
+
+    def by_pane(c):
         t._smears.append(c)
         t._words.append(c)
         if inside:
             c.unsmear.hover(True)
+    t._by_pane = by_pane
     for i, (heading, text, smeared, hide) in enumerate(entries):
         if i:
             t.insert("end", "\n")
@@ -1429,7 +1435,8 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
             if sense["pos"]:
                 t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
                 prefix += sense["pos"] + "  "
-            _insert_gloss(t, sense, "sense", censor and sense["gloss"][:GLOSS_KEY] in smeared, body, animator, prefix)
+            _insert_gloss(t, sense, "sense", censor and sense["gloss"][:GLOSS_KEY] in smeared, body, animator, prefix,
+                          pane=hide)
             if sense["example"]:
                 t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
             target = form_target(sense["gloss"]) if base else None
@@ -1446,7 +1453,7 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
                     t.insert("end", "No definition found.\n", "base")
                 else:
                     _insert_gloss(t, main, "base", censor and main["gloss"][:GLOSS_KEY] in keys, body, animator,
-                                  " " * 6 + name + after)
+                                  " " * 6 + name + after, pane=hide or hidden)
     t.config(state="disabled")
 
 
@@ -1532,9 +1539,11 @@ def _watch_pane(t):
     t.bind("<Leave>", lambda e: None if _pointer_inside(t) else over(False), add="+")
 
 
-def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
+def _insert_gloss(t, sense, tag, smear, body, animator, prefix, pane=False):
     """A sense's text and a line end into the pane `t` under `tag`; `smear`: its labels, then its gloss smeared
-    (smeared_label, wrapped to the room left on its line; `prefix`: the text already on it)."""
+    (smeared_label, wrapped to the room left on its line; `prefix`: the text already on it). It un-smears under the
+    pointer, or, `pane` (W-2, asked for: its word is smeared too), with the pointer anywhere over the pane; its words
+    can be clicked as the others can (on_word)."""
     if not smear:
         t.insert("end", sense["text"] + "\n", tag)
         return
@@ -1543,16 +1552,21 @@ def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
     pad = int(t.cget("padx") or 0)
     room = (t.winfo_width() if t.winfo_ismapped() else int(t.cget("width")) * body.measure("0")) - 2 * pad - 30
     width = max(body.measure("n" * 12), room - body.measure(prefix + label))
-    c = smeared_label(t, sense["gloss"].strip(), body, t.cget("bg"), animator, width=width)
+    c = smeared_label(t, sense["gloss"].strip(), body, t.cget("bg"), animator, width=width, hover=not pane,
+                      on_word=lambda w: t._on_word and t._on_word(w))
     t.window_create("end", window=c, align="top")
     t.insert("end", "\n", tag)
-    t._smears.append(c)
+    if pane:
+        t._by_pane(c)
+    else:
+        t._smears.append(c)
 
 
-def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=None, hover=True):
+def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=None, hover=True, on_word=None):
     """A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places
     that are not our own canvases (the definition panes, Browse's list). It un-smears while the pointer is over it
-    (`hover`), or when the caller says so: canvas.unsmear.hover(on, animator)."""
+    (`hover`), or when the caller says so: canvas.unsmear.hover(on, animator). `on_word` (W-2): once it shows, the
+    word under the pointer is underlined, as in the pane around it, and a click calls on_word(word)."""
     fg = PALETTE["text"] if fg is None else fg
     c = tk.Canvas(parent, bg=bg, highlightthickness=0, bd=0, cursor="arrow")
     item = c.create_text(0, 0, text=text, font=font_, width=width, anchor="nw", fill=fg, tags="gloss")
@@ -1562,8 +1576,66 @@ def smeared_label(parent, text, font_, bg, animator=None, width=0, fg=None, hove
     smear.place(item, text, fg, bg)
     if hover:
         c.bind("<Enter>", lambda e: smear.hover(True, animator))
-        c.bind("<Leave>", lambda e: smear.hover(False, animator))
+        c.bind("<Leave>", lambda e: (smear.hover(False, animator), _underline(c, None)))
+    if on_word:
+        c.word_at = lambda x, y: _canvas_word(c, item, text, font_, width, x, y) if smear.clear >= 1.0 else None
+
+        def motion(e):
+            hit = c.word_at(e.x, e.y)
+            _underline(c, hit, fg)
+            c.configure(cursor="hand2" if hit else "arrow")
+
+        def click(e):
+            hit = c.word_at(e.x, e.y)
+            if hit:
+                on_word(hit[0])
+        c.bind("<Motion>", motion, add="+")
+        c.bind("<Button-1>", click, add="+")
+        if not hover:
+            c.bind("<Leave>", lambda e: _underline(c, None), add="+")
     return c
+
+
+def _canvas_word(c, item, text, font_, width, x, y):
+    """(word, (x0, x1, y) of its underline) for the word under x, y of a smeared_label's text, or None. A canvas text
+    tells only which letter is under a point; where a word starts and ends is measured by laying out the text up to
+    each end the same way (wrapped at `width`)."""
+    try:
+        i = int(c.index(item, f"@{x},{y}"))
+    except (tk.TclError, ValueError):
+        return None
+    box = c.bbox(item)
+    if not box or not (box[0] <= x <= box[2] and box[1] <= y <= box[3]):
+        return None
+    for m in _WORD.finditer(text):
+        if m.start() <= i < m.end():
+            break
+    else:
+        return None
+
+    def end_of(n):                       # (the right edge and bottom of the text up to n letters)
+        probe = c.create_text(0, 0, text=text[:n], font=font_, width=width, anchor="nw", state="hidden")
+        c.itemconfigure(probe, state="normal")
+        b = c.bbox(probe)
+        c.delete(probe)
+        return (b[2], b[3]) if b else (0, 0)
+    sx, sy = end_of(m.start()) if m.start() else (0, None)
+    ex, ey = end_of(m.end())
+    if sy is not None and sy != ey:      # (the word starts the next line)
+        sx = 0
+    if not (sx <= x <= ex + 1):
+        return None
+    return m.group(0).lower(), (sx, ex, ey - 2)
+
+
+def _underline(c, hit, ink=None):
+    try:
+        c.delete("link")
+        if hit:
+            x0, x1, y = hit[1]
+            c.create_line(x0, y, x1, y, fill=ink or PALETTE["text"], tags="link")
+    except tk.TclError:
+        pass
 
 
 class TreeSmears:
@@ -1678,8 +1750,8 @@ class DefinitionDrawer(tk.Frame):
         inner.columnconfigure(0, weight=1)
         self._columns = 1
         self._shown = False
-        self._opening = None              # (from, to) pixels while it eases open (at_least)
-        self._floor, self._last_q, self._frame = (0, 0.0), 0.0, None
+        self._opening = None              # (from, to) pixels while it eases open (give)
+        self._floor, self._last_q, self._frame, self._shown_h = (0, 0.0), 0.0, None, 0
 
     COLUMN_CHARS = 80                     # the one column's width in characters; two share it (the window's size
                                           # never changes for them)
@@ -1796,27 +1868,30 @@ class DefinitionDrawer(tk.Frame):
         """How much taller it gets when open than it is now (folded or held: the room the window must find)."""
         return max(0, self.natural_height() - self.winfo_reqheight())
 
-    def at_least(self, pixels):
-        """While it eases open: never shorter than `pixels` from now on, the rest of the slide carrying on from
-        there. For the room a window grew by to fit it: given to the pane in the same layout as the window's new
-        size, the page around it never moves (given to the page first, it dropped and slid back up; given to
-        the pane before the window had grown, the page jumped up for a frame)."""
+    def give(self, pixels):
+        """The window just grew by `pixels` to make room for it (opening): it takes them on top of the height it has
+        now, in the very layout of the window's new size, and the rest of the slide carries on from there; folded,
+        open() starts there. Taken on top, the page around it never moves (taken as its whole height, its top edge,
+        and the text in it, dropped a little when the window grew after the slide had begun, F-23; given to the
+        page first, the page dropped and slid back up; held before the window had grown, the page jumped up)."""
+        if pixels <= 0:
+            return
         try:
             if self._opening:
-                if pixels > self._floor[0]:
-                    self._floor = (min(pixels, self._opening[1]), self._last_q)
-                    self._frame(self._last_q)
-            elif self._inner.winfo_manager() == "place" and pixels > self.winfo_reqheight():   # folded: open()
-                super().configure(height=pixels)                                               # starts there
+                now = max(self._shown_h, self.winfo_height())
+                self._floor = (min(now + pixels, self._opening[1]), self._last_q)
+                self._frame(self._last_q)
+            elif self._inner.winfo_manager() == "place":           # (folded)
+                super().configure(height=self.winfo_reqheight() + pixels)
         except tk.TclError:
             pass
 
     def open(self):
-        """Ease open from nothing (or the room it was given, at_least) to the height the contents want (the
-        caller has packed it already)."""
+        """Ease open from nothing (or the room it was given, give) to the height the contents want (the caller has
+        packed it already)."""
         self._shown = True
         end = self.natural_height()
-        held = self.winfo_reqheight() if self._inner.winfo_manager() == "place" else 0    # (folded: at_least)
+        held = self.winfo_reqheight() if self._inner.winfo_manager() == "place" else 0    # (folded: give)
         start = min(max(1, held), end)
         self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
 
@@ -1843,8 +1918,9 @@ class DefinitionDrawer(tk.Frame):
             self._last_q = p
             floor, q0 = self._floor if self._opening else (0, 0.0)
             h = a + (b - a) * p if floor <= 0 else floor + (b - floor) * (p - q0) / max(1e-6, 1.0 - q0)
+            self._shown_h = max(1, int(h))
             try:
-                super(DefinitionDrawer, self).configure(height=max(1, int(h)))
+                super(DefinitionDrawer, self).configure(height=self._shown_h)
             except tk.TclError:
                 pass
         self._frame = frame
@@ -2179,6 +2255,7 @@ class WordCard(SmoothCanvas):
         self._box = None                   # (width, height) last given to the canvas
         self.on_find = self.on_enter = None
         self.typing, self._typed, self._saved = False, "", None
+        self._blink_job = None
         self._find_hover = False
         self._censor = self._old_censor = False
         self.smear = Unsmear(self, "smear")
@@ -2499,6 +2576,25 @@ class WordCard(SmoothCanvas):
                 cx = (wb[0] - 3) if empty else (wb[2] + 3)
                 self.create_line(cx, top + line * 0.18, cx, top + line * 0.86, fill=PALETTE["accent"],
                                  width=max(2, line // 20), tags="caret")
+                self._blink(0)
+
+    BLINK_MS, BLINK_FOR_MS = 530, 10000   # the caret blinks as in most programs (UI-70), shown on every key, and
+                                          # stays shown after 10 s without one (GTK's way: nothing runs for good)
+
+    def _blink(self, since):
+        """Show the caret (`since` = 0: a key, or a redraw) or hide it, every BLINK_MS while typing."""
+        if self._blink_job:
+            self.after_cancel(self._blink_job)
+            self._blink_job = None
+        if not self.typing:
+            return
+        on = since % (2 * self.BLINK_MS) < self.BLINK_MS or since >= self.BLINK_FOR_MS
+        try:
+            self.itemconfigure("caret", state="normal" if on else "hidden")
+        except tk.TclError:
+            return
+        if since < self.BLINK_FOR_MS:
+            self._blink_job = self.after(self.BLINK_MS, lambda: self._blink(since + self.BLINK_MS))
 
     # ---- looking up a word (UI-51) ------------------------------------------------------------------------
     def find_box(self):
@@ -2540,6 +2636,7 @@ class WordCard(SmoothCanvas):
         if not self.typing:
             return
         self.typing = False
+        self._blink(0)                    # (stops it)
         if restore and self._saved is not None:
             self.set(*self._saved)
         self._saved = None

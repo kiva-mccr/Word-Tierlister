@@ -1717,6 +1717,28 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           removes only the source's files there and keeps itself, its build record, the save, the log and the zip
 #           (standalone.cleanup_place, remove_source). A folder unpacked from a program sitting beside it still
 #           replaces that program (T-12).
+# [x] F-23 Reported (Fedora 42): opening the definitions pane, its text blinked down a little. F-22 gave the pane the
+#           room the window grew by as its whole height; a window manager that grows the window only after the slide
+#           has begun (GNOME's, not openbox's) then set the pane shorter-topped than it already was, its top edge and
+#           text dropping. The room is now added on top of the height the pane has then (DefinitionDrawer.give, from
+#           App._give_room, step by step if the window grows in steps). Not seen here (openbox resizes at once);
+#           _selftest_widgets2 hands it the room mid-slide.
+# [x] UI-70 Asked for: the typing line in a search blinks, as in most programs. The word card's search caret blinks
+#           (530 ms), shows on every key, and stays shown after 10 s without one (as GTK does: nothing runs while
+#           idle). Browse's search box (a ttk entry) blinked already.
+# [x] UI-71 Asked for: the note that censoring is not fully accurate is not a window of its own. Ticked in How words
+#           are dealt, the first time in a save, the line under the tick box says it in full; from View > Censor
+#           obscene words, a longer message in the main window. After that a short message, as before.
+# [x] F-24 Asked for: making the program and removing the source must really remove it. Tried for real: a program
+#           built here from a copy of the source, started with --remove-source, removed it all but .gitignore (in every
+#           download and clone, not counted as source), which alone kept the folder there when the program went
+#           beside it. .gitignore and .gitattributes are source files now (standalone.REPO_FILES); on Windows the
+#           removal waits up to 30 s for the old window to let go of its files (10 s before).
+# [x] IC-4 Asked for: a slightly darker border round the icon (tools/make_icon.py, EDGE), so it stands out on light
+#           and dark backgrounds alike.
+# [x] W-2  Asked for: words in a smeared meaning can be clicked once it shows (W-1: underlined under the pointer;
+#           smeared_label's on_word), and a smeared form's word too. When the word itself is smeared, its smeared
+#           meanings un-smear with it, the pointer anywhere over the pane; otherwise each under the pointer.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

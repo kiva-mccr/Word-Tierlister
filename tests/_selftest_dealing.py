@@ -120,15 +120,11 @@ item[2].set(False); item[3](); pump(2)
 assert s.deal_settings()["censor"] is False and not card.censored and app.cur_word == "shit"
 item[2].set(True); item[3](); pump(2)
 assert s.deal_settings()["censor"] is True and card.censored and card.find_withtag("smear")
-# turning it on says it may not be fully accurate (asked for): a small dialog the first time in a save, then a toast
-from constants import CENSOR_CAVEAT_SHORT
-assert s.get_meta("censor_noted") == "1"
-tops = [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.winfo_viewable()]
-assert any(w.title() == "Censor obscene words" for w in tops), [w.title() for w in tops]
-for w in tops:
-    if w.title() == "Censor obscene words":
-        w.destroy()
-pump(2)
+# turning it on says it may not be fully accurate (asked for): the whole note the first time in a save, in this
+# window (asked for: not a window of its own), then a short toast
+from constants import CENSOR_CAVEAT, CENSOR_CAVEAT_SHORT
+assert s.get_meta("censor_noted") == "1" and CENSOR_CAVEAT in app.toast.cget("text")
+assert not [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words"]
 item[2].set(False); item[3](); item[2].set(True); item[3](); pump(2)
 assert app.toast.cget("text") == CENSOR_CAVEAT_SHORT
 assert not [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words"]
@@ -189,6 +185,37 @@ assert "(vulgar)" in app.def_text.get("1.0", "end") and "A flat surface." in app
 assert smears[0].bind("<Enter>") and smears[0].bind("<Leave>")                # (the pointer un-smears it)
 smears[0].unsmear.hover(True, app.anim); app.anim.finish_all(); pump(1)
 assert smears[0].unsmear.clear == 1 and not smears[0].find_withtag("smear")      # un-smeared under the pointer
+# W-2 (asked for): once it shows, its words can be clicked like the others (underlined under the pointer)
+app.show_defs = False; app.toggle_defs(True); app.anim.finish_all(); pump(3)
+smears = app.def_text._smears
+smears[0].unsmear.hover(True, app.anim); app.anim.finish_all(); pump(1)
+clicked = []
+app.def_text._on_word = clicked.append
+hit = smears[0].word_at(3, 3)
+assert hit and hit[0] == "something", hit
+x_end = hit[1][1]
+nxt = smears[0].word_at(int(smears[0].cget("width")) - 10, 3)                      # (the last word: "rude")
+assert nxt and nxt[0] == "rude" and nxt[1][0] > x_end, (hit, nxt, smears[0].cget("width"))
+smears[0].event_generate("<Motion>", x=3, y=3); pump(1)
+assert smears[0].find_withtag("link") and str(smears[0].cget("cursor")) == "hand2"
+smears[0].event_generate("<Button-1>", x=3, y=3); pump(1)
+assert clicked == ["something"]
+smears[0].unsmear.hover(False, app.anim); app.anim.finish_all(); pump(1)
+assert smears[0].word_at(3, 3) is None                                         # (smeared: nothing to click)
+# W-2: a smeared word's own smeared meanings un-smear with it, the pointer anywhere over the pane; an unsmeared
+# word's (above) each under the pointer
+s.set_def("bastard", "\u2022 (noun) (vulgar) Something rude.")
+s.set_rude({**FOUND, "bastard": (B["swear"], True, ["Something rude."])})
+app.mem_defs.pop("bastard", None)                                  # (looked up earlier: none was found then)
+app.def_words = ["bastard"]; app._render_defs(); pump(2)
+while app.defs.pending:
+    pump(1)
+app._render_defs(); pump(2)
+t = app.def_text
+assert len(t._words) == 2 and all(c.find_withtag("smear") for c in t._words) and not t._words[1].bind("<Enter>")
+t.event_generate("<Enter>"); app.anim.finish_all(); pump(1)
+assert all(c.unsmear.clear == 1 for c in t._words)
+app.def_words = ["table"]; app._render_defs(); pump(1)
 s.set_censor(False); app._render_defs(); pump(1)
 assert not app.def_text._smears and "Something rude" in app.def_text.get("1.0", "end") and not smears[0].winfo_exists()
 s.set_censor(True)
@@ -272,16 +299,13 @@ d.order_btns["rank"].invoke(); d.buttons["Next"].invoke(); d.buttons["Next"].inv
 assert d.step == 2 and list(d.buttons) == ["Back", "Done"]
 assert "may miss some" in " ".join(str(w.cget("text")) for w in d.sections["censor"].winfo_children()
                                   if w.winfo_class() == "TLabel")                 # (a line beside the tick, always)
-d.censor_v.set(True); pump(2)                                     # ticked the first time: the note says why, over it
-def censor_notes(w):
-    """The open "Censor obscene words" notes, anywhere under `w`."""
-    found = [w] if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words" else []
-    return found + [n for c in w.winfo_children() for n in censor_notes(c)]
-notes = censor_notes(root)
-assert len(notes) == 1 and s2.get_meta("censor_noted") == "1", notes
-notes[0].destroy(); pump(2)
+tops = lambda: [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)]
+before = tops()
+d.censor_v.set(True); pump(2)                                     # ticked the first time: the page says why
+assert CENSOR_CAVEAT in str(d.caveat.cget("text")) and s2.get_meta("censor_noted") == "1"
+assert tops() == before                                           # (in this window: no new one)
 d.censor_v.set(False); d.censor_v.set(True); pump(2)               # (once a save: not again)
-assert not censor_notes(root)
+assert tops() == before
 d.buttons["Done"].invoke(); pump(2)
 t_end = time.time() + 20
 while d.alive() and time.time() < t_end:
