@@ -1305,8 +1305,10 @@ class Toast(SmoothCanvas):
 
 def definition_tags(t, body):
     """The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of
-    speech and examples in italics, senses indented."""
-    italic = (body.cget("family"), body.cget("size"), "italic")   # follows the body size
+    speech and examples in italics, senses indented. The italics are the body's size now: refresh_widgets sets them
+    again after a zoom (reported: noun, verb... kept their old size until the pane was filled again)."""
+    t._tag_body = body
+    italic = (body.cget("family"), body.cget("size"), "italic")
     t.tag_configure("num", foreground=PALETTE["muted"])
     t.tag_configure("pos", foreground=PALETTE["muted"], font=italic)
     t.tag_configure("sense", lmargin1=6, lmargin2=26, spacing1=2)
@@ -2984,11 +2986,14 @@ class StyledDialog:
 
 def refresh_widgets(widget):
     """Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under
-    `widget` after shared fonts were resized; an open dialog (StyledDialog) then re-wraps and resizes itself."""
+    `widget` after shared fonts were resized; a definitions pane's italics follow, and an open dialog (StyledDialog)
+    then re-wraps and resizes itself."""
     for child in widget.winfo_children():
         if isinstance(child, tk.Canvas) and callable(getattr(child, "refresh", None)):
             child.refresh()                  # our canvas widgets (here and in ui_chart.py) all have refresh()
         else:
+            if isinstance(child, tk.Text) and getattr(child, "_tag_body", None) is not None:
+                definition_tags(child, child._tag_body)       # (a definitions pane's italics: a copy of the size)
             refresh_widgets(child)
             dialog = getattr(child, "dialog", None)
             if isinstance(dialog, StyledDialog):

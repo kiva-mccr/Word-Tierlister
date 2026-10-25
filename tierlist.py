@@ -1743,6 +1743,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           start's offer of the other form (App._offer_other_form, T-9) reading a save that had been closed. Not
 #           reproduced here (the yes and no paths, a window closed while a question was open, a new look); its
 #           timer now stops once the window is shut (App.shut) or the save closed (Store.closed).
+# [x] F-26 Reported: in the definitions pane the part of speech (noun, verb...) and the examples kept their size when
+#           the zoom changed, until the pane was opened again: their italics were a copy of the body's size, made as
+#           the pane was filled. refresh_widgets (run after every zoom, main window and Browse) sets them again.
 # [ ] F-23 again: reported still there on Fedora 42 after the fix above. Not seen here under openbox nor under
 #           GNOME's own window manager (mutter, X11), the definition there or arriving mid-slide: the pane's top
 #           only rises and its heading stays 14 px under it in every frame. Fedora's GNOME runs on Wayland, which

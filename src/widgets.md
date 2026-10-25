@@ -58,7 +58,7 @@ The module docstring has the details; this page is the map.
 - `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
   - methods: text, button, clear_buttons, show, refit, rescale, close, alive
-- `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; an open dialog...
+- `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; a definitions...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -87,6 +87,7 @@ The module docstring has the details; this page is the map.
 - The Wiktionary link (UI-67, `_place_link`, `LinkButton`) is placed over the pane's top right; a canvas's `lift()` raises items, so it is raised with `tk.Misc.lift`. The word's line gets a right margin so a long word never runs under it.
 - The drawer's end of slide (`_natural`) switches its contents from place back to pack and must finish that at once (`update_idletasks`): left to the next idle moment, a frame showed the pane empty, a flicker (F-20; seen only under a window manager, `_selftest_drawer`).
 - Opening, the drawer never lets the page move against its slide (F-22, `_selftest_drawer` under openbox): the room a window grows by for it is handed over in the same layout as the window's new size (`give`, from App's `<Configure>`, on top of the height it has then: a window manager may grow the window only after the slide has begun, F-23, and taken as its whole height the pane's text dropped a little; held before the resize, the page jumped up, after it, down). Closing, it leaves the layout first and only then gets its natural size back (`_natural(show=False)`): the other way round, one frame drew it at full height. Its gap below (`gap`) is inside it, so it slides shut too.
+- A definitions pane's italics (part of speech, examples) are a copy of the body font's size: `definition_tags` keeps the body on the Text and `refresh_widgets` sets them again after a zoom (F-26: they kept their old size until the pane was refilled).
 - Smeared meanings in a pane (W-2, asked for): when the entry's word is smeared too, they are the pane's (`hover=False`, in `_words`) and un-smear with the pointer anywhere over it; otherwise each under the pointer. Once shown, their words are clickable like the pane's (`smeared_label(on_word=)`, `_canvas_word`: a canvas text only says which letter is under a point, so a word's ends are measured by laying out the text up to each).
 - The card's typing caret blinks (UI-70, `WordCard._blink`): shown on every key and redraw, still (shown) after `BLINK_FOR_MS` without a key, so nothing keeps running while idle.
 - Never delete and remake a canvas item from its own tag Enter / Leave (or anything that runs then): the new item under the pointer is entered again and Tk loops for good, a freeze (F-21: the card's magnifier). Move and recolour it instead (`itemconfigure`).

@@ -432,6 +432,11 @@ dr.set_open(True); assert dr.is_open
 small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
 assert dr.columns == 1 and int(dr.text.cget("width")) == dr.COLUMN_CHARS
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
+from widgets import refresh_widgets
+small.configure(size=16); refresh_widgets(root)                               # a zoom, without filling it again
+for tag in ("pos", "ex"):                                                       # (reported: they kept the old size)
+    assert tkfont.Font(root=root, font=dr.text.tag_cget(tag, "font")).actual("size") == 16, tag
+small.configure(size=14); refresh_widgets(root)
 small.configure(size=11)
 # F-3: a meaning that only names another word shows that word's first real meaning under it, muted (once per word)
 defs.update({"apples": "1. (noun) plural of apple\n2. (noun) Alternative form of apple.",
