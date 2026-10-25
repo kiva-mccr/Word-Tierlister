@@ -284,10 +284,11 @@ and the one started never inherits the built program's own settings (its Tcl / T
 closes), so the unpacked source can build the program again. Making the program from source always asks first
 **Clean up behind?**, however the source came to you (a download, a clone, or unpacked from the program):
 **Keep the source** (the default) puts the program next to `tierlist.py` as usual; **Zip it** and **Remove it**
-put the program beside the source folder, move your save next to it, pack the source into a zip there first (for
-Zip it), and the program removes the source folder as it starts. Only the source's own files are removed: anything
-you added there stays, and so does a git checkout's history (`.git`). The program carries its source inside it,
-so it can always be unpacked again.
+put it there too, in the folder where the source is, pack the source into a zip in that folder first (for Zip it),
+and the program removes the source's files as it starts, leaving itself, your save and the zip in the folder. Only
+the source's own files are removed: anything you added there stays, and so does a git checkout's history (`.git`).
+(A source unpacked from a program that sits beside its folder replaces that program instead, and your save moves
+next to it.) The program carries its source inside it, so it can always be unpacked again.
 
 ## Missing packages
 Installing happens in two stages.

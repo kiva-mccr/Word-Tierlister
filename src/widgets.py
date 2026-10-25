@@ -1656,14 +1656,16 @@ class DefinitionDrawer(tk.Frame):
     """
     SLIDE_MS = 200
 
-    def __init__(self, parent, fonts, animator=None):
+    def __init__(self, parent, fonts, animator=None, gap=0):
         super().__init__(parent, bg=PALETTE["bg"])
         self._anim = animator
+        self._gap = gap                   # room under the pane, inside it: it slides shut with the pane (packed
+                                          # outside it, it jumped the page by that much as the pane left)
         body, head = fonts["body"], fonts["head"]
         self._body = body
         inner = self._inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1,
                                        highlightbackground=PALETTE["border"])
-        inner.pack(fill="x", anchor="n")
+        inner.pack(fill="x", anchor="n", pady=(0, gap))
         # one column, or two side by side for a duel's two words (asked for: each under its own card)
         self.texts = [tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                               padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow") for _ in range(2)]
@@ -1676,6 +1678,8 @@ class DefinitionDrawer(tk.Frame):
         inner.columnconfigure(0, weight=1)
         self._columns = 1
         self._shown = False
+        self._opening = None              # (from, to) pixels while it eases open (at_least)
+        self._floor, self._last_q, self._frame = (0, 0.0), 0.0, None
 
     COLUMN_CHARS = 80                     # the one column's width in characters; two share it (the window's size
                                           # never changes for them)
@@ -1744,18 +1748,20 @@ class DefinitionDrawer(tk.Frame):
         self._shown = bool(on)
         self._natural()
 
-    def _natural(self):
+    def _natural(self, show=True):
         """Back to sizing from the contents. The explicit height left by the slide must go too (0 = none):
-        with both set, Tk flips between the two sizes on every relayout."""
+        with both set, Tk flips between the two sizes on every relayout. `show`: lay it out now (opened);
+        shut, it must not be (it showed one frame at full height just before it left: a flash as it closed)."""
         try:
             if self._inner.winfo_manager() == "place":          # (folded: back in the packed layout)
                 self._inner.place_forget()
-                self._inner.pack(fill="x", anchor="n")
+                self._inner.pack(fill="x", anchor="n", pady=(0, self._gap))
             super().configure(height=0)
             self.pack_propagate(True)
-            self._inner.update_idletasks()      # (mapped again now: left to the next idle moment, a frame could
-                                                # show the pane empty, a flicker as it opened; reported, worst with
-                                                # the Wiktionary link inside it)
+            if show:
+                self._inner.update_idletasks()      # (mapped again now: left to the next idle moment, a frame
+                                                    # could show the pane empty, a flicker as it opened; reported,
+                                                    # worst with the Wiktionary link inside it)
         except tk.TclError:
             pass
 
@@ -1784,31 +1790,64 @@ class DefinitionDrawer(tk.Frame):
     def natural_height(self):
         """The height the contents want (whether or not it is folded right now)."""
         self.update_idletasks()
-        return self._inner.winfo_reqheight()
+        return self._inner.winfo_reqheight() + self._gap
+
+    def unshown_height(self):
+        """How much taller it gets when open than it is now (folded or held: the room the window must find)."""
+        return max(0, self.natural_height() - self.winfo_reqheight())
+
+    def at_least(self, pixels):
+        """While it eases open: never shorter than `pixels` from now on, the rest of the slide carrying on from
+        there. For the room a window grew by to fit it: given to the pane in the same layout as the window's new
+        size, the page around it never moves (given to the page first, it dropped and slid back up; given to
+        the pane before the window had grown, the page jumped up for a frame)."""
+        try:
+            if self._opening:
+                if pixels > self._floor[0]:
+                    self._floor = (min(pixels, self._opening[1]), self._last_q)
+                    self._frame(self._last_q)
+            elif self._inner.winfo_manager() == "place" and pixels > self.winfo_reqheight():   # folded: open()
+                super().configure(height=pixels)                                               # starts there
+        except tk.TclError:
+            pass
 
     def open(self):
-        """Ease open from nothing to the height the contents want (the caller has packed it already)."""
+        """Ease open from nothing (or the room it was given, at_least) to the height the contents want (the
+        caller has packed it already)."""
         self._shown = True
-        self._slide(0, self.natural_height(), self._natural)
+        end = self.natural_height()
+        held = self.winfo_reqheight() if self._inner.winfo_manager() == "place" else 0    # (folded: at_least)
+        start = min(max(1, held), end)
+        self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
+
+        def done():
+            self._opening = None
+            self._natural()
+        self._slide(start, end, done)
 
     def close(self, on_closed=None):
         """Ease shut, then call on_closed (the caller unpacks it there)."""
         self._shown = False
+        self._opening = None
 
         def done():
-            self._natural()
             if on_closed:
-                on_closed()
+                on_closed()                     # (unpacked first: then its natural size is never drawn)
+            self._natural(show=False)
         self._slide(max(1, self.winfo_height()), 0, done)
 
     def _slide(self, a, b, done=None):
         self.pack_propagate(False)
 
         def frame(p):
+            self._last_q = p
+            floor, q0 = self._floor if self._opening else (0, 0.0)
+            h = a + (b - a) * p if floor <= 0 else floor + (b - floor) * (p - q0) / max(1e-6, 1.0 - q0)
             try:
-                super(DefinitionDrawer, self).configure(height=max(1, int(a + (b - a) * p)))
+                super(DefinitionDrawer, self).configure(height=max(1, int(h)))
             except tk.TclError:
                 pass
+        self._frame = frame
         if self._anim is None:
             frame(1.0)
             if done:

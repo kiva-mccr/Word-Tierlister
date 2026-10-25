@@ -468,13 +468,15 @@ def came_from_program(record):
 def cleanup_place(root=ROOT, platform=None):
     """Where a program made from `root` goes when the source is to be cleaned up behind it (asked for: offered
     whenever the program is made, however the source came here; T-12 offered it only for one unpacked from the
-    program): the folder holding `root` (an older program there is replaced). None when there is no such folder
-    to put it in (the top of a disk) or it cannot be written to."""
+    program): where the source was, `root` itself (asked for: it went to the folder holding `root`, outside the one
+    it was made in); only a folder unpacked from a program that sits beside it puts the new one there instead,
+    replacing the old (T-12). None when it cannot be written to."""
     root = os.path.abspath(root)
     parent = os.path.dirname(root)
-    if not parent or parent == root or not os.access(parent, os.W_OK):
-        return None
-    return parent
+    if parent and parent != root and came_from_program(read_manifest(root, UNPACKED)) \
+            and os.path.exists(program_path(parent, platform)) and os.access(parent, os.W_OK):
+        return parent
+    return root if os.access(root, os.W_OK) else None
 
 
 REMOVE_RECORD = ".word-tierlist-remove.json"   # in a source folder to be removed: the files that may go (T-14)
@@ -530,17 +532,18 @@ def remove_source(folder, tries=40, wait=0.25):
     closing: on Windows a folder in use cannot be removed, so it tries again for a while). Only the program's own
     files go: those its unpack record lists (UNPACKED) or the old window wrote down for it (REMOVE_RECORD, T-14:
     a source that came from anywhere), OURS and any __pycache__; anything else (a save, a file of yours, a .git)
-    stays, and so does the folder then. Never touches a folder with neither record. Returns the paths left behind,
-    or None."""
+    stays, and so does the folder then. A program in the folder (it went where its source was) stays with its build
+    record and the log. Never touches a folder with neither record. Returns the paths left behind, or None."""
     record = read_manifest(folder, UNPACKED)
     marked = read_manifest(folder, REMOVE_RECORD)
     if not came_from_program(record) and not marked:
         return None
     listed = set((record or {}).get("files", {})) | set((marked or {}).get("files", []))
+    kept = (SIDE_FILE, "tierlist.log") if os.path.exists(program_path(folder)) else ()
 
     def ours(rel):
         parts = rel.split("/")
-        return rel in listed or parts[0] in OURS or "__pycache__" in parts
+        return rel not in kept and (rel in listed or parts[0] in OURS or "__pycache__" in parts)
 
     left = []
     for _ in range(max(1, tries)):

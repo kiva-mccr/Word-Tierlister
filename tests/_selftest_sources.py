@@ -318,16 +318,19 @@ open(os.path.join(os.path.dirname(prog), "tierlist.py"), "w").write("")
 assert S.existing_source(prog) == os.path.dirname(prog)          # (built from source: it sits beside tierlist.py)
 S.default_source_folder = lambda program=None: beside
 
-# ---- T-12: "Clean up behind?" (asked for): made from an unpacked source with no program beside its folder, the
-# program goes beside the folder, the save moves next to it, and the new program removes the source as it starts
+# ---- T-12: "Clean up behind?" (asked for): the program goes where the source was (asked for: not the folder holding
+# it); a folder unpacked from a program beside it replaces that program, the save moves next to it, and the new
+# program removes the source as it starts
 home12 = tempfile.mkdtemp()
 src12 = os.path.join(home12, "Word Tier List source")
 S.unpack(v2, src12)
-assert S.cleanup_place(src12) == home12
-assert S.cleanup_place(project())                                                  # (T-14: any source, asked for)
+assert S.cleanup_place(src12) == src12                                             # (no program beside: here)
+anywhere = os.path.join(tempfile.mkdtemp(), "Word-Tierlister"); shutil.copytree(project(), anywhere)
+assert S.cleanup_place(anywhere) == anywhere                                       # (T-14: any source, asked for)
+open(S.program_path(os.path.dirname(anywhere)), "w").write("a program beside a plain source")
+assert S.cleanup_place(anywhere) == anywhere                                       # (not unpacked from it: here)
 open(S.program_path(home12), "w").write("old program")
-assert S.cleanup_place(src12) == home12                                            # (an older program: replaced)
-os.remove(S.program_path(home12))
+assert S.cleanup_place(src12) == home12                                            # (the program it came from: replaced)
 # the helpers alone: only the program's own files go; a save and a file of yours stay (and so does the folder)
 os.makedirs(os.path.join(src12, "src", "__pycache__")); open(os.path.join(src12, "src", "__pycache__", "a.pyc"), "w").write("")
 os.makedirs(os.path.join(src12, ".venv", "bin")); open(os.path.join(src12, ".venv", "bin", "python"), "w").write("")
@@ -346,7 +349,7 @@ moved = S.move_save(db, home12)
 assert moved == os.path.join(home12, "tierlist-2.db") and open(moved).read() == "save"           # never over a file
 assert os.path.exists(moved + "-wal") and os.path.exists(moved + ".before-merge-1.bak") and not os.path.exists(db)
 assert open(os.path.join(home12, "tierlist.db")).read() == "another save"
-# the dialog: asked before building; yes puts the program beside the folder and starts it with --remove-source
+# the dialog: asked before building; yes replaces the program beside the folder and starts it with --remove-source
 S.is_frozen = sources.is_frozen = A.is_frozen = lambda: False
 root, app = window()
 save12 = os.path.join(src12, "tierlist.db")
@@ -369,9 +372,11 @@ check = T.Store(os.path.join(home12, "tierlist-3.db"))
 assert check.get_meta("offered_source") == "1"                   # (the program will not unpack it again)
 check.close()
 assert os.path.exists(os.path.join(src12, S.REMOVE_RECORD))      # (what the program may remove, written down)
+os.remove(S.program_path(home12))
 # T-14 (asked for: offered every time, whatever the source; or zipped): a downloaded or cloned source, with a .git
-# and a file of yours. "Zip it" packs the source beside it first; the new program then removes only the source's
-# own files; "Keep the source" changes nothing; closing the question makes nothing
+# and a file of yours. The program goes in its folder (asked for: it went to the folder holding it); "Zip it" packs
+# the source there first; the new program then removes only the source's own files, and keeps itself, its build
+# record, the save, the log and the zip; "Keep the source" changes nothing; closing the question makes nothing
 import zipfile
 home14 = tempfile.mkdtemp(); src14 = os.path.join(home14, "Word-Tierlister")
 os.makedirs(os.path.join(src14, "src")); os.makedirs(os.path.join(src14, ".git"))
@@ -379,23 +384,31 @@ for f, text in (("tierlist.py", "t\n"), ("src/a.py", "a\n"), ("README.md", "r\n"
                 ("my-notes.txt", "mine\n")):
     open(os.path.join(src14, f), "w").write(text)
 root, app = window()
+save14 = os.path.join(src14, "tierlist.db")
+app.store.close(); shutil.copy(app.store.path, save14)
+app.store = T.Store(save14)
 q14, built14, started14 = [], [], []
 sources.ask_buttons = lambda title, headline, message, buttons, **kw: (q14.append((headline, message, buttons)), "zip")[1]
 S.make_program = lambda root_dir, log, release=None, place=None: (built14.append(place),
                                                                  open(S.program_path(place or root_dir), "w").write("p"),
-                                                                 S.program_path(place or root_dir))[2]
+                                                                 open(os.path.join(place or root_dir, S.SIDE_FILE), "w").write("{}"),
+                                                                 S.program_path(place or root_dir))[3]
 S.start = lambda path, popen=None, args=(): started14.append((path, list(args)))
 d = sources.SourceDialog(app, root_dir=src14, frozen=False, check=lambda: None); settle(d)
 d.buttons["Make the program"].invoke(); pump(root, 2)
 head, message, buttons = q14[-1]
 assert head == "Clean up behind?" and [b[1] for b in buttons] == ["keep", "zip", "remove"] and "git checkout" in message
-assert built14 == [home14] and started14 == [(S.program_path(home14), ["--remove-source", src14])]
-with zipfile.ZipFile(os.path.join(home14, "Word-Tierlister.zip")) as z:
+assert "in this folder, where the source is" in message and "save stays here" in message, message
+assert built14 == [src14] and started14 == [(S.program_path(src14), ["--remove-source", src14])]
+with zipfile.ZipFile(os.path.join(src14, "Word-Tierlister.zip")) as z:
     names = set(z.namelist())
 assert {"Word-Tierlister/tierlist.py", "Word-Tierlister/src/a.py", "Word-Tierlister/README.md"} <= names
 assert not any(".git" in n or "my-notes" in n for n in names), names
+open(os.path.join(src14, "tierlist.log"), "w").write("log")
 left = S.remove_source(src14)                                     # (what the new program does as it starts)
-assert sorted(os.path.relpath(p, src14) for p in left) == [os.path.join(".git", "HEAD"), "my-notes.txt"], left
+kept14 = sorted({os.path.relpath(p, src14) for p in left})
+assert kept14 == sorted([os.path.join(".git", "HEAD"), "my-notes.txt", "Word-Tierlister.zip", "tierlist.db",
+                         S.SIDE_FILE, "tierlist.log", os.path.basename(S.program_path(src14))]), kept14
 assert not os.path.exists(os.path.join(src14, "tierlist.py")) and not os.path.exists(os.path.join(src14, "src"))
 assert S.zip_source(project(), home14).endswith(".zip")           # (another one there: never over it)
 root, app = window()

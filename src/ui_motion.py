@@ -57,14 +57,17 @@ class Animator:
 
     animator.run("word", 180, on_frame, on_done) calls on_frame(p) with p easing from 0 to 1
     (the last call is always exactly 1.0), then on_done(). Animations are identified by `key`;
-    at most one runs per key. Callbacks run on the UI thread, so they may touch widgets.
+    at most one runs per key. Callbacks run on the UI thread, so they may touch widgets. A frame held up by
+    other work moves it on by STALL_MS at most: it slows down rather than skipping ahead.
     """
     FRAME_MS = 16
+    STALL_MS = 50                          # the most one frame moves an animation on (about three frames)
 
     def __init__(self, root, reduce_motion=False, clock=time.perf_counter):
         self.root = root
         self.reduce_motion = reduce_motion
         self.clock = clock                 # injectable so tests need not wait in real time
+        self._real = clock is time.perf_counter     # (a test's clock jumps on purpose: never a stall)
         self._running = {}                 # key -> {"start", "ms", "frame", "done", "ease", "job"}
 
     @property
@@ -84,8 +87,9 @@ class Animator:
             if on_done:
                 on_done()
             return
-        anim = {"start": self.clock(), "ms": ms, "frame": on_frame, "done": on_done,
-                "ease": ease, "job": None}
+        now = self.clock()
+        anim = {"start": now, "ms": ms, "frame": on_frame, "done": on_done,
+                "ease": ease, "job": None, "last": now}
         self._running[key] = anim
         on_frame(ease(0.0))
         anim["job"] = self.root.after(self.FRAME_MS, lambda: self._tick(key, anim))
@@ -94,7 +98,13 @@ class Animator:
         """One frame: advance, or finish when the time is up. Ignores stale timers."""
         if self._running.get(key) is not anim:
             return
-        p = (self.clock() - anim["start"]) * 1000.0 / anim["ms"]
+        now = self.clock()
+        late = now - anim["last"] - self.STALL_MS / 1000.0
+        if self._real and late > 0:
+            anim["start"] += late          # held up (slow work, a busy machine): on by STALL_MS from the frame last
+                                           # shown, never a leap to where the clock says (a pane popped open at once)
+        anim["last"] = now
+        p = (now - anim["start"]) * 1000.0 / anim["ms"]
         if p >= 1.0:
             self.finish(key)
             return

@@ -1547,7 +1547,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the computer, the likely 99 MB: every window toolkit but Tk is excluded now (bundle.UNUSED).
 # [x] T-12 "Clean up behind?" (asked for: making the program from an unpacked source with no program beside it).
 #           Asked before the build (standalone.cleanup_place: the source has an unpack record and no program sits
-#           beside its folder). Yes: the program goes beside the source folder; this window closes, the save moves
+#           beside its folder). Yes: the program goes beside the source folder (T-15: now in it, unless a program it
+#           was unpacked from sits beside it); this window closes, the save moves
 #           next to the program if it was inside the folder (standalone.move_save, never over another file; its
 #           -wal / -shm, .bak backups and the log with it) and is remembered; the save notes the source was given
 #           out (offered_source), so the program does not unpack it again; then the program starts with
@@ -1659,7 +1660,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] T-14 Asked for: making the program did not ask to clean up behind (T-12 asked only for a source unpacked from the
 #           program). Now it asks every time it is made from source, whatever the source: Keep the source (the
 #           default), Zip it (the source packed into <folder>.zip beside it first, never over a file) or Remove it.
-#           Either of the last two puts the program beside the folder, moves the save, and writes down the files
+#           Either of the last two puts the program beside the folder (T-15: in it), moves the save, and writes down the files
 #           that may go (REMOVE_RECORD: the source's own), so a download or a clone keeps anything else (.git, files
 #           of yours); the new program removes them as it starts (standalone.remove_source).
 # [x] F-20 Reported (back again, Windows and Linux): the definitions pane flickered as it opened. Measured in the app every
@@ -1693,6 +1694,29 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           whole pixels). ui_style.set_icon (from apply_ttk_style) puts every size on each root, and so on every
 #           window (on Windows also its own taskbar group); a build packs src/icons as "icons" and the Windows
 #           program takes icon.ico as its own; the Linux launcher points at a copy in ~/.local/share/icons.
+# [x] F-22 Reported (after F-20): the definitions pane still flickered, now and then, opening and closing (Windows and
+#           Linux). Tracked frame by frame (asked for): the screen grabbed every ~25 ms under openbox and the tier
+#           buttons' place in each frame read, beside the layout read in the app every 3 ms. Five causes, each fixed:
+#           - opening in a window that had to grow: the window grew first and the page dropped (59 px here), then slid
+#             back up as the pane opened. The room the window gains now goes to the folded pane in the very layout
+#             of the window's new size (App._give_room from <Configure>; DefinitionDrawer.at_least);
+#           - a hiccup in the event loop mid-slide (now and then, ~150 ms seen): the slide then leapt to its end.
+#             An animation now moves on by Animator.STALL_MS at most per frame;
+#           - closing: the pane was put back to its full size for one frame just before it left (F-20's refresh), the
+#             page jumping up and back; it now leaves the layout first. Its gap went only after it had gone (a last
+#             3 px jump): the gap is inside the pane now and slides shut with it;
+#           - a window grown for the pane only by its minimum size shrank back the moment the pane closed (a jump
+#             after the slide): the grown size is set as the window's size;
+#           - at a zoom the open pane needs smaller text for: every text size from the full zoom down was tried and
+#             drawn, the page swelling past the window and stepping back (~0.5 s); opening now tries from the size
+#             shown. And the page shook by a pixel as the pane slid (two roundings): it is placed by its top.
+#           _selftest_drawer opens and closes it in two windows under openbox (the page only ever moves with the
+#           slide; it fails on the old code); _selftest_motion holds an animation up.
+# [x] T-15 Asked for: "Zip it" put the program in the folder holding the source, outside it. A clean up now puts the
+#           program where the source was, in its own folder (as Keep does), with the zip and the save; the program
+#           removes only the source's files there and keeps itself, its build record, the save, the log and the zip
+#           (standalone.cleanup_place, remove_source). A folder unpacked from a program sitting beside it still
+#           replaces that program (T-12).
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

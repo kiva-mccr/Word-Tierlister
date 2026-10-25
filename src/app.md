@@ -20,6 +20,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Window size: what shows = min(zoom, biggest that fits) x grow; re-fit from the zoom on every layout change, never ratchet down; measure minimum sizes at grow 1 (`_fit_window`).
+- A window grown by its minimum size alone gets that size set too (`_fit_window`): left to the minimum, it shrank back when the minimum fell (the definitions pane closing). The drawer opening only ever needs smaller text: its fit starts from the size shown, not the zoom (each size tried was drawn: the page swelled and stepped back, F-22). The centre contents are placed by their top (`_recenter`, also on their own `<Configure>`): centred by Tk plus an offset, two roundings shook them by a pixel.
 - In a grown window the folded definitions pane counts at its full height and is shortened to fit (it once slid open over the word card).
 - A definition that arrives while the pane slides open settles the slide before the fit (`_fit_defs`); fitted against the half-open pane it ended over the word card (F-8).
 - Every key goes through `on_key` and the keymap; a held key repeats after 500 ms, then every 250 ms (`_repeat_allowed`).

@@ -21,3 +21,4 @@ The module docstring has the details; this page is the map.
 - A key press speeds running animations out of the way (`hurry_all`), never jumps them.
 - Reduce motion makes `run` jump to the end; frame callbacks are tiny and never query the database.
 - A frame or end callback that finds its widget destroyed is dropped (`_gone`); any other error is raised as before.
+- A frame held up by other work moves an animation on by `STALL_MS` at most, never to where the clock says: after a stall the definitions pane leapt open (F-22). Only with the real clock (a test's clock jumps on purpose); tests that pump every 50 ms still finish an animation in about its time / 50 ms frames.

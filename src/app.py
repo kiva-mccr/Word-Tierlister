@@ -156,6 +156,7 @@ class App:
         self._was_online = False
         root.after(self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+        self._room_from = None    # the window's height before it grew for the opening drawer (_make_room)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
         self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
@@ -401,7 +402,7 @@ class App:
         self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
-        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim)
+        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim, gap=6)
         self.def_text = self.def_frame.text
 
         self.center = ttk.Frame(r)
@@ -413,7 +414,7 @@ class App:
         self.place_frame = ttk.Frame(self.center)
         inner = ttk.Frame(self.place_frame)
         self.place_inner = inner
-        inner.place(relx=0.5, rely=0.5, anchor="center")
+        inner.place(relx=0.5, anchor="n")            # (its top: _recenter)
         self.word_card = WordCard(inner, font("word"), font("body"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
         self.word_card.on_find, self.word_card.on_enter = self.start_lookup, self.lookup_word   # (UI-51)
@@ -457,7 +458,7 @@ class App:
         self.pair_frame = ttk.Frame(self.center)
         pi = ttk.Frame(self.pair_frame)
         self.pair_inner = pi
-        pi.place(relx=0.5, rely=0.5, anchor="center")
+        pi.place(relx=0.5, anchor="n")
         # Refine / Boundary: which tier or boundary to work on, right above the duel it affects (so the page
         # area is the same in every tab and the content does not jump when switching)
         self.opt_frame = ttk.Frame(pi)
@@ -480,6 +481,8 @@ class App:
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.pair_empty = EmptyCard(pi, font("title"), font("body"))         # nothing to duel here (UI-20)
         self.center.bind("<Configure>", self._on_center_configure)
+        for inner in (self.place_inner, self.pair_inner):       # (placed by their top: a change of height
+            inner.bind("<Configure>", lambda e: self._recenter())   # re-centres them)
         self.root.bind("<Configure>", self._on_root_configure, add="+")
 
     # ---- zoom (View menu, Ctrl + / Ctrl - / Ctrl 0) ---------------------------------------------------------
@@ -619,7 +622,10 @@ class App:
         ch = self.center.winfo_height()
         for inner in (self.place_inner, self.pair_inner):
             free = (ch - inner.winfo_reqheight()) / 2
-            inner.place_configure(y=-int(max(0, min(band / 2, free))))
+            # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
+            # the content shook by a pixel while the definitions pane slid against its top)
+            top = int(free - max(0, min(band / 2, free)))
+            inner.place_configure(y=top)
 
     def _fit_big_text(self):
         """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
@@ -680,6 +686,7 @@ class App:
         its full height without showing it (showing it open for the measurement made it flash, UI-35).
         """
         r = self.root
+        before = (r.winfo_width(), r.winfo_height())
         if self.show_defs:
             self.def_frame.set_lines(self._def_want)
         if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
@@ -688,7 +695,7 @@ class App:
                     self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
-                    ch += self.def_frame.natural_height()        # left out, it slid open over the word card)
+                    ch += self.def_frame.unshown_height()        # left out, it slid open over the word card)
                 if cw <= r.winfo_width() and ch <= r.winfo_height():
                     return
         f = ui_factor(r)
@@ -699,6 +706,9 @@ class App:
         # closes; it starts from the step that fitted this layout last time, so it does not flicker.
         key = (self.mode, self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
+        if folded_drawer:                # (opening the drawer only ever needs smaller text: tried from the full zoom,
+            start = min(start, round(self.font_scale * self.zoom, 2))     # each size tried showed, the page swelling
+                                                                          # past the window and stepping back down)
         lowest = min(self.zoom, 1.0) * self.FIT_LOWEST      # (half the normal size: a big zoom on a small
         sizes = [round(self.zoom - k * self.FIT_STEP, 2)      # screen may shrink as far as no zoom would)
                  for k in range(int((self.zoom - lowest) / self.FIT_STEP + 1e-6) + 1)]
@@ -716,7 +726,7 @@ class App:
                 self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:
-                    ch += self.def_frame.natural_height()
+                    ch += self.def_frame.unshown_height()
                 if cw <= area[2] and ch <= area[3]:
                     break
             else:
@@ -752,7 +762,9 @@ class App:
             ny = max(area[1], min(y, area[1] + area[3] - h))
             # (never while maximized: the window is bigger than the usable area then, and moving it back onto it
             # would un-maximize it)
-            if ((w, h) != (r.winfo_width(), r.winfo_height()) or (nx, ny) != (x, y)) and not is_maximized(r):
+            # (grown by the minimum size alone, it is set as the size too: left to the minimum, the window shrank
+            # back to its old size the moment the minimum fell again, a jump as the definitions pane closed)
+            if ((w, h) != before or (nx, ny) != (x, y)) and not is_maximized(r):
                 r.geometry(f"{w}x{h}" + (f"+{nx}+{ny}" if (nx, ny) != (x, y) else ""))
             if rebase:
                 self._ref_size = (max(self._ref_size[0], w), max(self._ref_size[1], h))
@@ -776,6 +788,7 @@ class App:
         """The window was resized: re-grow the contents once resizing pauses for 80 ms (like Browse)."""
         if e.widget is not self.root:
             return
+        self._give_room(e.height)
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
         self._grow_job = self.root.after(80, self._apply_grow)
@@ -815,12 +828,13 @@ class App:
                 d.collapse()                   # packed folded: it must not show at full height first
             else:
                 d.set_open(True)
-            d.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
+            d.pack(side="bottom", fill="x", padx=10, before=self.center)
             self._render_defs()
             if animate:
                 self._make_room(d.natural_height())   # grow the window first only if it must, then ease open
                 d.open()
         elif d.winfo_manager():
+            self._room_from = None
             def gone():
                 if not self.show_defs:
                     d.pack_forget()
@@ -835,10 +849,21 @@ class App:
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
         (which took long enough to swallow the slide). The page usually has room; if not, the full fit
-        runs (it may shorten the pane or the text), counting the folded drawer at its full height."""
+        runs (it may shorten the pane or the text), counting the folded drawer at its full height. A window that
+        must grow does so with the drawer already holding the room it gains (opened from nothing, the page grew,
+        dropped and slid back up as the drawer opened: a jump, seen whenever the window had to grow)."""
+        r = self.root
         cw, ch = self._content_size()
-        if ch + extra > self.root.winfo_height() or cw > self.root.winfo_width():
-            self._fit_window(folded_drawer=True)      # the drawer stays folded: it never flashes open first
+        self._room_from = None
+        if ch + extra > r.winfo_height() or cw > r.winfo_width():
+            self._room_from = r.winfo_height()        # (_on_root_configure: what the window gains goes to the drawer,
+            self._fit_window(folded_drawer=True)      # in the very layout of its new size; the drawer stays folded:
+            self._give_room(r.winfo_height())         # it never flashes open first)
+
+    def _give_room(self, height):
+        """The window is `height` tall now; opening the drawer made it grow: the drawer takes what it gained."""
+        if self._room_from is not None:
+            self.def_frame.at_least(height - self._room_from)
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""

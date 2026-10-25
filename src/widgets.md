@@ -41,7 +41,7 @@ The module docstring has the details; this page is the map.
 - `TreeSmears`: Censored words in one column of a ttk.Treeview (Browse's list), smeared as everywhere else (asked for: no more b•••••d).
   - methods: refresh
 - `DefinitionDrawer`: The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold with its senses numbered, the part of speech in italics and...
-  - methods: columns, set_lines, lines, show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, open, close
+  - methods: columns, set_lines, lines, show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, unshown_height, at_least, open, close
 - `ShapeCard`: One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve (how likely a word is to come up early, from rank #1 to...
   - methods: set, refresh, median_rank
 - `short_rank`: 13,863 -> '13.9k', 250,000 -> '250k', 1,200,000 -> '1.2M', 840 -> '840'.
@@ -86,4 +86,5 @@ The module docstring has the details; this page is the map.
 - An open dialog follows a change of the shared fonts (a zoom; maximizing brings back the maximized window's own, UI-57): `refresh_widgets` calls `StyledDialog.rescale`, which re-wraps every wrapped label in proportion, then sizes and centres the dialog again. Without it the text grew inside a window that kept its size and was cut off (F-18).
 - The Wiktionary link (UI-67, `_place_link`, `LinkButton`) is placed over the pane's top right; a canvas's `lift()` raises items, so it is raised with `tk.Misc.lift`. The word's line gets a right margin so a long word never runs under it.
 - The drawer's end of slide (`_natural`) switches its contents from place back to pack and must finish that at once (`update_idletasks`): left to the next idle moment, a frame showed the pane empty, a flicker (F-20; seen only under a window manager, `_selftest_drawer`).
+- Opening, the drawer never lets the page move against its slide (F-22, `_selftest_drawer` under openbox): the room a window grows by for it is handed over in the same layout as the window's new size (`at_least`, from App's `<Configure>`; held before the resize, the page jumped up, after it, down). Closing, it leaves the layout first and only then gets its natural size back (`_natural(show=False)`): the other way round, one frame drew it at full height. Its gap below (`gap`) is inside it, so it slides shut too.
 - Never delete and remake a canvas item from its own tag Enter / Leave (or anything that runs then): the new item under the pointer is entered again and Tk loops for good, a freeze (F-21: the card's magnifier). Move and recolour it instead (`itemconfigure`).
