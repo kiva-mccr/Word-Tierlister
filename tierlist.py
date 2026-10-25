@@ -1677,6 +1677,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] UI-68 Asked for: Browse's sort arrow pointed up for S to F; it now points the way the values grow (down for S..F,
 #           a..z and commonest first; up for the highest rating or most duels first; a second click turns it round),
 #           and the Sort drop-down says "Tier" instead of "Default" (the order the Tier column sorts in).
+# [x] UI-69 Reported (Fedora): the window opened with its contents bigger than allowed, and maximizing then made them
+#           smaller. The two zooms (UI-57: one for the window maximized, one for any other size) were kept apart and
+#           nothing kept them compatible: a usual zoom of 150% with 100% kept for maximized opened at 150%, then
+#           maximizing showed 100% (reproduced under openbox). Now the usual window never shows more than the
+#           maximized one: a usual zoom chosen above the maximized one raises that too, one chosen maximized below
+#           the usual one lowers that too, a save left with the usual one above opens at the maximized one, and a
+#           big window that is not maximized grows its contents (UI-25) only up to the maximized zoom
+#           (App._keep_compatible, _max_zoom, _grow_for).
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

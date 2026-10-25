@@ -181,5 +181,27 @@ assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2            
 maximize(False, "1000x700"); pump(4)
 assert not fits() and dlg.win.winfo_height() != grew and abs(dlg.win.winfo_height() - small) <= 2
 dlg.close()
+# the two zooms stay compatible (reported: the window opened with its contents bigger than when maximized, and
+# maximizing shrank them): the usual window never shows more than the maximized one would
+shown = lambda: round(app.font_scale * app.zoom * app.grow, 2)
+assert not A.is_maximized(root)
+app.set_zoom(s.meta_number("zoom_max", 1.0) + 0.2); pump(3)                  # usual zoom above the maximized one:
+assert s.meta_number("zoom_max", 1.0) == s.meta_number("zoom", 1.0) == app.zoom      # that rises with it
+maximize(True, "1880x1020")
+app.set_zoom(round(app.zoom - 0.3, 1)); pump(3)                                # maximized zoom below the usual one:
+assert s.meta_number("zoom", 1.0) == s.meta_number("zoom_max", 1.0) == app.zoom      # that comes down with it
+big = shown()
+maximize(False, "1000x700")
+assert shown() <= big + 1e-9
+# a big window that is not maximized grows its contents (UI-25), but never past what the maximized one shows
+root.geometry("1880x1000"); pump(4); app._apply_grow(); pump(4)
+assert not A.is_maximized(root) and shown() <= s.meta_number("zoom_max", 1.0) + 1e-9, (shown(), s.get_meta("zoom_max"))
+app.on_close()
+# a save whose usual zoom is above the maximized one (as left by earlier versions): it opens at the maximized one
+s = T.Store(db); s.set_meta("zoom", "1.5"); s.set_meta("zoom_max", "1.0")
+root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
+assert app.zoom == 1.0 and s.get_meta("zoom") == "1.0" and shown() <= 1.0
+maximize(True, "1880x1020")
+assert app.zoom == 1.0 and shown() >= 1.0 - 1e-9                              # maximizing never shrinks it
 app.on_close()
 print("ZOOM OK")

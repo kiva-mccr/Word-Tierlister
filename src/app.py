@@ -166,6 +166,10 @@ class App:
         self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
         self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
         self.zoom = store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
+        kept_max = self._max_zoom(store)
+        if kept_max is not None and self.zoom > kept_max:    # (never bigger than when maximized: _keep_compatible)
+            self.zoom = kept_max
+            store.set_meta("zoom", self.zoom)
         self._maximized = False   # the window maximized: it shows the zoom kept for that ("zoom_max", UI-57)
         self._chart_ready = False
         self._settled_ready = False
@@ -506,9 +510,31 @@ class App:
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
-        self.store.set_meta(self._zoom_key(), z)
+        key = self._zoom_key()
+        self.store.set_meta(key, z)
+        self._keep_compatible(key, z)
         self._say_zoom(z)
         return "break"
+
+    def _max_zoom(self, store=None):
+        """The zoom kept for the window maximized (UI-57), or None before one is chosen there."""
+        store = store or self.store
+        if store.get_meta("zoom_max") is None:
+            return None
+        return store.meta_number("zoom_max", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
+
+    def _keep_compatible(self, key, z):
+        """The two zooms (UI-57) stay compatible (reported: the window opened with its contents bigger than when
+        maximized, so maximizing shrank them): the window at any other size never shows more than maximized. A zoom
+        chosen for the usual window above the maximized one raises that too; one chosen maximized below the usual
+        one lowers that too."""
+        if key == "zoom":
+            kept = self._max_zoom()
+            if kept is not None and z > kept:
+                self.store.set_meta("zoom_max", z)
+        else:
+            if z < self.store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX):
+                self.store.set_meta("zoom", z)
 
     def _zoom_key(self):
         """Where the zoom is kept: one for the window maximized, one for it at any other size (UI-57: each comes
@@ -740,6 +766,10 @@ class App:
         (or what the contents need, if more), then in proportion, in steps of GROW_STEP, up to GROW_MAX."""
         rw, rh = self._ref_size
         g = math.floor(min(w / rw, h / rh) / self.GROW_STEP + 1e-6) * self.GROW_STEP
+        kept = None if is_maximized(self.root) else self._max_zoom()
+        if kept is not None:                  # (a big window, not maximized, never shows more than maximized does)
+            shown = self.font_scale * self.zoom
+            g = min(g, math.floor(kept / shown / self.GROW_STEP + 1e-6) * self.GROW_STEP)
         return round(max(1.0, min(self.GROW_MAX, g)), 2)
 
     def _on_root_configure(self, e):
