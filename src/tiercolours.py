@@ -12,7 +12,7 @@ from tkinter import ttk
 from constants import TIERS
 from fonts import font
 from smooth import SmoothCanvas
-from theme import DEFAULT_TIERS, PALETTE, SWATCHES, TIER_COLORS, is_hex
+from theme import PALETTE, SWATCHES, TIER_COLORS, default_tiers, is_hex
 from ui_motion import lerp_color
 from widgets import StyledDialog, TierChip
 
@@ -81,7 +81,7 @@ class TierColoursDialog:
             strip.tag_lower("ring")
 
     def reset(self):
-        for t, c in enumerate(DEFAULT_TIERS):
+        for t, c in enumerate(default_tiers()):          # (the look's own: Dusk's in dark mode, UI-77)
             self.vars[t].set(c)
 
     def apply(self):
@@ -94,6 +94,6 @@ class TierColoursDialog:
         self.dlg.close()
         if [c.upper() for c in self.colors] == [c.upper() for c in TIER_COLORS]:
             return                                             # (nothing changed: no need to reopen)
-        same = self.colors == list(DEFAULT_TIERS)
+        same = self.colors == list(default_tiers())
         self.app.store.set_meta("tier_colors", "" if same else json.dumps(self.colors))
         self.app.reopen()

@@ -282,7 +282,7 @@ class RoundButton(SmoothCanvas):
         fill, edge, width, fg = self._look
         try:
             self.itemconfigure("shape", fill=fill, outline=edge, width=width)
-            self.itemconfigure("hint", fill=lerp_color(fg, fill, 0.3))
+            self.itemconfigure("hint", fill=fg)     # (the key in the ink too, UI-76: paler, it was 3.4:1 on a pastel)
             if self._censor:                       # (the smear follows the button's colours as they fade)
                 self.smear._paper, self.smear._ink = fill, fg
                 self.smear.paint()

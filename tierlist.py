@@ -1801,10 +1801,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           shows 100%). Packed into a build as "typefaces".
 # [ ] UI-74 A light film grain (0.1) over the window's background, as in the mock-ups.
 # [ ] UI-75 A GitHub link at the top right of the main window (the menu bar's row).
-# [ ] UI-76 Stronger contrast: muted text about 7:1 (it was 5.0:1), and the key numbers on the tier pills in the
-#           dark ink (they were a paler ink, 3.2:1: below WCAG's 4.5:1 for text).
-# [ ] UI-77 Dark mode in the "Dusk" colours (warm night, cream text; the tiers in the film pastels) instead of the
-#           plum night. The light look keeps its colours.
+# [x] UI-76 Stronger contrast: muted text about 7:1 (it was 5.0:1), and the key numbers on the tier pills in the
+#           dark ink (they were a paler ink, 3.4:1 at worst: below WCAG's 4.5:1 for text); every button's key
+#           follows its label's colour (RoundButton._paint). theme.contrast; _selftest_looks checks both looks.
+#           The card's faint rude kind (UI-59) stays faint on purpose.
+# [x] UI-77 Dark mode in the "Dusk" colours (warm night, cream text; the tiers in the film pastels) instead of the
+#           plum night. The light look keeps its colours. theme.DARK; a save that never chose tier colours gets
+#           the look's own (theme.default_tiers: DUSK_TIERS in the dark), and Tier colours' Reset puts back the
+#           look's. Every text colour on its background is 7:1 or better, the dark ink on the tiers 5.3:1.
 # [ ] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first.
 #
 # Decisions

@@ -16,15 +16,23 @@ assert set(theme.DARK) == set(theme.LIGHT) and theme.PALETTE == theme.LIGHT
 colors, rows = theme.TIER_COLORS, theme.TIER_ROW
 theme.apply(dark=True)
 assert theme.PALETTE["bg"] == theme.DARK["bg"] and theme.TIER_COLORS is colors and theme.TIER_ROW is rows
-assert theme.TIER_ROW_TEXT[0] == theme.DARK["text"] and theme.TIER_COLORS == list(theme.DEFAULT_TIERS)
+assert theme.TIER_ROW_TEXT[0] == theme.DARK["text"] and theme.TIER_COLORS == list(theme.DUSK_TIERS)   # (Dusk, UI-77)
+assert theme.default_tiers() == theme.DUSK_TIERS and theme.default_tiers(dark=False) == theme.DEFAULT_TIERS
 assert theme.ink_on(theme.TIER_COLORS[2]) == theme.TIER_TEXT          # (dark ink on a pastel, dark mode too)
 assert theme.ink_on(theme.PALETTE["surface"]) == theme.DARK["text"]
 theme.apply(dark=False, tiers=["#112233"] * 6)
 assert theme.TIER_COLORS == ["#112233"] * 6 and theme.PALETTE["bg"] == theme.LIGHT["bg"]
 theme.apply(tiers=["nonsense"] * 6)
-assert theme.TIER_COLORS == list(theme.DEFAULT_TIERS)                 # (not colours: the defaults)
+assert theme.TIER_COLORS == list(theme.DEFAULT_TIERS) and theme.default_tiers() == theme.DEFAULT_TIERS   # (not colours)
 assert theme.is_hex("#FFB3C1") and not theme.is_hex("FFB3C1") and not theme.is_hex("#FFB3C")
 assert all(theme.is_light(c) for c in theme.SWATCHES)                 # (every swatch takes the dark ink)
+# ---- contrast (UI-76): main and muted text about 7:1 or better on the page and on cards, in both looks; the dark ink
+# (a tier pill's letter and its key) at least WCAG's 4.5:1 on every tier colour there is
+assert round(theme.contrast("#000000", "#FFFFFF"), 1) == 21.0 and theme.contrast("#777777", "#777777") == 1
+for look in (theme.LIGHT, theme.DARK):
+    for back in (look["bg"], look["surface"]):
+        assert theme.contrast(look["text"], back) >= 7 and theme.contrast(look["muted"], back) >= 6.9, (look, back)
+assert min(theme.contrast(theme.TIER_TEXT, c) for c in theme.SWATCHES + theme.DEFAULT_TIERS + theme.DUSK_TIERS) >= 4.5
 
 # ---- the window, in a save
 s = T.Store(os.path.join(tempfile.mkdtemp(), "looks.db"))
@@ -100,6 +108,7 @@ def check_dark():
     results["dark_bg"] = root3.cget("bg")
     results["store_open"] = app3.store.get_meta("dark_mode")
     results["pill_ink"] = app3.tier_row.buttons[2].cget("fg")
+    results["key_ink"] = app3.tier_row.buttons[2].itemcget("hint", "fill")
     app3.dark_var.set(False); app3.toggle_dark()
 
 
@@ -119,6 +128,7 @@ assert app.reopening and s.get_meta("tier_colors") == json.dumps(dlg.colors)
 last = A.reopen_while_asked(app, s, app.defs, new_root)
 assert results["dark_bg"] == theme.DARK["bg"] and results["store_open"] == "1", results
 assert results["pill_ink"] == theme.TIER_TEXT                          # (a tier pill keeps the dark ink)
+assert results["key_ink"].upper() == theme.TIER_TEXT                  # (its key too, UI-76: paler, it failed WCAG)
 assert results["light_bg"] == theme.LIGHT["bg"] and not last.reopening
 assert results["meta"] == ("0", theme.SWATCHES[8])
 # asked for (closing and opening again was jarring): the new window is built while the old one is still on screen,

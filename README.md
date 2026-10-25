@@ -118,7 +118,7 @@ missing or out of date, and also checks that each module imports only from the l
 ## Where to change things
 
 - A rule about ranking, duels, undo or the queue: `store.py`.
-- Colours: `theme.py` (the light and dark looks, the tier colours and their swatches). Settings > Tier colours...
+- Colours: `theme.py` (the light look and the dark one, Dusk, each with its default tier colours; the swatches; `contrast()`). Settings > Tier colours...
   (`tiercolours.py`) and View > Dark mode keep them in the save; the window is rebuilt in the new look behind the
   old one, which it then replaces in place, same size and spot, Browse too (`App.reopen`, `App.take_over`).
   Fonts and sizes: `fonts.py` (the typefaces themselves: `src/typefaces/`, `tools/make_typefaces.py`). How widgets look: `ui_style.py`.

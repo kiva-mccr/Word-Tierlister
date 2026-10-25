@@ -29,7 +29,7 @@ CODE_DIRS = ("", "src", "tests", "tools")         # where .py files live ("" = t
 KNOWN_OPTIONAL_DEV = {"PIL": "pillow", "PyInstaller": "pyinstaller", "fontTools": "fonttools"}   # only tests and tools
 #                                                       import these (screenshots, builds, the typefaces)
 NOISE = ("imported but unused",)                  # tierlist.py re-exports and a few test imports
-STRAY = (".db", ".db-wal", ".db-shm", ".log", ".pyc", ".part", ".png")
+STRAY = (".db", ".db-wal", ".db-shm", ".log", ".pyc", ".part", ".png", ".whl", ".ttf")
 
 
 def _files_in(d):
