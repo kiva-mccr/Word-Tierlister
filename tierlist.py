@@ -1662,6 +1662,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Either of the last two puts the program beside the folder, moves the save, and writes down the files
 #           that may go (REMOVE_RECORD: the source's own), so a download or a clone keeps anything else (.git, files
 #           of yours); the new program removes them as it starts (standalone.remove_source).
+# [x] F-20 Reported (back again, Windows and Linux): the definitions pane flickered as it opened. Measured in the app every
+#           4 ms under a window manager: at the end of the slide the pane's contents vanished for a frame. While it
+#           slides they are placed (clipped); at the end they go back to being packed, and Tk left that to the next
+#           idle moment, so one frame drew the pane empty. Unseen before; the Wiktionary link inside the pane (UI-67)
+#           made that frame long enough to see. The change now finishes at once (DefinitionDrawer._natural);
+#           _selftest_drawer opens it under openbox and checks the contents never vanish once shown.
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

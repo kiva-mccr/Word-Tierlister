@@ -1753,6 +1753,9 @@ class DefinitionDrawer(tk.Frame):
                 self._inner.pack(fill="x", anchor="n")
             super().configure(height=0)
             self.pack_propagate(True)
+            self._inner.update_idletasks()      # (mapped again now: left to the next idle moment, a frame could
+                                                # show the pane empty, a flicker as it opened; reported, worst with
+                                                # the Wiktionary link inside it)
         except tk.TclError:
             pass
 
