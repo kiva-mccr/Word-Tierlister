@@ -1746,10 +1746,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] F-26 Reported: in the definitions pane the part of speech (noun, verb...) and the examples kept their size when
 #           the zoom changed, until the pane was opened again: their italics were a copy of the body's size, made as
 #           the pane was filled. refresh_widgets (run after every zoom, main window and Browse) sets them again.
-# [ ] F-23 again: reported still there on Fedora 42 after the fix above. Not seen here under openbox nor under
-#           GNOME's own window manager (mutter, X11), the definition there or arriving mid-slide: the pane's top
-#           only rises and its heading stays 14 px under it in every frame. Fedora's GNOME runs on Wayland, which
-#           cannot be recorded here: asked for a screen recording to read frame by frame.
+# [x] F-27 Reported (Fedora 42 and Windows, maximized or not, now and then, words seen before too): the whole
+#           definitions pane dipped and came back as it opened (F-23 again). Going back over the earlier fixes: the
+#           slide (UI-35) kept the pane's contents packed; F-2 placed them while folded and packed them again at each
+#           slide's end, and every flicker since came from that switch (F-20: a frame empty, F-22: a frame at full
+#           height). The switch unmapped and remapped the contents at the end of every opening (counted: 20 times in
+#           20 opens); on a compositing desktop a frame could show the pane without them. Now they are placed for
+#           good, at their own height, and the pane's height is always set: by the slide, else from them
+#           (DefinitionDrawer._follow). _selftest_drawer counts no unmap while it opens or is open (fails on the old
+#           code). Also tried here: waiting, folded, for a slow window manager to grow the window first; under mutter
+#           Tk always learned the new size at once, so it changed nothing and was left out. A window that must grow
+#           for the pane may still show GNOME's compositor resizing it a frame late (seen once in seven).
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

@@ -1739,7 +1739,13 @@ class DefinitionDrawer(tk.Frame):
         self._body = body
         inner = self._inner = tk.Frame(self, bg=PALETTE["surface"], highlightthickness=1,
                                        highlightbackground=PALETTE["border"])
-        inner.pack(fill="x", anchor="n", pady=(0, gap))
+        # The contents are placed for good, at their own height, and the pane's height is always set, never left
+        # to the contents: by the slide while it eases, else from them as they change (_follow). Packed between
+        # slides (F-2 placed them only while folded), the switch back at each slide's end let the pane size itself
+        # for a moment, and now and then a frame showed it empty (F-20), at full height (F-22) or dipping (F-27).
+        inner.place(x=0, y=0, relwidth=1)
+        inner.bind("<Configure>", lambda e: self._follow())
+        self._folded, self._sliding = False, False
         # one column, or two side by side for a duel's two words (asked for: each under its own card)
         self.texts = [tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                               padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow") for _ in range(2)]
@@ -1820,33 +1826,26 @@ class DefinitionDrawer(tk.Frame):
     def set_open(self, on):
         """Mark as open / shut with no animation (the caller packs or unpacks it)."""
         self._shown = bool(on)
-        self._natural()
+        if on:
+            self._folded = False
+            self._follow()
 
-    def _natural(self, show=True):
-        """Back to sizing from the contents. The explicit height left by the slide must go too (0 = none):
-        with both set, Tk flips between the two sizes on every relayout. `show`: lay it out now (opened);
-        shut, it must not be (it showed one frame at full height just before it left: a flash as it closed)."""
+    def _follow(self):
+        """Between slides, open: the pane as tall (and asking as wide) as its contents want, gap included."""
+        if self._sliding or self._folded:
+            return
         try:
-            if self._inner.winfo_manager() == "place":          # (folded: back in the packed layout)
-                self._inner.place_forget()
-                self._inner.pack(fill="x", anchor="n", pady=(0, self._gap))
-            super().configure(height=0)
-            self.pack_propagate(True)
-            if show:
-                self._inner.update_idletasks()      # (mapped again now: left to the next idle moment, a frame
-                                                    # could show the pane empty, a flicker as it opened; reported,
-                                                    # worst with the Wiktionary link inside it)
+            inner = self._inner
+            super().configure(height=max(1, inner.winfo_reqheight() + self._gap), width=inner.winfo_reqwidth())
         except tk.TclError:
             pass
 
     def collapse(self):
         """Fold to nothing before it is packed for opening, so it never shows at full height first. The contents
-        are placed, not packed, while folded: clipped rather than unmapped, so the text keeps its real width and
-        can say how tall it needs to be before the pane opens (F-2: it opened at its usual 9 lines, measured 0)."""
-        self.pack_propagate(False)
-        super().configure(height=1)
-        self._inner.pack_forget()
-        self._inner.place(x=0, y=0, relwidth=1)
+        stay at their full height, clipped, so the text keeps its real width and can say how tall it needs to be
+        before the pane opens (F-2: it opened at its usual 9 lines, measured 0)."""
+        self._folded = True
+        super().configure(height=1, width=self._inner.winfo_reqwidth())
 
     def lines_needed(self):
         """How many lines tall the text must be to show all of it at its present width (0 before it is laid
@@ -1864,6 +1863,7 @@ class DefinitionDrawer(tk.Frame):
     def natural_height(self):
         """The height the contents want (whether or not it is folded right now)."""
         self.update_idletasks()
+        self._follow()
         return self._inner.winfo_reqheight() + self._gap
 
     def unshown_height(self):
@@ -1883,7 +1883,7 @@ class DefinitionDrawer(tk.Frame):
                 now = max(self._shown_h, self.winfo_height())
                 self._floor = (min(now + pixels, self._opening[1]), self._last_q)
                 self._frame(self._last_q)
-            elif self._inner.winfo_manager() == "place":           # (folded)
+            elif self._folded:
                 super().configure(height=self.winfo_reqheight() + pixels)
         except tk.TclError:
             pass
@@ -1893,13 +1893,15 @@ class DefinitionDrawer(tk.Frame):
         packed it already)."""
         self._shown = True
         end = self.natural_height()
-        held = self.winfo_reqheight() if self._inner.winfo_manager() == "place" else 0    # (folded: give)
+        held = self.winfo_reqheight() if self._folded else 0    # (folded: give)
         start = min(max(1, held), end)
         self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
+        self._folded = False
 
         def done():
             self._opening = None
-            self._natural()
+            self._sliding = False
+            self._follow()                      # (the same height it ended at, unless its contents changed since)
         self._slide(start, end, done)
 
     def close(self, on_closed=None):
@@ -1908,13 +1910,14 @@ class DefinitionDrawer(tk.Frame):
         self._opening = None
 
         def done():
+            self._sliding = False
+            self._folded = True                 # (left at 1 pixel: unpacked by on_closed, or opened from there)
             if on_closed:
-                on_closed()                     # (unpacked first: then its natural size is never drawn)
-            self._natural(show=False)
+                on_closed()
         self._slide(max(1, self.winfo_height()), 0, done)
 
     def _slide(self, a, b, done=None):
-        self.pack_propagate(False)
+        self._sliding = True
 
         def frame(p):
             self._last_q = p

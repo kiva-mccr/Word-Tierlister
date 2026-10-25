@@ -5,7 +5,7 @@ moment, so for a frame the pane showed empty: seen only under a real window mana
 inside it (UI-67). Here the pane is opened under openbox (when it is installed) while its contents are checked
 every few milliseconds: once shown they never vanish again.
 
-Then, tracked frame by frame (asked for): the page around it never moves against the slide. Opening in a window that
+Its contents are never unmapped while it opens or is open (F-27). Then, tracked frame by frame (asked for): the page around it never moves against the slide. Opening in a window that
 must grow, the window grew first and the page dropped by half the growth, then slid back up as the pane opened;
 closing, the pane was put back to its full size for a frame just before it left (the page jumped up and back), and
 the gap under it went only once it had gone (a last small jump). The tier buttons' place in the window is read every
@@ -45,6 +45,24 @@ try:
     assert shown and all(shown), mapped                           # (once shown, never empty again)
     lb = app.def_frame.text._link_button
     assert lb.winfo_ismapped()
+    # F-27: its contents are never taken out and put back (unmapped) while it opens or stays open: at the end of
+    # every slide they were, and on a compositing desktop (GNOME on Wayland) a frame could show the pane without
+    # them now and then, the whole pane seeming to dip and come back (reported)
+    unmaps, state = [], ["closed"]
+    inner = app.def_frame._inner
+    inner.bind("<Unmap>", lambda e: unmaps.append(state[0]) if e.widget is inner else None, add="+")
+    for _ in range(4):
+        for opening in (False, True):
+            state[0] = "closing" if not opening else "opening"
+            app.toggle_defs(opening)
+            end = time.time() + 0.4
+            while time.time() < end:
+                root.update(); time.sleep(0.004)
+            state[0] = "open" if opening else "closed"
+            end = time.time() + 0.15
+            while time.time() < end:
+                root.update(); time.sleep(0.004)
+    assert not [u for u in unmaps if u in ("opening", "open")], unmaps
     # frame by frame: a window that must grow for it (and one that need not), opened and closed
     for size in ("1000x700", "1100x980"):
         app.toggle_defs(False)
