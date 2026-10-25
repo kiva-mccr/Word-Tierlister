@@ -127,10 +127,10 @@ Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 
 draws src/icons; ui_style.set_icon on every window; .ico for the Windows program; the Linux launcher's copy),
 UI-79 (the shelf's spines one width), UI-73 (typefaces), UI-75 (GitHub link), UI-76 (contrast), UI-77 (Dusk dark mode): the user picked these from two
 rounds of mock-ups (a Design canvas artifact, each board beside the real window) and kept buttons, card and labels.
-Next: UI-74 (film grain 0.1) waits on the user: Tk has no see-through widgets, so a grain over the whole window as
-in the mock-up cannot be drawn (only inside canvases); UI-78 (borders and the card's shadowy edge) is a pass of its
-own, mock-ups with befores and afters first. UI-32 (moving pastel
-background) needs the user's OK to relax the no-motion-while-idle guardrail. The "Window by window" list in the roadmap
+Next: UI-78 (borders and the card's shadowy edge: only slight changes, the user is attached to the current style),
+mock-ups with befores and afters first; a UI-21 (next-up peek) mock-up was asked for. Dropped: UI-74 (film grain)
+and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
+Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.
 Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
 commit 9b78889; swaps are still counted).
@@ -173,13 +173,11 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   incomplete PyInstaller.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
-- The user's Linux build was 99 MB (22 MB here): GTK (gi) and Qt (PySide6) were pulled in, now excluded (T-11);
-  if it is still big, ask for its log's "biggest parts" line.
+- The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).
 - A read-only save file's dialog could not be verified (the test machine ran as root).
-- Reported: holding a key in Refine crashed the user's PC; not reproduced here (see UI-49's notes). Two
-  hazards fixed (Boundary's pair list could reach gigabytes; held repeats now wait after a slow action).
-  Ask what OS / save size / key if it happens again.
+- Holding a key in Refine once crashed the user's PC; after the two fixes (Boundary's pair list, held repeats wait
+  after a slow action) the user no longer sees it.
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.

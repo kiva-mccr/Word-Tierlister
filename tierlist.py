@@ -1018,7 +1018,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           glowing) left the chart drawn under the next tab's view; a hidden chart now stays hidden mid-animation.
 #           Then (asked for): Boundary check's swap strip archived (see "In consideration"); that tab shows no
 #           view in the spot. The save still counts swaps per boundary (swaps table, Store.swap_counts).
-# [ ] UI-32 Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
+# [-] UI-32 Dropped (asked for). Soft moving background (asked for): a pastel polka-dot or blob pattern behind the main page,
 #           drifting and jiggling slowly. Two things to settle before building:
 #           - It goes against a guardrail above ("nothing loops or moves while idle"), so it needs your
 #             OK to relax that one rule for the background only. Proposed limits: very slow (a full drift
@@ -1799,7 +1799,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           tall and the window grew by a quarter (much of the layout is measured in lines): tools/make_typefaces.py
 #           tightens them, and the window is within a few percent of its old size (a 1366 x 768 laptop still
 #           shows 100%). Packed into a build as "typefaces".
-# [ ] UI-74 A light film grain (0.1) over the window's background, as in the mock-ups.
+# [-] UI-74 Dropped (asked for): a light film grain (0.1) over the window's background, as in the mock-ups. Tk
+#           has no see-through widgets, so it could only go inside the drawn parts (card, buttons), never the page.
 # [x] UI-75 A GitHub link at the top right of the main window (the menu bar's row): "GitHub" and the "opens
 #           elsewhere" icon, muted until hovered (LinkButton with words; App.open_page, constants.REPO_PAGE). The
 #           GitHub mark itself was left out: the icons are one hand-drawn polygon style (smooth.ICONS).
