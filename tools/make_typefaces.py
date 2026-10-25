@@ -68,10 +68,71 @@ FACES = {"YoungSerif-Regular": ("Young Serif", "normal", "roman"),
          "AtkinsonHyperlegible-BoldItalic": ("Atkinson Hyperlegible", "bold", "italic")}
 
 
+def contours(glyphs, name, steps=12):
+    """A glyph's outline as closed polygons (each curve flattened into `steps` short lines)."""
+    from fontTools.pens.basePen import BasePen
+
+    class Flat(BasePen):
+        def __init__(self, gs):
+            super().__init__(gs)
+            self.done, self.cur = [], []
+
+        def _moveTo(self, p):
+            self.cur = [p]
+
+        def _lineTo(self, p):
+            self.cur.append(p)
+
+        def _curveToOne(self, p1, p2, p3):
+            p0 = self.cur[-1]
+            self.cur += [tuple((1 - t) ** 3 * a + 3 * (1 - t) ** 2 * t * b + 3 * (1 - t) * t ** 2 * c + t ** 3 * d
+                               for a, b, c, d in zip(p0, p1, p2, p3)) for t in (k / steps for k in range(1, steps + 1))]
+
+        def _qCurveToOne(self, p1, p2):
+            p0 = self.cur[-1]
+            self.cur += [tuple((1 - t) ** 2 * a + 2 * (1 - t) * t * b + t ** 2 * c for a, b, c in zip(p0, p1, p2))
+                         for t in (k / steps for k in range(1, steps + 1))]
+
+        def _closePath(self):
+            if len(self.cur) > 2:
+                self.done.append(self.cur)
+            self.cur = []
+
+        _endPath = _closePath
+
+    pen = Flat(glyphs)
+    glyphs[name].draw(pen)
+    return pen.done
+
+
+def _area(poly):
+    return sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(poly, poly[1:] + poly[:1])) / 2
+
+
+def hole_shapes(glyphs, name, points=20):
+    """A glyph's holes (the inside of an e, o, a, d: contours wound against its outer one), each as a polygon of
+    about `points` points evenly along it: the smear fills them so a counter never shows white through it (F-40)."""
+    polys = contours(glyphs, name)
+    if len(polys) < 2:
+        return []
+    outer = max(polys, key=lambda p: abs(_area(p)))
+    sign = _area(outer) > 0
+    out = []
+    for hole in polys:
+        a = _area(hole)
+        if (a > 0) == sign or abs(a) < 400:                   # (an outer contour, or a speck)
+            continue
+        step = max(1, len(hole) // points)
+        out.append([v for p in hole[::step] for v in (round(p[0]), round(p[1]))])
+    return out
+
+
 def write_overhangs(folder=OUT):
     """overhang.json: for each face ("family|weight|slant"), the letters whose ink reaches past their own box, as
     {letter: [left, right]} in 1/1000 em (Young Serif's j reaches 0.125 em left, its f 0.09 em right). Tk measures
-    and repaints text by those boxes, so fonts.text_overhang reads this to smear and repaint the rest (F-32)."""
+    and repaints text by those boxes, so fonts.text_overhang reads this to smear and repaint the rest (F-32). Under
+    "holes|...", each Latin letter's holes as flat lists [x0, y0, x1, y1, ..] from its origin, y up from the
+    baseline (hole_shapes, F-40)."""
     import json
     from fontTools.pens.boundsPen import BoundsPen
     from fontTools.ttLib import TTFont
@@ -79,7 +140,7 @@ def write_overhangs(folder=OUT):
     for name, (family, weight, slant) in FACES.items():
         f = TTFont(os.path.join(folder, name + ".ttf"))
         glyphs, hmtx, upm = f.getGlyphSet(), f["hmtx"], f["head"].unitsPerEm
-        found = {}
+        found, holes = {}, {}
         for code, glyph in f.getBestCmap().items():
             if not chr(code).isprintable() or chr(code).isspace():
                 continue
@@ -91,7 +152,13 @@ def write_overhangs(folder=OUT):
             right = max(0, pen.bounds[2] - hmtx[glyph][0]) * 1000 / upm
             if left >= 5 or right >= 5:
                 found[chr(code)] = [round(left), round(right)]
+            shapes = hole_shapes(glyphs, glyph) if code < 0x250 and slant == "roman" else []   # (Latin letters;
+            #                                                       no smear is italic: the file stays small, F-40)
+            if shapes:
+                holes[chr(code)] = [[round(v * 1000 / upm) for v in shape] for shape in shapes]
         out[f"{family}|{weight}|{slant}"] = found
+        if holes:
+            out[f"holes|{family}|{weight}|{slant}"] = holes
     with open(os.path.join(folder, "overhang.json"), "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 

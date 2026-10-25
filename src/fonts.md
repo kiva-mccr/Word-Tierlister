@@ -13,6 +13,7 @@ The module docstring has the details; this page is the map.
 - `typeface_files`: The bundled font files (.ttf), sorted.
 - `load_typefaces`: Make the bundled typefaces usable by Tk in this program only (once per process).
 - `text_overhang`: (left, right): how many pixels `text` in `font` reaches past the box Tk measures for it.
+- `letter_holes`: The holes of `text`'s letters (an e's, an o's) as polygons [x0, y0, x1, y1, ..], pixels from the text's left end and its baseline (y up): the smear fills them so no...
 - `pick_font_family`: Return the first preferred family present in `available` (case-insensitive), else fallback.
 - `init_fonts`: Load the bundled typefaces, pick the families and build the shared Font objects (once per root).
 - `spec`: (size, weight, face) a role is built with: a display role's stand-in (Young Serif missing) is bold, as the words were before.
@@ -23,6 +24,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `letter_holes` reads overhang.json's "holes|..." tables (upright faces only); a font not bundled, or text under 14 px, has none (F-40). Keep them out of the overhang letters (`_overhangs`).
 - `text_overhang` reads src/typefaces/overhang.json (written by tools/make_typefaces.py): only a word's first and last letters count (inside a word the overhang lies over its neighbour); no Tk call unless such a letter is there (F-32).
 - Use `font(role)`; after resizing them (zoom, grow) call `widgets.refresh_widgets(window)`.
 - Measure text with the fonts instead of assuming a dpi.

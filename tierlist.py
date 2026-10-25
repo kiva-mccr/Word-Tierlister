@@ -1821,6 +1821,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           move outward only as far as the space between letters (em / 20), never over the end letter (the user's
 #           rule from F-33); the short letters' wider runs start at the third letter from either end and stop at
 #           the end letters.
+# [x] F-40 Asked for: fill the inner voids, gone at the very start of un-smearing. tools/make_typefaces.py writes
+#           each letter's holes (an o's, a d's: contours wound against the outer one) as small polygons into
+#           overhang.json (upright faces only: no smear is italic); the smear fills them, and the band, in its tone,
+#           and both are gone a tenth of the way into un-smearing (FILL_FADE). Rectangles inside the holes were
+#           tried first and left white crescents at their curves. Only on one line (not a wrapped meaning).
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

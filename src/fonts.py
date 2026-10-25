@@ -118,7 +118,8 @@ def _overhangs():
                 _overhang = {face: {ch: tuple(v) for ch, v in table.items()} for face, table in json.load(fh).items()}
         except (OSError, ValueError):
             _overhang = {}
-        _overhang["letters"] = set().union(*(t.keys() for t in _overhang.values())) if _overhang else set()
+        reach = [t for face, t in _overhang.items() if "|" in face and not face.startswith("holes|")]
+        _overhang["letters"] = set().union(*(t.keys() for t in reach)) if reach else set()
     return _overhang
 
 
@@ -140,13 +141,30 @@ def text_overhang(widget, font, text):
     return left * em / 1000, right * em / 1000
 
 
-def _face(widget, font, table):
+def letter_holes(widget, font, text):
+    """The holes of `text`'s letters (an e's, an o's) as polygons [x0, y0, x1, y1, ..], pixels from the text's left
+    end and its baseline (y up): the smear fills them so no counter shows white through it (F-40). [] for a font
+    not bundled."""
+    text = str(text or "")
+    face, em = _face(widget, font, _overhangs(), "holes|")
+    if not face:
+        return []
+    out = []
+    for i, ch in enumerate(text):
+        if ch in face:
+            x = float(widget.tk.call("font", "measure", font, text[:i])) if i else 0.0
+            out += [[(x if k % 2 == 0 else 0.0) + v * em / 1000 for k, v in enumerate(shape)] for shape in face[ch]
+                    if em >= 14]                    # (too small to show a hole: nothing to draw)
+    return out
+
+
+def _face(widget, font, table, prefix=""):
     """(the table's entry for `font`'s face, its em in pixels), or (None, 0) for a font not bundled."""
     try:
         a = widget.tk.call("font", "actual", font)
         actual = dict(zip(a[0::2], a[1::2]))
         size = float(actual["-size"])
-        return (table.get(f"{actual['-family']}|{actual['-weight']}|{actual['-slant']}"),
+        return (table.get(f"{prefix}{actual['-family']}|{actual['-weight']}|{actual['-slant']}"),
                 -size if size < 0 else size * float(widget.tk.call("tk", "scaling")))
     except (tkinter.TclError, KeyError, ValueError):
         return None, 0

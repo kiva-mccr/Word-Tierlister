@@ -130,7 +130,8 @@ rounds of mock-ups (a Design canvas artifact, each board beside the real window)
 UI-78 (borders: of six slight changes, only softer button and pill edges, widgets.EDGE; the user is attached to the
 current style), F-32 (letters reaching past their boxes: smeared and repainted whole), F-33 (smears never reach past
 the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar), F-35 / F-37 (no bar under a smear: its band only between the end letters), F-38 (short letters smear further), F-39 (second letters never over the end letters; the user checked 194 smeared
-words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported),
+words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported), F-40 (the letters' holes filled, gone at
+the very start of un-smearing),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). Next: nothing planned. Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap

@@ -686,6 +686,19 @@ for i in cv.find_withtag("s"):
     if cv.type(i) == "text" and cv.itemcget(i, "text") in ("far", "art"):            # (the a or the r moving out)
         dx = cv.coords(i)[0] - (10 if cv.itemcget(i, "text") == "far" else 10 + m("f"))
         assert abs(dx) <= lay["near"], (cv.itemcget(i, "text"), dx)
+# F-40 (asked for): the holes of the letters (an o's, a d's) are filled in the smear's tone, and the fill is gone at
+# the very start of un-smearing (FILL_FADE); a font not bundled has none, and nothing is drawn past the letters' boxes
+from fonts import font as _font, init_fonts as _init, letter_holes
+_init(root)
+cv.delete("all")
+w3 = cv.create_text(20, 10, text="good", font=_font("word"), anchor="nw"); root.update()
+b3 = cv.bbox(w3)
+assert len(letter_holes(cv, _font("word"), "good")) == 5 and letter_holes(cv, ("Helvetica", 40), "good") == []
+fills = lambda: [i for i in cv.find_withtag("s") if cv.type(i) == "polygon"]
+smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
+assert len(fills()) == 5 and all(b3[0] <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] for i in fills())
+cv.delete("s"); smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0 - _W.FILL_FADE - 0.01, ("s",))
+assert not fills() and not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)

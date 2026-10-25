@@ -12,7 +12,7 @@ from tkinter import ttk
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
-from fonts import font, text_overhang
+from fonts import font, letter_holes, text_overhang
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
@@ -28,6 +28,7 @@ SMEAR_BODY = 0.48       # the band filling the gaps between the letters, in em u
                         # x-height of the roundest fonts used; a more generous one would show a flat top)
 SHORT_LETTERS = frozenset("acemnorsuvwxz")   # no ascender, descender or dot: smeared twice as far as the others
 SHORT_SPREAD = 2.0                            # (F-38, the user's idea), filling the gaps between round letters
+FILL_FADE = 0.1         # the band and the holes' fill are gone this far into un-smearing (F-40: at its very start)
 _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
 
@@ -50,9 +51,16 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     lay = _smear_layout(c, item, box)
     half = lay["n"] * SMEAR_SPREAD / 2 * amount
     col = lerp_color(ink, paper, SMEAR_TONE * amount)
-    band = max(0.0, (amount - 0.75) / 0.25)    # gone a quarter of the way into un-smearing (else a pale box shows
-    if lay["band"] and band > 0:                # behind the letters closing in); not on a word wrapped over two lines
-        c.create_rectangle(*lay["band"], outline="", fill=lerp_color(paper, col, band), tags=tags)
+    # the band between the end letters (F-37) and a fill inside every letter's holes (F-40, asked for: no counter shows
+    # white), both gone at the very start of un-smearing (else a pale box shows behind the letters closing in); not
+    # on a word wrapped over two lines
+    fill = max(0.0, (amount - (1 - FILL_FADE)) / FILL_FADE)
+    if fill > 0:
+        tone = lerp_color(paper, col, fill)
+        if lay["band"]:
+            c.create_rectangle(*lay["band"], outline="", fill=tone, tags=tags)
+        for shape in lay["holes"]:
+            c.create_polygon(*shape, outline="", fill=tone, tags=tags)
     # a copy every `gap` whole pixels (Tk draws text at whole pixels: copies landing on the same one stack up and look
     # bold on small text, reported in the definitions pane; on small text wider gaps show as combs, while big text's
     # thick strokes hide them, and half the copies is half the drawing each frame: F-36); near the end the side copies
@@ -144,8 +152,13 @@ def _smear_layout(c, item, box):
             left = _measure(c, fnt, text[:i])
             short.append((text[i:j], x + left, y, left - first_w, last_x - _measure(c, fnt, text[:j])))
             i = j
+    holes = []
+    if len(lines) == 1:                          # (inside each letter's holes: never past its ink, F-40)
+        line, x = lines[0][0], lines[0][1]
+        base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
+        holes = [[x + v if k % 2 == 0 else base - v for k, v in enumerate(shape)] for shape in letter_holes(c, fnt, line)]
     out, right = text_overhang(c, fnt, opts["text"])
-    lay = {"font": fnt, "lines": rows, "band": band, "short": short,
+    lay = {"font": fnt, "lines": rows, "band": band, "short": short, "holes": holes,
            "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)), "near": max(1, round(em / 20)),
            "reach": (box[0] - out - 2, box[1] - 1, box[2] + right + 2, box[3] + 1)}
     if len(cache) > 64:
