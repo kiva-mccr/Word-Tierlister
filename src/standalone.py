@@ -68,13 +68,14 @@ REPO_FILES = ("LICENSE", ".gitignore", ".gitattributes")      # (in every downlo
 def source_files(root=ROOT):
     """The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists
     (REPO_FILES); never saves, logs, caches, exports or a built program (docs/ may hold screenshots; src/icons
-    holds the icon, IC-1)."""
+    holds the icon, IC-1; src/typefaces the fonts, UI-73)."""
     keep = []
     for f in walk(root):
         top_level = os.sep not in f
         if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f in REPO_FILES or \
                 (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
-                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))):
+                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))) or \
+                (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith(".ttf")):
             if top_level and f.endswith(".txt") and f != "requirements.txt":
                 continue                              # an export (tierlist.txt) next to tierlist.py is yours
             keep.append(f)
@@ -150,6 +151,8 @@ def pyinstaller_args(dist, work, root=ROOT, platform=None, source=None):
         args += ["--add-data", f"{src}{sep}{dest}"]
     icons = os.path.join(root, "src", "icons")                     # (the window icon, IC-1: ui_style.set_icon)
     args += ["--add-data", f"{icons}{sep}icons"]
+    typefaces = os.path.join(root, "src", "typefaces")             # (the fonts, UI-73: fonts.load_typefaces)
+    args += ["--add-data", f"{typefaces}{sep}typefaces"]
     if platform.startswith("win"):                                  # (the .exe file's own icon, in Explorer)
         args += ["--icon", os.path.join(icons, "icon.ico")]
     if source:

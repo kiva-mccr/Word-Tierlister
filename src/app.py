@@ -411,7 +411,7 @@ class App:
         self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
-        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim, gap=6)
+        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("heading")}, animator=self.anim, gap=6)
         self.def_text = self.def_frame.text
 
         self.center = ttk.Frame(r)
@@ -424,7 +424,7 @@ class App:
         inner = ttk.Frame(self.place_frame)
         self.place_inner = inner
         inner.place(relx=0.5, anchor="n")            # (its top: _recenter)
-        self.word_card = WordCard(inner, font("word"), font("body"))
+        self.word_card = WordCard(inner, font("word"), font("small"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
         self.word_card.on_find, self.word_card.on_enter = self.start_lookup, self.lookup_word   # (UI-51)
         self.word_card.animator = self.anim                       # (a censored word un-smears under the pointer)

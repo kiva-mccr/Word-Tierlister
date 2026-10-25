@@ -112,7 +112,7 @@ def check_light_again():
 
 A._steps = [check_reopened, check_dark, check_light_again]
 first_root = root
-root.geometry("980x700+37+41"); app.open_browser(); pump(root, 8)
+root.geometry("1020x720+37+41"); app.open_browser(); pump(root, 8)
 dlg.apply()
 root.mainloop()                                                       # (the first window, until it reopens)
 assert app.reopening and s.get_meta("tier_colors") == json.dumps(dlg.colors)
@@ -124,5 +124,5 @@ assert results["meta"] == ("0", theme.SWATCHES[8])
 # asked for (closing and opening again was jarring): the new window is built while the old one is still on screen,
 # takes its place and size and its Browse window, and only then does the old one close
 assert results["old_up"] and results["first_gone"] and results["browse"], results
-assert results["geometry"] == "980x700+37+41", results["geometry"]
+assert results["geometry"] == "1020x720+37+41", results["geometry"]
 print("LOOKS OK")

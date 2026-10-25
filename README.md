@@ -38,11 +38,12 @@ All optional; `python tierlist.py --help` explains each.
 ```
 tierlist.py        run this. Your save (tierlist.db), its log and exports stay next to it.
 requirements.txt   the Python packages (the program offers to install them itself)
-src/               the program's modules; src/icons/ holds its icon (drawn by tools/make_icon.py)
+src/               the program's modules; src/icons/ holds its icon (drawn by tools/make_icon.py), src/typefaces/
+                   its two fonts (fetched by tools/make_typefaces.py)
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
                    build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules),
-                   make_icon.py (draws the icon)
+                   make_icon.py (draws the icon), make_typefaces.py (fetches the fonts)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -68,7 +69,8 @@ either way the save you used last is found again, so switching between the two l
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
-| `src/fonts.py` | Typography: font family and named size roles. |
+| `src/fonts.py` | Typography (UI-73): loads the two bundled typefaces for this program only (never installed) and builds the named size roles: Young Serif for the words, Atkinson Hyperlegible for the rest, the text in three sizes (20 / 12 / 10 pt). |
+| `src/typefaces/` | Young Serif and Atkinson Hyperlegible (regular, bold, both italics), from Google Fonts under the SIL Open Font Licence (the licences beside them), with their line spacing tightened by `tools/make_typefaces.py`. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1). |
 | `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile with a slightly darker border (IC-4), the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
 | `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
@@ -88,6 +90,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder, each code file's notes up to date, the import layers); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/speed_check.py` | Times refresh, placing, duels and every Browse sort on a big throwaway save (a million words by default, dense and sparse); fails when something is more than twice its budget (F-9). |
+| `tools/make_typefaces.py` | Fetches the two typefaces into `src/typefaces/` with their licences and tightens their line spacing (needs the internet and fontTools). Run it only to change the fonts. |
 | `tools/make_icon.py` | Draws the icon into `src/icons/` at every size (each size from the shapes, small ones snapped to whole pixels; needs Pillow). Run it only to change the icon. |
 | `tools/stress_ui.py` | Random actions on the real window (keys, tabs, resizes, Browse, dialogs, censoring) on a pretend small screen; fails on any error or a window bigger than the screen (F-9). |
 | `tools/notes.py` | Keeps each code file's notes (`name.md` beside `name.py`) up to date: regenerates their uses / used by / tests / public API from the code, keeping the hand-written parts; `--check` lists what is missing or stale. |
@@ -118,7 +121,7 @@ missing or out of date, and also checks that each module imports only from the l
 - Colours: `theme.py` (the light and dark looks, the tier colours and their swatches). Settings > Tier colours...
   (`tiercolours.py`) and View > Dark mode keep them in the save; the window is rebuilt in the new look behind the
   old one, which it then replaces in place, same size and spot, Browse too (`App.reopen`, `App.take_over`).
-  Fonts and sizes: `fonts.py`. How widgets look: `ui_style.py`.
+  Fonts and sizes: `fonts.py` (the typefaces themselves: `src/typefaces/`, `tools/make_typefaces.py`). How widgets look: `ui_style.py`.
 - What a key or button does, what appears on screen: `app.py` (`on_key`, `_key_target`, `next_tab` for Tab, `_show_place`, `_show_pair`).
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`.
 - The order words come in, which kinds, censoring: Settings > How words are dealt (`dealing.py`; the data in

@@ -1788,6 +1788,24 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           of a Markdown export, which .gitignore leaves out: the note had never reached GitHub, and an export saved
 #           beside tierlist.py would have overwritten it. The note is tracked now (only tierlist-export.md is left
 #           out), and an export aimed at a code file's note goes to tierlist-export.md, saying so (saves.is_code_note).
+# --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
+#     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
+#     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
+# [x] UI-73 Typefaces: Young Serif for the words (the card, a duel, a definition's heading) and Atkinson
+#           Hyperlegible for everything else, shipped in src/typefaces (SIL Open Font Licence, the licences beside
+#           them) and loaded for this program only (fonts.load_typefaces: fontconfig, a private GDI font,
+#           CoreText; never installed; the old installed fonts stand in if that fails). The text keeps to three
+#           sizes, 20 / 12 / 10 pt, beside the card's word and a duel's two words. As shipped their lines were
+#           tall and the window grew by a quarter (much of the layout is measured in lines): tools/make_typefaces.py
+#           tightens them, and the window is within a few percent of its old size (a 1366 x 768 laptop still
+#           shows 100%). Packed into a build as "typefaces".
+# [ ] UI-74 A light film grain (0.1) over the window's background, as in the mock-ups.
+# [ ] UI-75 A GitHub link at the top right of the main window (the menu bar's row).
+# [ ] UI-76 Stronger contrast: muted text about 7:1 (it was 5.0:1), and the key numbers on the tier pills in the
+#           dark ink (they were a paler ink, 3.2:1: below WCAG's 4.5:1 for text).
+# [ ] UI-77 Dark mode in the "Dusk" colours (warm night, cream text; the tiers in the film pastels) instead of the
+#           plum night. The light look keeps its colours.
+# [ ] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

@@ -140,7 +140,7 @@ class RoundButton(SmoothCanvas):
     * refresh() re-measures after the shared Font object was resized (call it after a font change).
     * With an Animator the hover tint fades over HOVER_MS; without one (or with reduce motion) it jumps.
     * `lift` (pixels, default 0): on hover the button rises by that much over a soft shadow (UI-7).
-    * `hint_font`: a Font for the caption (default: 72% of the label font, which is too big on big cards).
+    * `hint_font`: a Font for the caption (default: 77% of the label font, which is too big on big cards).
     * `flat=True` is a quiet text button: no fill or outline until hovered (UI-8). `ring` is the
       width of the accent outline on hover (2; the duel cards use 3).
     * config(censor=True): the text is smeared sideways until hovered (ST-6, the duel cards; see Unsmear).
@@ -296,7 +296,7 @@ class RoundButton(SmoothCanvas):
         self.delete("all")
         wrap = self._wrap if self._wrap > 0 else 0
         s = self._font.cget("size")
-        hs = int(round(s * 0.72))
+        hs = int(round(s * 0.77))           # (9-10 pt under 12-13 pt text: about fonts' small size)
         if self._own_hint_font:
             self._hint_font.configure(family=self._font.cget("family"), weight="normal",
                                       size=max(7, hs) if s > 0 else min(-9, hs))
@@ -1722,7 +1722,7 @@ class DefinitionDrawer(tk.Frame):
     """The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold
     with its senses numbered, the part of speech in italics and examples muted.
 
-        drawer = DefinitionDrawer(root, fonts={"body": font("body"), "head": font("head")}, animator=app.anim)
+        drawer = DefinitionDrawer(root, fonts={"body": font("body"), "head": font("heading")}, animator=app.anim)
         drawer.show_words(["apple"], lambda w: "1. (noun) a fruit\n      e.g. \"an apple a day\"")
         drawer.open() / drawer.close()      # the caller packs it first / unpacks it after on_closed
 
@@ -2246,7 +2246,7 @@ class WordCard(SmoothCanvas):
     """The word being sorted: big text on a soft rounded white card with a faint shadow, and a muted
     sub-line under it (frequency rank, "skipped", "compound").
 
-        card = WordCard(parent, font("word"), font("body"))
+        card = WordCard(parent, font("word"), font("small"))
         card.set("serendipity", "frequency rank #4,321")
 
     * The card's size never depends on the word: only on the two fonts and the room it is given

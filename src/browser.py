@@ -16,7 +16,7 @@ from tkinter import ttk
 
 from constants import KINDS, TIERS, typed_word
 from errors import show_message
-from fonts import family, font
+from fonts import ROLES, family, font
 from keymap import spec_of
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from smooth import arrow_image
@@ -31,7 +31,7 @@ class Browser:
 
     CHUNK = 1000                 # rows fetched per page; the next page loads when you scroll near the end (3000
                                  # cost ~50 ms more to open Browse on a big save, for rows far off screen)
-    BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
+    BASE_W, BASE_H = 980, 760    # window size at which the text is the body size (it grows/shrinks from there)
     # the columns: heading, the Sort it stands for (M-7: a click on the heading sorts by it), alignment
     COLUMNS = (("tier", "Tier", "Tier", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
                ("games", "Duels", "Duels", "e"), ("freq", "Freq #", "Frequency", "e"))
@@ -45,7 +45,7 @@ class Browser:
         self.win = tk.Toplevel(app.root)
         self.win.withdraw()                      # (shown once built, placed and filled: _open)
         self.win.title("Browse & edit tier list")
-        # base_w/base_h: the window size at which the text is 12 pt (the reference scaled for dpi, then
+        # base_w/base_h: the window size at which the text is the body size (the reference scaled for dpi, then
         # raised to what the contents need in _fit_to_contents). On a small screen the window opens
         # smaller than that, so the text starts proportionally smaller (it keeps scaling with resizes).
         f = ui_factor(app.root)
@@ -65,8 +65,8 @@ class Browser:
         self.zoom = app.store.meta_number("browse_zoom", 0, int, lo=-4, hi=30)
 
         # Shared fonts: resizing these two updates every widget that uses them at once.
-        self.f_body = tkfont.Font(family=family(), size=12)
-        self.f_bold = tkfont.Font(family=family(), size=12, weight="bold")
+        self.f_body = tkfont.Font(family=family(), size=ROLES["body"][0])
+        self.f_bold = tkfont.Font(family=family(), size=ROLES["body"][0], weight="bold")
         self.sid = f"Br{id(self)}"
         self.style = ttk.Style(self.win)
         self.tstyle = f"{self.sid}.Treeview"
@@ -240,7 +240,7 @@ class Browser:
         self._scale_job = self.win.after(80, self._apply_scale)
 
     def _apply_scale(self):
-        """Text size follows the window size (12 pt at the starting size), plus the manual zoom."""
+        """Text size follows the window size (the body size at the starting size), plus the manual zoom."""
         self._scale_job = None
         try:
             w, h = self.win.winfo_width(), self.win.winfo_height()
@@ -248,7 +248,7 @@ class Browser:
             return
         if w < 100 or h < 100:  # not shown yet: the size it is about to open at (Tk says 1x1 until then)
             w, h = self._open_size or (self.base_w, self.base_h)
-        size = max(8, min(64, int(round(12 * min(w / self.base_w, h / self.base_h))) + self.zoom))
+        size = max(8, min(64, int(round(ROLES["body"][0] * min(w / self.base_w, h / self.base_h))) + self.zoom))
         if size == self.fsize:
             return
         self._set_size(size)
@@ -310,9 +310,9 @@ class Browser:
         self.win.minsize(min(nw, area[2]), min(nh, area[3]))
 
     def _fit_to_contents(self):
-        """First sizing, once the widgets exist: at the 12 pt reference text, make sure the preferred
+        """First sizing, once the widgets exist: at the reference text size (body), make sure the preferred
         size is not smaller than what the toolbars and columns need, then place the window."""
-        self._set_size(12)
+        self._set_size(ROLES["body"][0])
         area = usable_area(self.app.root)
         nw, nh = self._needed_size()
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
@@ -354,7 +354,7 @@ class Browser:
         return "break"
 
     def _say_zoom(self):
-        """'Zoom 100%' (the manual zoom against the 12 pt text) at the bottom of the definition pane, every time
+        """'Zoom 100%' (the manual zoom against the body text size) at the bottom of the definition pane, every time
         a zoom key is pressed, even when nothing changed (M-6). One message, replaced by the next."""
         if self._toast is None:
             self._toast = Toast(self.win, font("label"), animator=self.app.anim, page_bg=PALETTE["surface"])

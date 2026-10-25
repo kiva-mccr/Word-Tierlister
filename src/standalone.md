@@ -4,7 +4,7 @@ Turning the source into a program and back (T-3, T-6..T-8): the list of source f
 
 - **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_icon`, `_selftest_sources`, `_selftest_updates`
+- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_sources`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 

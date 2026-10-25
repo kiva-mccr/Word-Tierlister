@@ -26,7 +26,8 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top
 sys.path.insert(0, os.path.join(HERE, "src"))
 import standalone  # noqa: E402  (what ships: standalone.SHIP_DIRS / source_files)
 CODE_DIRS = ("", "src", "tests", "tools")         # where .py files live ("" = the top: tierlist.py)
-KNOWN_OPTIONAL_DEV = {"PIL": "pillow", "PyInstaller": "pyinstaller"}   # only tests import these (screenshots, builds)
+KNOWN_OPTIONAL_DEV = {"PIL": "pillow", "PyInstaller": "pyinstaller", "fontTools": "fonttools"}   # only tests and tools
+#                                                       import these (screenshots, builds, the typefaces)
 NOISE = ("imported but unused",)                  # tierlist.py re-exports and a few test imports
 STRAY = (".db", ".db-wal", ".db-shm", ".log", ".pyc", ".part", ".png")
 
