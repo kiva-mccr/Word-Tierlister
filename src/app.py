@@ -254,7 +254,8 @@ class App:
         settings page is open, while a long job runs and while Wiktionary's meanings are being downloaded."""
         frozen = is_frozen()
         key = self.FORM_ASKED[frozen]
-        if not self.root.winfo_exists() or self.store.get_meta(key) == "1":
+        # (reported: it fired after the save had closed and failed reading it: once shut, a window never asks)
+        if self.shut or self.store.closed or not self.root.winfo_exists() or self.store.get_meta(key) == "1":
             return
         if dialog_open(self.root) or self.busy or self.rude_read is not None:
             self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
@@ -2141,7 +2142,10 @@ class App:
             return
         self._shut(close_store=True)
 
+    shut = False                            # (_shut: timers that slip through its cancelling see it and stop)
+
     def _shut(self, close_store):
+        self.shut = True
         self.online.stop()
         self._drop_old()                         # (closed before the window it replaced was: that one goes too)
         for bw in list(self.browsers):

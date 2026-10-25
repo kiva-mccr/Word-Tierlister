@@ -1739,6 +1739,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] W-2  Asked for: words in a smeared meaning can be clicked once it shows (W-1: underlined under the pointer;
 #           smeared_label's on_word), and a smeared form's word too. When the word itself is smeared, its smeared
 #           meanings un-smear with it, the pointer anywhere over the pane; otherwise each under the pointer.
+# [x] F-25 Reported: "sqlite3.InterfaceError: bad parameter or other API misuse" twice at closing, from the first
+#           start's offer of the other form (App._offer_other_form, T-9) reading a save that had been closed. Not
+#           reproduced here (the yes and no paths, a window closed while a question was open, a new look); its
+#           timer now stops once the window is shut (App.shut) or the save closed (Store.closed).
+# [ ] F-23 again: reported still there on Fedora 42 after the fix above. Not seen here under openbox nor under
+#           GNOME's own window manager (mutter, X11), the definition there or arriving mid-slide: the pane's top
+#           only rises and its heading stays 14 px under it in every frame. Fedora's GNOME runs on Wayland, which
+#           cannot be recorded here: asked for a screen recording to read frame by frame.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

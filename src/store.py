@@ -180,11 +180,14 @@ class Store:
 
     def close(self):
         """Flush and close the database; safe to call twice."""
+        self.closed = True
         try:
             self.db.commit()
             self.db.close()
         except sqlite3.Error:
             pass
+
+    closed = False                       # (close: a timer still waiting must not read a closed save)
 
     @contextlib.contextmanager
     def bulk_write(self, names=None):

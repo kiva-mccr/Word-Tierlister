@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- A timer that reads the save checks it is still open (`App.shut`, `Store.closed`): the form offer's fired after closing and failed reading the closed save (F-25).
 - Turning censoring on says it may not be fully accurate in the window it was turned on in (UI-71, asked for: never a window of its own): `censor_note(show=)` hands the whole note to How words are dealt, else a long toast.
 - Window size: what shows = min(zoom, biggest that fits) x grow; re-fit from the zoom on every layout change, never ratchet down; measure minimum sizes at grow 1 (`_fit_window`).
 - A window grown by its minimum size alone gets that size set too (`_fit_window`): left to the minimum, it shrank back when the minimum fell (the definitions pane closing). The drawer opening only ever needs smaller text: its fit starts from the size shown, not the zoom (each size tried was drawn: the page swelled and stepped back, F-22). The centre contents are placed by their top (`_recenter`, also on their own `<Configure>`): centred by Tk plus an offset, two roundings shook them by a pixel.
