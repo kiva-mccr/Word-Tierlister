@@ -1800,7 +1800,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           tightens them, and the window is within a few percent of its old size (a 1366 x 768 laptop still
 #           shows 100%). Packed into a build as "typefaces".
 # [ ] UI-74 A light film grain (0.1) over the window's background, as in the mock-ups.
-# [ ] UI-75 A GitHub link at the top right of the main window (the menu bar's row).
+# [x] UI-75 A GitHub link at the top right of the main window (the menu bar's row): "GitHub" and the "opens
+#           elsewhere" icon, muted until hovered (LinkButton with words; App.open_page, constants.REPO_PAGE). The
+#           GitHub mark itself was left out: the icons are one hand-drawn polygon style (smooth.ICONS).
 # [x] UI-76 Stronger contrast: muted text about 7:1 (it was 5.0:1), and the key numbers on the tier pills in the
 #           dark ink (they were a paler ink, 3.4:1 at worst: below WCAG's 4.5:1 for text); every button's key
 #           follows its label's colour (RoundButton._paint). theme.contrast; _selftest_looks checks both looks.

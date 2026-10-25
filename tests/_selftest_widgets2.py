@@ -1,6 +1,6 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
-DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
+DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import time, types
 import tkinter as tk
@@ -705,5 +705,26 @@ wc.type_key(types.SimpleNamespace(keysym="b", char="b")); wait(3 * WordCard.BLIN
 assert caret() == "normal" and wc._blink_job is None                  # (still now, and shown)
 wc.end_typing(); assert wc._blink_job is None and not wc.find_withtag("caret")
 wc.destroy()
+
+# ---- LinkButton with words (UI-75: the GitHub link): the words, then the icon; muted, the text colour on hover;
+# a click runs it; it re-measures when its font is resized
+from widgets import LinkButton
+went = []
+lf = tkfont.Font(root=root, family="TkDefaultFont", size=12)
+holder = tk.Toplevel(root); holder.geometry("+0+0")               # (the root is full: somewhere it shows)
+link = LinkButton(holder, "external", lambda: went.append(1), text="GitHub", font=lf, bg=PALETTE["surface"])
+link.pack(); update(6)
+words = link.find_withtag("all")
+assert len(words) == 2 and link.itemcget(words[0], "text") == "GitHub"
+assert link.itemcget(words[0], "fill") == PALETTE["muted"]
+assert link.winfo_reqwidth() > lf.measure("GitHub") + link.size                # (room for both)
+link.event_generate("<Motion>", warp=True, x=4, y=4); update(6)      # (the real pointer, so no stray Leave follows)
+assert link.itemcget(link.find_withtag("all")[0], "fill") == PALETTE["text"]
+link.event_generate("<ButtonRelease-1>"); update()
+assert went == [1]
+w0 = link.winfo_reqwidth()
+lf.configure(size=20); link.refresh(); update()
+assert link.winfo_reqwidth() > w0
+holder.destroy()
 root.destroy()
 print("WIDGETS2 OK")

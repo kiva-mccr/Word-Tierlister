@@ -9,6 +9,7 @@ TIERS = ["S", "A", "B", "C", "D", "F"]
 DEFAULT_ANCHORS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
 VERSION = "1.0.0"     # this program's version: a release is tagged v + VERSION (T-8; the build workflow checks it)
 REPO = "kiva-mccr/Word-Tierlister"     # on GitHub: its Releases carry the programs and the source (T-8)
+REPO_PAGE = f"https://github.com/{REPO}"   # the project's page (the GitHub link in the menu bar, UI-75)
 WM_CLASS = "word-tierlist"   # every window's name for the desktop (tk.Tk(className=)): X sees WM_CLASS "word-tierlist",
 WM_CLASS_NAME = "Word-tierlist"   # "Word-tierlist" (Tk lowers it and capitalizes it); a Linux launcher's StartupWMClass
                              # names the second and its file is word-tierlist.desktop, so the taskbar shows the

@@ -1322,15 +1322,18 @@ def definition_tags(t, body):
 
 class LinkButton(SmoothCanvas):
     """A small icon (smooth.ICONS) that does something when clicked, muted until hovered, with a hover note: the
-    Wiktionary link at the top right of a definition (asked for).
+    Wiktionary link at the top right of a definition (asked for). With `text` (in `font`), the words come first and
+    the icon after them, and hovering darkens both to the text colour: the GitHub link in the menu bar (UI-75).
 
         LinkButton(parent, "external", command, note="Open on Wiktionary", size=16, bg=PALETTE["surface"])
+        LinkButton(bar, "external", command, text="GitHub", font=font("body"), bg=PALETTE["surface"])
     """
 
-    def __init__(self, parent, icon, command, note=None, size=16, bg=None):
+    def __init__(self, parent, icon, command, note=None, size=16, bg=None, text=None, font=None):
         bg = bg or PALETTE["surface"]
         super().__init__(parent, width=size + 6, height=size + 6, bd=0, highlightthickness=0, bg=bg, cursor="hand2")
         self.icon, self.command, self.size = icon, command, size
+        self.text, self._font = text, font
         self._hover = False
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
@@ -1345,8 +1348,19 @@ class LinkButton(SmoothCanvas):
 
     def _draw(self):
         self.delete("all")
-        ink = PALETTE["accent"] if self._hover else PALETTE["muted"]
-        self.create_image(3, 3, image=self.icon_image(self.icon, self.size, ink), anchor="nw")
+        if not self.text:
+            ink = PALETTE["accent"] if self._hover else PALETTE["muted"]
+            self.create_image(3, 3, image=self.icon_image(self.icon, self.size, ink), anchor="nw")
+            return
+        ink = PALETTE["text"] if self._hover else PALETTE["muted"]
+        f = self._font or tkfont.nametofont("TkDefaultFont")
+        size = max(10, int(f.metrics("linespace") * 0.7))
+        tw, h = f.measure(self.text), max(f.metrics("linespace"), size) + 6
+        gap = max(4, size // 3)
+        self.configure(width=3 + tw + gap + size + 3, height=h)
+        self.create_text(3, h / 2, text=self.text, font=f, fill=ink, anchor="w")
+        self.create_image(3 + tw + gap, (h - size) / 2, image=self.icon_image(self.icon, size, ink), anchor="nw")
+        self.size = size
 
     def refresh(self):
         self._draw()

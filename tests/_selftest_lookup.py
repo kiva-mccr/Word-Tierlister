@@ -198,6 +198,13 @@ assert D.wiktionary_url("ice cream") == "https://en.wiktionary.org/wiki/ice_crea
 assert D.wiktionary_url("naïve") == "https://en.wiktionary.org/wiki/na%C3%AFve#English"
 app.online.online = False; app._watch_online(); pump(4)
 assert not link_shown(drawer) and not link_shown(bt)                                    # the connection went: gone
+# the project's page from the menu bar's top right (UI-75), online or not
+from constants import REPO_PAGE
+gh = app.github
+assert gh.winfo_ismapped() and gh.winfo_rootx() > app.root.winfo_rootx() + app.root.winfo_width() * 0.7
+assert gh.winfo_rooty() < app.mode_switch.winfo_rooty()                                 # (in the menus' row)
+gh.event_generate("<ButtonRelease-1>"); pump(2)
+assert opened[-1] == REPO_PAGE == "https://github.com/kiva-mccr/Word-Tierlister"
 # the check itself: a probe on a worker thread, again every EVERY seconds; never with WORD_TIERLIST_OFFLINE
 calls = []
 o = D.Online(probe=lambda: calls.append(1) or True)

@@ -28,7 +28,7 @@ from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
 from constants import (CENSOR_CAVEAT, CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
-                       QUEUE_SHAPES, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
+                       QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
@@ -43,7 +43,7 @@ from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
 
 
@@ -347,6 +347,10 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
+        # the project's page, at the top right (UI-75: asked for); muted until hovered
+        self.github = LinkButton(bar, "external", lambda: self.open_page(REPO_PAGE), note="The project on GitHub",
+                                 bg=PALETTE["surface"], text="GitHub", font=font("body"))
+        self.github.pack(side="right", padx=(0, 6))
         for name in self.header.buttons:
             r.bind(f"<Alt-{name[0].lower()}>", lambda e, n=name: self._open_menu_key(n))
         r.bind("<F10>", lambda e: self._open_menu_key("File"))
@@ -1819,10 +1823,14 @@ class App:
 
     def open_wiktionary(self, word):
         """Open `word`'s Wiktionary page in the browser."""
+        self.open_page(wiktionary_url(word))
+
+    def open_page(self, url):
+        """Open a web page in the browser (a new tab); with no browser to open, say where it is."""
         try:
-            webbrowser.open(wiktionary_url(word), new=2)
-        except Exception:                       # (no browser to open: say where it is)
-            self.flash(f"No web browser could be opened: {wiktionary_url(word)}", kind="warn", ms=6000)
+            webbrowser.open(url, new=2)
+        except Exception:
+            self.flash(f"No web browser could be opened: {url}", kind="warn", ms=6000)
 
     def _watch_online(self):
         """Every few seconds: when the connection comes or goes, the definitions panes show or hide the link."""
