@@ -17,6 +17,33 @@ first: `pip install -r requirements.txt`.
 See the docstring at the top of `tierlist.py` for how it works and the full code map; the roadmap
 (UI, start-up and packaging steps, ticked as built) is the comment block right under it.
 
+## Using it
+
+Each word comes up on a card; you put it in a tier, S (best) to F. The tabs along the top:
+
+- **Place new words**: press 1 to 6 (S to F) or click a tier, or press Space to place it by comparing it with one
+  anchor word per tier (about three questions: ↑ / B better, ↓ / W worse, E / Enter the same tier). U or ? puts a
+  word off for later; / looks up any word to sort it now.
+- **Refine within tier**: two words of the same tier, side by side: ← / A or → / L picks the better one, ↓ / T is a
+  tie, S skips. This puts the words of each tier in order.
+- **Boundary check**: the weakest word of one tier against the strongest of the next; if the lower one wins, they
+  swap tiers.
+- **Resolve conflicts**: answers that contradict each other (A beat B, B beat C, C beat A), to judge again.
+
+A tab only shows once it has work. Everywhere: Backspace or Ctrl+Z undoes (even after a restart), D shows the
+definition, Tab moves to the next tab, Ctrl + / Ctrl - / Ctrl 0 zoom. Every key can be changed under Settings >
+Keyboard shortcuts. The other menus:
+
+- **File**: import earlier progress (another save, or an exported list), export the list, where your save file is,
+  add it to the applications menu (Linux) or the Start menu (Windows), and Source & Updates (make it a program, or
+  update it).
+- **Edit**: Undo. **View**: Browse / edit the tier list (search, sort, move words between tiers), zoom, Show
+  definitions, Reduce motion, Censor obscene words and Dark mode.
+- **Settings**: anchor words, How words are dealt (the order, which kinds of words), keyboard shortcuts, tier
+  colours, and whether new words are always placed by comparing.
+
+Everything is saved after every action: close it any time and it carries on where you left off.
+
 ## Options
 
 All optional; `python tierlist.py --help` explains each.
@@ -43,7 +70,8 @@ src/               the program's modules; src/icons/ holds its icon (drawn by to
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
                    build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules),
-                   make_icon.py (draws the icon), make_typefaces.py (fetches the fonts)
+                   make_icon.py (draws the icon), make_typefaces.py (fetches the fonts), speed_check.py and
+                   stress_ui.py (speed and stress checks), notes.py (keeps the notes beside the code current)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
 ```
 
@@ -68,7 +96,7 @@ either way the save you used last is found again, so switching between the two l
 | `.github/workflows/build.yml` | Build programs (T-8): builds the Linux and Windows programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
-| `src/theme.py` | Colour palette, tier colours (and the softer Browse row tints). |
+| `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; the swatches, Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
 | `src/fonts.py` | Typography (UI-73): loads the two bundled typefaces for this program only (never installed) and builds the named size roles: Young Serif for the words, Atkinson Hyperlegible for the rest, the text in three sizes (20 / 12 / 10 pt). |
 | `src/typefaces/` | Young Serif and Atkinson Hyperlegible (regular, bold, both italics), from Google Fonts under the SIL Open Font Licence (the licences beside them), with their line spacing tightened by `tools/make_typefaces.py`; `overhang.json`, the letters whose ink reaches past their box. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1). |
@@ -210,7 +238,7 @@ to check them, is archived (see the roadmap's OB-3 / OB-4).
 ## Building a program
 
 `python tools/build.py` turns the source into a program for the system it runs on (`dist/word-tierlist` on
-Linux, `dist/word-tierlist.exe` on Windows, `dist/Word Tier List.app` on macOS; about 22 MB). It installs
+Linux, `dist/word-tierlist.exe` on Windows, `dist/Word Tier List.app` on macOS; about 25 MB). It installs
 PyInstaller first if it is missing. Add `--check` to start the new program for a moment afterwards. The program
 keeps its save next to itself (or in your user data folder when that folder is read-only) and finds the save you
 used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one,
@@ -327,3 +355,9 @@ window stage runs. `--no-install` turns all of it off.
 `tierlist.log` sits next to your save. It keeps everything that goes wrong: errors (with a friendly dialog as well),
 a window that stops answering for 10 seconds (and where the program was stuck), a hard crash, and a session that
 ended without closing. Each start is marked with the version and the system it runs on. Send it along with a report.
+
+## Licence
+
+Word Tier List is free software under the GNU General Public License, version 3 (`LICENSE`). The two typefaces in
+`src/typefaces/`, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1 (their licences
+are beside them); `tools/make_typefaces.py` tightens their line spacing, which that licence allows.

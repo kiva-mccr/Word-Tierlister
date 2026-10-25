@@ -6,4 +6,6 @@ the first time.
 - **Linux:** a downloaded file cannot be started until it is allowed to run: in its Properties tick "Allow executing
   file as program", or run `chmod +x word-tierlist-linux`.
 
-Your save stays next to the program. To run from the source code instead, see the README.
+Put the program in a folder of its own: your save stays next to it, and the first start unpacks the program's
+source code into "Word Tier List source" beside it (File > Source & Updates has it too). To run from the source
+code instead, see the README.

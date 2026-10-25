@@ -62,10 +62,12 @@ How it works
   power and nothing is lost. Undo (Ctrl+Z) survives restarts too.
 * Press D any time to show the dictionary definition next to the word(s).
 * Every key can be changed under Settings > Keyboard shortcuts (the keys above are the defaults).
+* Looks: light by default, View > Dark mode for the warm "Dusk" night; Settings > Tier colours for your own
+  colours; the words in Young Serif, the rest in Atkinson Hyperlegible (both ship with it).
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, build,
-measure_rudeness, notes), the Claude notes in .claude/; each code file has a note beside it (name.md: read it
+measure_rudeness, notes, speed_check, stress_ui, make_icon, make_typefaces), the Claude notes in .claude/; each code file has a note beside it (name.md: read it
 before editing the file); the README has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
@@ -85,7 +87,7 @@ before editing the file); the README has the same map with more detail)
                     detection, queue preparation.
     saves.py        where the save lives (app_dir, T-1), finding your earlier save, remembering it, exporting.
     definitions.py  Definitions: WordNet offline, dictionaryapi.dev online, cached.
-    theme.py        colour palette (UI-1).            fonts.py     typography (UI-2).
+    theme.py        the light and Dusk looks (UI-1, UI-77).  fonts.py  the bundled typefaces, size roles (UI-2, UI-73).
     sizing.py       window sizes from the screen and the contents; monitors; Windows display scaling.
     ui_style.py     ttk / tk styling (UI-3).          ui_motion.py easing, colour blend, Animator (UI-4).
     smooth.py       soft-edged rounded shapes, curves and icons drawn as images (UI-53).
@@ -96,6 +98,7 @@ before editing the file); the README has the same map with more detail)
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
+    tiercolours.py  Settings > Tier colours... (UI-61).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     sources.py      File > Source & Updates...: make a standalone program; in the program, unpack its source (T-6, T-7).
     app.py          App: the main window and all modes.
@@ -126,7 +129,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #
 # tkinter constraints that shape the plan
 #   - No real transparency or anti-aliasing: "fades" are colour blends toward the background,
-#     rounded corners are smoothed Canvas polygons, shadows are a slightly darker offset shape.
+#     rounded corners are soft-edged images (UI-53), shadows are a slightly darker offset shape.
 #   - Animation = root.after() at ~60 fps with easing. Per-frame work must be tiny and must never
 #     query the database (the list can hold ~1M words).
 #   - Fonts cannot be bundled in one file: pick the nicest installed family, fall back gracefully.
