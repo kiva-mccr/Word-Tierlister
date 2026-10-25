@@ -5,7 +5,7 @@ moment, so for a frame the pane showed empty: seen only under a real window mana
 inside it (UI-67). Here the pane is opened under openbox (when it is installed) while its contents are checked
 every few milliseconds: once shown they never vanish again.
 
-Its contents are never unmapped while it opens or is open (F-27). Then, tracked frame by frame (asked for): the page around it never moves against the slide. Opening in a window that
+Its contents are never unmapped while it opens or is open (F-27); a longer definition eases it taller (F-28). Then, tracked frame by frame (asked for): the page around it never moves against the slide. Opening in a window that
 must grow, the window grew first and the page dropped by half the growth, then slid back up as the pane opened;
 closing, the pane was put back to its full size for a frame just before it left (the page jumped up and back), and
 the gap under it went only once it had gone (a last small jump). The tier buttons' place in the window is read every
@@ -63,6 +63,26 @@ try:
             while time.time() < end:
                 root.update(); time.sleep(0.004)
     assert not [u for u in unmaps if u in ("opening", "open")], unmaps
+    # F-28 (asked for): a longer definition makes it taller smoothly, eased like opening, not in one jump
+    s.set_def("long", "\n".join(f"{i}. (adjective) meaning number {i} of a word with very many meanings" for i in range(1, 16)))
+    root.geometry("1100x980"); app.toggle_defs(True)
+    for _ in range(40):
+        root.update(); time.sleep(0.01)
+    tops = []
+
+    def watch():
+        try:
+            tops.append(app.def_frame.winfo_rooty() - root.winfo_rooty())
+        except tk.TclError:
+            return
+        root.after(3, watch)
+    watch(); app._render_defs(["long"])
+    end = time.time() + 0.5
+    while time.time() < end:
+        root.update(); time.sleep(0.003)
+    steps = [b - a for a, b in zip(tops, tops[1:]) if b != a]
+    assert steps and all(d < 0 for d in steps) and len(steps) >= 4, tops      # (only up, in several frames)
+    app._render_defs(["table"]); app.toggle_defs(False); app.toggle_defs(True)
     # frame by frame: a window that must grow for it (and one that need not), opened and closed
     for size in ("1000x700", "1100x980"):
         app.toggle_defs(False)

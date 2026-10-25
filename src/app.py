@@ -683,8 +683,9 @@ class App:
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
         now need more room. The minimum size always follows the contents. It also sets the size at which
         the contents start to grow with the window (UI-25); `rebase` (after a zoom) makes that at least the
-        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open; count it at
-        its full height without showing it (showing it open for the measurement made it flash, UI-35).
+        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open (or held, about
+        to grow); count it at its full height without showing it (showing it open for the measurement made it
+        flash, UI-35).
         """
         r = self.root
         before = (r.winfo_width(), r.winfo_height())
@@ -1748,8 +1749,13 @@ class App:
             if not self.def_frame.is_open:   # about to slide open: _layout_defs makes room for it at this height
                 self.def_frame.set_lines(want)
                 return
-            self.def_frame.settle()          # (a definition arriving while it slides open: fitted against the
-            self._fit_window()               # half-open pane, it ended taller than fits, over the word card)
+            d, r = self.def_frame, self.root
+            d.hold()                         # (settled first: a definition arriving while it slides open, fitted
+                                             # against the half-open pane, ended taller than fits, over the card)
+            self._room_from = r.winfo_height()          # the room the window gains goes to the pane (as opening)
+            self._fit_window(folded_drawer=True)        # (counted at its new height, though it has not grown yet)
+            self._give_room(r.winfo_height())
+            d.open()                         # then it eases the rest of the way (asked for: it jumped)
 
     # ---- Wiktionary's meanings for a save without them (OB-6), read in the background ------------------------
     def _start_rude_read(self):

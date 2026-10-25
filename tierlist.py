@@ -1757,6 +1757,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           code). Also tried here: waiting, folded, for a slow window manager to grow the window first; under mutter
 #           Tk always learned the new size at once, so it changed nothing and was left out. A window that must grow
 #           for the pane may still show GNOME's compositor resizing it a frame late (seen once in seven).
+# [x] F-28 Asked for: a longer definition made the open pane jump to its new height; it now eases there like opening
+#           (the same strategy as F-22 / F-27, which the user confirmed worked): App._fit_defs holds the pane at its
+#           height (DefinitionDrawer.hold), fits the window counting it at its new one, gives it what the window grew
+#           by, then opens it the rest of the way. Recorded frame by frame under openbox and mutter: in a tall or
+#           maximized window the pane's top rises smoothly over ~200 ms and the page above slides up with it; in a
+#           window that must grow, the pane takes exactly what the window gains (its top and the page stay still;
+#           the window's own resize stays one step: resizing it every frame flickered, UI-35).
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;

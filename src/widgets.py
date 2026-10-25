@@ -1745,7 +1745,7 @@ class DefinitionDrawer(tk.Frame):
         # for a moment, and now and then a frame showed it empty (F-20), at full height (F-22) or dipping (F-27).
         inner.place(x=0, y=0, relwidth=1)
         inner.bind("<Configure>", lambda e: self._follow())
-        self._folded, self._sliding = False, False
+        self._folded, self._sliding, self._held = False, False, False
         # one column, or two side by side for a duel's two words (asked for: each under its own card)
         self.texts = [tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                               padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow") for _ in range(2)]
@@ -1832,7 +1832,7 @@ class DefinitionDrawer(tk.Frame):
 
     def _follow(self):
         """Between slides, open: the pane as tall (and asking as wide) as its contents want, gap included."""
-        if self._sliding or self._folded:
+        if self._sliding or self._folded or self._held:
             return
         try:
             inner = self._inner
@@ -1883,20 +1883,27 @@ class DefinitionDrawer(tk.Frame):
                 now = max(self._shown_h, self.winfo_height())
                 self._floor = (min(now + pixels, self._opening[1]), self._last_q)
                 self._frame(self._last_q)
-            elif self._folded:
+            elif self._folded or self._held:
                 super().configure(height=self.winfo_reqheight() + pixels)
         except tk.TclError:
             pass
 
+    def hold(self):
+        """Open, about to need more room (a longer definition): keep the height it has while the window is fitted
+        for its new one (what the window grows by goes to it: give); open() then eases it the rest of the way
+        (asked for: it jumped to its new height)."""
+        self.settle()
+        self._held = True
+
     def open(self):
-        """Ease open from nothing (or the room it was given, give) to the height the contents want (the caller has
-        packed it already)."""
+        """Ease open from nothing (or the room it was given, give; or, held, the height it has) to the height the
+        contents want (the caller has packed it already)."""
         self._shown = True
         end = self.natural_height()
-        held = self.winfo_reqheight() if self._folded else 0    # (folded: give)
+        held = self.winfo_reqheight() if self._folded or self._held else 0
         start = min(max(1, held), end)
         self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
-        self._folded = False
+        self._folded = self._held = False
 
         def done():
             self._opening = None

@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `_fit_defs` grows an open definitions pane as opening does (F-28): hold it, fit the window counting it at its new height (`folded_drawer=True`) with the room it gains going to it (`_room_from` / `_give_room`), then ease it open the rest of the way.
 - A timer that reads the save checks it is still open (`App.shut`, `Store.closed`): the form offer's fired after closing and failed reading the closed save (F-25).
 - Turning censoring on says it may not be fully accurate in the window it was turned on in (UI-71, asked for: never a window of its own): `censor_note(show=)` hands the whole note to How words are dealt, else a long toast.
 - Window size: what shows = min(zoom, biggest that fits) x grow; re-fit from the zoom on every layout change, never ratchet down; measure minimum sizes at grow 1 (`_fit_window`).
