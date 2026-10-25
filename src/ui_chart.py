@@ -10,6 +10,7 @@ S..F order, not from colour, so the colours can stay pastel (the user's choice o
 """
 import math
 
+from constants import SHELF_SPINES, SHELF_ZIPF
 from constants import TIERS as TIERS_LETTERS
 from theme import PALETTE, TIER_BAR, TIER_COLORS, tier_blend
 from ui_motion import lerp_color
@@ -336,7 +337,8 @@ class Bookshelf(SmoothCanvas):
     A spine's height is the share of its words placed. Its colour is the median tier of those words, part way
     to the next tier and blended round the colour wheel (theme.tier_blend), so it stays as bright as the pastels.
     Spines are equal steps of commonness (each a fixed factor rarer than the last), not equal word counts: one
-    near the start holds a few words, one near the end thousands; the hover note says how many.
+    near the start holds a few words, one near the end thousands; the hover note says how many. Every spine is the
+    same width (UI-79, asked for): a short list, with fewer spines, has a shorter shelf.
     Hovering a spine darkens its outline and lifts it a little off the shelf, its two neighbours less
     (hover(i); eased over LIFT_MS, at once with Reduce motion).
     mark([i, j]) puts a little triangle over those spines, pointing down at them (UI-55: where the words
@@ -363,8 +365,11 @@ class Bookshelf(SmoothCanvas):
         self._draw()
 
     def _metrics(self):
+        """(line, spine width, tallest spine): every spine is one width however many there are (asked for), the
+        width that puts a full list's spines (about SHELF_SPINES, a log scale) in 30 lines; a short list's shelf is
+        shorter."""
         line = self._font.metrics("linespace") if self._font else 16
-        return line, int(line * 30), 2 * line          # line, shelf width, tallest spine
+        return line, (line * 30 - self.GAP * len(SHELF_ZIPF)) / SHELF_SPINES, 2 * line
 
     def _rise(self):
         """How far the hovered spine lifts, in pixels (there is that much room above the tallest spine)."""
@@ -377,13 +382,11 @@ class Bookshelf(SmoothCanvas):
 
     def _draw(self):
         self.delete("all")
-        line, width, hmax = self._metrics()
+        line, sw, hmax = self._metrics()
         zones, spines = self.data["zones"], self.data["spines"]
         top = 1 + self.MARK_ROOM + self._mark_size()[1] + 2 + self._rise()   # room for a mark, a spine lifting
         self._edges = []
         base = top + hmax
-        n = max(1, len(spines))
-        sw = (width - self.GAP * max(0, len(zones) - 1)) / n
         self._x = []
         x, i = 1.0, 0
         labels = []
@@ -425,7 +428,7 @@ class Bookshelf(SmoothCanvas):
             self.create_text(right + line // 2, top + hmax / 2, text=format_coverage(self.data["coverage"]),
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
             right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
-        super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
+        super().configure(width=max(right, line * 4) + 2, height=base + 4 + line + 2)
         self._top = top
         self._marks = [i for i in self._marks if i < len(self._x)]
         self._draw_marks(lifted=False)

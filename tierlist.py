@@ -1811,6 +1811,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           plum night. The light look keeps its colours. theme.DARK; a save that never chose tier colours gets
 #           the look's own (theme.default_tiers: DUSK_TIERS in the dark), and Tier colours' Reset puts back the
 #           look's. Every text colour on its background is 7:1 or better, the dark ink on the tiers 5.3:1.
+# [x] UI-79 Asked for: the shelf's spines are always one width, however many there are (a full list's ~64 fill
+#           30 lines, as before; a short list's shelf is shorter). Bookshelf._metrics.
 # [ ] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first.
 #
 # Decisions

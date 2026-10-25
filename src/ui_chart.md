@@ -28,4 +28,5 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - The bookshelf design is a settled decision (zones, heights, blended colours, hover note): ask before changing it.
+- Every spine is one width (UI-79, asked for: `Bookshelf._metrics`), sized so a full list's ~SHELF_SPINES fill 30 lines; a short list's shelf is shorter, never stretched.
 - Bars ease with `DistributionChart._ease`; nothing animates while idle.
