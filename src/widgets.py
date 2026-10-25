@@ -66,6 +66,9 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
         c.create_rectangle(x0, box[1], x1, box[3], fill=paper, outline="", tags=tags)
 
 
+EDGE = 0.07     # a button's or pill's edge: its fill this far toward the ink (UI-78: softer, asked for; it was 0.14)
+
+
 class Unsmear:
     """A censored word (ST-6) on one of our canvases: its text item is hidden behind a sideways smear
     (smear_items); `clear` (0 = smeared, 1 = the word itself) eases toward 1 while the pointer is over it, the
@@ -240,7 +243,7 @@ class RoundButton(SmoothCanvas):
         """(fill, outline, outline width, text colour) for the current state."""
         fill = self._fill
         fg = self._fg or ink_on(fill)
-        edge = lerp_color(fill, PALETTE["text"], 0.14)
+        edge = lerp_color(fill, PALETTE["text"], EDGE)
         if self._flat:
             base = super().cget("bg")
             if not self._enabled:
@@ -435,7 +438,7 @@ class TierChip(SmoothCanvas):
         h = int(line * 1.5)
         w = max(h, self._font.measure(self._text) + line)
         super().configure(width=w + 2, height=h + 2)
-        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, TIER_TEXT, 0.14))
+        self.round_rect(1, 1, w, h, h // 2 - 1, fill=self._color, outline=lerp_color(self._color, TIER_TEXT, EDGE))
         self.create_text(1 + w / 2, 1 + h / 2, text=self._text, font=self._font, fill=TIER_TEXT)   # (dark ink on a
                                                                                                  # pastel, dark mode too)
 

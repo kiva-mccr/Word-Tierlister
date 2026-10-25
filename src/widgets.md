@@ -62,6 +62,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- A button's and a pill's edge is its fill `EDGE` (0.07) of the way to the ink (UI-78: the user chose it softer from mock-ups); keep RoundButton and TierChip on the same constant.
 - The definitions pane's two columns (UI-60) together ask no more width than its one column (each less its padding and the hairline): two plain halves made a zoomed duel tab too wide, so it was shown smaller. Set its height with `set_lines`, never on one text.
 - Definition links (W-1): `word_at` only answers inside `LINK_TAGS` and over a real letter (past a line's end the nearest index is not under the pointer); `_watch_links` binds once per pane, so `on_word` is read from the pane at click time. Text tag bindings (the "Back to" line) follow the last motion: tests send a `<Motion>` first.
 - WordCard's kind label (UI-59) lives in the top margin and never changes the card's size; it is placed from the letters' real tops (0.8 em above the baseline) and its font shrinks to fit (asked for: never clipped). Check by pixels at small and large zooms.

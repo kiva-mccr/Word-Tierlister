@@ -958,7 +958,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           refine yet", "No conflicts - nicely consistent") on a soft card instead of dashes.
 #           Built: widgets.EmptyCard (a soft rounded panel with a title and a line of text); App.EMPTY
 #           holds the Refine / Boundary / Conflicts messages, and Place shows "Every word is placed".
-# [?] UI-21 Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
+# [-] UI-21 Dropped (asked for, after mock-ups: a line under the card, a corner of it, a deck).
+#           Next-up peek (optional). adds Store.upcoming(n) and a faded line with the next two
 #           words under the card, so the eye can pre-read and the flow stays quick.
 #           Shelved (asked for): on the "In consideration" list under Decisions; not built for now.
 #
@@ -1814,7 +1815,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           look's. Every text colour on its background is 7:1 or better, the dark ink on the tiers 5.3:1.
 # [x] UI-79 Asked for: the shelf's spines are always one width, however many there are (a full list's ~64 fill
 #           30 lines, as before; a short list's shelf is shorter). Bookshelf._metrics.
-# [ ] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first.
+# [x] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first (only
+#           slight changes: the user is attached to the style). Of six (the card without its hairline, a deeper or a
+#           straight-down shadow, softer button edges, a paler or no pane outline), the user took only the softer
+#           edges: a button's and a tier pill's edge is half as dark (widgets.EDGE 0.07, was 0.14). The card, its
+#           shadow and the pane stay as they were.
 #
 # Decisions
 #   Settled:  progress bar (UI-14): a bookshelf of spines by commonness (page .. library), "95% of text" after it;
@@ -1823,7 +1828,6 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #             to choose (UI-62: asked for later, so "light theme only" was lifted; not the default); the
 #             session count stays as a muted "+N today", with the pace only in a hover note.
 #   In consideration (shelved, not planned; ask before building):
-#             - Next-up peek (UI-21).
 #             - Boundary check's swap strip (UI-31, archived by request): the six tiers as pills with the swaps
 #               per join under them, the join being checked in bold. Last version: ui_chart.SwapStrip in commit
 #               9b78889. The swap counts are still recorded, so it would show the full history if it came back.

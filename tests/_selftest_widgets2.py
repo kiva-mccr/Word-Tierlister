@@ -21,6 +21,8 @@ clicks = []
 b = RoundButton(root, "S", lambda: clicks.append(1), font=fnt, lift=3, hint="1")
 b.pack(padx=10, pady=10); update()
 plain = RoundButton(root, "S", lambda: None, font=fnt, hint="1"); plain.pack(); update()
+import widgets as _W
+assert plain._target()[1] == _W.lerp_color(plain._fill, PALETTE["text"], _W.EDGE) and _W.EDGE == 0.07   # (UI-78: softer)
 assert b.winfo_reqheight() == plain.winfo_reqheight() + 3                     # room for the lift
 y0 = b.coords("label")[1]
 assert b.itemcget("shadow", "fill") == PALETTE["bg"]                         # shadow invisible at rest

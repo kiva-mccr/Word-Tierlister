@@ -127,12 +127,12 @@ Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 
 draws src/icons; ui_style.set_icon on every window; .ico for the Windows program; the Linux launcher's copy),
 UI-79 (the shelf's spines one width), UI-73 (typefaces), UI-75 (GitHub link), UI-76 (contrast), UI-77 (Dusk dark mode): the user picked these from two
 rounds of mock-ups (a Design canvas artifact, each board beside the real window) and kept buttons, card and labels.
-Next: UI-78 (borders and the card's shadowy edge: only slight changes, the user is attached to the current style),
-mock-ups with befores and afters first; a UI-21 (next-up peek) mock-up was asked for. Dropped: UI-74 (film grain)
+UI-78 (borders: of six slight changes, only softer button and pill edges, widgets.EDGE; the user is attached to the
+current style). Next: the user has smearing bugs to report. Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.
-Shelved ("In consideration" in the roadmap's Decisions): UI-21 next-up peek; Boundary's swap strip (archived,
+Shelved ("In consideration" in the roadmap's Decisions): Boundary's swap strip (archived,
 commit 9b78889; swaps are still counted).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
