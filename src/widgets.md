@@ -62,6 +62,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- The letters next to a line's ends move outward only `near` (em / 20, the space between letters), never over the end letter: "fart"'s a buried the f (F-39). Copies moved right are the line less its last letter, or less its last two past `near`; left likewise. The short runs (F-38) start at the third letter from either end and stop at the end letters.
 - On one line the short letters' runs (SHORT_LETTERS) smear SHORT_SPREAD times as far, each capped at its room to the word's ends (F-38, the user's idea; a thin end letter such as the i of "imam" would let them out); not on wrapped text, where the many runs made the pane's frames twice as slow.
 - The smear's band behind the letters runs only from the end of the first letter to the start of the last, hidden in the word (F-37, asked for): at the box's edges, then at the end letters' bodies (F-35), its flat ends still showed as a bar under the smear. Without it, white gaps show between round letters ("uc", "ss").
 - A smear frame must stay cheap (F-36, reported as lag): its layout is worked out once per text and box (`_smear_layout`), its copies are plain items (tk.Canvas.create_text, no overhang tracking each) under one invisible guard over its whole reach, copies on big text sit `em / 40` pixels apart, and a card sliding in moves its smear instead of drawing it again. A copy moved right is the line less its last letter, one moved left less its first: one item a copy.

@@ -667,12 +667,25 @@ for amount in (1.0, 0.3, 0.05):
 # the rest, but never past the word's ends; a wrapped meaning keeps the one spread
 import widgets as _W
 cv.delete("all")
-w1 = cv.create_text(10, 40, text="imam", font=("TkDefaultFont", 30), anchor="nw"); root.update()
+F30 = ("TkDefaultFont", 30)
+m = lambda t: cv.tk.call("font", "measure", F30, t)
+w1 = cv.create_text(10, 40, text="hammocks", font=F30, anchor="nw"); root.update()
 b1 = cv.bbox(w1); smear_items(cv, w1, "#3D3A4B", "#ffffff", 1.0, ("s",))
-runs = [i for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "mam"]
-far = max(abs(cv.coords(i)[0] - (10 + cv.tk.call("font", "measure", ("TkDefaultFont", 30), "i"))) for i in runs)
-assert runs and far > _W.SMEAR_SPREAD * cv.tk.call("font", "measure", ("TkDefaultFont", 30), "n") / 2 + 1   # (further)
+runs = [i for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "mmoc"]   # (3rd on)
+far = max(abs(cv.coords(i)[0] - (10 + m("ha"))) for i in runs)
+assert runs and far > _W.SMEAR_SPREAD * m("n") / 2 + 1                                  # (further than the rest)
+assert all(cv.coords(i)[0] >= 10 + m("h") - 1 and cv.bbox(i)[2] <= 10 + m("hammock") + 2 for i in runs)   # (never
+#                                                                       onto the end letters, asked for: "fart")
 assert all(b1[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b1[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
+# the letters next to the ends move outward only as far as the space between letters: never over an end letter
+cv.delete("all")
+w2 = cv.create_text(10, 40, text="fart", font=F30, anchor="nw"); root.update()
+smear_items(cv, w2, "#3D3A4B", "#ffffff", 1.0, ("s",))
+lay = next(v for v in cv._smear_cache.values() if v["lines"][0][0] == "fart")
+for i in cv.find_withtag("s"):
+    if cv.type(i) == "text" and cv.itemcget(i, "text") in ("far", "art"):            # (the a or the r moving out)
+        dx = cv.coords(i)[0] - (10 if cv.itemcget(i, "text") == "far" else 10 + m("f"))
+        assert abs(dx) <= lay["near"], (cv.itemcget(i, "text"), dx)
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)

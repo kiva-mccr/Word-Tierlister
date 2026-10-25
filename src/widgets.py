@@ -64,26 +64,32 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
     make = tk.Canvas.create_text                # (plain items: the guard below repaints their reach, once: F-36)
     fnt = lay["font"]
-    # (F-38) the short letters' runs reach further, behind the rest: never outward past the word's ends
+    # (F-38) the short letters' runs (third letter on, from either end) reach further, behind the rest: never onto the
+    # end letters
     far = half * SHORT_SPREAD
     if far - half >= gap:
         more = sorted({round(half + (far - half) * k / max(1, int((far - half) / gap))) for k in
                        range(1, max(1, int((far - half) / gap)) + 1)}, reverse=True)
         for dist in more:
             for run, rx, y, left_room, right_room in lay["short"]:
-                if dist <= right_room:            # (never past the word's ends: F-33)
+                if dist <= right_room:            # (never over the end letters: F-33)
                     make(c, rx + dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
                 if dist <= left_room:
                     make(c, rx - dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
-    # (F-33) a copy moved right leaves out the line's last letter, one moved left its first: so the end letters only
-    # move inward and the letters between both ways, still one item a copy
+    # (F-33, the user's rules) the end letters move only inward; the letters next to them outward only as far as the
+    # space between letters (`near`), never over the end letter; the rest both ways. A copy moved right is the line
+    # less its last letter (or, past `near`, less its last two), one moved left less its first (or first two): still
+    # one item a copy
+    near = lay["near"]
     for dx in offsets:
-        for line, x, y, head, tail_x, tail in lay["lines"]:
-            if dx > 0 and head:
-                make(c, x + dx, y, text=head, font=fnt, anchor="nw", fill=side, tags=tags)
-            elif dx < 0 and tail:
-                make(c, tail_x + dx, y, text=tail, font=fnt, anchor="nw", fill=side, tags=tags)
-    for line, x, y, _head, _tail_x, _tail in lay["lines"]:
+        for line, x, y, right1, right2, left1_x, left1, left2_x, left2 in lay["lines"]:
+            if dx > 0:
+                piece, px = (right1, x) if dx <= near else (right2, x)
+            else:
+                piece, px = (left1, left1_x) if -dx <= near else (left2, left2_x)
+            if piece:
+                make(c, px + dx, y, text=piece, font=fnt, anchor="nw", fill=side, tags=tags)
+    for line, x, y, *_pieces in lay["lines"]:
         make(c, x, y, text=line, font=fnt, anchor="nw", fill=col, tags=tags)
     # an invisible shape over everything the smear can reach: drawn with it, so deleting it with the smear's next frame
     # makes Tk repaint all of it (letters reaching past their boxes, F-32), without a guard for every copy
@@ -106,36 +112,41 @@ def _smear_layout(c, item, box):
     em = -size if size < 0 else size * float(c.tk.call("tk", "scaling"))
     linespace = float(c.tk.call("font", "metrics", fnt, "-linespace"))
     lines = _smear_lines(c, item, opts, box, linespace)
-    rows = []                                  # (line, x, y, it less its last letter, where and it less its first)
+    rows = []        # (line, x, y, it less its last letter, less its last two, where and less its first, its first two)
     for text, x, y in lines:
         if not text.strip():
             continue
         if len(text) < 2:                       # (one letter: it smears both ways)
-            rows.append((text, x, y, text, x, text))
+            rows.append((text, x, y, text, text, x, text, x, text))
             continue
-        rows.append((text, x, y, text[:-1], x + _measure(c, fnt, text[0]), text[1:]))
+        w1 = x + _measure(c, fnt, text[0])
+        if len(text) == 2:                      # (two letters: each is an end, and moves only inward)
+            rows.append((text, x, y, text[0], text[0], w1, text[1], w1, text[1]))
+            continue
+        rows.append((text, x, y, text[:-1], text[:-2], w1, text[1:], x + _measure(c, fnt, text[:2]), text[2:]))
     band = None
     if len(lines) == 1 and len(lines[0][0]) > 2:   # (inside the end letters, never to the word's edges: F-37)
         line, x = lines[0][0], lines[0][1]
         base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
         band = (x + _measure(c, fnt, line[0]), base - SMEAR_BODY * em, x + _measure(c, fnt, line[:-1]),
                 base - 0.02 * em)
-    short = []                                 # (run of short letters, its x, y, its room to the word's left and right end)
+    short = []                       # (run of short letters, its x, y, its room to the first letter and to the last)
     for text, x, y in lines if len(lines) == 1 else ():   # (not a wrapped meaning: small text, many runs, F-38)
-        i = 0
-        while i < len(text):
+        i, end = 2, len(text) - 2                       # (from the third letter to the third from the end)
+        first_w, last_x = _measure(c, fnt, text[:1]), _measure(c, fnt, text[:-1])
+        while i < end:
             if text[i] not in SHORT_LETTERS:
                 i += 1
                 continue
             j = i
-            while j < len(text) and text[j] in SHORT_LETTERS:
+            while j < end and text[j] in SHORT_LETTERS:
                 j += 1
             left = _measure(c, fnt, text[:i])
-            short.append((text[i:j], x + left, y, left, _measure(c, fnt, text[j:]) if j < len(text) else 0))
+            short.append((text[i:j], x + left, y, left - first_w, last_x - _measure(c, fnt, text[:j])))
             i = j
     out, right = text_overhang(c, fnt, opts["text"])
     lay = {"font": fnt, "lines": rows, "band": band, "short": short,
-           "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)),
+           "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)), "near": max(1, round(em / 20)),
            "reach": (box[0] - out - 2, box[1] - 1, box[2] + right + 2, box[3] + 1)}
     if len(cache) > 64:
         cache.clear()

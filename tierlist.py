@@ -1817,6 +1817,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           or dot) further than the tall ones. On one line their runs smear twice as far, behind the rest, never past
 #           the word's ends; with the inner band it fills the last slivers ("mess", "effigy"). Without the band a few
 #           still showed, so it stays. A wrapped meaning (small text, many runs) keeps the one spread.
+# [x] F-39 Reported: in "fart" the a smeared too far over the f, the r over the t. The letters next to the ends now
+#           move outward only as far as the space between letters (em / 20), never over the end letter (the user's
+#           rule from F-33); the short letters' wider runs start at the third letter from either end and stop at
+#           the end letters.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
