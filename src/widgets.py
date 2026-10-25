@@ -2470,10 +2470,19 @@ class WordCard(SmoothCanvas):
         return bw - inset - size, inset, size
 
     def _draw_find(self, bw, r):
-        self.delete("find")
+        """The magnifier: drawn once, then only moved and recoloured. Never deleted and made again here: called from
+        its own Enter / Leave, a new item under the pointer is entered again, and Tk looped on that for good
+        (reported: the program froze, hovering it; F-21)."""
         x, y, size = self.find_box()
         ink = PALETTE["accent"] if self.typing else (PALETTE["text"] if self._find_hover else PALETTE["muted"])
-        self.create_image(x, y, image=self.icon_image("search", size, ink), anchor="nw", tags="find")
+        image = self.icon_image("search", size, ink)
+        items = self.find_withtag("find")
+        if items:
+            self.coords(items[0], x, y)
+            self.itemconfigure(items[0], image=image)
+            self.tag_raise("find")
+        else:
+            self.create_image(x, y, image=image, anchor="nw", tags="find")
 
     def _hover_find(self, on):
         self._find_hover = on

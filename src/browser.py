@@ -33,9 +33,9 @@ class Browser:
                                  # cost ~50 ms more to open Browse on a big save, for rows far off screen)
     BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
     # the columns: heading, the Sort it stands for (M-7: a click on the heading sorts by it), alignment
-    COLUMNS = (("tier", "Tier", "Default", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
+    COLUMNS = (("tier", "Tier", "Tier", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
                ("games", "Duels", "Duels", "e"), ("freq", "Freq #", "Frequency", "e"))
-    RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
+    RISING = ("Tier", "A-Z", "Frequency")        # sorts whose values go up down the list (S..F, a..z, commonest
                                                  # first: rank 1, 2...); Rating and Duels start with the highest
     SORT_MS = 260                                # the sort arrow fills like a loading bar as the rows load
 
@@ -97,7 +97,7 @@ class Browser:
                      + [label for _, label, _ in KINDS] + ["Obscene words"],      # (ST-6: placed words of a kind)
                      on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
         ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
-        self.sort_var = tk.StringVar(value="Default")
+        self.sort_var = tk.StringVar(value="Tier")
         self.reverse = False                       # the sort turned round (a second click on its heading)
         ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=lambda: self.sort_by(self.sort_var.get()),
                      font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
@@ -405,12 +405,13 @@ class Browser:
         return 2 * h - 1, h
 
     def _show_sort(self, reveal=1.0):
-        """The headings, with a small arrow (an image, after the text) on the one the list is sorted by: up when
-        its values rise down the list (a..z, S..F, commonest first), down when they fall; filled `reveal` of
-        the way, the rest pale. The Word column also says which way round in words, "(A-Z)" or "(Z-A)"."""
+        """The headings, with a small arrow (an image, after the text) on the one the list is sorted by, pointing the
+        way its values grow (asked for: S to F points down): down when they rise down the list (S..F, a..z,
+        commonest first), up when they fall (the highest rating first); filled `reveal` of the way, the rest pale.
+        The Word column also says which way round in words, "(A-Z)" or "(Z-A)"."""
         try:
             sort = self.sort_var.get()
-            up = (sort in self.RISING) != self.reverse
+            up = (sort in self.RISING) == self.reverse
             fill = PALETTE["muted"]
             w, h = self._arrow_size()
             img = arrow_image(self.tree, w, h, fill, lerp_color(fill, PALETTE["surface2"], 0.7), reveal, up)

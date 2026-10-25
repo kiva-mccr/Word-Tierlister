@@ -77,7 +77,7 @@ def browse(app, rnd):
     elif r < 0.35:
         bw.unplace()
     elif r < 0.5:
-        bw.sort_by(rnd.choice(["Default", "A-Z", "Rating", "Frequency", "Duels"]), toggle=True)
+        bw.sort_by(rnd.choice(["Tier", "A-Z", "Rating", "Frequency", "Duels"]), toggle=True)
     elif r < 0.6:
         bw.filter_var.set(rnd.choice(["All placed", "Unplaced", "Obscene words", "Tier S"]))
         bw.reload()

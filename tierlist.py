@@ -1668,6 +1668,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           idle moment, so one frame drew the pane empty. Unseen before; the Wiktionary link inside the pane (UI-67)
 #           made that frame long enough to see. The change now finishes at once (DefinitionDrawer._natural);
 #           _selftest_drawer opens it under openbox and checks the contents never vanish once shown.
+# [x] F-21 Reported: the program froze on Linux and had to be closed by force; the log's watchdog (F-19) caught the window
+#           thread inside a canvas delete, from the word card's magnifier being hovered. Its Enter / Leave redrew it
+#           by deleting it and making it anew; the new item under the pointer was entered again, and Tk looped on
+#           that for good (reproduced here under openbox: the pointer on the icon's corner froze it at once). The
+#           magnifier is now made once and only moved and recoloured (WordCard._draw_find); _selftest_freeze rests
+#           the pointer on its every edge and shows new words under it, under openbox, and fails rather than hangs.
+# [x] UI-68 Asked for: Browse's sort arrow pointed up for S to F; it now points the way the values grow (down for S..F,
+#           a..z and commonest first; up for the highest rating or most duels first; a second click turns it round),
+#           and the Sort drop-down says "Tier" instead of "Default" (the order the Tier column sorts in).
 # [x] IC-1 An icon for the program: the window / taskbar icon (iconphoto) and the built programs' icon
 #           (T-6 / T-8: .ico for Windows, .png for the Linux launcher), in the pastel look.
 #           The user's design: the progress shelf's six spines filled S to F in the tier colours, the lilac shelf

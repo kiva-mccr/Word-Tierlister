@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`, `tiercolours`
-- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -86,3 +86,4 @@ The module docstring has the details; this page is the map.
 - An open dialog follows a change of the shared fonts (a zoom; maximizing brings back the maximized window's own, UI-57): `refresh_widgets` calls `StyledDialog.rescale`, which re-wraps every wrapped label in proportion, then sizes and centres the dialog again. Without it the text grew inside a window that kept its size and was cut off (F-18).
 - The Wiktionary link (UI-67, `_place_link`, `LinkButton`) is placed over the pane's top right; a canvas's `lift()` raises items, so it is raised with `tk.Misc.lift`. The word's line gets a right margin so a long word never runs under it.
 - The drawer's end of slide (`_natural`) switches its contents from place back to pack and must finish that at once (`update_idletasks`): left to the next idle moment, a frame showed the pane empty, a flicker (F-20; seen only under a window manager, `_selftest_drawer`).
+- Never delete and remake a canvas item from its own tag Enter / Leave (or anything that runs then): the new item under the pointer is entered again and Tk loops for good, a freeze (F-21: the card's magnifier). Move and recolour it instead (`itemconfigure`).

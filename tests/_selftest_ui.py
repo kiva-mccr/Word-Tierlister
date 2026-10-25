@@ -229,7 +229,7 @@ assert list(kids) == sorted(kids)
 bw.sort_var.set("Frequency"); bw.reload(); pump(2)
 fr = [int(bw.tree.set(k, "freq").replace(",", "")) for k in bw.tree.get_children()[:50]]
 assert fr == sorted(fr)
-bw.sort_var.set("Default")
+bw.sort_var.set("Tier")
 bw.filter_var.set("All placed"); bw.search_var.set("serend"); bw.reload(); pump(2)
 assert "serendipity" in bw.tree.get_children()
 bw.tree.selection_set("serendipity"); pump(2)

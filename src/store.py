@@ -72,7 +72,7 @@ WORD_INDEXES = (
     ("idx_placed_word", "words(word) WHERE tier IS NOT NULL"),
     ("idx_placed_shelf", "words(rank, tier, freq) WHERE tier IS NOT NULL"),
     # Browse's sorts, read in order from an index instead of sorting every row (0.2-0.9 s with 300k placed of a
-    # million; built once on the first open of a big save, ~2 s): the placed words' Default (tier, best first;
+    # million; built once on the first open of a big save, ~2 s): the placed words' Tier order (tier, best first;
     # turned round, the index read backwards), Rating and Duels; the unplaced words' queue and frequency order
     ("idx_placed_order", "words(tier, rating DESC, games DESC, rank) WHERE tier IS NOT NULL"),
     ("idx_placed_rating", "words(rating DESC, rank) WHERE tier IS NOT NULL"),
@@ -1063,20 +1063,21 @@ class Store:
         return (r["a"], r["b"]) if r else None
 
     # ---- listing / export ------------------------------------------------------------------
-    SORTS = ("Default", "A-Z", "Frequency", "Rating", "Duels")
-    # each sort's natural order (reverse=True flips every part of it); Default is per filter, below
+    SORTS = ("Tier", "A-Z", "Frequency", "Rating", "Duels")
+    # each sort's natural order (reverse=True flips every part of it); Tier is per filter, below (the queue's order
+    # for unplaced words)
     _ORDERS = {"A-Z": "word ASC", "Frequency": "rank ASC", "Rating": "rating DESC, rank ASC",
                "Duels": "games DESC, rank ASC"}
 
     KIND_FILTERS = {label: bit for _, label, bit in KINDS}
     SEARCH_WINDOW, SEARCH_WINDOW_MAX = 20, 200_000     # (a broad search reads this many words in order per row asked)
-    _PLACED_INDEX = {"Default": "idx_placed_order", "Rating": "idx_placed_rating", "Duels": "idx_placed_games",
+    _PLACED_INDEX = {"Tier": "idx_placed_order", "Rating": "idx_placed_rating", "Duels": "idx_placed_games",
                      "A-Z": "idx_placed_word", "Frequency": "idx_placed_shelf"}
-    _UNPLACED_INDEX = {"Default": "idx_unplaced_queue", "Frequency": "idx_unplaced_rank", "A-Z": "idx_unplaced_word"}
+    _UNPLACED_INDEX = {"Tier": "idx_unplaced_queue", "Frequency": "idx_unplaced_rank", "A-Z": "idx_unplaced_word"}
 
-    def list_words(self, text="", tier_filter="All placed", sort="Default", limit=3000, offset=0,
+    def list_words(self, text="", tier_filter="All placed", sort="Tier", limit=3000, offset=0,
                    with_total=True, reverse=False):
-        """One page of words. Default order = tier/rating for placed words, queue order for unplaced; A-Z,
+        """One page of words. The Tier order = tier/rating for placed words, queue order for unplaced; A-Z,
         Frequency (commonest first), Rating and Duels (highest first); `reverse` turns the order round (M-7)."""
         where, args = [], []
         if tier_filter == "Unplaced":
@@ -1120,7 +1121,7 @@ class Store:
         rows = None
         ordered = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
         window = (offset + limit) * self.SEARCH_WINDOW
-        broad = tier_filter in ("All placed", "Unplaced") or (tier_filter.startswith("Tier ") and sort == "Default")
+        broad = tier_filter in ("All placed", "Unplaced") or (tier_filter.startswith("Tier ") and sort == "Tier")
         if text and ordered and broad and window <= self.SEARCH_WINDOW_MAX:
             # a search that matches many words (one letter): read the sort's own index from the top and stop once
             # a page of matches is found, instead of sorting every match (0.25 s in a million). The first `window`

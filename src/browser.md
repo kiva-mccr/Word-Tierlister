@@ -20,3 +20,4 @@ The module docstring has the details; this page is the map.
 - Selection is an outline over the row (the row keeps its tier colour).
 - Its text size is set in one place (`_set_size`); its zoom is separate from the main window's and saved.
 - Messages name a word with `app.shown()`, never raw.
+- The sort arrow points the way the values grow (UI-68: down for `RISING` sorts in their own order); the first sort is called "Tier" (it was "Default"; for unplaced words it is the queue's order).

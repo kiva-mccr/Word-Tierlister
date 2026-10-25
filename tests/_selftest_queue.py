@@ -171,9 +171,9 @@ for name, key in (("Rating", "rating"), ("Duels", "games")):
     lo, _ = p.list_words("", "All placed", name, limit=50, reverse=True)
     assert [r[key] for r in hi] == sorted((r[key] for r in hi), reverse=True) and [r[key] for r in lo] == sorted(r[key] for r in lo)
     assert hi[0][key] >= lo[0][key]
-back, _ = p.list_words("", "All placed", "Default", limit=5, reverse=True)
+back, _ = p.list_words("", "All placed", "Tier", limit=5, reverse=True)
 assert back[0]["tier"] == max(r["tier"] for r in p.list_words("", "All placed", limit=7000)[0])   # F first
-dq, utotal = p.list_words("", "Unplaced", "Default", limit=2000)
+dq, utotal = p.list_words("", "Unplaced", "Tier", limit=2000)
 assert utotal == 2000 and [r["word"] for r in dq] == [r[0] for r in p.db.execute(
     "SELECT word FROM words WHERE tier IS NULL ORDER BY skips, qkey, rank")]
 assert dq[0]["rank"] != 7000 or dq[1]["rank"] != 7001      # unplaced default order is the shuffled queue
@@ -207,7 +207,7 @@ except RuntimeError:
     pass
 assert indexes(big) == want and not big.db.execute("SELECT 1 FROM words WHERE skips=7").fetchone()   # rolled back
 with big.bulk_write(("idx_unplaced_queue",)):                    # a sort named after its index still works meanwhile
-    assert big.list_words("", "Unplaced", "Default", limit=3)[0]
+    assert big.list_words("", "Unplaced", "Tier", limit=3)[0]
 big.db.execute("DROP INDEX idx_words_tg"); big.db.commit()       # (stopped halfway: opening the save mends it)
 assert indexes(T.Store(big.path)) == want
 sh = big.shelf(); assert big.get_meta("shelf_totals")
