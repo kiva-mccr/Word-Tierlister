@@ -653,7 +653,7 @@ for amount in (1.0, 0.3, 0.05):
     # letters only move inward and the letters between both ways: nothing reaches past the word (it was cut off
     # straight there, and cropped by a canvas only as wide as the word)
     if amount > 0.1:                                                    # (at the very end: only the word itself)
-        assert set(xs) == {"a smeared meanin", " smeared meaning", "a smeared meaning"}, set(xs)
+        assert {"a smeared meanin", " smeared meaning", "a smeared meaning"} <= set(xs), set(xs)   # (and short runs)
         assert all(x > 10 for x in xs["a smeared meanin"])
     assert xs["a smeared meaning"] == [10]                              # (the word, drawn last)
     assert cv.itemcget(copies[-1], "text") == "a smeared meaning"
@@ -663,6 +663,16 @@ for amount in (1.0, 0.3, 0.05):
     if amount == 0.05:
         assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
     assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill") == "#ffffff"]
+# F-38 (the user's idea): on one line the short letters (no ascender, descender or dot) smear twice as far, behind
+# the rest, but never past the word's ends; a wrapped meaning keeps the one spread
+import widgets as _W
+cv.delete("all")
+w1 = cv.create_text(10, 40, text="imam", font=("TkDefaultFont", 30), anchor="nw"); root.update()
+b1 = cv.bbox(w1); smear_items(cv, w1, "#3D3A4B", "#ffffff", 1.0, ("s",))
+runs = [i for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "mam"]
+far = max(abs(cv.coords(i)[0] - (10 + cv.tk.call("font", "measure", ("TkDefaultFont", 30), "i"))) for i in runs)
+assert runs and far > _W.SMEAR_SPREAD * cv.tk.call("font", "measure", ("TkDefaultFont", 30), "n") / 2 + 1   # (further)
+assert all(b1[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b1[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)

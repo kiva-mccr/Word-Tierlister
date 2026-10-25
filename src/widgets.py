@@ -26,6 +26,8 @@ SMEAR_SPREAD = 0.625    # how far a censored word is smeared sideways, in letter
 SMEAR_TONE = 0.55       # how pale the smear is (0 = the text colour, 1 = the card)
 SMEAR_BODY = 0.48       # the band filling the gaps between the letters, in em up from the baseline (about the
                         # x-height of the roundest fonts used; a more generous one would show a flat top)
+SHORT_LETTERS = frozenset("acemnorsuvwxz")   # no ascender, descender or dot: smeared twice as far as the others
+SHORT_SPREAD = 2.0                            # (F-38, the user's idea), filling the gaps between round letters
 _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
 
@@ -36,7 +38,9 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the same tone fills the gaps
     behind them (else the space inside an "e" and between the curves of "ss" or "uc" shows as white slivers), from
     the end of the first letter to the start of the last, hidden in the word (asked for: reaching the ends, its flat
-    edges showed as a bar under the smear, F-37). `amount` (0..1) narrows it and darkens it toward `ink`
+    edges showed as a bar under the smear, F-37). On one line the short letters (SHORT_LETTERS: no ascender,
+    descender or dot) smear SHORT_SPREAD times as far, behind the rest, which fills most such gaps on their own
+    (F-38, the user's idea). `amount` (0..1) narrows it and darkens it toward `ink`
     (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text, redrawn
     every frame from a layout worked out once (_smear_layout). Returns nothing; the items carry `tags`."""
     c = canvas
@@ -60,6 +64,17 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     side = lerp_color(paper, col, min(1.0, max(0.0, (half - 0.5) / 1.5)))   # (faded out by half a pixel apart)
     make = tk.Canvas.create_text                # (plain items: the guard below repaints their reach, once: F-36)
     fnt = lay["font"]
+    # (F-38) the short letters' runs reach further, behind the rest: never outward past the word's ends
+    far = half * SHORT_SPREAD
+    if far - half >= gap:
+        more = sorted({round(half + (far - half) * k / max(1, int((far - half) / gap))) for k in
+                       range(1, max(1, int((far - half) / gap)) + 1)}, reverse=True)
+        for dist in more:
+            for run, rx, y, left_room, right_room in lay["short"]:
+                if dist <= right_room:            # (never past the word's ends: F-33)
+                    make(c, rx + dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
+                if dist <= left_room:
+                    make(c, rx - dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
     # (F-33) a copy moved right leaves out the line's last letter, one moved left its first: so the end letters only
     # move inward and the letters between both ways, still one item a copy
     for dx in offsets:
@@ -79,8 +94,8 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
 def _smear_layout(c, item, box):
     """What a smear of text `item` needs that stays the same from frame to frame (kept per canvas for the text, its
     font and its box, so an un-smearing redraws without measuring again: F-36): its lines, each without its last
-    letter and without its first (F-33), the band between its end letters (F-37), the font's "n" width, the copies'
-    gap and the smear's whole reach."""
+    letter and without its first (F-33), the band between its end letters (F-37), its runs of short letters with
+    which way each may move (F-38), the font's "n" width, the copies' gap and the smear's whole reach."""
     opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
     fnt = opts["font"]
     key = (item, tuple(opts.values()), tuple(box), tuple(c.coords(item)[:2]))
@@ -105,8 +120,21 @@ def _smear_layout(c, item, box):
         base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
         band = (x + _measure(c, fnt, line[0]), base - SMEAR_BODY * em, x + _measure(c, fnt, line[:-1]),
                 base - 0.02 * em)
+    short = []                                 # (run of short letters, its x, y, its room to the word's left and right end)
+    for text, x, y in lines if len(lines) == 1 else ():   # (not a wrapped meaning: small text, many runs, F-38)
+        i = 0
+        while i < len(text):
+            if text[i] not in SHORT_LETTERS:
+                i += 1
+                continue
+            j = i
+            while j < len(text) and text[j] in SHORT_LETTERS:
+                j += 1
+            left = _measure(c, fnt, text[:i])
+            short.append((text[i:j], x + left, y, left, _measure(c, fnt, text[j:]) if j < len(text) else 0))
+            i = j
     out, right = text_overhang(c, fnt, opts["text"])
-    lay = {"font": fnt, "lines": rows, "band": band,
+    lay = {"font": fnt, "lines": rows, "band": band, "short": short,
            "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)),
            "reach": (box[0] - out - 2, box[1] - 1, box[2] + right + 2, box[3] + 1)}
     if len(cache) > 64:
