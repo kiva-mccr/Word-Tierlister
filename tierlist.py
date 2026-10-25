@@ -1809,7 +1809,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] F-35 Reported (with pictures): a horizontal ledge under every smear. The band that fills the letters' body
 #           behind the smear spanned the word's whole box (side bearings, serif feet); once the ends smeared only
 #           inward (F-33) its flat ends stuck out. It now starts and ends at the end letters' bodies, measured from
-#           the font files above the serifs (overhang.json's body tables, fonts.body_inset).
+#           the font files above the serifs. Replaced by F-37.
+# [x] F-37 Asked for: remove the bar, or hide it in the word. Without the band, white gaps showed between round
+#           letters ("uc", "ss"), so it stays, but only from the end of the first letter to the start of the last:
+#           the end letters' smear hides its ends. The body measurements F-35 needed are gone again.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

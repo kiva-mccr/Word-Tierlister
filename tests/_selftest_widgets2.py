@@ -670,15 +670,18 @@ box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
 texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
 assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
 assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
-# F-35: the band behind the letters starts and ends at the end letters' bodies, never the box's edges (it showed as
-# a flat ledge under the smear, wider than the letters above it)
+# F-37: the band behind the letters runs from the end of the first letter to the start of the last, hidden in the
+# word (at the box's edges it showed as a bar under the smear)
 from fonts import init_fonts as _init, font as _font
 _init(root)
 cv.delete("all")
 big = cv.create_text(20, 10, text="fuck", font=_font("word"), anchor="nw"); root.update()
 bb = cv.bbox(big); smear_items(cv, big, "#3D3A4B", "#ffffff", 1.0, ("s",))
 band = [cv.coords(i) for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
-assert len(band) == 1 and band[0][0] > bb[0] + 2 and band[0][2] < bb[2] - 5, (band, bb)   # (f's stem, k's arm)
+f_w, k_x = cv.tk.call("font", "measure", _font("word"), "f"), cv.tk.call("font", "measure", _font("word"), "fuc")
+assert len(band) == 1 and abs(band[0][0] - (20 + f_w)) <= 1 and abs(band[0][2] - (20 + k_x)) <= 1, (band, bb)
+cv.delete("s"); cv.itemconfigure(big, text="ox"); smear_items(cv, big, "#3D3A4B", "#ffffff", 1.0, ("s",))
+assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]   # (two letters)
 cv.destroy()
 
 # UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it

@@ -12,7 +12,7 @@ from tkinter import ttk
 
 from constants import QUEUE_AXIS, QUEUE_MEDIAN, queue_weight
 from rudeness import GLOSS_KEY
-from fonts import body_inset, font, text_overhang
+from fonts import font, text_overhang
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
@@ -24,8 +24,8 @@ _CUSTOM = ("text", "hint", "font", "wraplength", "bg", "fg", "censor")
 UNSMEAR_MS = 260        # a censored word un-smears this fast under the pointer (ST-6), and smears again as fast
 SMEAR_SPREAD = 0.625    # how far a censored word is smeared sideways, in letter widths (the user's pick)
 SMEAR_TONE = 0.55       # how pale the smear is (0 = the text colour, 1 = the card)
-SMEAR_BODY = 0.48       # the band filling the letters' body, in em up from the baseline (about the x-height of
-                        # the roundest fonts used; a more generous one would show a flat top over round letters)
+SMEAR_BODY = 0.48       # the band filling the gaps between the letters, in em up from the baseline (about the
+                        # x-height of the roundest fonts used; a more generous one would show a flat top)
 _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
 
@@ -33,10 +33,11 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
     """Smear the text `item` sideways (ST-6): copies of it side by side over SMEAR_SPREAD letter widths, in one
     pale tone (so none of them stays crisp on top). The smear never reaches past the word (F-33, the user's rules):
     the first and last letter of each line smear only inward and the letters between them both ways; so nothing is
-    cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the
-    same tone fills the letters' body behind them (else the space inside an "e", the gaps between the curves of
-    "ss" and the open side of a last "c" show as white slivers and notches). `amount` (0..1) narrows it and darkens
-    it toward `ink` (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text, redrawn
+    cut off, by a strip or by the edge of a canvas only as wide as the word. A band in the same tone fills the gaps
+    behind them (else the space inside an "e" and between the curves of "ss" or "uc" shows as white slivers), from
+    the end of the first letter to the start of the last, hidden in the word (asked for: reaching the ends, its flat
+    edges showed as a bar under the smear, F-37). `amount` (0..1) narrows it and darkens it toward `ink`
+    (un-smearing; the band fades out). Tk cannot blur, so the copies are plain canvas text, redrawn
     every frame from a layout worked out once (_smear_layout). Returns nothing; the items carry `tags`."""
     c = canvas
     box = c.bbox(item)
@@ -78,8 +79,8 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
 def _smear_layout(c, item, box):
     """What a smear of text `item` needs that stays the same from frame to frame (kept per canvas for the text, its
     font and its box, so an un-smearing redraws without measuring again: F-36): its lines, each without its last
-    letter and without its first (F-33), the band behind the letters' bodies (F-35), the font's "n" width, the
-    copies' gap and the smear's whole reach."""
+    letter and without its first (F-33), the band between its end letters (F-37), the font's "n" width, the copies'
+    gap and the smear's whole reach."""
     opts = {k: c.itemcget(item, k) for k in _TEXT_OPTS}
     fnt = opts["font"]
     key = (item, tuple(opts.values()), tuple(box), tuple(c.coords(item)[:2]))
@@ -99,11 +100,11 @@ def _smear_layout(c, item, box):
             continue
         rows.append((text, x, y, text[:-1], x + _measure(c, fnt, text[0]), text[1:]))
     band = None
-    if len(lines) == 1:
+    if len(lines) == 1 and len(lines[0][0]) > 2:   # (inside the end letters, never to the word's edges: F-37)
+        line, x = lines[0][0], lines[0][1]
         base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
-        x, line = lines[0][1], lines[0][0]           # (from the end letters' bodies, never the box's edges: F-35)
-        left, right = body_inset(c, fnt, line)
-        band = (x + left, base - SMEAR_BODY * em, x + _measure(c, fnt, line) - right, base - 0.02 * em)
+        band = (x + _measure(c, fnt, line[0]), base - SMEAR_BODY * em, x + _measure(c, fnt, line[:-1]),
+                base - 0.02 * em)
     out, right = text_overhang(c, fnt, opts["text"])
     lay = {"font": fnt, "lines": rows, "band": band,
            "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)),
