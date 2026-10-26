@@ -76,6 +76,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - GNOME's window manager can be tried here too: `apt-get install -y mutter`, then under xvfb-run
   `dbus-run-session -- sh -c 'mutter --x11 --replace --sm-disable & ...'` (X11 only; Wayland cannot be recorded).
 - New indexes on words go in `store.WORD_INDEXES`; writes of over `BULK_ROWS` rows go through `Store.bulk_write`.
+- Tk draws whatever `update_idletasks` lays out: never try sizes on screen one at a time (F-41). Measure once and work
+  the rest out, and pin what shows (`DefinitionDrawer.pin`) while measuring.
 - After UI changes to layout or fitting, run `tools/stress_ui.py` under xvfb-run (random actions on a small pretend
   screen; fails on errors or a window bigger than the screen).
 - Long work on the save (a reshuffle) runs on a worker thread with App.busy set and a moving bar; nothing
@@ -132,7 +134,7 @@ current style), F-32 (letters reaching past their boxes: smeared and repainted w
 the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar), F-35 / F-37 (no bar under a smear: its band only between the end letters), F-38 (short letters smear further), F-39 (second letters never over the end letters; the user checked 194 smeared
 words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported), F-40 (the letters' holes filled, gone at
 the very start of un-smearing),
-F-36 (smear frames cheap again: layout once, one item a copy, one guard). Docs reviewed for the first release
+F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (switching tabs with the pane open: the fit never draws the line counts it tries (pane pinned, lines worked out from one measurement), the duel tabs share one text size, and their cards fade over to the new pair). Docs reviewed for the first release
 (README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
 .app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). U-1 (File > Check
 for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git

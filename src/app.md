@@ -4,7 +4,7 @@ The main window (`App`): the header, the three placing views, the duel tabs, the
 
 - **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -19,6 +19,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- Tk draws every layout the fit measures (`update_idletasks`), so a fit must never try sizes on screen one by one (F-41: switching tabs with the definitions pane open, the pane was tried a line at a time and the page stuttered; the duel cards blinked out). `_fit_window` pins the pane at the height it shows (`DefinitionDrawer.pin`, also a pane sliding open, which carries on to its new height after) and `_fit_lines` works the lines out from one measurement. `_content_size` counts the pane at its lines' height while `_measure_pane` is set (a held pane once counted at its old, taller height, so each duel tab got its own text size). The duel tabs share one `_fit_cache` key.
+- From one duel tab to another the cards fade over to the new pair (`_fade_duel` -> `DuelCards.show(fade=True)`, under the duel's `anim_key`: a key press or a tab switch finishes it); the big text is sized for the new words when they show (`then=`).
 - Never try a zoom on screen to see if it fits when it can be known before: `_precheck_zoom` tries the steps while the window is hidden (`open_window`) and `_remember_cap` keeps the limits in the save per screen and version (F-30). Estimating from the page's size failed: it grows 0.5-1.7x as fast as its text.
 - The page keeps room for a one-line message under its contents (`_toast_room`, F-29/UI-72) inside its breathing room (max, not sum: a sum cost the laptop its 110%); `_recenter` keeps the contents above it.
 - A fit that changes an open definitions pane's height eases it (`_fit_window` wraps `_fit_size`; F-29); tests that check the settled layout finish animations first.

@@ -166,7 +166,9 @@ class App:
         self._ref_size = None     # the window size at which grow is 1 (set by _fit_window)
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
-        self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
+        self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
+        self._measure_pane = False    # while _fit_window measures: count the definitions pane at its lines' height
+        self._fit_cache = {}      # (place or duel, pane lines, zoom, screen) -> the font step that fitted last time (_fit_window)
         self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
         # layout -> the smallest zoom found not to fit there: never tried on screen again (saved for each screen;
         # asked for: a zoom in that cannot fit grew the window and snapped back the first time)
@@ -830,6 +832,12 @@ class App:
         width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
         # (breathing room round the contents, at least enough under them for a message: _recenter keeps it there)
         height = sum(w.winfo_reqheight() for w in rows) + inner_h + max(int(50 * f), self._toast_room())
+        # The pane may show another height than its lines make (pinned, held, folded, sliding): count those. (Counting
+        # only what it lacked, a held pane taller than its lines counted at its old height: the fit took a smaller
+        # text size than it needed, and the duel tabs ended at different sizes.)
+        d = self.def_frame
+        if self._measure_pane and d.winfo_manager():
+            height += d.natural_height() - d.winfo_reqheight()
         return width, height
 
     def _toast_room(self):
@@ -845,10 +853,42 @@ class App:
         if d.easing:
             d.settle()
         was = d.winfo_reqheight() if not initial and self.show_defs and d.steady else None
+        opening = not initial and self.show_defs and d.opening
         scale = self._applied_scale
-        self._fit_size(initial, rebase, folded_drawer)
-        if was is not None and self._applied_scale == scale:
-            d.ease_from(was)
+        # The pane keeps the height it shows while the fit tries others (each line count tried was drawn: the page
+        # under it jumped up and down a line at a time, switching tabs stuttered and the duel buttons blinked out).
+        # Sliding open (a tab switched to with a longer definition), it is counted at the height it is heading for:
+        # counted half-way, a tall pane "fitted" and ended past the window's bottom.
+        if was is not None or opening:
+            d.pin()
+        self._measure_pane = self.show_defs or folded_drawer
+        try:
+            self._fit_size(initial, rebase, folded_drawer)
+        finally:
+            self._measure_pane = False
+        if opening:
+            d.unpin()                # (eases on from where it stopped)
+        elif was is not None:
+            ease = self._applied_scale == scale
+            d.unpin(follow=not ease)
+            if ease:
+                d.ease_from(was)
+
+    def _fit_lines(self, height):
+        """(width, height, lines) of the contents with the definitions pane at the most lines that fit in `height`
+        pixels, from the lines it wants down to DEF_LINES_MIN (lines None when it is shut). Measured once, at the
+        lines it has, and worked out for the others: a pane's height grows by one line's height a line. (Each line
+        count tried was drawn: the page stuttered as the pane shrank a line at a time.) Folded, about to slide open,
+        it is counted at its full height (left out, it slid open over the word card)."""
+        cw, ch = self._content_size()
+        if not self.show_defs:
+            return cw, ch, None
+        d = self.def_frame
+        now, step, lines = d.lines(), d.line_height(), self._def_want
+        over = ch + (lines - now) * step - height
+        if over > 0:
+            lines = max(self.DEF_LINES_MIN, lines - -(-over // step))
+        return cw, ch + (lines - now) * step, lines
 
     def _fit_size(self, initial=False, rebase=False, folded_drawer=False):
         """Size and place the main window for this screen and these contents.
@@ -866,25 +906,21 @@ class App:
         """
         r = self.root
         before = (r.winfo_width(), r.winfo_height())
-        if self.show_defs:
-            self.def_frame.set_lines(self._def_want)
         if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
-            lowest = self.DEF_LINES_MIN - 1   # must (to DEF_LINES_MIN at most): re-measuring at normal size would
-            for lines in (range(self._def_want, lowest, -1) if self.show_defs else (None,)):     # flash small text
+            cw, ch, lines = self._fit_lines(r.winfo_height())    # must: re-measuring at normal size would flash
+            if cw <= r.winfo_width() and ch <= r.winfo_height():                                    # small text
                 if lines:
                     self.def_frame.set_lines(lines)
-                cw, ch = self._content_size()
-                if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
-                    ch += self.def_frame.unshown_height()        # left out, it slid open over the word card)
-                if cw <= r.winfo_width() and ch <= r.winfo_height():
-                    return
+                return
         f = ui_factor(r)
         area = usable_area(r)
         # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),
         # then take the next font step down, and repeat. Every fit starts again from the full size (the
         # zoom), so a step taken for a taller view (the definitions open, a duel tab) is undone when it
         # closes; it starts from the step that fitted this layout last time, so it does not flicker.
-        key = (self.mode, self.show_defs and self._def_want, self.zoom, tuple(area))
+        # (the duel tabs share one layout and one key: each with its own, Refine and Boundary check could fit at
+        # different text sizes, and switching between them resized every button)
+        key = (self.mode == "place", self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
         if folded_drawer:                # (opening the drawer only ever needs smaller text: tried from the full zoom,
             start = min(start, round(self.font_scale * self.zoom, 2))     # each size tried showed, the page swelling
@@ -902,19 +938,13 @@ class App:
                 scale_fonts(size)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
-            for lines in (range(self._def_want, self.DEF_LINES_MIN - 1, -1) if self.show_defs else (self.DEF_LINES,)):
-                self.def_frame.set_lines(lines)
-                cw, ch = self._content_size()
-                if folded_drawer:
-                    ch += self.def_frame.unshown_height()
-                if cw <= area[2] and ch <= area[3]:
-                    break
-            else:
-                continue
-            break
+            cw, ch, lines = self._fit_lines(area[3])
+            if cw <= area[2] and ch <= area[3]:
+                break
         self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
-        if not self.show_defs and self.def_frame.lines() != self.DEF_LINES:
-            self.def_frame.set_lines(self.DEF_LINES)
+        want = lines if self.show_defs else self.DEF_LINES
+        if self.def_frame.lines() != want:
+            self.def_frame.set_lines(want)
         r.update_idletasks()
         if rescaled:
             self._fit_big_text()               # the fonts changed even if the window size did not
@@ -1542,6 +1572,7 @@ class App:
     def _show_pair(self):
         """Pair view: show the next duel, or a friendly message with the buttons disabled when none is available."""
         self._show_frame(self.pair_frame)
+        fade, self._fade_duel = self._fade_duel, False
         self.pair = self._pick_pair()
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
@@ -1564,8 +1595,8 @@ class App:
             tiers = [self.store.get_word(w)["tier"] for w in words]
             # the duel cards wear their word's tier colour (a neutral pastel without a tier)
             self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers],
-                           censor=[self.store.censored(w) for w in words])
-            self._fit_big_text()
+                           censor=[self.store.censored(w) for w in words], fade=fade,
+                           then=self._fit_big_text)       # (sized for the new words once they show)
             self.ctx_lbl.config(text=self.pair["ctx"])
             self._render_defs(words)
             # little triangles on the shelf over where the two words come from (UI-55; one if they share a spine),
@@ -1694,6 +1725,8 @@ class App:
         """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
         comparison, pair or focus."""
         self.anim.finish(self.duel.anim_key)   # a duel result still showing finishes first (it loads a pair)
+        # from one duel tab to another the cards fade over to the new pair (asked for: they blinked)
+        self._fade_duel = self.mode != "place" and self.mode_var.get() != "place" and self.duel.winfo_ismapped()
         self.mode = self.mode_var.get()
         self.word_card.end_typing()            # (a word half typed on the card is dropped)
         self.mode_switch.set(self.mode)

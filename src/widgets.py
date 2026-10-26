@@ -413,6 +413,17 @@ class RoundButton(SmoothCanvas):
         except tk.TclError:
             pass
 
+    def veil(self, amount, color=None):
+        """Paint it faded `amount` (0 = as it is, 1 = gone) into `color` (default: the colour behind it), its state
+        untouched: for a fade an owner runs frame by frame (DuelCards.show). Any fade of its own stops."""
+        if self._anim is not None:
+            self._anim.stop(f"rb{id(self)}")
+        color = color or super().cget("bg")
+        fill, edge, width, fg = self._target()
+        self._look = (lerp_color(fill, color, amount), lerp_color(edge, color, amount), width,
+                      lerp_color(fg, color, amount))
+        self._paint()
+
     def _paint(self):
         """Apply self._look to the items (colours only; geometry is _draw)."""
         fill, edge, width, fg = self._look
@@ -597,6 +608,7 @@ class DuelCards(tk.Frame):
 
     def __init__(self, parent, on_answer, card_font=None, small_font=None, animator=None):
         super().__init__(parent, bg=PALETTE["bg"])
+        self._anim = animator
         self.columnconfigure((0, 1), uniform="duel")
         self.grid_anchor("n")                # centred when the frame is wider than the cards (a long context line)
         self.left = RoundButton(self, "", lambda: on_answer("left"), bg=PALETTE["left"], font=card_font,
@@ -637,14 +649,38 @@ class DuelCards(tk.Frame):
         """The Animator key of the result animation (a key press finishes it: the next pair waits on it)."""
         return f"duel{id(self)}"
 
-    def show(self, left, right, colors=None, censor=(False, False)):
+    FADE_MS, FADE_OUT = 240, 0.4             # show(fade=True): the whole fade, and the share of it spent fading out
+
+    def show(self, left, right, colors=None, censor=(False, False), fade=False, then=None):
         """Show a new pair (and enable everything). `colors` = (left fill, right fill), e.g. each word's tier
         colour; without it the cards keep their own pastel blue / peach. `censor`: each word smeared until
-        hovered (ST-6)."""
+        hovered (ST-6). `fade`: the old pair fades into the page and the new one fades in (switching between the
+        duel tabs; asked for: the cards changed words, colours and widths in one blink). It runs under anim_key,
+        so a key press or the next result finishes it first. `then()` runs once the new words are on the cards."""
         left_bg, right_bg = colors or (PALETTE["left"], PALETTE["right"])
-        self.left.config(text=left, bg=left_bg, censor=censor[0])
-        self.right.config(text=right, bg=right_bg, censor=censor[1])
-        self.set_enabled(True)
+
+        def put():
+            self.left.config(text=left, bg=left_bg, censor=censor[0])
+            self.right.config(text=right, bg=right_bg, censor=censor[1])
+            self.set_enabled(True)
+            if then:
+                then()
+        if not fade or self._anim is None:
+            put()
+            return
+        cards, swapped = (self.left, self.right), []
+
+        def frame(p):
+            if p < self.FADE_OUT:
+                amount = p / self.FADE_OUT
+            else:
+                if not swapped:                  # (out of sight: the new words, colours and widths)
+                    swapped.append(True)
+                    put()
+                amount = 1.0 - (p - self.FADE_OUT) / (1.0 - self.FADE_OUT)
+            for c in cards:
+                c.veil(amount, PALETTE["bg"])
+        self._anim.run(self.anim_key, self.FADE_MS, frame)
 
     def set_enabled(self, enabled):
         for b in self.buttons.values():
@@ -1895,7 +1931,7 @@ class DefinitionDrawer(tk.Frame):
         # for a moment, and now and then a frame showed it empty (F-20), at full height (F-22) or dipping (F-27).
         inner.place(x=0, y=0, relwidth=1)
         inner.bind("<Configure>", lambda e: self._follow())
-        self._folded, self._sliding, self._held = False, False, False
+        self._folded, self._sliding, self._held, self._reopen, self._pinned = False, False, False, False, False
         # one column, or two side by side for a duel's two words (asked for: each under its own card)
         self.texts = [tk.Text(inner, height=9, wrap="word", state="disabled", font=body, bd=0, highlightthickness=0,
                               padx=14, pady=10, bg=PALETTE["surface"], cursor="arrow") for _ in range(2)]
@@ -1954,6 +1990,8 @@ class DefinitionDrawer(tk.Frame):
 
     def _scrolled(self, bar, first, last):
         """A column's view moved or its meanings changed: its bar follows, shown only while they do not all fit."""
+        if self._pinned:
+            return                       # (unpin() brings them up to date)
         try:
             bar.set(first, last)
             need = (float(first) > 0.0 or float(last) < 1.0) and (bar is self.bars[0] or self._columns == 2)
@@ -1969,6 +2007,10 @@ class DefinitionDrawer(tk.Frame):
 
     def lines(self):
         return int(self.text.cget("height"))
+
+    def line_height(self):
+        """Pixels a line adds to its height (App._fit_lines works out other line counts with it)."""
+        return max(1, self._body.metrics("linespace"))
 
     def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None, link=None):
         """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
@@ -2038,10 +2080,6 @@ class DefinitionDrawer(tk.Frame):
         self._follow()
         return self._inner.winfo_reqheight() + self._gap
 
-    def unshown_height(self):
-        """How much taller it gets when open than it is now (folded or held: the room the window must find)."""
-        return max(0, self.natural_height() - self.winfo_reqheight())
-
     def give(self, pixels):
         """The window just grew by `pixels` to make room for it (opening): it takes them on top of the height it has
         now, in the very layout of the window's new size, and the rest of the slide carries on from there; folded,
@@ -2071,6 +2109,7 @@ class DefinitionDrawer(tk.Frame):
         self.update_idletasks()
         end = self._inner.winfo_reqheight() + self._gap
         if not self.steady or abs(end - height) < 2:
+            self._follow()                # (pinned at `height` until now: the last pixel or two)
             return
         try:
             super().configure(height=height)
@@ -2091,6 +2130,48 @@ class DefinitionDrawer(tk.Frame):
         (asked for: it jumped to its new height)."""
         self.settle()
         self._held = True
+        self._pin_box(True)
+
+    def pin(self):
+        """About to be measured at other heights (App._fit_window tries a line count at a time): keep showing the
+        height it has, so the page never shows the tries (it stuttered switching tabs). Sliding open, it stops where
+        it is and carries on to its new height at unpin() (it slid on to the old one, then jumped)."""
+        if self._opening is not None and self._anim is not None:
+            self._anim.stop(f"drawer{id(self)}")
+            self._opening, self._sliding, self._reopen = None, False, True
+        self._held = True
+        self._pin_box(True)
+
+    def unpin(self, follow=True):
+        """After pin(): follow the contents again; `follow=False` stays at the pinned height for ease_from to start
+        from (following first showed the new height for a frame before the ease began). Stopped sliding open, it
+        eases on from there."""
+        self._pin_box(False)
+        if self._reopen:
+            self._reopen = False
+            self.open()                     # (held: from the height it has)
+            return
+        self._held = False
+        if follow:
+            self._follow()
+
+    def _pin_box(self, on):
+        """Keep the box inside at the height it shows, and its scroll bars as they are, while other line counts are
+        tried (pin, hold): left to follow, the box shrank and grew a line at a time and the bars blinked."""
+        if on == self._pinned:
+            return
+        self._pinned = on
+        if on:
+            self._inner.place_configure(height=max(1, self._inner.winfo_height()))
+            return
+        self._inner.place_configure(height="")
+        for t, bar in zip(self.texts, self.bars):
+            self._scrolled(bar, *t.yview())
+
+    @property
+    def opening(self):
+        """Sliding open (App._fit_window pins it for the fit, then it eases on to its new height)."""
+        return self._opening is not None
 
     def open(self):
         """Ease open from nothing (or the room it was given, give; or, held, the height it has) to the height the
@@ -2101,6 +2182,7 @@ class DefinitionDrawer(tk.Frame):
         start = min(max(1, held), end)
         self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
         self._folded = self._held = False
+        self._pin_box(False)
 
         def done():
             self._opening = None

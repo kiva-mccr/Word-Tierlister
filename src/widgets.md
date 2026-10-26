@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `shortcuts`, `sources`, `tiercolours`
-- **Tests:** `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -14,7 +14,7 @@ The module docstring has the details; this page is the map.
 - `Unsmear`: A censored word (ST-6) on one of our canvases: its text item is hidden behind a sideways smear (smear_items); `clear` (0 = smeared, 1 = the word itself) eases toward...
   - methods: place, paint, hover
 - `RoundButton`: A rounded, pastel button with a hover tint, a pressed 'dip', a disabled look and a key hint.
-  - methods: configure, cget, set_enabled, enabled, set_selected, refresh, invoke, flash
+  - methods: configure, cget, set_enabled, enabled, set_selected, refresh, veil, invoke, flash
 - `TierRow`: The six tier pills S..F, each with its key hint (1-6), a hover lift and the pressed dip (UI-7).
 - `TierChip`: A small tier label drawn like the tier pills (rounded, pastel, a faint edge of the same hue), for places that name a tier without being a button: the Anchor words...
   - methods: refresh, set_color
@@ -41,7 +41,7 @@ The module docstring has the details; this page is the map.
 - `TreeSmears`: Censored words in one column of a ttk.Treeview (Browse's list), smeared as everywhere else (asked for: no more b•••••d).
   - methods: refresh
 - `DefinitionDrawer`: The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold with its senses numbered, the part of speech in italics and...
-  - methods: columns, set_lines, lines, show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, unshown_height, give, steady, ease_from, hold, open, close
+  - methods: columns, set_lines, lines, line_height, show_words, is_open, settle, set_open, collapse, lines_needed, natural_height, give, steady, ease_from, hold, pin, unpin, opening, open, close
 - `ShapeCard`: One of the queue dialog's two shape choices (UI-41): a little card with the shape's soft pastel curve (how likely a word is to come up early, from rank #1 to...
   - methods: set, refresh, median_rank
 - `short_rank`: 13,863 -> '13.9k', 250,000 -> '250k', 1,200,000 -> '1.2M', 840 -> '840'.
@@ -62,6 +62,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `DefinitionDrawer.pin()` / `unpin()` (F-41): while App's fit measures other line counts, the pane and its box keep the height they show and the scroll bars stay as they are (`_pin_box`; `hold()` does the same); a pane stopped sliding open eases on from there at `unpin()`. `ease_from` starts from the pinned height, so unpin with `follow=False` before it.
+- `DuelCards.show(fade=True)` fades the cards into the page with `RoundButton.veil`, swaps the words, colours and widths while they are out of sight (`FADE_OUT`), and fades them back; `veil` stops the button's own fade so the two never fight.
 - The letters' holes are filled with their own shapes (fonts.letter_holes, from overhang.json), never rectangles: those left white crescents at a hole's curves (F-40). The fill and the band go in the first FILL_FADE of un-smearing; both only on one line.
 - The letters next to a line's ends move outward only `near` (em / 20, the space between letters), never over the end letter: "fart"'s a buried the f (F-39). Copies moved right are the line less its last letter, or less its last two past `near`; left likewise. The short runs (F-38) start at the third letter from either end and stop at the end letters.
 - On one line the short letters' runs (SHORT_LETTERS) smear SHORT_SPREAD times as far, each capped at its room to the word's ends (F-38, the user's idea; a thin end letter such as the i of "imam" would let them out); not on wrapped text, where the many runs made the pane's frames twice as slow.
