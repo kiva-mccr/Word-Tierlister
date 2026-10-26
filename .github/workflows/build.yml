@@ -1,7 +1,8 @@
 # Build programs (T-8): Word Tier List as a program for Linux, Windows and macOS, built at the same time on GitHub's
 # machines from the pushed source (PyInstaller builds only for the system it runs on).
-#   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the two programs as downloads of the run
-#   - pushing a tag v<VERSION> (src/constants.py): the same, published as a GitHub Release (the README links there)
+#   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the three programs as downloads of the run
+#   - "Run workflow" on main with "Publish as a release" ticked (T-17), or pushing a tag v<VERSION> (src/constants.py):
+#     the same, published as the GitHub Release v<VERSION> (the README links there); the button makes the tag itself
 # The release's page starts with .github/release-notes.md (T-5: what an unsigned program asks). Each build is started
 # once to check that it runs (tools/build.py --check). macOS (T-16): an app bundle for Apple Silicon (macos-latest),
 # zipped as word-tierlist-macos.zip; Intel Macs are not built for.
@@ -9,6 +10,11 @@ name: Build programs
 
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish as a release (v + VERSION from src/constants.py; from main only)"
+        type: boolean
+        default: false
   push:
     tags: ["v*"]
 
@@ -69,7 +75,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -81,6 +87,18 @@ jobs:
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$GITHUB_REF_NAME" assets/* --repo "$GITHUB_REPOSITORY"
-          --title "Word Tier List $GITHUB_REF_NAME" --notes-file .github/release-notes.md --generate-notes
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+          else                                   # (the button: the tag is v + VERSION, made here on this commit)
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "A release is published from main only (this run is on $GITHUB_REF_NAME)"; exit 1
+            fi
+            tag="v$(python3 -c "import sys; sys.path.insert(0, 'src'); import constants; print(constants.VERSION)")"
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              echo "$tag is already released: raise VERSION in src/constants.py first"; exit 1
+            fi
+          fi
+          gh release create "$tag" assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Word Tier List $tag" --notes-file .github/release-notes.md --generate-notes

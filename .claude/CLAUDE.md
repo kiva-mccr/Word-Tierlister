@@ -134,7 +134,8 @@ words covering the commonest start / end letter pairs and found them all good: a
 the very start of un-smearing),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). Docs reviewed for the first release
 (README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
-.app, icon.icns). Next: the release (PR #7 into main, then tag v1.0.0). Dropped: UI-21 (next-up peek), UI-74 (film grain)
+.app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags).
+Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.

@@ -251,8 +251,9 @@ or on GitHub:
   fetches `word-tierlist-linux`, `word-tierlist-windows.exe` and `word-tierlist-macos.zip` into `dist/`. It needs your commits pushed and GitHub's
   command-line tool logged in (`gh auth login`); without them it says what is missing and builds for this
   computer only. GitHub only starts the workflow once it is on the repository's default branch.
-- **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py`, commit,
-  then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds the three programs,
+- **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py` and get
+  it onto `main`, then on GitHub open Actions > Build programs > **Run workflow**, tick **Publish as a release** and
+  run it (it makes the tag `v<VERSION>` itself); or tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds the three programs,
   starts each once to check it runs, and attaches them to a new release, whose page starts with
   `.github/release-notes.md`. (The macOS one is for Apple Silicon; it is not signed either.)
 

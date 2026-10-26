@@ -146,6 +146,7 @@ assert os.access(os.path.join(dist, S.RELEASE_ASSETS["linux"]), os.X_OK)
 # the workflow: on a button and on a v-tag; builds Linux, Windows and macOS under the names the release and README use
 text = open(os.path.join(_paths.ROOT, ".github", "workflows", B.WORKFLOW), encoding="utf-8").read()
 assert "workflow_dispatch" in text and 'tags: ["v*"]' in text and "gh release create" in text
+assert "inputs.release" in text and '--target "$GITHUB_SHA"' in text and "refs/heads/main" in text   # (T-17: the button)
 notes = open(os.path.join(_paths.ROOT, ".github", "release-notes.md"), encoding="utf-8").read()
 assert "--notes-file .github/release-notes.md" in text and "Run anyway" in notes and "chmod +x" in notes   # (T-5)
 assert "Open Anyway" in notes and "ditto -c -k --keepParent" in text and "macos-latest" in text          # (T-16)
