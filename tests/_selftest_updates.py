@@ -172,4 +172,25 @@ S.start("/x/word-tierlist", popen=lambda args, **kw: seen.append(kw.get("env")))
 S.open_folder(tempfile.gettempdir(), popen=lambda args, **kw: seen.append(kw.get("env"))) if not sys.platform.startswith("win") else None
 S.start_source("/x/src", "/usr/bin/python3", popen=lambda args, **kw: seen.append(kw.get("env")))
 assert seen and all(e is not None and not any(k.startswith("_PYI_") for k in e) for e in seen)
+# U-3: a built program trusts this computer's certificates (reported: on another Linux than the build machine's, or a
+# Mac, every https request failed, and Check for updates said GitHub could not be reached); the reason is kept
+import deps
+env = {}
+fedora = lambda p: p == "/etc/pki/tls/certs/ca-bundle.crt"
+assert deps.use_system_certificates(env, frozen=True, platform="linux", exists=fedora) == "/etc/pki/tls/certs/ca-bundle.crt"
+assert env == {"SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"}
+assert deps.use_system_certificates({}, frozen=True, platform="darwin", exists=lambda p: p == "/etc/ssl/cert.pem")
+assert deps.use_system_certificates({}, frozen=False, exists=fedora) is None                 # (from source: Python's own)
+assert deps.use_system_certificates({}, frozen=True, platform="win32", exists=fedora) is None  # (Windows: its own store)
+env = {"SSL_CERT_FILE": "/mine.pem"}
+assert deps.use_system_certificates(env, frozen=True, platform="linux", exists=fedora) is None and env["SSL_CERT_FILE"] == "/mine.pem"
+os.environ.pop("WORD_TIERLIST_OFFLINE")
+try:
+    import urllib.error
+    def untrusted(url, timeout=10):
+        raise urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+    assert S.latest_release(untrusted) is None and "CERTIFICATE_VERIFY_FAILED" in S.last_error
+    assert S.latest_release(fetch) and S.last_error is None
+finally:
+    os.environ["WORD_TIERLIST_OFFLINE"] = offline
 print("UPDATES OK")

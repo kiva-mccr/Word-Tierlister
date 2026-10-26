@@ -535,6 +535,7 @@ class UpdateDialog:
         if not r:
             text = (f"You have version {VERSION}. GitHub could not be reached (or has no release yet), so it is not "
                     "known whether a newer one is out.")
+            how = f"What went wrong: {standalone.last_error}" if standalone.last_error else ""
             dlg.button("Try again", self.again)
             dlg.button("Close", dlg.close, default=True)
         elif not standalone.newer(r):

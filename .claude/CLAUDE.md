@@ -139,7 +139,8 @@ F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (
 .app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). F-42 (the Windows build's check hung on the one-file program's inner process holding its pipe: output to files, the whole tree stopped, jobs time out after 30 min). U-1 (File > Check
 for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git
 checkout updates with git pull, other source folders sync; a quiet check at start once a day). U-2 (the censoring
-toast is the How words are dealt line).
+toast is the How words are dealt line). U-3 (a built program trusts this computer's certificates: SSL_CERT_FILE from
+deps.CA_BUNDLES; the update dialog says what went wrong).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -183,6 +184,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - The Windows zoom keys are now read by keycode with Ctrl held (keymap.WIN_CTRL_KEYS); not tried on real Windows.
   The PyInstaller.utils error was not reproduced here: the build now checks the parts it uses and repairs an
   incomplete PyInstaller.
+- U-3's certificate fix was reproduced from source with the certificates hidden, not in a real built program on
+  Fedora or a Mac.
 - U-1's self-update never ran against a real release or on Windows / macOS (renaming the running .exe, ditto):
   the first test is updating a 1.0.0 program to the next release.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
