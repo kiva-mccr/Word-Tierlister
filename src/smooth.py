@@ -26,6 +26,8 @@ import struct
 import tkinter as tk
 import zlib
 
+from fonts import text_overhang
+
 _CACHE_MAX = 600
 
 
@@ -356,11 +358,68 @@ def _cached(canvas, key, make):
 
 # ---------------------------------------------------------------- the canvas
 class SmoothCanvas(tk.Canvas):
-    """A Canvas whose round_rect() shapes are drawn smooth. Everything else is an ordinary Canvas."""
+    """A Canvas whose round_rect() shapes are drawn smooth, and whose text is repainted where its letters reach past
+    their boxes (F-32: fonts.text_overhang). Everything else is an ordinary Canvas."""
 
     def __init__(self, *a, **k):
         super().__init__(*a, **k)
         self._rr = {}                  # polygon id -> {"box", "radii", "fill", "outline", "width", "img", "state"}
+        self._ink = {}                 # text item -> [left, right, last box]: a text that overhangs its box
+
+    # -- text whose letters reach past the box Tk measures for it (Young Serif's j and f): Tk repaints only that
+    # box, so the rest stayed on screen when the text moved, changed or went, and was cut off where a neighbour was
+    # redrawn (F-32). Such text gets an invisible guard shape over its whole reach, set again after every change:
+    # moving a shape makes Tk repaint where it was and where it is (one made and dropped at once does not).
+    def create_text(self, *args, **kw):
+        item = super().create_text(*args, **kw)
+        self._note_ink(item)
+        return item
+
+    def _note_ink(self, item):
+        left, right = text_overhang(self, super().itemcget(item, "font"), super().itemcget(item, "text"))
+        rec = self._ink.get(item)
+        if not (left or right):
+            if rec:
+                super().delete(rec[2])
+                del self._ink[item]
+            return
+        if rec is None:
+            rec = self._ink[item] = [left, right, super().create_rectangle(0, 0, 0, 0, outline="", fill="",
+                                                                           tags=("inkguard",))]
+        rec[0], rec[1] = left, right
+        self._guard([item])
+
+    def ink_box(self, item):
+        """The box of text `item` with the reach of its letters (its bbox, wider where a letter overhangs it)."""
+        box = super().bbox(item)
+        rec = self._ink.get(item)
+        if not box or not rec:
+            return box
+        return (math.floor(box[0] - rec[0]) - 1, box[1], math.ceil(box[2] + rec[1]) + 1, box[3])
+
+    def _inked(self, args):
+        if not self._ink:
+            return []
+        found = []
+        for a in args:
+            try:
+                found.extend(i for i in super().find_withtag(a) if i in self._ink)
+            except tk.TclError:
+                pass
+        return found
+
+    def _guard(self, items):
+        """Set each text's guard over its reach as it is now: Tk repaints the guard's old place and its new one (a
+        hidden text keeps its guard where it was, which still repaints there)."""
+        for item in items:
+            rec = self._ink.get(item)
+            if rec is None:
+                continue
+            box = self.ink_box(item)
+            if box:
+                super().coords(rec[2], box[0] - 1, box[1] - 1, box[2] + 1, box[3] + 1)
+            else:
+                super().move(rec[2], 0, 0)
 
     # -- making and changing shapes
     def round_rect(self, x1, y1, x2, y2, r, fill="", outline="", width=1, tags=(), radii=None, state="normal",
@@ -484,9 +543,20 @@ class SmoothCanvas(tk.Canvas):
         for item in touched:
             self._render(item, force=True)
 
-    # -- the ordinary Canvas methods, kept working for these shapes
+    # -- the ordinary Canvas methods, kept working for these shapes (and for overhanging text)
     def itemconfigure(self, tag_or_id, cnf=None, **kw):
         kw = dict(cnf or {}, **kw)
+        changes = kw and ("text" in kw or "font" in kw)
+        inked = self._inked([tag_or_id]) if kw and (changes or "state" in kw) else []
+        out = self._itemconfigure(tag_or_id, kw)
+        if changes:
+            for item in super().find_withtag(tag_or_id):
+                if super().type(item) == "text":
+                    self._note_ink(item)
+        self._guard(inked)
+        return out
+
+    def _itemconfigure(self, tag_or_id, kw):
         rr = self._rr_items(tag_or_id) if kw else []
         if not rr:
             return super().itemconfigure(tag_or_id, kw or None) if kw else super().itemconfigure(tag_or_id)
@@ -513,7 +583,9 @@ class SmoothCanvas(tk.Canvas):
         return super().itemcget(tag_or_id, option)
 
     def coords(self, tag_or_id, *args):
+        inked = self._inked([tag_or_id]) if args else []
         out = super().coords(tag_or_id, *args)
+        self._guard(inked)
         if args:
             pts = list(args[0]) if len(args) == 1 and isinstance(args[0], (list, tuple)) else list(args)
             xs, ys = pts[0::2], pts[1::2]
@@ -523,7 +595,9 @@ class SmoothCanvas(tk.Canvas):
         return out
 
     def move(self, tag_or_id, dx, dy):
+        inked = self._inked([tag_or_id])
         super().move(tag_or_id, dx, dy)
+        self._guard(inked)
         for item in self._rr_items(tag_or_id):
             rec = self._rr[item]
             x1, y1, x2, y2 = rec["box"]
@@ -531,6 +605,8 @@ class SmoothCanvas(tk.Canvas):
             self._render(item)
 
     def delete(self, *args):
+        for item in self._inked(args):            # (a shown guard, deleted, repaints its place: the text's reach)
+            super().delete(self._ink.pop(item)[2])
         gone = set()
         for a in args:
             gone.update(self._rr_items(a))
@@ -618,6 +694,14 @@ class SmoothCanvas(tk.Canvas):
         return self._rr[rr[0]]["img"] if rr else None
 
 
+def _ring(cx, cy, outer, inner, n=24):
+    """A ring as one polygon: round the outer circle, then back round the inner one (the even-odd fill leaves the
+    middle clear)."""
+    pts = [(cx + outer * math.cos(2 * math.pi * k / n), cy + outer * math.sin(2 * math.pi * k / n)) for k in range(n + 1)]
+    return pts + [(cx + inner * math.cos(2 * math.pi * k / n), cy + inner * math.sin(2 * math.pi * k / n))
+                  for k in range(n, -1, -1)]
+
+
 # little filled icons on a 16 x 16 grid, one style (UI-42's file picker, M-8); each is a list of polygons that
 # do not overlap
 ICONS = {
@@ -632,6 +716,13 @@ ICONS = {
                    (1.5, 14.5)]],
     "folder": [[(1, 3), (6.2, 3), (7.8, 4.8), (15, 4.8), (15, 13.5), (1, 13.5)]],
     "book": [[(2.5, 1.5), (4.6, 1.5), (4.6, 14.5), (2.5, 14.5)], [(5.6, 1.5), (13.5, 1.5), (13.5, 14.5), (5.6, 14.5)]],
+    # a magnifier (UI-51): a ring, its hole made by tracing the inner circle back the other way, and a handle
+    "search": [_ring(6.5, 6.5, 5.0, 3.0),
+               [(9.6, 11.0), (11.0, 9.6), (15.0, 13.6), (13.6, 15.0)]],
+    # "opens elsewhere" (the Wiktionary link on a definition): a box open at its top right, an arrow leaving it
+    "external": [[(1.5, 3.5), (7.0, 3.5), (7.0, 5.2), (3.2, 5.2), (3.2, 12.8), (10.8, 12.8), (10.8, 9.0), (12.5, 9.0),
+                  (12.5, 14.5), (1.5, 14.5)],
+                 [(9.0, 1.5), (14.5, 1.5), (14.5, 7.0), (12.6, 5.1), (7.6, 10.1), (5.9, 8.4), (10.9, 3.4)]],
 }
 
 

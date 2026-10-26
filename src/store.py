@@ -8,11 +8,22 @@ Data model (see SCHEMA below)
                  skips counts "don't know / later" presses. qkey is the seeded queue key (lower =
                  comes up sooner); rank is the frequency rank (1 = most common); pen is the
                  compound-word class (0 normal, 1 closed compound, 2 hyphenated / multi-word).
+                 kinds: its parts of speech (constants.KINDS bits; NULL = not known); rude: the kinds of its
+                 meanings by the rules (rudeness.KIND_BITS: 1 clean, then one bit per rude kind; NULL = no
+                 rude meaning found), obscene: 1 if the whole word is smeared while censoring (OB-6); out: 1
+                 if "How words are dealt" leaves it out of the queue (ST-6; kept up to date by set_deal).
     comparisons  every answer ever given (winner, loser, tie, kind). Used to avoid repeating a
                  duel and to detect contradictions.
     conflicts    pairs whose answers contradict each other, waiting to be re-judged.
+    swaps        boundary checks that swapped their two words (per boundary; still counted, UI-31).
     anchors      the one reference word per tier used by "compare to anchors".
     defs         cached definitions.        meta  small key/value settings (seed, mode, ...).
+    rude         the meanings of the words Wiktionary has any sign of rudeness for (and their forms), kept
+                 compact for the rules (rudeness.compact), and `smeared`: the keys (first rudeness.GLOSS_KEY
+                 characters) of those smeared in the definitions while censoring (JSON, or NULL).
+                 Its meta keys: rude_senses "1" once kept, rude_done what words.rude was scored from
+                 (wordsource.rude_version), rude_tried when the background read last started; the dealing
+                 ones: deal_kinds, deal_obscene, deal_rude (rudeness.KIND_BITS), censor.
     history      one JSON row per action, so Undo works and survives restarts.
 
 Conventions
@@ -21,6 +32,7 @@ Conventions
     * Methods starting with an underscore are internal helpers.
 """
 import bisect
+import contextlib
 import hashlib
 import json
 import math
@@ -31,14 +43,52 @@ import re
 import sqlite3
 import time
 
-from constants import (PEN_UNITS, QUEUE_DEFAULTS, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
+from obscene import RUDE_KINDS, TICKED, on_list
+from rudeness import KIND_BITS, LISTED
+from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
+
+_RUDE_BITS = sum(KIND_BITS[k] for k in RUDE_KINDS)
+_TICKED_BITS = sum(KIND_BITS[k] for k in TICKED)
 
 
 # --------------------------------------------------------------------------
 # Schema. All statements are IF NOT EXISTS, so opening an old save file is safe;
 # columns added in later versions are migrated in Store.__init__.
 # --------------------------------------------------------------------------
+# The words table's indexes (name, what it indexes), made when a save opens. Big writes take them away and build them
+# again afterwards (Store.bulk_write): updating a dozen and a half indexes row by row doubled the time.
+WORD_INDEXES = (
+    # the queue (next_unplaced): the words dealt (out=0) in order, even when nearly all are left out
+    ("idx_words_q3", "words(tier, out, skips, qkey)"),
+    ("idx_words_obscene", "words(word) WHERE obscene=1"),
+    ("idx_words_tg", "words(tier, games)"),                     # settled_shares
+    ("idx_words_shelf", "words(rank, tier, freq)"),             # shelf_layout(), the shelf's totals
+    # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
+    ("idx_words_tr", "words(tier, rating)"),
+    # Browse's A-Z / Z-A and Frequency over the placed words only: with a few thousand placed out of a million,
+    # walking every word in order to find them took ~200 ms (and froze the sort arrow's fill). The shelf counts its
+    # placed words per spine from idx_placed_shelf too (a few thousand placed: a few ms, not a pass over a million)
+    ("idx_placed_word", "words(word) WHERE tier IS NOT NULL"),
+    ("idx_placed_shelf", "words(rank, tier, freq) WHERE tier IS NOT NULL"),
+    # Browse's sorts, read in order from an index instead of sorting every row (0.2-0.9 s with 300k placed of a
+    # million; built once on the first open of a big save, ~2 s): the placed words' Tier order (tier, best first;
+    # turned round, the index read backwards), Rating and Duels; the unplaced words' queue and frequency order
+    ("idx_placed_order", "words(tier, rating DESC, games DESC, rank) WHERE tier IS NOT NULL"),
+    ("idx_placed_rating", "words(rating DESC, rank) WHERE tier IS NOT NULL"),
+    ("idx_placed_games", "words(games DESC, rank) WHERE tier IS NOT NULL"),
+    ("idx_unplaced_queue", "words(skips, qkey, rank) WHERE tier IS NULL"),
+    ("idx_unplaced_rank", "words(rank) WHERE tier IS NULL"),
+    ("idx_unplaced_word", "words(word) WHERE tier IS NULL"),
+    # How words are dealt's counts per kind (kind_counts), over every word
+    ("idx_words_kinds", "words(kinds, rude)"),
+    # (a kind's or the obscene words' count among the placed ones, read from the index, not every row)
+    ("idx_placed_kinds", "words(kinds, rude) WHERE tier IS NOT NULL"),
+    # the header's "N skipped": counting them among a million unplaced words took 60 ms on every refresh
+    ("idx_words_skipped", "words(word) WHERE tier IS NULL AND skips > 0"),
+)
+BULK_ROWS = 100000      # a write of more rows than this goes through bulk_write
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS words(
     word TEXT PRIMARY KEY,
@@ -49,7 +99,12 @@ CREATE TABLE IF NOT EXISTS words(
     skips INTEGER NOT NULL DEFAULT 0,
     qkey REAL,
     pen INTEGER NOT NULL DEFAULT 0,
-    freq REAL NOT NULL DEFAULT 0
+    freq REAL NOT NULL DEFAULT 0,
+    kinds INTEGER,
+    obscene INTEGER NOT NULL DEFAULT 0,
+    out INTEGER NOT NULL DEFAULT 0,
+    rude INTEGER,
+    rude_main INTEGER
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,6 +120,7 @@ CREATE TABLE IF NOT EXISTS conflicts(a TEXT NOT NULL, b TEXT NOT NULL, PRIMARY K
 CREATE TABLE IF NOT EXISTS swaps(comp_id INTEGER PRIMARY KEY, boundary INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS anchors(tier INTEGER PRIMARY KEY, word TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS defs(word TEXT PRIMARY KEY, text TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS rude(word TEXT PRIMARY KEY, senses TEXT NOT NULL, smeared TEXT);
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS history(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,34 +156,76 @@ class Store:
             self.db.execute("ALTER TABLE words ADD COLUMN pen INTEGER NOT NULL DEFAULT 0")
         if "freq" not in cols:                   # word frequency (wordfreq), for the coverage tag (UI-14)
             self.db.execute("ALTER TABLE words ADD COLUMN freq REAL NOT NULL DEFAULT 0")
+        if "kinds" not in cols:                  # ST-6: kinds of words, obscene ones, left out of the queue
+            self.db.execute("ALTER TABLE words ADD COLUMN kinds INTEGER")
+            self.db.execute("ALTER TABLE words ADD COLUMN obscene INTEGER NOT NULL DEFAULT 0")
+            self.db.execute("ALTER TABLE words ADD COLUMN out INTEGER NOT NULL DEFAULT 0")
+        if "rude" not in cols:                   # OB-6: the kinds of its meanings, by the rules (rudeness.py)
+            self.db.execute("ALTER TABLE words ADD COLUMN rude INTEGER")
+            self.db.execute("UPDATE words SET rude=? WHERE obscene=1", (KIND_BITS["swear"],))   # (until scored)
+        if "rude_main" not in cols:              # what a word smeared whole mostly is (rudeness.main_kind), a bit
+            self.db.execute("ALTER TABLE words ADD COLUMN rude_main INTEGER")
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tg ON words(tier, games)")   # settled_shares
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_shelf ON words(rank, tier, freq)")   # shelf()
-        # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_tr ON words(tier, rating)")
-        # Browse's A-Z / Z-A and Frequency over the placed words only: with a few thousand placed out of a
-        # million, walking every word in order to find them took ~200 ms (and froze the sort arrow's fill)
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_word ON words(word) WHERE tier IS NOT NULL")
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_placed_rank ON words(rank) WHERE tier IS NOT NULL")
+        self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
+        self.db.execute("DROP INDEX IF EXISTS idx_placed_rank")      # (now idx_placed_shelf, which also counts the shelf)
+        for name, spec in WORD_INDEXES:
+            self.db.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {spec}")
         self.db.commit()
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
         self._prog = None    # the shelf's tallies (shelf()), counted once, then kept up to date by each change
+        self._counts = None  # placed words per tier (tier_counts()), the same way
+        self._obscene = None     # the obscene words (obscene_words()), read once
+        self._bulk = set()       # the indexes a bulk_write has taken away for now
 
     def close(self):
         """Flush and close the database; safe to call twice."""
+        self.closed = True
         try:
             self.db.commit()
             self.db.close()
         except sqlite3.Error:
             pass
 
+    closed = False                       # (close: a timer still waiting must not read a closed save)
+
+    @contextlib.contextmanager
+    def bulk_write(self, names=None):
+        """For a write of many rows (over BULK_ROWS): the words table's indexes (`names`, else every one) are taken
+        away while it runs and built again once at the end, which commits (a million new words: 19 s -> 10 s). A
+        failed write is rolled back first. Nests: an inner one leaves alone what an outer one took. If the program
+        stops in between, opening the save builds the missing indexes again (Store.__init__)."""
+        gone = [(n, spec) for n, spec in WORD_INDEXES if (names is None or n in names) and n not in self._bulk]
+        self._bulk.update(n for n, _ in gone)
+        for n, _ in gone:
+            self.db.execute(f"DROP INDEX IF EXISTS {n}")
+        try:
+            yield
+        except BaseException:
+            self.db.rollback()
+            raise
+        finally:
+            for n, spec in gone:
+                self.db.execute(f"CREATE INDEX IF NOT EXISTS {n} ON {spec}")
+            self._bulk.difference_update(n for n, _ in gone)
+            self.db.commit()
+
     # ---- meta / defs ----------------------------------------------------
     def get_meta(self, key, default=None):
         """Read a setting from the meta table (always returned as text), or `default`."""
         r = self.db.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()
         return r["value"] if r else default
+
+    def meta_number(self, key, default, cast=float, lo=None, hi=None):
+        """A numeric setting: `cast` of its text (float or int), kept within lo..hi; `default` when it is unset or
+        not a number (a hand-edited or damaged save)."""
+        try:
+            value = cast(self.get_meta(key, default))
+        except (TypeError, ValueError):
+            value = cast(default)
+        if lo is not None:
+            value = max(lo, value)
+        return min(hi, value) if hi is not None else value
 
     def set_meta(self, key, value):
         """Save a setting (stored as text) and commit."""
@@ -152,16 +250,37 @@ class Store:
     def insert_words(self, words):
         """Add words in presentation order. Existing words keep their tier/ratings and are only re-ranked."""
         # New words get a placeholder queue key (the back of the line) until reshuffle() runs.
-        self.db.executemany(
-            "INSERT INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, ?)"
-            " ON CONFLICT(word) DO UPDATE SET rank=excluded.rank",
-            ((w, i, 1e18 + i) for i, w in enumerate(words)),
-        )
+        words = list(words)
+        with self.bulk_write() if len(words) > BULK_ROWS else contextlib.nullcontext():
+            self.db.executemany(
+                "INSERT INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, ?)"
+                " ON CONFLICT(word) DO UPDATE SET rank=excluded.rank",
+                ((w, i, 1e18 + i) for i, w in enumerate(words)),
+            )
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('pen_done', '0')")
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', '0')")
+        self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('rude_done', '0')")   # (new words: OB-6)
+        self._forget_shelf_totals()
         self.db.commit()
         self._total = None
-        self._prog = None
+        self._forget_tallies()
+        self.version += 1
+
+    def add_word(self, word):
+        """Add one word the list did not have (UI-51: looked up and added by hand), at the very end of it: the
+        rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
+        rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
+        self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
+        listed = on_list(word)                       # (no meanings to read for it: the hand-picked list)
+        self.db.execute("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
+                        (LISTED[0] if listed else None, int(listed), KIND_BITS[LISTED[3]] if listed else None, word))
+        sql, args = self._out_sql()
+        self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))
+        self._obscene = None
+        self._forget_shelf_totals()
+        self.db.commit()
+        self._total = None
+        self._forget_tallies()
         self.version += 1
 
     def has_word(self, word):
@@ -174,10 +293,15 @@ class Store:
 
     def next_unplaced(self):
         """The word to show next in Place mode, or None when nothing is left."""
-        # Fresh words first (skips=0), then skipped words; within each, the seeded queue order.
+        # Fresh words first (skips=0), then skipped words; within each, the seeded queue order. Only the words
+        # "How words are dealt" deals (out=0).
         return self.db.execute(
-            "SELECT * FROM words WHERE tier IS NULL ORDER BY skips, qkey, rank LIMIT 1"
+            "SELECT * FROM words WHERE tier IS NULL AND out=0 ORDER BY skips, qkey, rank LIMIT 1"
         ).fetchone()
+
+    def left_out(self):
+        """How many unplaced words "How words are dealt" leaves out (they never come up while it does)."""
+        return self.db.execute("SELECT COUNT(*) FROM words WHERE tier IS NULL AND out=1").fetchone()[0]
 
     # ---- seeded queue order ---------------------------------------------------
     def queue_settings(self):
@@ -187,13 +311,10 @@ class Store:
             seed = random.SystemRandom().randrange(1, 2 ** 31)
             self.set_meta("qseed", seed)
         shape = self.get_meta("qshape", QUEUE_DEFAULTS["qshape"])
-        try:
-            spread = max(100.0, float(self.get_meta("qspread", QUEUE_DEFAULTS["qspread"])))
-            comp = min(10.0, max(0.0, float(self.get_meta("qcompound", QUEUE_DEFAULTS["qcompound"]))))
-        except ValueError:
-            spread, comp = float(QUEUE_DEFAULTS["qspread"]), float(QUEUE_DEFAULTS["qcompound"])
+        spread = self.meta_number("qspread", QUEUE_DEFAULTS["qspread"], lo=100.0)
+        comp = self.meta_number("qcompound", QUEUE_DEFAULTS["qcompound"], lo=0.0, hi=10.0)
         return {"seed": int(seed), "spread": spread,
-                "shape": shape if shape in ("exp", "gauss") else "exp", "compound": comp}
+                "shape": shape if shape in QUEUE_SHAPES else "exp", "compound": comp}
 
     def reshuffle(self, seed=None, spread=None, shape=None, compound=None):
         """Give every unplaced word a random queue key whose odds fall off with frequency rank.
@@ -203,42 +324,188 @@ class Store:
         sampling without replacement with weight exp(-pos/spread): a word `spread` ranks further
         back is e times less likely to come up early. pos = frequency rank, plus a push-back for
         compound words. Keys are stored as logs so they never overflow. The same seed always gives
-        the same relative order, whichever words are already placed.
+        the same relative order, whichever words are already placed. The "rank" shape (Most common first,
+        ST-6) is no randomness at all: the key is the rank.
         """
         for key, val in (("qseed", seed), ("qspread", spread), ("qshape", shape), ("qcompound", compound)):
             if val is not None:
                 self.set_meta(key, val)
         cfg = self.queue_settings()
-        spread, comp, gauss = cfg["spread"], cfg["compound"], cfg["shape"] == "gauss"
+        spread, comp, gauss, strict = cfg["spread"], cfg["compound"], cfg["shape"] == "gauss", cfg["shape"] == "rank"
         salt = str(cfg["seed"]).encode()
         rows = self.db.execute("SELECT word, rank, pen FROM words WHERE tier IS NULL").fetchall()
         total = len(rows)
-        rebuild_index = total > 100000  # much faster to rebuild the index than to update it row by row
-        if rebuild_index:
-            self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
-        batch = []
-        for n, (word, rank, pen) in enumerate(rows, 1):
-            x = int.from_bytes(hashlib.blake2b(word.encode("utf-8"), digest_size=8, key=salt).digest(), "big")
-            u = ((x >> 12) + 0.5) / 4503599627370496.0  # strictly inside (0, 1)
-            e = -math.log(u) or 1e-300
-            z = (rank + PEN_UNITS.get(pen, 0.0) * comp * spread) / spread
-            batch.append((math.log(e) + (0.5 * z * z if gauss else z), word))
-            if len(batch) >= 50000 or n == total:
-                self.db.executemany("UPDATE words SET qkey=? WHERE word=?", batch)
-                batch = []
-        if rebuild_index:
-            self.db.execute("CREATE INDEX IF NOT EXISTS idx_words_q2 ON words(tier, skips, qkey)")
+        # (the two indexes holding qkey are built again afterwards: much faster than updating them row by row)
+        with self.bulk_write(("idx_words_q3", "idx_unplaced_queue")) if total > BULK_ROWS else contextlib.nullcontext():
+            batch = []
+            for n, (word, rank, pen) in enumerate(rows, 1):
+                if strict:
+                    batch.append((float(rank), word))
+                else:
+                    x = int.from_bytes(hashlib.blake2b(word.encode("utf-8"), digest_size=8, key=salt).digest(), "big")
+                    u = ((x >> 12) + 0.5) / 4503599627370496.0  # strictly inside (0, 1)
+                    e = -math.log(u) or 1e-300
+                    z = (rank + PEN_UNITS.get(pen, 0.0) * comp * spread) / spread
+                    batch.append((math.log(e) + (0.5 * z * z if gauss else z), word))
+                if len(batch) >= 50000 or n == total:
+                    self.db.executemany("UPDATE words SET qkey=? WHERE word=?", batch)
+                    batch = []
         self.db.commit()
         self.version += 1
 
-    def tier_counts(self):
-        """{tier index: number of placed words}. Tiers with no words are absent. Counted again only after a
-        change to the save (any write, the connection's total_changes): a duel asked for it twice."""
+    # ---- how words are dealt (ST-6): kinds of words, rude ones (OB-5, OB-6) ---------------------------------
+    def deal_settings(self):
+        """{"kinds": the ticked kinds (constants.KINDS bits), "obscene": "Obscene words" ticked, "rude": the ticked
+        rude kinds under it (rudeness.KIND_BITS), "censor": censored words shown smeared}. Every kind of word is
+        ticked to start with; "Obscene words" is not (with obscene.TICKED ticked under it for when it is), and
+        nothing is censored."""
+        kinds = self.meta_number("deal_kinds", ALL_KINDS, int) & ALL_KINDS
+        rude = self.meta_number("deal_rude", _TICKED_BITS, int) & _RUDE_BITS
+        return {"kinds": kinds, "obscene": self.get_meta("deal_obscene", "0") == "1", "rude": rude,
+                "censor": self.get_meta("censor", "0") == "1"}
+
+    def _out_sql(self):
+        """(SQL for words.out, its arguments): a word with a meaning of a ticked rude kind is dealt; one with no clean
+        meaning (only rude ones) is left out otherwise; any other word is dealt while one of its kinds of word is
+        (unknown kinds count as "other")."""
+        d = self.deal_settings()
+        ticked = d["rude"] if d["obscene"] else 0
+        return ("CASE WHEN (COALESCE(rude, 1) & ?) != 0 THEN 0 WHEN (COALESCE(rude, 1) & 1) = 0 THEN 1"
+                " WHEN (COALESCE(kinds, 16) & ?) != 0 THEN 0 ELSE 1 END"), (ticked, d["kinds"])
+
+    def set_deal(self, kinds=None, obscene=None, rude=None):
+        """Save which words are dealt and mark the rest out of the queue (one pass over the list: ~1 s with a
+        million words, so the dialog runs it on a worker thread). Nothing is deleted or unplaced."""
+        if kinds is not None:
+            self.set_meta("deal_kinds", int(kinds) & ALL_KINDS)
+        if obscene is not None:
+            self.set_meta("deal_obscene", "1" if obscene else "0")
+        if rude is not None:
+            self.set_meta("deal_rude", int(rude) & _RUDE_BITS)
+        sql, args = self._out_sql()
+        self.db.execute(f"UPDATE words SET out = {sql} WHERE out != {sql}", args * 2)
+        self.db.commit()
+        self.version += 1
+
+    def set_censor(self, on):
+        self.set_meta("censor", "1" if on else "0")
+        self.version += 1
+
+    def set_kinds(self, pairs):
+        """[(word, kinds bits)] from the word source (wordsource.fill_kinds / build_wiktionary)."""
+        self.db.executemany("UPDATE words SET kinds=? WHERE word=?", ((k, w) for w, k in pairs))
+        self.db.commit()
+        self.version += 1
+
+    @staticmethod
+    def _stepped(steps, chunk):
+        """A writer's steps as a generator to step through (`chunk`: App writes a background result a little at a
+        time, between frames), or all of them at once."""
+        if chunk:
+            return steps
+        for _ in steps:
+            pass
+
+    def save_rude_senses(self, saved, chunk=None):
+        """Keep {word: its meanings as compact JSON (rudeness.compact)} for the rules (the words the Wiktionary
+        download had any sign of rudeness for, and their forms), in place of what was kept before. `chunk`: see
+        _stepped."""
+        def steps():
+            items = list(saved.items())
+            self.db.execute("DELETE FROM rude")
+            for i in range(0, len(items), chunk or len(items) or 1):
+                self.db.executemany("INSERT OR REPLACE INTO rude(word, senses) VALUES(?, ?)", items[i:i + (chunk or len(items))])
+                self.db.commit()
+                yield
+            self.set_meta("rude_senses", "1")
+        return self._stepped(steps(), chunk)
+
+    def rude_senses(self):
+        """{word: compact JSON} as save_rude_senses kept them, for the words in the list."""
+        return dict(self.db.execute("SELECT r.word, r.senses FROM rude r JOIN words w ON w.word = r.word"))
+
+    def set_rude(self, found, chunk=None):
+        """Save what the rules found: {word: (rudeness.KIND_BITS of its meanings, smeared whole while censoring,
+        [the keys of its meanings smeared in the definitions], its main kind (rudeness.main_kind) or None)}; every
+        other word is clean (NULL). Each word's place in the queue follows at once. `chunk`: see _stepped."""
+        def steps():
+            old = [r[0] for r in self.db.execute("SELECT word FROM words WHERE rude IS NOT NULL OR obscene=1")]
+            rows = [(w, None, False, None, None) for w in old if w not in found]
+            rows += [(w, v[0], v[1], v[3] if len(v) > 3 else None, json.dumps(v[2]) if v[2] else None)
+                     for w, v in found.items()]
+            for i in range(0, len(rows), chunk or len(rows) or 1):
+                part = rows[i:i + (chunk or len(rows))]
+                sql, args = self._out_sql()          # (read each time: the settings may change between steps)
+                self.db.executemany("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
+                                    ((b, int(bool(wh)), KIND_BITS.get(k), w) for w, b, wh, k, _m in part))
+                self.db.executemany(f"UPDATE words SET out = {sql} WHERE word=?", ((*args, w) for w, *_ in part))
+                self.db.executemany("UPDATE rude SET smeared=NULL WHERE word=?", ((w,) for w, *_r, m in part if not m))
+                self.db.executemany("INSERT INTO rude(word, senses, smeared) VALUES(?, '[]', ?) ON CONFLICT(word)"
+                                    " DO UPDATE SET smeared=excluded.smeared", ((w, m) for w, *_r, m in part if m))
+                self.db.commit()
+                self._obscene = None
+                self.version += 1
+                yield
+        return self._stepped(steps(), chunk)
+
+    def rude_kind(self, word):
+        """What a word smeared whole mostly is ("sexual", rudeness.main_kind), or None: the card shows it faintly
+        above the word (asked for)."""
+        r = self.db.execute("SELECT rude_main FROM words WHERE word=? AND obscene=1", (word,)).fetchone()
+        return next((k for k, bit in KIND_BITS.items() if r and r[0] == bit), None)
+
+    def smeared_meanings(self, word):
+        """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring, or []."""
+        r = self.db.execute("SELECT smeared FROM rude WHERE word=?", (word,)).fetchone()
+        return json.loads(r[0]) if r and r[0] else []
+
+    def obscene_words(self):
+        """The words smeared whole while censoring (a few thousand), read once (partial index)."""
+        if self._obscene is None:
+            self._obscene = {r[0] for r in self.db.execute("SELECT word FROM words WHERE obscene=1")}
+        return self._obscene
+
+    def censored(self, word):
+        """True if `word` is to be shown smeared or masked (Censor obscene words is on and it is smeared whole)."""
+        return bool(word) and self.get_meta("censor", "0") == "1" and word in self.obscene_words()
+
+    def kind_counts(self):
+        """{kind of word: words of that kind with a clean meaning (the ones its tick deals), "obscene": words with
+        only rude meanings, each rude kind: words with a meaning of that kind}, over the whole list. One pass:
+        counted again only after a change."""
         mark = self.db.total_changes
-        if getattr(self, "_tc", (None,))[0] != mark:
-            self._tc = (mark, {r[0]: r[1] for r in self.db.execute(
-                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")})
-        return dict(self._tc[1])
+        if getattr(self, "_kc", (None,))[0] != mark:
+            counts = {k: 0 for k, _, _ in KINDS}
+            counts.update({k: 0 for k in RUDE_KINDS}, obscene=0)
+            for kinds, rude, n in self.db.execute(    # (bare columns: read in order from idx_words_kinds, 84 ms
+                    "SELECT kinds, rude, COUNT(*) FROM words GROUP BY kinds, rude"):   # in a million; 0.5-0.8 s
+                kinds = 16 if kinds is None else kinds              # with the defaults filled in by SQL)
+                rude = 1 if rude is None else rude
+                for k in RUDE_KINDS:
+                    if rude & KIND_BITS[k]:
+                        counts[k] += n
+                if not rude & 1:
+                    counts["obscene"] += n
+                    continue
+                for key, _, bit in KINDS:
+                    if kinds & bit:
+                        counts[key] += n
+            self._kc = (mark, counts)
+        return dict(self._kc[1])
+
+    def tier_counts(self):
+        """{tier index: number of placed words}. Tiers with no words are absent. Counted once (25 ms with 300k
+        placed), then kept up to date by every change of a word's tier (_tier_moved), as the shelf is: counting
+        again on every placement made each one 25 ms slower."""
+        if self._counts is None:
+            self._counts = {r[0]: r[1] for r in self.db.execute(
+                "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")}
+        return dict(self._counts)
+
+    def _forget_tallies(self):
+        """After a change the running tallies cannot follow (a bulk write, a rollback): count them again."""
+        self._prog = None
+        self._counts = None
 
     def stats(self):
         """Numbers for the header: total, placed, skipped, per-tier counts, duels, conflicts."""
@@ -246,8 +513,8 @@ class Store:
         if self._total is None:
             self._total = self.count_words()
         tiers = self.tier_counts()
-        skipped = self.db.execute(
-            "SELECT COUNT(*) FROM words WHERE tier IS NULL AND skips > 0"
+        skipped = self.db.execute(           # (named: SQLite's planner preferred idx_words_q3, a 60 ms walk)
+            f"SELECT COUNT(*) FROM words{self._hint('idx_words_skipped')} WHERE tier IS NULL AND skips > 0"
         ).fetchone()[0]
         return {
             "total": self._total,
@@ -292,30 +559,57 @@ class Store:
         before the frequencies are known)}. Counted from the save once (a pass over the list), then kept up to
         date by every change of a word's tier, so a refresh never rescans."""
         if self._prog is None:
-            layout = self.shelf_layout()
+            totals = self._shelf_totals()
+            layout = totals["layout"]
             spines, starts = [], []
             for name, edges in layout:
                 for lo in edges[:-1]:
                     starts.append(lo)
                     spines.append({"zone": name, "words": 0, "placed": 0, "tiers": [0] * len(TIERS)})
             p = {"layout": [(name, len(edges) - 1) for name, edges in layout], "spines": spines, "starts": starts,
-                 "fp": 0.0, "ft": 0.0}
+                 "fp": 0.0, "ft": totals["ft"]}
             ends = starts[1:] + [layout[-1][1][-1]] if layout else []
-            for sp, lo, hi in zip(spines, starts, ends):   # one range per spine, counted by SQLite (idx_words_shelf)
-                for tier, n, fq in self.db.execute("SELECT tier, COUNT(*), SUM(freq) FROM words WHERE rank >= ? AND "
-                                                   "rank < ? GROUP BY tier", (lo, hi)):
-                    sp["words"] += n
-                    p["ft"] += fq or 0.0
-                    if tier is not None:
-                        sp["placed"] += n
-                        sp["tiers"][tier] += n
-                        p["fp"] += fq or 0.0
-            if not spines:
-                p["ft"] = self.db.execute("SELECT TOTAL(freq) FROM words").fetchone()[0]
+            for sp, lo, hi, n in zip(spines, starts, ends, totals["words"]):
+                sp["words"] = n                    # (the placed ones: one range per spine of idx_placed_shelf)
+                for tier, k, fq in self.db.execute(f"SELECT tier, COUNT(*), TOTAL(freq) FROM words"
+                                                   f"{self._hint('idx_placed_shelf')} WHERE tier IS NOT NULL AND "
+                                                   "rank >= ? AND rank < ? GROUP BY tier", (lo, hi)):
+                    sp["placed"] += k
+                    sp["tiers"][tier] += k
+                    p["fp"] += fq
             self._prog = p
         p = self._prog
         return {"zones": p["layout"], "spines": [dict(sp, tiers=list(sp["tiers"])) for sp in p["spines"]],
                 "coverage": p["fp"] / p["ft"] if p["ft"] > 0 else None}
+
+    def _shelf_totals(self):
+        """{"n": words in the list, "layout": shelf_layout(), "words": words per spine, "ft": their total frequency}.
+        They change only when words come in or their frequencies change (_forget_shelf_totals), so they are counted
+        once (a pass over the list, ~0.4 s at a million words on every start) and kept in the save."""
+        n = self.count_words()
+        try:
+            t = json.loads(self.get_meta("shelf_totals") or "null")
+        except ValueError:
+            t = None
+        if not isinstance(t, dict) or t.get("n") != n:
+            layout = self.shelf_layout()
+            bounds = [(lo, hi) for _name, edges in layout for lo, hi in zip(edges, edges[1:])]
+            counts = [self.db.execute("SELECT COUNT(*), TOTAL(freq) FROM words WHERE rank >= ? AND rank < ?",
+                                      b).fetchone() for b in bounds]          # (idx_words_shelf)
+            ft = (sum(c[1] for c in counts) if counts
+                  else self.db.execute("SELECT TOTAL(freq) FROM words").fetchone()[0])
+            t = {"n": n, "layout": layout, "words": [c[0] for c in counts], "ft": ft}
+            self.set_meta("shelf_totals", json.dumps(t))
+        return t
+
+    def _forget_shelf_totals(self):
+        """Words came in, or their frequencies or ranks changed: the shelf's totals are counted again."""
+        self.db.execute("DELETE FROM meta WHERE key='shelf_totals'")
+        self._prog = None
+
+    def _hint(self, index):
+        """" INDEXED BY index" for a query that names its index, or "" while a bulk_write has it away."""
+        return "" if index in self._bulk else f" INDEXED BY {index}"
 
     def spine_of(self, word):
         """Which spine of the progress shelf `word` belongs to (its index in shelf()["spines"]), or None."""
@@ -327,8 +621,15 @@ class Store:
         return bisect.bisect_right(starts, row["rank"]) - 1
 
     def _tier_moved(self, row, old, new):
-        """Keep the shelf's tallies current: the word in `row` (with rank and freq) went from tier `old` to `new`
-        (None = not placed)."""
+        """Keep the tallies current (tier_counts, the shelf's): the word in `row` (with rank and freq) went from
+        tier `old` to `new` (None = not placed). Every change of a word's tier calls this, or _forget_tallies."""
+        c = self._counts
+        if c is not None and old != new:
+            for t, sign in ((old, -1), (new, 1)):
+                if t is not None:
+                    c[t] = c.get(t, 0) + sign
+                    if c[t] <= 0:
+                        del c[t]
         p = self._prog
         if p is None or old == new or not p["spines"]:
             return
@@ -346,18 +647,34 @@ class Store:
         """Store each word's frequency [(word, freq)] (for the coverage tag; filled once by wordsource)."""
         self.db.executemany("UPDATE words SET freq=? WHERE word=?", ((f, w) for w, f in pairs))
         self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('freq_done', ?)", (self.FREQ_VERSION,))
+        self._forget_shelf_totals()
         self.db.commit()
-        self._prog = None
+        self._forget_tallies()
         self.version += 1
 
     def settled_shares(self, min_games, totals=None):
         """Per tier, the share of its words with at least `min_games` duels (how settled its order is, UI-31);
         None for an empty tier. `totals` is tier_counts() if the caller has it already. Index-only
-        (idx_words_tg): ~50 ms with a million placed words."""
+        (idx_words_tg), and per tier it counts the smaller side, the settled or the unsettled words, as the last
+        answer says (counting every settled word took ~30 ms a duel with 300k placed, most of them settled)."""
         total = totals if totals is not None else self.tier_counts()
-        done = dict(self.db.execute("SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL AND games >= ? "
-                                    "GROUP BY tier", (min_games,)).fetchall())
-        return [done.get(t, 0) / total[t] if total.get(t) else None for t in range(len(TIERS))]
+        last = getattr(self, "_settled_last", {})
+        shares = []
+        for t in range(len(TIERS)):
+            n = total.get(t, 0)
+            if not n:
+                shares.append(None)
+                continue
+            if last.get((t, min_games), 0.0) > 0.5:
+                done = n - self.db.execute("SELECT COUNT(*) FROM words WHERE tier=? AND games < ?",
+                                           (t, min_games)).fetchone()[0]
+            else:
+                done = self.db.execute("SELECT COUNT(*) FROM words WHERE tier=? AND games >= ?",
+                                       (t, min_games)).fetchone()[0]
+            last[(t, min_games)] = done / n
+            shares.append(done / n)
+        self._settled_last = last
+        return shares
 
     def swap_counts(self):
         """Per boundary (0 = S|A ... 4 = D|F), how many boundary checks swapped the two words (UI-31; counted
@@ -388,7 +705,7 @@ class Store:
                 (t, tier_base(t), w, t),
             )
         self.db.commit()
-        self._prog = None
+        self._forget_tallies()
         self.version += 1
 
     def _follow_anchors(self, before):
@@ -518,8 +835,9 @@ class Store:
         """Send a placed word back to the front of the queue so it is judged again next."""
         before = self._snap([word])
         # Back to the front of the queue so the word is re-judged next.
-        front = self.db.execute(
-            "SELECT MIN(qkey) FROM words WHERE tier IS NULL AND skips=0 AND qkey < 1e17").fetchone()[0]
+        front = self.db.execute(              # (the front of the dealt words: one step down idx_words_q3; without
+            "SELECT MIN(qkey) FROM words WHERE tier IS NULL AND out=0 AND skips=0 AND qkey < 1e17"   # out=0 it
+        ).fetchone()[0]                       # walked every unplaced word, 75 ms in a million)
         front = (front if front is not None else 0.0) - 1.0
         self.db.execute(
             "UPDATE words SET tier=NULL, rating=1500, games=0, skips=0, qkey=? WHERE word=?", (front, word))
@@ -675,8 +993,7 @@ class Store:
             # answers it (over all tiers at once it sorted every placed word, ~15 ms at 300k)
             seeds = []
             for t in ([tier] if tier is not None else eligible):
-                seeds += self.db.execute("SELECT * FROM words WHERE tier=? ORDER BY games ASC, RANDOM() LIMIT 40",
-                                         (t,)).fetchall()
+                seeds += self._least_dueled(t, 40)
             seeds.sort(key=lambda r: (r["games"], random.random()))
             seeds = seeds[:40]
             random.shuffle(seeds)
@@ -686,6 +1003,20 @@ class Store:
                 if c["word"] not in faced:
                     return a["word"], c["word"], a["tier"]
         return None
+
+    def _least_dueled(self, t, k):
+        """Up to k of tier t's words with the fewest duels, from a random point among those with as few (ORDER BY
+        games, RANDOM() sorted every such word: tens of thousands in a big tier, ~50 ms a duel)."""
+        least = self.db.execute("SELECT MIN(games) FROM words WHERE tier=?", (t,)).fetchone()[0]
+        if least is None:
+            return []
+        same = self.db.execute("SELECT COUNT(*) FROM words WHERE tier=? AND games=?", (t, least)).fetchone()[0]
+        rows = self.db.execute("SELECT * FROM words WHERE tier=? AND games=? LIMIT ? OFFSET ?",
+                               (t, least, k, random.randrange(same - k) if same > k else 0)).fetchall()
+        if len(rows) < k:                     # (a few with the fewest: the next fewest after them)
+            rows += self.db.execute("SELECT * FROM words WHERE tier=? AND games>? ORDER BY games LIMIT ?",
+                                    (t, least, k - len(rows))).fetchall()
+        return rows
 
     def _nearest(self, a, k):
         """Up to k words of a's tier with the ratings nearest to a's, nearest first, ties in random order.
@@ -735,14 +1066,21 @@ class Store:
         return (r["a"], r["b"]) if r else None
 
     # ---- listing / export ------------------------------------------------------------------
-    SORTS = ("Default", "A-Z", "Frequency", "Rating", "Duels")
-    # each sort's natural order (reverse=True flips every part of it); Default is per filter, below
+    SORTS = ("Tier", "A-Z", "Frequency", "Rating", "Duels")
+    # each sort's natural order (reverse=True flips every part of it); Tier is per filter, below (the queue's order
+    # for unplaced words)
     _ORDERS = {"A-Z": "word ASC", "Frequency": "rank ASC", "Rating": "rating DESC, rank ASC",
                "Duels": "games DESC, rank ASC"}
 
-    def list_words(self, text="", tier_filter="All placed", sort="Default", limit=3000, offset=0,
+    KIND_FILTERS = {label: bit for _, label, bit in KINDS}
+    SEARCH_WINDOW, SEARCH_WINDOW_MAX = 20, 200_000     # (a broad search reads this many words in order per row asked)
+    _PLACED_INDEX = {"Tier": "idx_placed_order", "Rating": "idx_placed_rating", "Duels": "idx_placed_games",
+                     "A-Z": "idx_placed_word", "Frequency": "idx_placed_shelf"}
+    _UNPLACED_INDEX = {"Tier": "idx_unplaced_queue", "Frequency": "idx_unplaced_rank", "A-Z": "idx_unplaced_word"}
+
+    def list_words(self, text="", tier_filter="All placed", sort="Tier", limit=3000, offset=0,
                    with_total=True, reverse=False):
-        """One page of words. Default order = tier/rating for placed words, queue order for unplaced; A-Z,
+        """One page of words. The Tier order = tier/rating for placed words, queue order for unplaced; A-Z,
         Frequency (commonest first), Rating and Duels (highest first); `reverse` turns the order round (M-7)."""
         where, args = [], []
         if tier_filter == "Unplaced":
@@ -754,6 +1092,14 @@ class Store:
             if tier_filter.startswith("Tier "):
                 where.append("tier=?")
                 args.append(TIERS.index(tier_filter[5:]))
+            elif tier_filter == "Obscene words":               # ST-6: a kind of word (placed ones): only rude meanings
+                where.append("(COALESCE(rude, 1) & 1) = 0")
+            elif tier_filter in self.KIND_FILTERS:
+                where.append("(COALESCE(kinds, 16) & ?) != 0")
+                args.append(self.KIND_FILTERS[tier_filter])
+        if tier_filter == "Unplaced" and sort in ("Rating", "Duels"):
+            sort = "Frequency"          # (an unplaced word is always at 1500 with no duels: the order is by rank, from
+                                        # idx_unplaced_rank, not a sort of every unplaced word: 0.9 s in a million)
         order = self._ORDERS.get(sort, default_order)
         if reverse:
             order = ", ".join(part.replace(" ASC", " DESC") if part.endswith(" ASC") else part.replace(" DESC", " ASC")
@@ -762,17 +1108,50 @@ class Store:
             where.append("word LIKE ?")
             args.append("%" + text.replace("%", "").replace("_", "") + "%")
         clause = " AND ".join(where)
-        rows = self.db.execute(
-            f"SELECT word, tier, rating, games, skips, rank, pen FROM words WHERE {clause}"
-            f" ORDER BY {order} LIMIT ? OFFSET ?",
-            args + [limit, offset],
-        ).fetchall()
+        # the index each order is read from, named (without fresh statistics SQLite's planner sometimes sorted every
+        # row instead: 0.2-0.9 s in a million)
+        placed = tier_filter != "Unplaced"
+        if text:                        # (a search: the few words that match, found in the words' own index, sorted)
+            index = "idx_placed_word" if placed else "idx_unplaced_word"
+        elif tier_filter == "Obscene words":                   # (a few among the placed: found, then sorted)
+            index = "idx_placed_kinds"
+        elif tier_filter.startswith("Tier "):
+            index = None                # (the tier's own words: idx_words_tr, the planner's choice)
+        else:
+            index = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
+        hint = self._hint(index) if index else ""
+        cols = "word, tier, rating, games, skips, rank, pen"
+        rows = None
+        ordered = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
+        window = (offset + limit) * self.SEARCH_WINDOW
+        broad = tier_filter in ("All placed", "Unplaced") or (tier_filter.startswith("Tier ") and sort == "Tier")
+        if text and ordered and broad and window <= self.SEARCH_WINDOW_MAX:
+            # a search that matches many words (one letter): read the sort's own index from the top and stop once
+            # a page of matches is found, instead of sorting every match (0.25 s in a million). The first `window`
+            # words in order hold the first matches in order; too few there (a rarer search), the usual way below.
+            # Only where that index leads straight to the rows (a kind of word, or a small tier in another order,
+            # could be spread through all of it)
+            rows = self.db.execute(
+                f"SELECT {cols} FROM (SELECT {cols}, qkey FROM words{self._hint(ordered)} WHERE {' AND '.join(where[:-1])}"
+                f" ORDER BY {order} LIMIT ?) WHERE word LIKE ? ORDER BY {order} LIMIT ? OFFSET ?",
+                args[:-1] + [window, args[-1], limit, offset]).fetchall()
+            if len(rows) < limit:
+                rows = None
+        if rows is None:
+            rows = self.db.execute(
+                f"SELECT {cols} FROM words{hint} WHERE {clause} ORDER BY {order} LIMIT ? OFFSET ?",
+                args + [limit, offset],
+            ).fetchall()
         total = None
         if with_total:
             if offset == 0 and len(rows) < limit:
                 total = len(rows)  # a short first page is everything: skip the extra full scan
             else:
-                total = self.db.execute(f"SELECT COUNT(*) FROM words WHERE {clause}", args).fetchone()[0]
+                counted = self._hint("idx_placed_kinds") if tier_filter in self.KIND_FILTERS or \
+                    tier_filter == "Obscene words" else ""
+                if text and not counted:      # (a search counts in the words' own index, as it lists: without it the
+                    counted = hint            # count read the whole table, 0.9 s of a 1 s search in a million)
+                total = self.db.execute(f"SELECT COUNT(*) FROM words{counted} WHERE {clause}", args).fetchone()[0]
         return rows, total
 
     def export_rows(self):
@@ -919,11 +1298,14 @@ class Store:
                         (w, l, tie, kind, ts))
                     have.add((w, l))
                     res["comparisons"] += 1
+            if res["added"]:
+                self._forget_shelf_totals()
             self.db.commit()
         except Exception:
             self.db.rollback()
+            self._forget_tallies()            # (the rolled-back rows had moved them)
             raise
         self._total = None
-        self._prog = None
+        self._forget_tallies()
         self.version += 1
         return res

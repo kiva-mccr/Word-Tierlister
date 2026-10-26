@@ -124,5 +124,28 @@ root.destroy()
 root = tk.Tk(); app2 = T.App(root, s, T.Definitions(s)); root.update()
 assert app2.reduce_motion is True and app2.motion_var.get() is True and app2.anim.reduce_motion is True
 app2.anim.run("p", 200, got.append); app2.anim.cancel_all()
+# a widget closed while it animates: its next frame (and its end) are dropped quietly, never an error dialog
+lbl = tk.Label(root, text="x"); lbl.pack()
+anim3 = Animator(root)
+anim3.run("gone", 200, lambda p: lbl.configure(fg="#000000"), lambda: lbl.configure(bg="#FFFFFF"))
+lbl.destroy()
+anim3.finish("gone")                                     # (raised TclError: invalid command name)
+try:
+    anim3.run("bad", 200, lambda p: root.tk.call("no_such_command"))
+    raise AssertionError("a real error must still be raised")
+except tk.TclError:
+    pass
+# held up (slow work right after it starts, a busy machine): an animation moves on by STALL_MS at most, never leaps
+# to where the clock says (reported: the definitions pane popped open now and then instead of sliding)
+seen = []
+anim4 = Animator(root)
+anim4.run("slow", 200, seen.append, ease=lambda t: t)
+time.sleep(0.15)
+for _ in range(40):
+    root.update(); time.sleep(0.004)
+    if len(seen) > 1:
+        break
+assert len(seen) > 1 and seen[1] <= (Animator.STALL_MS + 10) / 200, seen
+anim4.finish_all()
 root.destroy()
 print("MOTION OK")

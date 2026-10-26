@@ -1,6 +1,6 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
-DefinitionDrawer (UI-12), WordCard.transition_from (UI-16)."""
+DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import time, types
 import tkinter as tk
@@ -21,6 +21,8 @@ clicks = []
 b = RoundButton(root, "S", lambda: clicks.append(1), font=fnt, lift=3, hint="1")
 b.pack(padx=10, pady=10); update()
 plain = RoundButton(root, "S", lambda: None, font=fnt, hint="1"); plain.pack(); update()
+import widgets as _W
+assert plain._target()[1] == _W.lerp_color(plain._fill, PALETTE["text"], _W.EDGE) and _W.EDGE == 0.07   # (UI-78: softer)
 assert b.winfo_reqheight() == plain.winfo_reqheight() + 3                     # room for the lift
 y0 = b.coords("label")[1]
 assert b.itemcget("shadow", "fill") == PALETTE["bg"]                         # shadow invisible at rest
@@ -393,11 +395,20 @@ defs = {"apple": '1. (noun) a round fruit\n      e.g. "an apple a day"\n2. (verb
 dr.show_words(["apple", "pear"], defs.get)
 txt = dr.text.get("1.0", "end")
 assert txt.startswith("apple\n1.  noun  a round fruit\n\u201can apple a day\u201d\n2.  verb  to pick apples")
-assert "pear\nLooking up definition..." in txt
+assert "pear" not in txt and dr.text2.get("1.0", "end").startswith("pear\nLooking up definition...")
+assert dr.columns == 2 and dr.text2.winfo_manager() == "grid"                 # (two words: side by side, asked for)
+dr.update_idletasks()
+assert dr.text.winfo_reqwidth() + dr.text2.winfo_reqwidth() + 1 <= dr.COLUMN_CHARS * small.measure("0") + 28   # (no
+                                                                                 # wider than the one column)
+dr.set_lines(5); assert dr.lines() == 5 and int(dr.text2.cget("height")) == 5
+dr.show_words(["apple", "pear"], defs.get, back=("Back to x", lambda: None))
+assert dr.columns == 1 and not dr.text2.winfo_manager()                         # (a lookup: one column again)
+dr.set_lines(9)
+dr.show_words(["apple", "pear"], defs.get)
 def tags_at(word):
     i = dr.text.search(word, "1.0"); return set(dr.text.tag_names(i))
 assert "head" in tags_at("apple") and "pos" in tags_at("noun") and "ex" in tags_at("an apple a day")
-assert "wait" in tags_at("Looking up") and "num" in tags_at("2.")
+assert "wait" in dr.text2.tag_names(dr.text2.search("Looking up", "1.0")) and "num" in tags_at("2.")
 assert dr.text.tag_cget("pos", "font") and "italic" in str(tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("slant"))
 assert str(dr.text.cget("state")) == "disabled"
 assert not dr.is_open
@@ -406,14 +417,59 @@ full = dr.winfo_reqheight()
 dr.open(); update()
 assert dr.is_open and dr.winfo_height() < full                                  # easing open from nothing
 anim.finish_all(); update(); assert abs(dr.winfo_height() - full) <= 2, (dr.winfo_height(), full, dr.winfo_reqheight(), root.winfo_height())
+# F-29 (asked for: comparing shrank it in one jump): a fit that shortens it eases it there from where it was
+dr.set_lines(9); update(); anim.finish_all(); update()
+assert dr.steady
+tall = dr.winfo_height()
+dr.set_lines(4); update()
+dr.ease_from(tall); update()
+mid = dr.winfo_height()
+assert dr.easing and mid >= tall - 2, (tall, mid)                             # (from where it was: not jumped)
+seen = [mid]
+for _ in range(30):
+    root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+assert seen[-1] < tall and all(b <= a for a, b in zip(seen, seen[1:])) and len(set(seen)) > 3, seen
+assert not dr.easing and dr.steady
+dr.set_lines(9); update(); anim.finish_all(); update()
+# F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
+# height it has: taken as its whole height, the pane's top edge and its text dropped a little
+dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()
+dr.open(); update()
+was = dr.winfo_height()
+dr.give(30); update()
+assert dr.winfo_height() == min(full, was + 30), (was, dr.winfo_height(), full)
+dr.give(5000); update(); assert dr.winfo_height() <= full                       # (never past its own height)
+anim.finish_all(); update()
 closed = []
 dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()
 assert not dr.is_open and not closed and dr.winfo_height() > 1                   # still closing
 anim.finish_all(); update(); assert closed == [1] and not dr.winfo_manager()
 dr.set_open(True); assert dr.is_open
 small.configure(size=14); dr.show_words(["apple"], defs.get)                  # italics follow the body size
+assert dr.columns == 1 and int(dr.text.cget("width")) == dr.COLUMN_CHARS
 assert tkfont.Font(root=root, font=dr.text.tag_cget("pos", "font")).actual("size") == 14
+from widgets import refresh_widgets
+small.configure(size=16); refresh_widgets(root)                               # a zoom, without filling it again
+for tag in ("pos", "ex"):                                                       # (reported: they kept the old size)
+    assert tkfont.Font(root=root, font=dr.text.tag_cget(tag, "font")).actual("size") == 16, tag
+small.configure(size=14); refresh_widgets(root)
 small.configure(size=11)
+# F-3: a meaning that only names another word shows that word's first real meaning under it, muted (once per word)
+defs.update({"apples": "1. (noun) plural of apple\n2. (noun) Alternative form of apple.",
+             "kumquats": "1. (noun) plural of kumquat", "fruits": "1. (noun) plural of fruit"})
+defs["fruit"] = "1. (noun) plural of fruits\n2. (noun) The seed-bearing part of a plant."
+dr.show_words(["apples"], defs.get)
+txt = dr.text.get("1.0", "end")
+assert txt.count("apple (noun): a round fruit") == 1, txt
+assert "base" in tags_at("apple (noun)") and "base" in tags_at("a round fruit")
+dr.show_words(["kumquats"], defs.get)
+assert "kumquat: Looking up definition..." in dr.text.get("1.0", "end")       # (filled in when it arrives)
+dr.show_words(["fruits"], defs.get)
+assert "fruit (noun): The seed-bearing part" in dr.text.get("1.0", "end")    # (its first meaning that is no form)
+from definitions import form_target
+assert form_target("Alternative form of bull dyke.") == "bull dyke" and form_target("A form of government.") is None
+assert form_target("third-person singular simple present indicative of take") == "take"
+assert form_target("Alternative letter-case form of Gypsy (\u201ca member\u201d).") == "Gypsy"
 
 # ---- WordCard.transition_from (UI-16): the old word nudges toward its tier and fades, the new one eases in
 cwin = tk.Toplevel(root)
@@ -477,11 +533,18 @@ from widgets import StyledDialog
 init_fonts(root)
 got = []
 dlg = StyledDialog(root, "T", "A headline", "Some intro text", animator=anim)
+# hidden until show() has centred it: first seen where it ends up (it appeared at the parent's top left, then
+# jumped, reported on the keyboard shortcuts dialog)
+mapped = []
+dlg.win.bind("<Map>", lambda e: e.widget is dlg.win and mapped.append((dlg.win.winfo_rootx(), dlg.win.winfo_rooty())))
 tk.Label(dlg.body, text="body").pack()
+dlg.win.update_idletasks(); update()
+assert dlg.win.state() == "withdrawn" and not mapped
 dlg.button("Details", lambda: got.append("details"), side="left")
 dlg.button("Cancel", dlg.close)
 dlg.button("Go", lambda: got.append("go"), default=True)
 dlg.show(); update()
+assert mapped and abs(mapped[0][0] - dlg.win.winfo_rootx()) <= 1 and abs(mapped[0][1] - dlg.win.winfo_rooty()) <= 1
 assert dlg.win.cget("bg") == PALETTE["bg"] and all(isinstance(b, RoundButton) for b in dlg.buttons.values())
 xs = {k: b.winfo_rootx() for k, b in dlg.buttons.items()}
 assert xs["Details"] < xs["Cancel"] < xs["Go"]                                 # default rightmost, extras far left
@@ -572,5 +635,170 @@ poly = chip.find_withtag("all")[0]
 assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.smooth_image(poly) is not None
 w0 = chip.winfo_reqwidth(); small.configure(size=20); chip.refresh(); assert chip.winfo_reqwidth() > w0
 small.configure(size=11); chip.destroy()
+
+# un-smearing ends on the word itself (reported: small text looked bold, then snapped): one copy per pixel, and
+# near the end the side copies fade into the paper under a middle copy drawn last
+from widgets import smear_items
+cv = tk.Canvas(root, bg="#ffffff"); cv.pack()
+txt = cv.create_text(10, 10, text="a smeared meaning", font=("TkDefaultFont", 11), anchor="nw", fill="#3D3A4B")
+root.update()
+box = cv.bbox(txt)
+for amount in (1.0, 0.3, 0.05):
+    cv.delete("s"); smear_items(cv, txt, "#3D3A4B", "#ffffff", amount, ("s",))
+    copies = [i for i in cv.find_withtag("s") if cv.type(i) == "text"]
+    xs = {}
+    for i in copies:
+        xs.setdefault(cv.itemcget(i, "text"), []).append(cv.coords(i)[0])
+    # F-33 (the user's rules): a copy moved right leaves out the last letter, one moved left the first, so the end
+    # letters only move inward and the letters between both ways: nothing reaches past the word (it was cut off
+    # straight there, and cropped by a canvas only as wide as the word)
+    if amount > 0.1:                                                    # (at the very end: only the word itself)
+        assert {"a smeared meanin", " smeared meaning", "a smeared meaning"} <= set(xs), set(xs)   # (and short runs)
+        assert all(x > 10 for x in xs["a smeared meanin"])
+    assert xs["a smeared meaning"] == [10]                              # (the word, drawn last)
+    assert cv.itemcget(copies[-1], "text") == "a smeared meaning"
+    for texts in xs.values():
+        assert len(texts) == len(set(texts))                            # (no two on one pixel)
+    assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in copies)
+    if amount == 0.05:
+        assert all(cv.itemcget(i, "fill") == "#ffffff" for i in copies[:-1])    # side copies gone into the paper
+    assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill") == "#ffffff"]
+# F-38 (the user's idea): on one line the short letters (no ascender, descender or dot) smear twice as far, behind
+# the rest, but never past the word's ends; a wrapped meaning keeps the one spread
+import widgets as _W
+cv.delete("all")
+F30 = ("TkDefaultFont", 30)
+m = lambda t: cv.tk.call("font", "measure", F30, t)
+w1 = cv.create_text(10, 40, text="hammocks", font=F30, anchor="nw"); root.update()
+b1 = cv.bbox(w1); smear_items(cv, w1, "#3D3A4B", "#ffffff", 1.0, ("s",))
+runs = [i for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "mmoc"]   # (3rd on)
+far = max(abs(cv.coords(i)[0] - (10 + m("ha"))) for i in runs)
+assert runs and far > _W.SMEAR_SPREAD * m("n") / 2 + 1                                  # (further than the rest)
+assert all(cv.coords(i)[0] >= 10 + m("h") - 1 and cv.bbox(i)[2] <= 10 + m("hammock") + 2 for i in runs)   # (never
+#                                                                       onto the end letters, asked for: "fart")
+assert all(b1[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b1[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
+# the letters next to the ends move outward only as far as the space between letters: never over an end letter
+cv.delete("all")
+w2 = cv.create_text(10, 40, text="fart", font=F30, anchor="nw"); root.update()
+smear_items(cv, w2, "#3D3A4B", "#ffffff", 1.0, ("s",))
+lay = next(v for v in cv._smear_cache.values() if v["lines"][0][0] == "fart")
+for i in cv.find_withtag("s"):
+    if cv.type(i) == "text" and cv.itemcget(i, "text") in ("far", "art"):            # (the a or the r moving out)
+        dx = cv.coords(i)[0] - (10 if cv.itemcget(i, "text") == "far" else 10 + m("f"))
+        assert abs(dx) <= lay["near"], (cv.itemcget(i, "text"), dx)
+# F-40 (asked for): the holes of the letters (an o's, a d's) are filled in the smear's tone, and the fill is gone at
+# the very start of un-smearing (FILL_FADE); a font not bundled has none, and nothing is drawn past the letters' boxes
+from fonts import font as _font, init_fonts as _init, letter_holes
+_init(root)
+cv.delete("all")
+w3 = cv.create_text(20, 10, text="good", font=_font("word"), anchor="nw"); root.update()
+b3 = cv.bbox(w3)
+assert len(letter_holes(cv, _font("word"), "good")) == 5 and letter_holes(cv, ("Helvetica", 40), "good") == []
+fills = lambda: [i for i in cv.find_withtag("s") if cv.type(i) == "polygon"]
+smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
+assert len(fills()) == 5 and all(b3[0] <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] for i in fills())
+cv.delete("s"); smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0 - _W.FILL_FADE - 0.01, ("s",))
+assert not fills() and not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
+# a wrapped text's every line keeps its ends inward
+cv.delete("all")
+txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
+box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
+texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
+assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
+assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
+# F-37: the band behind the letters runs from the end of the first letter to the start of the last, hidden in the
+# word (at the box's edges it showed as a bar under the smear)
+from fonts import init_fonts as _init, font as _font
+_init(root)
+cv.delete("all")
+big = cv.create_text(20, 10, text="fuck", font=_font("word"), anchor="nw"); root.update()
+bb = cv.bbox(big); smear_items(cv, big, "#3D3A4B", "#ffffff", 1.0, ("s",))
+band = [cv.coords(i) for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
+f_w, k_x = cv.tk.call("font", "measure", _font("word"), "f"), cv.tk.call("font", "measure", _font("word"), "fuc")
+assert len(band) == 1 and abs(band[0][0] - (20 + f_w)) <= 1 and abs(band[0][2] - (20 + k_x)) <= 1, (band, bb)
+cv.delete("s"); cv.itemconfigure(big, text="ox"); smear_items(cv, big, "#3D3A4B", "#ffffff", 1.0, ("s",))
+assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]   # (two letters)
+cv.destroy()
+
+# UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it
+from fonts import font
+wc = WordCard(root, font("word"), font("body")); wc.pack(); root.update()
+wc.set("table", "frequency rank #9"); root.update(); size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
+assert not wc.find_withtag("kind")
+wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
+assert wc.itemcget("kind", "text") == "sexual" and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
+kb, wb = wc.bbox("kind"), wc.bbox("word")
+assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                      # above the letters, on the card
+# asked for (a little of both): the word is drawn smaller under a kind, the kind is near the sub-line's size, and it
+# stays clear of the tops of the letters (tall ones: b, f, k)
+labelled = abs(wc._fit.cget("size"))
+wc.set("bum-fuck", "frequency rank #7"); root.update()
+assert labelled < abs(wc._fit.cget("size")) and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
+wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
+assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace")
+pt = abs(wc._fit.cget("size")) * float(wc.tk.call("tk", "scaling"))
+ink_top = wc._word_xy[1] + wc._fit.metrics("ascent") - 0.82 * pt
+assert wc.bbox("kind")[3] <= ink_top - 0.25 * font("body").metrics("linespace"), (wc.bbox("kind"), ink_top)
+assert wc.itemcget("kind", "fill") != wc.itemcget("sub", "fill")                  # paler than the sub-line
+# a censored word's smear never covers the kind: not as drawn, not half un-smeared, and not while the outgoing word's
+# smear slides up past it (a skip sends it up; its tall letters reach the kind's row)
+def smear_over_kind():
+    """How many smear items over the kind are drawn above it (and how many lie over it at all)."""
+    order, kb = list(wc.find_all()), wc.bbox("kind")
+    over = [i for i in wc.find_overlapping(*kb) if {"smear", "oldsmear"} & set(wc.gettags(i))]
+    return sum(order.index(i) > order.index(wc.find_withtag("kind")[0]) for i in over), len(over)
+wc.set("cum", "frequency rank #8", censor=True, kind="sexual"); root.update()
+assert wc.find_withtag("smear") and smear_over_kind()[0] == 0
+wc.smear.clear = 0.5; wc.smear.paint(); assert smear_over_kind()[0] == 0
+anim, crossed = Animator(root), 0
+wc.set("bollocks", "frequency rank #8", censor=True, kind="crude"); root.update()     # (tall letters: they reach up)
+wc.set("jizz", "frequency rank #9", censor=True, kind="sexual")
+wc.transition_from("bollocks", "frequency rank #8", 0, -wc.winfo_reqheight(), anim)
+frame_at = wc._frame
+anim.cancel_all()
+for k in range(1, 8):                             # (frame by frame, early on, while the outgoing smear shows)
+    frame_at(k * 0.05); root.update()
+    above, there = smear_over_kind()
+    assert above == 0, above
+    crossed += there
+wc.delete("old"); root.update()
+assert crossed                                    # (the outgoing smear did pass over the kind: the case is tested)
+wc.begin_typing(); root.update(); assert not wc.find_withtag("kind")
+# UI-70: the typing caret blinks (shown on every key), and stops, shown, after a while without one
+caret = lambda: wc.itemcget(wc.find_withtag("caret")[0], "state")
+def wait(ms):
+    end = time.time() + ms / 1000
+    while time.time() < end:
+        root.update(); time.sleep(0.01)
+assert caret() == "normal"
+wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+wc.type_key(types.SimpleNamespace(keysym="a", char="a")); root.update(); assert caret() == "normal"   # (a key: shown)
+wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+wc.BLINK_FOR_MS = 2 * WordCard.BLINK_MS
+wc.type_key(types.SimpleNamespace(keysym="b", char="b")); wait(3 * WordCard.BLINK_MS)
+assert caret() == "normal" and wc._blink_job is None                  # (still now, and shown)
+wc.end_typing(); assert wc._blink_job is None and not wc.find_withtag("caret")
+wc.destroy()
+
+# ---- LinkButton with words (UI-75: the GitHub link): the words, then the icon; muted, the text colour on hover;
+# a click runs it; it re-measures when its font is resized
+from widgets import LinkButton
+went = []
+lf = tkfont.Font(root=root, family="TkDefaultFont", size=12)
+holder = tk.Toplevel(root); holder.geometry("+0+0")               # (the root is full: somewhere it shows)
+link = LinkButton(holder, "external", lambda: went.append(1), text="GitHub", font=lf, bg=PALETTE["surface"])
+link.pack(); update(6)
+words = link.find_withtag("all")
+assert len(words) == 2 and link.itemcget(words[0], "text") == "GitHub"
+assert link.itemcget(words[0], "fill") == PALETTE["muted"]
+assert link.winfo_reqwidth() > lf.measure("GitHub") + link.size                # (room for both)
+link.event_generate("<Motion>", warp=True, x=4, y=4); update(6)      # (the real pointer, so no stray Leave follows)
+assert link.itemcget(link.find_withtag("all")[0], "fill") == PALETTE["text"]
+link.event_generate("<ButtonRelease-1>"); update()
+assert went == [1]
+w0 = link.winfo_reqwidth()
+lf.configure(size=20); link.refresh(); update()
+assert link.winfo_reqwidth() > w0
+holder.destroy()
 root.destroy()
 print("WIDGETS2 OK")

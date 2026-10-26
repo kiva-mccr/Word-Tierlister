@@ -51,7 +51,9 @@ for _ in range(30):
     assert not s._faced(x, y)
     s.record_comparison(x, y, random.choice(["a", "b", "tie"]), "within")
 
-# conflict detection: a>b, b>c, then c>a
+# conflict detection: a>b, b>c, then c>a. (The random answers above now and then contradict each other too,
+# depending on the order Python's sets come out in that run: start from no conflicts, so only this one counts.)
+s.db.execute("DELETE FROM conflicts"); s.db.commit()
 c = "wxyz1"; d = "wxyz2"; e = "wxyz3"
 s.insert_words([c, d, e])
 for w in (c, d, e):
@@ -209,6 +211,34 @@ assert s.next_unplaced()["word"] == "w050"
 # list / search / export
 rows, total = s.list_words("w05", "All placed")
 assert total >= 1
+# F-17: a search that matches many words reads the sort's own index and stops after a page; it gives exactly the
+# rows the plain way gives, in every filter, order and page (small pages here, so both ways are used). Its own save:
+# here some words share a rank (added in different ways), and tied rows may come in either order either way
+q = T.Store(os.path.join(tempfile.mkdtemp(), "search.db"))
+q.insert_words([f"w{i:04d}" for i in range(400)])
+_rnd = random.Random(2)
+for i in range(0, 400, 2):
+    q.place(f"w{i:04d}", _rnd.randrange(6))
+for text in ("w", "w0", "w01", "w0399", "nothing"):
+    for show in ("All placed", "Unplaced", "Tier B", "Tier S"):
+        for sort in T.Store.SORTS:
+            for rev in (False, True):
+                for limit, offset in ((5, 0), (5, 10), (40, 0)):
+                    fast = [tuple(r) for r in q.list_words(text, show, sort, limit, offset, False, rev)[0]]
+                    q.SEARCH_WINDOW_MAX = -1                     # (the plain way: every match, sorted)
+                    plain = [tuple(r) for r in q.list_words(text, show, sort, limit, offset, False, rev)[0]]
+                    del q.SEARCH_WINDOW_MAX
+                    assert fast == plain, (text, show, sort, rev, limit, offset)
+q.close()
+# the count of a search is read from the words' own index (it read the whole table: 0.9 s in a million)
+plan = []
+real = s.db.execute
+s.db = type("Spy", (), {"execute": lambda self, q, a=(): (plan.append(q), real(q, a))[1],
+                        "__getattr__": lambda self, k: getattr(real.__self__, k)})()
+s.list_words("w", "All placed", limit=3)
+s.db = real.__self__
+count = next(q for q in plan if q.startswith("SELECT COUNT(*)"))
+assert "INDEXED BY idx_placed_word" in count, count
 assert len(s.export_rows()) > 100
 
 # resumable: close, reopen, state intact
@@ -236,7 +266,25 @@ senses = parse_definition('1. (noun) a round fruit\n      e.g. "an apple a day"\
 assert [x["num"] for x in senses] == ["1", "2", "3"] and senses[0]["pos"] == "noun"
 assert senses[0]["text"] == "a round fruit" and senses[0]["example"] == "an apple a day"
 assert senses[1]["example"] is None and senses[2]["pos"] == "adj"
-assert parse_definition("(No definition found.)") == [{"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
+keys = lambda d: {k: d[k] for k in ("num", "pos", "text", "example")}
+assert [keys(x) for x in parse_definition("(No definition found.)")] == [
+    {"num": "", "pos": "", "text": "(No definition found.)", "example": None}]
 assert parse_definition("") == [] and parse_definition(None) == []
-assert parse_definition("1. no part of speech")[0] == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
+assert keys(parse_definition("1. no part of speech")[0]) == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
+# the Wiktionary build's lines: one sense each (they used to run together), its labels and the gloss after them
+# (a censored pane smears a meaning by its gloss's first characters: OB-6)
+senses = parse_definition("\u2022 (noun) A container.\n\u2022 (noun) (vulgar, slang) The vagina.\n"
+                          "\u2022 (verb) (sometimes, offensive) To hit.\n\u2022 (noun) (obsolete) An old box.")
+assert [x["pos"] for x in senses] == ["noun", "noun", "verb", "noun"] and senses[0]["text"] == "A container."
+assert senses[1]["labels"] == ["vulgar", "slang"] and senses[1]["gloss"] == "The vagina." and senses[0]["labels"] == []
+assert senses[0]["gloss"] == "A container."
+assert senses[1]["text"] == "(vulgar, slang) The vagina."
+# numeric settings: read, kept in range, and the default for one unset or damaged by hand
+m = T.Store(os.path.join(tempfile.mkdtemp(), "meta.db"))
+assert m.meta_number("zoom", 1.0) == 1.0
+m.set_meta("zoom", "9"); assert m.meta_number("zoom", 1.0, hi=2.5) == 2.5
+m.set_meta("zoom", "big"); assert m.meta_number("zoom", 1.0) == 1.0
+m.set_meta("browse_zoom", "-9"); assert m.meta_number("browse_zoom", 0, int, lo=-4) == -4
+fresh = m.deal_settings()["kinds"]
+m.set_meta("deal_kinds", "not a number"); assert m.deal_settings()["kinds"] == fresh   # (every kind, as when new)
 print("CORE OK")

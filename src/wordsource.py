@@ -3,8 +3,14 @@
 Flow on a first run (driven by main() in tierlist.py):
     build_word_list() or build_wiktionary()   fill the `words` table, most common first
     prepare_queue()                           look up word frequencies once (fill_frequencies), flag
-                                              compounds (compute_penalties), then give every
+                                              compounds (compute_penalties), sort words into kinds
+                                              (fill_kinds, ST-6; a Wiktionary build records them itself),
+                                              score the rude meanings (find_rude, OB-6), then give every
                                               unplaced word a seeded queue key (Store.reshuffle)
+    fetch_rude_senses()                       a save without Wiktionary's meanings (older, or from a word
+                                              list): App reads them in the background, once
+A Wiktionary build hands each entry to a RudeCollector, which keeps the meanings the rudeness rules read (the save's
+table rude); find_rude scores them (rudeness.score_saved), or lets the hand-picked list stand in (rude_version).
 
 The Wiktionary path is resumable at every stage: the 3 GB download continues from its .part file,
 the parsed entries sit in a temporary `wk` table (flag meta.wk_done), and existing progress in the
@@ -20,6 +26,9 @@ import time
 import urllib.error
 import urllib.request
 
+import rudeness
+from constants import OFFLINE_ENV, kind_bits
+from obscene import CENSORED, RUDE, obscene_in
 from problems import SetupError
 
 
@@ -92,9 +101,10 @@ _PHRASE_RE = re.compile(r"^[^\W\d_]+(?:[-' ’][^\W\d_]+)*$")
 # Insert a parsed entry into the staging table, or merge it with an earlier entry for the same word
 # (a word often has several parts of speech): add the senses, keep the definition text (capped).
 _WK_UPSERT = (
-    "INSERT INTO wk(word, senses, lemma, live, text) VALUES(?,?,?,?,?) "
+    "INSERT INTO wk(word, senses, lemma, live, text, kinds) VALUES(?,?,?,?,?,?) "
     "ON CONFLICT(word) DO UPDATE SET senses=senses+excluded.senses, "
     "lemma=MAX(lemma, excluded.lemma), live=MAX(live, excluded.live), "
+    "kinds=kinds | excluded.kinds, "
     "text=CASE WHEN length(text) < 800 THEN text || char(10) || excluded.text ELSE text END"
 )
 
@@ -170,16 +180,68 @@ def _summarize(entry):
         if not dead:
             live = True
         if len(lines) < 4:
-            label = f"({', '.join(sorted(dead))}) " if dead else ""
+            # its labels as the drawer shows them: the rude ones (and their hedges) first, then the dead ones
+            rude = [t.replace("-", " ") for t in s.get("tags", []) if t.replace("-", " ") in RUDE | _HEDGES]
+            shown = (rude if set(rude) & RUDE else []) + sorted(dead)
+            label = f"({', '.join(shown)}) " if shown else ""
             lines.append(f"• ({pos}) {label}{str(glosses[-1])[:220]}")
     return n, lemma, live, "\n".join(lines)
 
 
-def _parse_wiktionary(db, path, include_phrases, log):
+_HEDGES = set(rudeness.HEDGES)
+
+
+class RudeCollector:
+    """Picks out, from the Wiktionary download's entries, the meanings the rudeness rules read (OB-6): every
+    meaning (rudeness.compact) of a word with any sign of rudeness (rudeness.has_signal), and of a word that is only
+    a form of one ("fucks: plural of fuck"). A word's entries come
+    one after another in the download; a form usually comes after its word, the few before it wait till the end.
+
+        c = RudeCollector(); c.add(word, entry) for each entry kept; c.finish() -> {word: compact JSON}
+    """
+    def __init__(self):
+        self.word, self.senses = None, []
+        self.kept, self.seen, self.waiting = {}, set(), {}
+
+    def add(self, word, entry):
+        """One entry of `word` (kaikki.org's JSON); a new word settles the last one."""
+        if word != self.word:
+            self._flush()
+            self.word = word
+        self.senses += rudeness.compact_entry(entry)
+
+    def _flush(self):
+        word, senses = self.word, self.senses
+        self.senses = []
+        if not senses:
+            return
+        self.seen.add(word)
+        if any(rudeness.has_signal(c) for c in senses):
+            self.kept[word] = json.dumps(senses, separators=(",", ":"))
+            return
+        targets = {c.get("f") for c in senses}
+        if len(targets) == 1 and None not in targets:
+            target = targets.pop()
+            if target in self.kept:
+                self.kept[word] = json.dumps(senses, separators=(",", ":"))
+            elif target not in self.seen:
+                self.waiting[word] = (target, senses)
+
+    def finish(self):
+        """{word: compact JSON} for every word kept, after the last entry (the forms that waited join their word)."""
+        self._flush()
+        for word, (target, senses) in self.waiting.items():
+            if target in self.kept:
+                self.kept[word] = json.dumps(senses, separators=(",", ":"))
+        self.waiting = {}
+        return self.kept
+
+
+def _parse_wiktionary(db, path, include_phrases, log, rude=None):
     """Stream the kaikki.org JSONL dump into the staging table `wk`, one row per word (committed in batches).
 
     Keeps English entries whose headword is lowercase, word-shaped, not an affix/name/symbol and has
-    at least one gloss. Memory use stays flat because lines are read one at a time.
+    at least one gloss; `rude` (a RudeCollector) is handed each one. Lines are read one at a time.
     """
     shape = _PHRASE_RE if include_phrases else _WORD_RE
     batch, lines, kept = [], 0, 0
@@ -208,7 +270,9 @@ def _parse_wiktionary(db, path, include_phrases, log):
             n, lemma, live, text = _summarize(entry)
             if n == 0:
                 continue
-            batch.append((word, n, int(lemma), int(live), text))
+            if rude is not None:
+                rude.add(word, entry)
+            batch.append((word, n, int(lemma), int(live), text, kind_bits(entry.get("pos"))))
             kept += 1
             if len(batch) >= 20000:
                 db.executemany(_WK_UPSERT, batch)
@@ -228,16 +292,19 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     shorter first). Definitions are cached into the save file. Existing progress is kept.
     """
     try:
-        from wordfreq import get_frequency_dict, zipf_frequency
+        from wordfreq import get_frequency_dict
     except ImportError:
         raise SetupError("A required package is missing.\n\nOpen a terminal and run:\n    pip install wordfreq\n\nthen start the program again.")
     db = store.db
     default_path = os.path.join(os.path.dirname(os.path.abspath(store.path)), WIKT_FILENAME)
     ours = path is None
     path = path or default_path
-    db.execute("CREATE TABLE IF NOT EXISTS wk("
-               "word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT)")
+    if store.get_meta("wk_done") == "1" and store.get_meta("rude_senses") != "1":
+        store.set_meta("wk_done", "0")          # a half-done build from before OB-6 kept no meanings: read it again
     if store.get_meta("wk_done") != "1":
+        db.execute("DROP TABLE IF EXISTS wk")
+        db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT, "
+                   "kinds INTEGER)")
         db.execute("DELETE FROM wk")
         db.commit()
         if ours and not os.path.exists(path):
@@ -246,22 +313,23 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
             log("  if it stops, just run the program again and it resumes")
             download_resumable(WIKT_URL, path, log)
         log("Reading entries...")
-        _parse_wiktionary(db, path, include_phrases, log)
+        rude = RudeCollector()
+        _parse_wiktionary(db, path, include_phrases, log, rude)
+        store.save_rude_senses(rude.finish())         # (the rules score them in prepare_queue)
         store.set_meta("wk_done", "1")
 
     log("Ranking words by frequency...")
     log("  loading the word-frequency data (about a minute)...")
     fd = get_frequency_dict("en")
+    freqs = {}          # (kept for the coverage tag: fill_frequencies has nothing left to do)
 
     def zipf(w):
-        # Zipf scale (log10 of frequency per billion words). Hyphenated/spaced forms are not in the
-        # single-word dictionary, so ask wordfreq to estimate them; everything else unknown is 0.
-        f = fd.get(w)
-        if f:
-            return math.log10(f) + 9.0
-        if "-" in w or " " in w:
-            return zipf_frequency(w, "en")
-        return 0.0
+        # Zipf scale (log10 of frequency per billion words); wordfreq's own estimates of hyphenated / spaced forms
+        # are rounded to two places, as its zipf_frequency does
+        f = freqs[w] = frequency(fd, w)
+        if not f:
+            return 0.0
+        return math.log10(f) + 9.0 if w in fd else round(math.log10(f) + 9.0, 2)
 
     log("  ordering the words by how common they are...")
     rows = db.execute("SELECT word, senses, lemma, live FROM wk").fetchall()
@@ -271,12 +339,19 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     if not ordered:
         store.set_meta("wk_done", "0")
         raise RuntimeError("no usable entries were found in the Wiktionary file")
-    if store.count_words():
+    older = store.count_words()
+    if older:
         # Words already in the save that Wiktionary lacks go behind everything else.
         db.execute("UPDATE words SET rank = rank + ?", (len(ordered),))
     log(f"  saving {len(ordered):,} words and their definitions to your save file...")
-    store.insert_words(ordered)
+    with store.bulk_write():                      # (the indexes are built once, after all three passes)
+        store.insert_words(ordered)
+        db.execute("UPDATE words SET kinds=(SELECT kinds FROM wk WHERE wk.word=words.word)")
+        if older:                                 # (the words Wiktionary lacks: how common they are too)
+            freqs.update((w, frequency(fd, w)) for (w,) in db.execute("SELECT word FROM words") if w not in freqs)
+        store.set_frequencies((w, f) for w, f in freqs.items() if f)
     db.execute("INSERT OR REPLACE INTO defs(word, text) SELECT word, text FROM wk")
+    store.set_meta("kinds_done", "1")
     db.execute("DROP TABLE wk")
     db.commit()
     store.set_meta("source", "wiktionary")
@@ -330,23 +405,141 @@ def compute_penalties(store, log=print):
     return True
 
 
+def frequency(fd, w):
+    """wordfreq's frequency of `w` (`fd`: its get_frequency_dict("en")): hyphenated / spaced forms, which that
+    dictionary lacks, are estimated by wordfreq; any other word it has never seen is 0."""
+    f = fd.get(w)
+    if f:
+        return f
+    if "-" in w or " " in w:
+        from wordfreq import word_frequency
+        return word_frequency(w, "en")
+    return 0.0
+
+
 def fill_frequencies(store, log=print):
     """Store each word's wordfreq frequency (for the progress bar's coverage tag, UI-14). Words wordfreq has never
-    seen keep 0: they add nothing to how much of everyday English is covered."""
+    seen keep 0: they add nothing to how much of everyday English is covered. (A Wiktionary build stores them as it
+    ranks the words: this is for the other word lists and older saves.)"""
     try:
-        from wordfreq import get_frequency_dict, word_frequency
+        from wordfreq import get_frequency_dict
     except ImportError:
         log("wordfreq is not installed, so the coverage figure is not available (pip install wordfreq).")
         return
     fd = get_frequency_dict("en")
-
-    def freq(w):        # the same as the ranking (build_wiktionary's zipf): hyphenated / spaced forms are estimated
-        f = fd.get(w)
-        if f:
-            return f
-        return word_frequency(w, "en") if ("-" in w or " " in w) else 0.0
     words = [r[0] for r in store.db.execute("SELECT word FROM words")]
-    store.set_frequencies((w, f) for w, f in ((w, freq(w)) for w in words) if f)
+    store.set_frequencies((w, f) for w, f in ((w, frequency(fd, w)) for w in words) if f)
+
+
+# --------------------------------------------------------------------------
+# Kinds of words (for a save made before ST-6: a Wiktionary build records them itself)
+# --------------------------------------------------------------------------
+_DEF_POS = re.compile(r"^\s*(?:\u2022|\d+\.)\s*\(([a-z ]+)\)", re.M)
+
+
+def fill_kinds(store, log=print):
+    """Each word's kinds from its stored definition (every source writes "(noun) ..." lines: the Wiktionary
+    build's, WordNet's, dictionaryapi.dev's), else from WordNet (nltk) if it is installed, else "other"."""
+    log("  reading the parts of speech from the stored definitions...")
+    kinds = {}
+    for word, text in store.db.execute("SELECT word, text FROM defs"):
+        bits = 0
+        for pos in _DEF_POS.findall(text or ""):
+            bits |= kind_bits(pos)
+        if bits:
+            kinds[word] = bits
+    rest = [r[0] for r in store.db.execute("SELECT word FROM words WHERE kinds IS NULL") if r[0] not in kinds]
+    wn = None
+    if rest:
+        try:
+            from nltk.corpus import wordnet as wn
+            wn.synsets("dog")
+        except Exception:               # nltk or its data missing: those words count as "other"
+            wn = None
+    if wn is not None:
+        log(f"  asking WordNet about {len(rest):,} more words...")
+        letters = {"n": 1, "v": 2, "a": 4, "s": 4, "r": 8}
+        for w in rest:
+            bits = 0
+            for syn in wn.synsets(w.replace(" ", "_")):
+                bits |= letters.get(syn.pos(), 16)
+            if bits:
+                kinds[w] = bits
+    store.set_kinds(kinds.items())
+    store.db.execute("UPDATE words SET kinds=16 WHERE kinds IS NULL")
+    store.db.commit()
+    log(f"  sorted {len(kinds):,} words into kinds.")
+
+
+# --------------------------------------------------------------------------
+# Rude meanings (OB-6): scored by the rules in rudeness.py
+# --------------------------------------------------------------------------
+RUDE_RETRY_S = 6 * 3600         # a save without Wiktionary's meanings tries the download again after this long
+
+
+def rude_version(store):
+    """What words.rude should be scored from: RUDENESS_VERSION once the save keeps Wiktionary's meanings (a
+    Wiktionary build, or read later by fetch_rude_senses), else "list" (obscene.on_list's short list stands in)."""
+    return rudeness.RUDENESS_VERSION if store.get_meta("rude_senses") == "1" else "list"
+
+
+def find_rude(words, saved, old=(), log=print):
+    """{word: rudeness.results} for the words of a save: the rules over the meanings it keeps (`saved`: {word:
+    compact JSON}). Without kept meanings (`saved` None) the short hand-picked list stands in (obscene.on_list:
+    rudeness.LISTED), with the words smeared whole before (`old`: an older save's flags). No database: a worker
+    thread may run it."""
+    if saved is not None:
+        try:
+            from wordfreq import zipf_frequency
+            zipf = lambda w: zipf_frequency(w, "en")       # noqa: E731  (how common: rudeness.COMMON_ZIPF)
+        except ImportError:
+            zipf = None
+        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log, zipf)
+    return {w: rudeness.LISTED for w in [*obscene_in(words), *old]}
+
+
+def wants_rude_fetch(store):
+    """True if the save has no Wiktionary meanings to score yet (a save from before OB-6, or from a word list), so
+    the App reads them in the background (fetch_rude_senses), and it is time to try again."""
+    if store.get_meta("rude_senses") == "1" or os.environ.get(OFFLINE_ENV) or not store.count_words():
+        return False
+    return time.time() - store.meta_number("rude_tried", 0.0) > RUDE_RETRY_S
+
+
+def read_rude_senses(path, keep, log=print):
+    """{word: compact JSON} (RudeCollector) for the words in `keep`, from a downloaded kaikki.org file."""
+    rude = RudeCollector()
+    total, chars, lines = os.path.getsize(path), 0, 0
+    with _open_text(path) as f:
+        for line in f:
+            lines += 1
+            chars += len(line)
+            if lines % 50000 == 0:
+                log(f"  read {lines:,} entries ({min(99, int(100 * chars / total))}%)")
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue
+            word = entry.get("word")
+            if word in keep and entry.get("lang_code", "en") == "en" and entry.get("pos") not in SKIP_POS:
+                rude.add(word, entry)
+    return rude.finish()
+
+
+def fetch_rude_senses(save_path, keep, log=print):
+    """Download English Wiktionary next to the save (resumable, like the first run's), keep the meanings the rules
+    read for the words in `keep`, and remove the download. No database, no tkinter: App runs it on a worker thread
+    and writes the result (Store.save_rude_senses, Store.set_rude with find_rude's)."""
+    path = os.path.join(os.path.dirname(os.path.abspath(save_path)), WIKT_FILENAME)
+    if not os.path.exists(path):
+        download_resumable(WIKT_URL, path, log)
+    try:
+        return read_rude_senses(path, keep, log)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def wiktionary_steps(store, path=None):
@@ -360,16 +553,21 @@ def wiktionary_steps(store, path=None):
     return steps + ["Ranking words"]
 
 
-def queue_steps(store, adds_words=False):
+def queue_steps(store, adds_words=False, by_wiktionary=False):
     """The main steps prepare_queue will report (see wiktionary_steps). `adds_words`: words are about to be
-    added first, which makes it redo all three (adding words resets pen_done and freq_done)."""
+    added first, which makes it redo them (adding words resets pen_done, freq_done and rude_done); `by_wiktionary`:
+    by a Wiktionary build, which records their kinds and frequencies itself."""
     if not adds_words and not store.count_words():
         return []
     pen = adds_words or store.get_meta("pen_done") != "1"
-    freq = adds_words or store.get_meta("freq_done") != store.FREQ_VERSION
+    freq = not by_wiktionary and (adds_words or store.get_meta("freq_done") != store.FREQ_VERSION)
+    kinds = not by_wiktionary and store.get_meta("kinds_done") != "1"
+    rude = adds_words or store.get_meta("rude_done") != rude_version(store)
     shuffle = pen or store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
     return ((["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
+            + (["Sorting words into kinds"] if kinds else [])
+            + (["Scoring rude meanings"] if rude else [])
             + (["Shuffling the queue"] if shuffle else []))
 
 
@@ -386,6 +584,23 @@ def prepare_queue(store, log=print):
     if store.get_meta("freq_done") != store.FREQ_VERSION:
         log("Looking up how common each word is (one time, a few seconds)...")
         fill_frequencies(store, log)
+    dealt = False
+    if store.get_meta("kinds_done") != "1":
+        log("Sorting words into kinds (nouns, verbs...; one time, a few seconds)...")
+        fill_kinds(store, log)
+        store.set_meta("kinds_done", "1")
+        dealt = True
+    version = rude_version(store)
+    if store.get_meta("rude_done") != version:
+        log("Scoring rude meanings (one time, about a minute)...")
+        words = [r[0] for r in store.db.execute("SELECT word FROM words")]
+        saved = store.rude_senses() if version != "list" else None
+        store.set_rude(find_rude(words, saved, store.obscene_words(), log))
+        store.set_meta("rude_done", version)
+        dealt = True
+    if dealt or store.get_meta("deal_done") != "3":     # the words left out follow the new kinds (3: by the kinds
+        store.set_deal()                                 # of their meanings, OB-6)
+        store.set_meta("deal_done", "3")
     stale = store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone()
     if stale or changed:

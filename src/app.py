@@ -6,34 +6,48 @@ bottom in the order things happen:
     construction (header, widgets) -> layout toggles -> refresh -> place mode -> pair modes ->
     undo -> keys -> definitions -> dialogs (anchors, queue, merge, export)
 """
-import gc
 import json
 import math
 import os
 import random
+import re
 import sqlite3
+import sys
 import threading
 import time
+import webbrowser
 
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+import deps
+import rudeness
+from definitions import Online, wiktionary_url
+import wordsource
 from browser import Browser
+from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS
+from constants import (CENSOR_CAVEAT, CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
+                       QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
-from saves import write_export
-from sizing import center_geometry, fit_size, ui_factor, usable_area
+from keymap import Keymap, display, spec_of
+from saves import app_dir, is_code_note, is_frozen, write_export
+from shortcuts import ShortcutsDialog
+from tiercolours import TierColoursDialog
+from sources import SourceDialog
+import standalone
+from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
+import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
 from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, RoundButton, ShapeCard, StyledDialog, TabBar, TierChip, TierRow, Toast,
-                     Tooltip, WordCard, refresh_widgets, watch_focus)
+from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
+                     Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
 
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # (where tierlist.py is)
+SCRIPT_DIR = app_dir()          # where tierlist.py is, or a built program (T-1)
 
 
 def format_stats(stats):
@@ -51,6 +65,35 @@ def local_midnight(now=None):
     """The start of today, local time, as a timestamp."""
     t = time.localtime(now if now is not None else time.time())
     return time.mktime((t.tm_year, t.tm_mon, t.tm_mday, 0, 0, 0, 0, 0, -1))
+
+
+def apply_look(store):
+    """The look the save asks for (UI-61, UI-62): dark mode (meta dark_mode) and the tier colours (meta tier_colors,
+    six #RRGGBB as JSON), applied to theme before a window is built."""
+    try:
+        tiers = json.loads(store.get_meta("tier_colors") or "null")
+    except ValueError:
+        tiers = None
+    theme.apply(dark=store.get_meta("dark_mode") == "1", tiers=tiers if isinstance(tiers, list) else None)
+
+
+def reopen_while_asked(app, store, defs, new_root):
+    """After the window's event loop ended: while it ended to reopen (App.reopen: a new look), build the window again
+    in that look on a new root (new_root() -> a hidden Tk with fonts and styles), with the save still open, while
+    the old one is still on screen; the new one takes its place, size and state (App.take_over) and shows, and only
+    then does the old one close, so the look changes in place instead of the window going away and coming back
+    (reported: jarring). Returns the last App."""
+    while app.reopening:
+        old = app
+        apply_look(store)
+        root = new_root()
+        tk._default_root = root                  # (anything made without a master belongs to the new window)
+        app = App(root, store, defs)
+        app.take_over(old)
+        app.open_window()
+        root.after(120, app._drop_old)           # (once the new one is drawn over it)
+        root.mainloop()
+    return app
 
 
 class App:
@@ -73,11 +116,15 @@ class App:
     buttons) are two frames in self.center; refresh() shows the one matching the mode.
     """
 
-    def __init__(self, root, store, defs, note=None, other_saves=()):
+    def __init__(self, root, store, defs, note=None, other_saves=(), ask_dealing=False, offer_form=False):
         """Build the window. `note` is a one-time message (which save was resumed); `other_saves` are
-        extra saves with progress that _startup() offers to merge. `defs` is a Definitions.
+        extra saves with progress that _startup() offers to merge. `defs` is a Definitions. `ask_dealing`: show
+        the first start's "How words are dealt" steps (ST-6; main() asks once per save). `offer_form`: offer the
+        other form once (T-9: make a program from source, or unpack the source in the program; main() turns it off
+        with --no-install, and tests leave it off).
         """
         self.root, self.store, self.defs = root, store, defs
+        self.ask_dealing, self.offer_form = ask_dealing, offer_form
         self.note, self.other_saves = note, list(other_saves)
         self.mode = store.get_meta("mode", "place")
         if self.mode not in self.modes_with_work(store.stats()):
@@ -85,7 +132,12 @@ class App:
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
+        self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
+        self._ws = root.tk.call("tk", "windowingsystem")
         self.cur_word = None
+        self.looked_up = None        # a word looked up from the card (UI-51): shown until it is placed or skipped
+        self._was_looked_up = None   # the last one placed or skipped: undoing that brings it back to the card
+        self._to_add = None          # a word not in the list: Enter again adds it
         self.cmp = None
         self.pair = None
         self.focus = None
@@ -96,9 +148,17 @@ class App:
         self._last_action = self.session_start
         self.mem_defs = {}
         self.def_words = []
+        self.def_lookup = None    # a word clicked in the definitions (W-1): the pane shows it until "Back" or the next word
+        self.lookups = []         # words looked up so (W-1), shown in Browse for the moment, at the bottom
         self.browsers = []
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
+        self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
+        self._was_online = False
+        root.after(self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
+        self._room_from = None    # the window's height before it grew for the opening drawer (_make_room)
+        self._was_comparing = False   # (the place view showed a comparison last time: _render_place_state)
+        self._lines_before_cmp = 0    # the definitions pane's lines when that comparison began
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
         self._applied_scale = None  # font scale last applied (skip re-applying the same)
         self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
@@ -106,8 +166,16 @@ class App:
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self._fit_cache = {}      # (layout, zoom, screen) -> the font step that fitted last time (_fit_window)
-        self._zoom_cap = {}       # layout -> the smallest zoom found not to fit there (a held Ctrl + stops trying)
-        self.zoom = min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(store.get_meta("zoom", "1") or 1)))
+        self._def_want = self.DEF_LINES  # lines the definition pane asks for (raised to show every sense: UI-56)
+        # layout -> the smallest zoom found not to fit there: never tried on screen again (saved for each screen;
+        # asked for: a zoom in that cannot fit grew the window and snapped back the first time)
+        self._zoom_cap = self._saved_caps()
+        self.zoom = store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
+        kept_max = self._max_zoom(store)
+        if kept_max is not None and self.zoom > kept_max:    # (never bigger than when maximized: _keep_compatible)
+            self.zoom = kept_max
+            store.set_meta("zoom", self.zoom)
+        self._maximized = False   # the window maximized: it shows the zoom kept for that ("zoom_max", UI-57)
         self._chart_ready = False
         self._settled_ready = False
 
@@ -117,63 +185,153 @@ class App:
         self.defs_var = tk.BooleanVar(value=self.show_defs)
         self.auto_var = tk.BooleanVar(value=self.auto_compare)
         self.motion_var = tk.BooleanVar(value=self.reduce_motion)
+        self.censor_var = tk.BooleanVar(value=store.deal_settings()["censor"])
+        self.dark_var = tk.BooleanVar(value=store.get_meta("dark_mode") == "1")
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
         self._build_header()
         self._build_ui()
+        self.apply_keys()
+        # every key goes through on_key and the keymap (UI-48), Ctrl ones too
         root.bind("<Key>", self.on_key)
         root.bind("<KeyRelease>", self.on_key_release)
         self._held = {}                            # keysym -> held-key state (_repeat_allowed)
-        for seq in ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"):
-            root.bind(seq, lambda e: self._zoom_key(e, 1))
-        for seq in ("<Control-minus>", "<Control-KP_Subtract>"):
-            root.bind(seq, lambda e: self._zoom_key(e, -1))
-        for seq in ("<Control-0>", "<Control-KP_0>"):
-            root.bind(seq, lambda e: self._zoom_key(e, 0))
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
-        root.bind("<Control-z>", lambda e: self.undo())
         root.bind("<ButtonPress-1>", self._click_background, add="+")
-        root.bind("<Command-z>", lambda e: self.undo())
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self._update_options()
         self._layout_defs()
         self.refresh()
         self._fit_window(initial=True)
         root.after(120, self._poll_defs)
+        self.rude_read = None     # the background read of Wiktionary's meanings (_start_rude_read), while it runs
+        root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
 
+    def open_window(self):
+        """Show the main window once it is built, sized and filled (F-1): every pending layout is finished while
+        it is still hidden, and it is drawn while see-through (where the system allows it: Windows, macOS, a
+        Linux desktop with a compositor), so it appears complete rather than as a blank frame filling in."""
+        r = self.root
+        r.update_idletasks()
+        self._precheck_zoom()
+        r.update_idletasks()
+        try:
+            r.attributes("-alpha", 0.0)
+        except tk.TclError:
+            pass
+        r.deiconify()
+        r.update()                                  # (mapped, exposed and every widget drawn)
+        r.after(30, self._unveil)
+
+    def _unveil(self):
+        try:
+            self.root.attributes("-alpha", 1.0)
+        except tk.TclError:
+            pass
+
     def _startup(self):
-        """One-time prompts after the window opens: which save was resumed, merge offers, anchors."""
+        """One-time prompts after the window opens: which save was resumed, merge offers, how words are dealt
+        (ST-6: once per save, then in Settings), anchors."""
         if self.note:
             self.flash(self.note, ms=12000)
         if self.other_saves:
             self.offer_merge(self.other_saves)
-        if not all(self.anchors):
-            self.edit_anchors()
+
+        def anchors():
+            if not all(self.anchors):
+                self.edit_anchors()
+        if self.ask_dealing and self.store.get_meta("dealt_asked") != "1":
+            self.edit_dealing(first=True, on_done=anchors)
+        else:
+            anchors()
+        if self.offer_form:
+            self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
+
+    # ---- T-9: the other form, offered once --------------------------------------------------------------------
+    FORM_OFFER_MS = 1500                     # after the start's own questions; then checked this often until quiet
+    FORM_ASKED = {False: "offered_program", True: "offered_source"}      # meta: asked once (source / program)
+
+    def _offer_other_form(self):
+        """Once (remembered in the save, from source and in the program each), when nothing else is going on: from
+        source "Make this a standalone program?" (T-9: yes does what File > Source & Updates would); in the
+        program its source is unpacked beside it without asking (T-10, _unpack_beside). Waits while a question or
+        settings page is open, while a long job runs and while Wiktionary's meanings are being downloaded."""
+        frozen = is_frozen()
+        key = self.FORM_ASKED[frozen]
+        # (reported: it fired after the save had closed and failed reading it: once shut, a window never asks)
+        if self.shut or self.store.closed or not self.root.winfo_exists() or self.store.get_meta(key) == "1":
+            return
+        if dialog_open(self.root) or self.busy or self.rude_read is not None:
+            self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
+            return
+        if frozen and not standalone.bundled_source():
+            return                                   # (built without its source: nothing to offer)
+        if not frozen and os.path.exists(standalone.program_path(standalone.ROOT)):
+            return                                   # (a program is beside tierlist.py already)
+        self.store.set_meta(key, "1")                # (asked once, whatever the answer)
+        if frozen:                                   # (T-10, asked for: no question; done once, quietly, unless a
+            return self._unpack_beside()             # copy of the source is beside the program already)
+        else:
+            yes = ask_yes_no("Source & Updates", "Make this a standalone program?",
+                             "It builds Word Tier List into one program for this computer, next to tierlist.py "
+                             "(a minute or two), then reopens as the program with the same save; Python is no "
+                             "longer needed to run it. You can do it any time from File > Source & Updates.",
+                             yes="Make it", no="Not now", parent=self.root)
+        if yes:
+            return SourceDialog(self, go=True)
+        return None
+
+    def _unpack_beside(self):
+        """The built program's first start (T-10): its source goes into "Word Tier List source" beside it, unless a
+        copy is there already (standalone.existing_source: tierlist.py beside it, or a folder holding one). Says
+        where in a message; File > Source & Updates can unpack it again, or elsewhere. Returns the folder, or None."""
+        if standalone.existing_source():
+            return None
+        where = standalone.default_source_folder()
+        try:
+            standalone.unpack(standalone.bundled_source(), where)
+        except OSError as exc:
+            self.flash(f"The source code could not be unpacked beside the program ({exc.strerror or exc}); "
+                       "File > Source & Updates can put it elsewhere", ms=6000)
+            return None
+        self.flash(f"The source code is unpacked beside the program, in \"{os.path.basename(where)}\" "
+                   "(File > Source & Updates)", ms=5000)
+        return where
 
     # ---- construction ------------------------------------------------------------------
     def _menu_items(self):
         """The header menus (UI-10): File (import/export), Edit (undo), View (browse, definitions, motion),
         Settings (anchors, queue). Each item is a DropMenu row: ("command", label, command, shortcut)
-        or ("check", label, variable, command)."""
+        or ("check", label, variable, command). Shortcuts come from the keymap (UI-48)."""
+        key = lambda a: (self.keys.display(a) or [None])[0]
         return [
             ("File", [("command", "Import earlier progress...", self.import_progress, None),
                       ("command", "Export tier list...", self.export, None),
                       ("command", "Where is my save file?", self.show_save_location, None),
+                      *([("command", "Add to applications menu", self.add_launcher, None)]
+                        if sys.platform.startswith("linux") else []),
+                      *([("command", "Add to Start menu", self.add_launcher, None)]
+                        if sys.platform.startswith("win") else []),
+                      ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
-            ("Edit", [("command", "Undo", self.undo, "Ctrl+Z")]),
+            ("Edit", [("command", "Undo", self.undo, key("undo"))]),
             ("View", [("command", "Browse / edit tier list...", self.open_browser, None),
                       ("separator",),
-                      ("command", "Zoom in", lambda: self.zoom_step(1), "Ctrl +"),
-                      ("command", "Zoom out", lambda: self.zoom_step(-1), "Ctrl \u2212"),
-                      ("command", "Actual size", lambda: self.set_zoom(1.0), "Ctrl 0"),
+                      ("command", "Zoom in", lambda: self.zoom_step(1), key("zoom_in")),
+                      ("command", "Zoom out", lambda: self.zoom_step(-1), key("zoom_out")),
+                      ("command", "Actual size", lambda: self.set_zoom(1.0), key("zoom_reset")),
                       ("separator",),
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
-                      ("check", "Reduce motion", self.motion_var, self.toggle_motion)]),
+                      ("check", "Reduce motion", self.motion_var, self.toggle_motion),
+                      ("check", "Censor obscene words", self.censor_var, self.toggle_censor),
+                      ("check", "Dark mode", self.dark_var, self.toggle_dark)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
-                          ("command", "Queue randomness & seed...", self.edit_queue, None),
+                          ("command", "How words are dealt...", self.edit_dealing, None),
+                          ("command", "Keyboard shortcuts...", self.edit_keys, None),
+                          ("command", "Tier colours...", self.edit_tier_colours, None),
                           ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
         ]
 
@@ -189,6 +347,10 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
+        # the project's page, at the top right (UI-75: asked for); muted until hovered
+        self.github = LinkButton(bar, "external", lambda: self.open_page(REPO_PAGE), note="The project on GitHub",
+                                 bg=PALETTE["surface"], text="GitHub", font=font("body"))
+        self.github.pack(side="right", padx=(0, 6))
         for name in self.header.buttons:
             r.bind(f"<Alt-{name[0].lower()}>", lambda e, n=name: self._open_menu_key(n))
         r.bind("<F10>", lambda e: self._open_menu_key("File"))
@@ -248,11 +410,12 @@ class App:
         bottom.pack(side="bottom", fill="x")
         ttk.Button(bottom, text="Undo", command=self.undo, takefocus=0).pack(side="left")
         ttk.Button(bottom, text="Browse / edit...", command=self.open_browser, takefocus=0).pack(side="left", padx=6)
-        ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0).pack(side="left")
+        self.def_btn = ttk.Button(bottom, text="Definition (D)", command=lambda: self.toggle_defs(), takefocus=0)
+        self.def_btn.pack(side="left")
         self.hint_lbl = ttk.Label(bottom, foreground=PALETTE["muted"], justify="right")   # one line (it is short)
         self.hint_lbl.pack(side="right")
 
-        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("head")}, animator=self.anim)
+        self.def_frame = DefinitionDrawer(r, {"body": font("body"), "head": font("heading")}, animator=self.anim, gap=6)
         self.def_text = self.def_frame.text
 
         self.center = ttk.Frame(r)
@@ -264,9 +427,12 @@ class App:
         self.place_frame = ttk.Frame(self.center)
         inner = ttk.Frame(self.place_frame)
         self.place_inner = inner
-        inner.place(relx=0.5, rely=0.5, anchor="center")
-        self.word_card = WordCard(inner, font("word"), font("body"))
+        inner.place(relx=0.5, anchor="n")            # (its top: _recenter)
+        self.word_card = WordCard(inner, font("word"), font("small"))
         self.word_card.grid(row=0, column=0, pady=(0, 22))      # breathing room above the tier pills
+        self.word_card.on_find, self.word_card.on_enter = self.start_lookup, self.lookup_word   # (UI-51)
+        self.word_card.animator = self.anim                       # (a censored word un-smears under the pointer)
+        Tooltip(self.word_card, self._card_note, font=font("body"))
         self.place_empty = EmptyCard(inner, font("title"), font("body"))     # every word placed (UI-20)
         self.ladder = AnchorLadder(inner, TIERS, font("head"), animator=self.anim)
         self.ladder.grid(row=1, column=0)
@@ -305,7 +471,7 @@ class App:
         self.pair_frame = ttk.Frame(self.center)
         pi = ttk.Frame(self.pair_frame)
         self.pair_inner = pi
-        pi.place(relx=0.5, rely=0.5, anchor="center")
+        pi.place(relx=0.5, anchor="n")
         # Refine / Boundary: which tier or boundary to work on, right above the duel it affects (so the page
         # area is the same in every tab and the content does not jump when switching)
         self.opt_frame = ttk.Frame(pi)
@@ -324,11 +490,12 @@ class App:
         self.duel = DuelCards(pi, self._on_duel, font("pair"), font("body"), animator=self.anim)
         self.duel.grid(row=2, column=0, sticky="nsew")
         self.left_btn, self.right_btn = self.duel.left, self.duel.right
-        self.tie_btn, self.skip_pair_btn = self.duel.tie, self.duel.skip
         self.ctx_lbl = ttk.Label(pi, text="", foreground=PALETTE["muted"], wraplength=720, justify="center")
         self.ctx_lbl.grid(row=3, column=0, pady=(10, 0))
         self.pair_empty = EmptyCard(pi, font("title"), font("body"))         # nothing to duel here (UI-20)
         self.center.bind("<Configure>", self._on_center_configure)
+        for inner in (self.place_inner, self.pair_inner):       # (placed by their top: a change of height
+            inner.bind("<Configure>", lambda e: self._recenter())   # re-centres them)
         self.root.bind("<Configure>", self._on_root_configure, add="+")
 
     # ---- zoom (View menu, Ctrl + / Ctrl - / Ctrl 0) ---------------------------------------------------------
@@ -345,36 +512,69 @@ class App:
             self._say_zoom(z)                     # unchanged (Ctrl 0 at 100%, zoom out at the smallest): say so
             return "break"
         old, before = self.zoom, self.font_scale * self.zoom * self.grow     # what is on screen now
+        bigger = z > round(old * self.grow, 2) + 1e-9     # (a zoom in: in a grown window 120% can be a step down)
         cap = self._zoom_cap.get(self._layout_key())
-        if z > old and cap is not None and z >= cap:
+        if bigger and cap is not None and z >= cap:
             z = round(cap - self.ZOOM_STEP, 2)    # known not to fit here: refuse on the spot, nothing tried on screen
             if z <= old and self.grow == 1:
                 self._refuse_zoom()
                 return "break"
         self._apply_zoom(z)
         now = self.font_scale * self.zoom
-        if z > old and now <= before + 1e-9:
-            self._zoom_cap[self._layout_key()] = z    # remember: holding the key will not try it again
+        if bigger and now <= before + 1e-9:
+            self._remember_cap(z)                     # remember (in the save, for this screen): never tried again
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
-        self.store.set_meta("zoom", z)
+        key = self._zoom_key()
+        self.store.set_meta(key, z)
+        self._keep_compatible(key, z)
         self._say_zoom(z)
         return "break"
+
+    def _max_zoom(self, store=None):
+        """The zoom kept for the window maximized (UI-57), or None before one is chosen there."""
+        store = store or self.store
+        if store.get_meta("zoom_max") is None:
+            return None
+        return store.meta_number("zoom_max", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
+
+    def _keep_compatible(self, key, z):
+        """The two zooms (UI-57) stay compatible (reported: the window opened with its contents bigger than when
+        maximized, so maximizing shrank them): the window at any other size never shows more than maximized. A zoom
+        chosen for the usual window above the maximized one raises that too; one chosen maximized below the usual
+        one lowers that too."""
+        if key == "zoom":
+            kept = self._max_zoom()
+            if kept is not None and z > kept:
+                self.store.set_meta("zoom_max", z)
+        else:
+            if z < self.store.meta_number("zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX):
+                self.store.set_meta("zoom", z)
+
+    def _zoom_key(self):
+        """Where the zoom is kept: one for the window maximized, one for it at any other size (UI-57: each comes
+        back as it was left when the window is maximized or restored again, even after a restart)."""
+        return "zoom_max" if is_maximized(self.root) else "zoom"
+
+    def _follow_maximize(self):
+        """The window was just maximized or restored: show the zoom kept for that (UI-57; restored: the usual zoom,
+        100% until one is chosen). Maximized before any zoom was chosen there, the contents simply grow with it
+        (UI-25). True if the zoom changed."""
+        m = is_maximized(self.root)
+        if m == self._maximized:
+            return False
+        self._maximized = m
+        if m and self.store.get_meta("zoom_max") is None:
+            return False
+        self._apply_zoom(self.store.meta_number("zoom_max" if m else "zoom", 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX))
+        return True                           # (always: the window's new size is the one that zoom is shown in)
 
     def _say_zoom(self, z):
         """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
         note = "" if self.font_scale > 0.999 else " (shown smaller, to fit the screen)"
-        self.flash(f"Zoom {round(z * 100)}%{note}", bg=PALETTE["info"][0], fg=PALETTE["info"][1],
+        self.flash(f"Zoom {round(z * 100)}%{note}", kind="info",
                    ms=900 if not note else 1600)
-
-    def _zoom_key(self, e, d):
-        """Ctrl + / Ctrl - (d = 1 / -1) or Ctrl 0 (d = 0, actual size) pressed: paced like every other held key
-        (500 ms, then every 250 ms after the last step finished), so holding it never queues up refits."""
-        if self._repeat_allowed(e):
-            self.set_zoom(1.0) if d == 0 else self.zoom_step(d)
-            self._action_done(e)
-        return "break"
 
     def zoom_step(self, d):
         """Ctrl + / Ctrl - (and the View menu): one step bigger or smaller than what is on screen now, which in a
@@ -383,15 +583,99 @@ class App:
 
     def _layout_key(self):
         """What decides how big things can get: the tab, the definitions pane and the screen."""
-        return (self.mode, self.show_defs, tuple(usable_area(self.root)))
+        area = usable_area(self.root)
+        return (self.mode, bool(self.show_defs), area[2], area[3])
+
+    ZOOM_CAPS = "zoom_caps"                  # meta: {"mode|defs|screen": zoom}, the zooms that do not fit there
+
+    def _cap_key(self, key):
+        mode, defs, w, h = key
+        return f"{mode}|{int(defs)}|{w}x{h}"
+
+    def _saved_caps(self):
+        """The zoom limits found before on each screen, by this version of the program (a new one may lay the page
+        out differently: it finds them again)."""
+        try:
+            saved = json.loads(self.store.get_meta(self.ZOOM_CAPS, "{}"))
+        except ValueError:
+            saved = {}
+        if saved.pop("version", None) != VERSION:
+            return {}
+        caps = {}
+        for k, z in saved.items():
+            try:
+                mode, defs, wh = k.split("|")
+                w, h = (int(v) for v in wh.split("x"))
+            except ValueError:
+                continue
+            caps[(mode, defs == "1", w, h)] = float(z)
+        return caps
+
+    def _remember_cap(self, z, key=None):
+        key = key or self._layout_key()
+        self._zoom_cap[key] = z
+        try:
+            saved = json.loads(self.store.get_meta(self.ZOOM_CAPS, "{}"))
+        except ValueError:
+            saved = {}
+        if saved.get("version") != VERSION:
+            saved = {"version": VERSION}
+        saved[self._cap_key(key)] = z
+        self.store.set_meta(self.ZOOM_CAPS, json.dumps(saved))
+
+    def _fits_at(self, size, defs):
+        """Would the page fit the screen with its text at `size`, the definitions pane open (at its shortest) or not
+        (`defs`, whether or not it is open now)? Tried and left so: only while the window is still hidden, where no
+        one sees it (_precheck_zoom puts it back)."""
+        r, d = self.root, self.def_frame
+        area = usable_area(r)
+        self.font_scale, self.grow = size / self.zoom, 1.0
+        scale_fonts(size)
+        self._apply_wraps(area[2])
+        refresh_widgets(r)
+        d.set_lines(self.DEF_LINES_MIN)
+        cw, ch = self._content_size()
+        packed = bool(d.winfo_manager())
+        if defs != packed:                    # (counted as if it were open, or not)
+            pane = d.natural_height()
+            ch += pane if defs else -pane
+        return cw <= area[2] and ch <= area[3]
+
+    def _precheck_zoom(self):
+        """While the window is still hidden (open_window): find the first zoom step above the one shown that does
+        not fit this screen, so a zoom in there is refused straight away, never tried on screen (asked for: the
+        first try grew the window and snapped back). Saved for the screen: later starts skip it (~300 ms a try)."""
+        mode, _defs, w, h = self._layout_key()
+        todo = [defs for defs in (False, True) if (mode, defs, w, h) not in self._zoom_cap]
+        if not todo:
+            return
+        d = self.def_frame
+        kept = (self.font_scale, self.grow, self._applied_scale, d.lines())
+        try:
+            for defs in todo:                 # (the pane closed and open: opened later, it is known there too)
+                step = round(round(self.zoom * self.grow, 1) + self.ZOOM_STEP, 2)
+                while step <= self.ZOOM_MAX + 1e-9:
+                    if not self._fits_at(step, defs):
+                        self._remember_cap(step, (mode, defs, w, h))
+                        break
+                    step = round(step + self.ZOOM_STEP, 2)
+        finally:
+            self.font_scale, self.grow, self._applied_scale, lines = kept
+            scale_fonts(self._applied_scale)
+            self._apply_wraps(usable_area(self.root)[2])
+            refresh_widgets(self.root)
+            d.set_lines(lines)
+            self._fit_big_text()
 
     def _refuse_zoom(self):
-        """Zoom in cannot go further: say so once; while that message shows, a repeat just wiggles it."""
+        """Zoom in cannot go further: say so and shake the message "no" (asked for: from the first time; it used
+        to grow the window and snap back); while it shows, a repeat shakes it again."""
         t = getattr(self, "_zoom_note", None)
         if t is not None and t.cget("text") == self.ZOOM_FULL and t.wiggle():
             return
-        self.flash(self.ZOOM_FULL, bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+        self.flash(self.ZOOM_FULL, kind="info", ms=1500)
         self._zoom_note = self.toast
+        self.toast.wiggle()
 
     ZOOM_FULL = "This is as big as fits on this screen"
 
@@ -404,7 +688,7 @@ class App:
 
     # ---- window size: fits the screen and the contents ------------------------------------------
     FIT_STEP, FIT_LOWEST = 0.1, 0.5         # sizes tried until the contents fit: the zoom, then 0.1 less each time,
-                                             # down to half the zoom
+                                             # down to half the normal size (half the zoom when that is smaller)
     BASE_SIZE = (1040, 760)                  # preferred window size at the classic 96 dpi
     MIN_SIZE = (780, 580)                    # never smaller than this (also at 96 dpi)
 
@@ -435,7 +719,13 @@ class App:
         ch = self.center.winfo_height()
         for inner in (self.place_inner, self.pair_inner):
             free = (ch - inner.winfo_reqheight()) / 2
-            inner.place_configure(y=-int(max(0, min(band / 2, free))))
+            # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
+            # the content shook by a pixel while the definitions pane slid against its top)
+            top = int(free - max(0, min(band / 2, free)))
+            limit = ch - inner.winfo_reqheight() - self._toast_room()
+            if limit >= 0:                        # (centred low on a short page, it sat where messages show)
+                top = min(top, limit)
+            inner.place_configure(y=top)
 
     def _fit_big_text(self):
         """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
@@ -479,10 +769,29 @@ class App:
         inner_w = max(self.place_inner.winfo_reqwidth(), self.pair_inner.winfo_reqwidth())
         inner_h = max(self.place_inner.winfo_reqheight(), self.pair_inner.winfo_reqheight() + extra)
         width = max([w.winfo_reqwidth() for w in rows] + [inner_w + int(60 * f)])
-        height = sum(w.winfo_reqheight() for w in rows) + inner_h + int(50 * f)
+        # (breathing room round the contents, at least enough under them for a message: _recenter keeps it there)
+        height = sum(w.winfo_reqheight() for w in rows) + inner_h + max(int(50 * f), self._toast_room())
         return width, height
 
+    def _toast_room(self):
+        """Room kept under the page's contents for a one-line message (asked for: a message never covers the word
+        card, the buttons or the definitions pane): a Toast's pill, 10 px off the bottom, and a little gap."""
+        line = font("label").metrics("linespace")
+        return int(line * 1.9) + 2 + 10 + 6
+
     def _fit_window(self, initial=False, rebase=False, folded_drawer=False):
+        """_fit_size, and an open definitions pane it made shorter or taller eases there from where it was (asked
+        for: comparing to anchors shrank it in one jump), unless the text size changed too (a zoom: it follows)."""
+        d = self.def_frame
+        if d.easing:
+            d.settle()
+        was = d.winfo_reqheight() if not initial and self.show_defs and d.steady else None
+        scale = self._applied_scale
+        self._fit_size(initial, rebase, folded_drawer)
+        if was is not None and self._applied_scale == scale:
+            d.ease_from(was)
+
+    def _fit_size(self, initial=False, rebase=False, folded_drawer=False):
         """Size and place the main window for this screen and these contents.
 
         The contents are shown at the zoom, or at the biggest size in 0.1 steps below it that fits the screen,
@@ -492,24 +801,38 @@ class App:
         screen, centred. Later calls (mode or definition pane changed) only grow it if the contents
         now need more room. The minimum size always follows the contents. It also sets the size at which
         the contents start to grow with the window (UI-25); `rebase` (after a zoom) makes that at least the
-        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open; count it at
-        its full height without showing it (showing it open for the measurement made it flash, UI-35).
+        window's current size. `folded_drawer`: the definitions drawer is folded, about to slide open (or held, about
+        to grow); count it at its full height without showing it (showing it open for the measurement made it
+        flash, UI-35).
         """
         r = self.root
-        if not initial and self.grow > 1:
-            cw, ch = self._content_size()
-            if cw <= r.winfo_width() and ch <= r.winfo_height():
-                return       # still fits at the grown size: re-measuring at normal size would flash small text
+        before = (r.winfo_width(), r.winfo_height())
+        if self.show_defs:
+            self.def_frame.set_lines(self._def_want)
+        if not initial and self.grow > 1:     # still fits at the grown size, the definition pane shortened if it
+            lowest = self.DEF_LINES_MIN - 1   # must (to DEF_LINES_MIN at most): re-measuring at normal size would
+            for lines in (range(self._def_want, lowest, -1) if self.show_defs else (None,)):     # flash small text
+                if lines:
+                    self.def_frame.set_lines(lines)
+                cw, ch = self._content_size()
+                if folded_drawer:             # (folded, about to slide open: counted at its full height, as below;
+                    ch += self.def_frame.unshown_height()        # left out, it slid open over the word card)
+                if cw <= r.winfo_width() and ch <= r.winfo_height():
+                    return
         f = ui_factor(r)
         area = usable_area(r)
         # Make the contents fit the usable area: first shorten the definition pane (down to 3 lines),
         # then take the next font step down, and repeat. Every fit starts again from the full size (the
         # zoom), so a step taken for a taller view (the definitions open, a duel tab) is undone when it
         # closes; it starts from the step that fitted this layout last time, so it does not flicker.
-        key = (self.mode, self.show_defs, self.zoom, tuple(area))
+        key = (self.mode, self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
-        sizes = [round(self.zoom - k * self.FIT_STEP, 2)
-                 for k in range(int(self.zoom * (1 - self.FIT_LOWEST) / self.FIT_STEP + 1e-6) + 1)]
+        if folded_drawer:                # (opening the drawer only ever needs smaller text: tried from the full zoom,
+            start = min(start, round(self.font_scale * self.zoom, 2))     # each size tried showed, the page swelling
+                                                                          # past the window and stepping back down)
+        lowest = min(self.zoom, 1.0) * self.FIT_LOWEST      # (half the normal size: a big zoom on a small
+        sizes = [round(self.zoom - k * self.FIT_STEP, 2)      # screen may shrink as far as no zoom would)
+                 for k in range(int((self.zoom - lowest) / self.FIT_STEP + 1e-6) + 1)]
         rescaled = False
         self.grow = 1.0                          # measured at the normal size; _apply_grow re-grows after
         for size in [z for z in sizes if z <= start + 1e-9]:
@@ -520,19 +843,19 @@ class App:
                 scale_fonts(size)
                 self._apply_wraps(area[2])
                 refresh_widgets(self.root)
-            for lines in (range(9, 2, -1) if self.show_defs else (9,)):
-                self.def_text.config(height=lines)
+            for lines in (range(self._def_want, self.DEF_LINES_MIN - 1, -1) if self.show_defs else (self.DEF_LINES,)):
+                self.def_frame.set_lines(lines)
                 cw, ch = self._content_size()
                 if folded_drawer:
-                    ch += self.def_frame.natural_height()
+                    ch += self.def_frame.unshown_height()
                 if cw <= area[2] and ch <= area[3]:
                     break
             else:
                 continue
             break
         self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
-        if not self.show_defs and int(self.def_text.cget("height")) != 9:
-            self.def_text.config(height=9)
+        if not self.show_defs and self.def_frame.lines() != self.DEF_LINES:
+            self.def_frame.set_lines(self.DEF_LINES)
         r.update_idletasks()
         if rescaled:
             self._fit_big_text()               # the fonts changed even if the window size did not
@@ -555,8 +878,15 @@ class App:
         else:
             r.update_idletasks()
             w, h = max(r.winfo_width(), min_w), max(r.winfo_height(), min_h)
-            if (w, h) != (r.winfo_width(), r.winfo_height()):
-                r.geometry(f"{w}x{h}")
+            x, y = r.winfo_x(), r.winfo_y()          # grown past the screen's edge (the minimum size grows it
+            nx = max(area[0], min(x, area[0] + area[2] - w))        # too): moved back onto it
+            ny = max(area[1], min(y, area[1] + area[3] - h))
+            # (never while maximized: the window is bigger than the usable area then, and moving it back onto it
+            # would un-maximize it)
+            # (grown by the minimum size alone, it is set as the size too: left to the minimum, the window shrank
+            # back to its old size the moment the minimum fell again, a jump as the definitions pane closed)
+            if ((w, h) != before or (nx, ny) != (x, y)) and not is_maximized(r):
+                r.geometry(f"{w}x{h}" + (f"+{nx}+{ny}" if (nx, ny) != (x, y) else ""))
             if rebase:
                 self._ref_size = (max(self._ref_size[0], w), max(self._ref_size[1], h))
             self._apply_grow()
@@ -569,12 +899,17 @@ class App:
         (or what the contents need, if more), then in proportion, in steps of GROW_STEP, up to GROW_MAX."""
         rw, rh = self._ref_size
         g = math.floor(min(w / rw, h / rh) / self.GROW_STEP + 1e-6) * self.GROW_STEP
+        kept = None if is_maximized(self.root) else self._max_zoom()
+        if kept is not None:                  # (a big window, not maximized, never shows more than maximized does)
+            shown = self.font_scale * self.zoom
+            g = min(g, math.floor(kept / shown / self.GROW_STEP + 1e-6) * self.GROW_STEP)
         return round(max(1.0, min(self.GROW_MAX, g)), 2)
 
     def _on_root_configure(self, e):
         """The window was resized: re-grow the contents once resizing pauses for 80 ms (like Browse)."""
         if e.widget is not self.root:
             return
+        self._give_room(e.height)
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
         self._grow_job = self.root.after(80, self._apply_grow)
@@ -583,7 +918,7 @@ class App:
         """Scale every shared font with the window (the word card, pills, buttons, chart and menus follow).
         The minimum size stays the one measured at the normal size, so the window can always shrink back."""
         self._grow_job = None
-        if not self._ref_size:
+        if not self._ref_size or self._follow_maximize():
             return
         g = self._grow_for(self.root.winfo_width(), self.root.winfo_height())
         if g == 1.0 and self.grow > 1:
@@ -614,12 +949,13 @@ class App:
                 d.collapse()                   # packed folded: it must not show at full height first
             else:
                 d.set_open(True)
-            d.pack(side="bottom", fill="x", padx=10, pady=(0, 6), before=self.center)
+            d.pack(side="bottom", fill="x", padx=10, before=self.center)
             self._render_defs()
             if animate:
                 self._make_room(d.natural_height())   # grow the window first only if it must, then ease open
                 d.open()
         elif d.winfo_manager():
+            self._room_from = None
             def gone():
                 if not self.show_defs:
                     d.pack_forget()
@@ -631,17 +967,46 @@ class App:
                 d.set_open(False)
                 gone()
 
+    def _refit_if_needed(self):
+        """After the place view changed (comparing to anchors began or ended): the full fit only if the page no
+        longer fits, or, the comparison over, if the definitions pane was shortened for it; the pane eases to its
+        new height (asked for: it had to shrink smoothly so everything fits)."""
+        if not self.root.winfo_exists() or self.shut:
+            return
+        self.root.update_idletasks()
+        inner = self.place_inner
+        over = (inner.winfo_reqheight() + self._toast_room() > self.center.winfo_height()
+                or inner.winfo_reqwidth() > self.center.winfo_width())       # (really covered, not just snug)
+        short = self.show_defs and not self._was_comparing and self.def_frame.lines() < self._lines_before_cmp
+        if over or short:
+            self._fit_window()
+
     def _make_room(self, extra):
         """Opening the drawer (`extra` pixels tall): one quick size check instead of the full fitting pass
         (which took long enough to swallow the slide). The page usually has room; if not, the full fit
-        runs (it may shorten the pane or the text), counting the folded drawer at its full height."""
+        runs (it may shorten the pane or the text), counting the folded drawer at its full height. A window that
+        must grow does so with the drawer already holding the room it gains (opened from nothing, the page grew,
+        dropped and slid back up as the drawer opened: a jump, seen whenever the window had to grow)."""
+        r = self.root
         cw, ch = self._content_size()
-        if ch + extra > self.root.winfo_height() or cw > self.root.winfo_width():
-            self._fit_window(folded_drawer=True)      # the drawer stays folded: it never flashes open first
+        self._room_from = None
+        if ch + extra > r.winfo_height() or cw > r.winfo_width():
+            self._room_from = r.winfo_height()        # (_on_root_configure: what the window gains goes to the drawer,
+            self._fit_window(folded_drawer=True)      # in the very layout of its new size; the drawer stays folded:
+            self._give_room(r.winfo_height())         # it never flashes open first)
+
+    def _give_room(self, height):
+        """The window is `height` tall now; opening the drawer made it grow: the drawer takes what it gained since
+        last time (a window manager may grow it in steps, or only after the slide has begun)."""
+        if self._room_from is not None and height > self._room_from:
+            self.def_frame.give(height - self._room_from)
+            self._room_from = height
 
     def toggle_defs(self, value=None):
         """Show/hide definitions (D key, menu, button). `value` forces on/off; the choice is saved."""
         self.show_defs = (not self.show_defs) if value is None else bool(value)
+        if not self.show_defs:
+            self._def_want = self.DEF_LINES     # opened again, it fits the words shown then
         self.defs_var.set(self.show_defs)
         self.store.set_meta("show_defs", int(self.show_defs))
         was_open = self.def_frame.is_open
@@ -655,6 +1020,37 @@ class App:
         self.anim.reduce_motion = self.reduce_motion
         self.anim.finish_all()
         self.store.set_meta("reduce_motion", int(self.reduce_motion))
+
+    def toggle_censor(self):
+        """View > Censor obscene words (asked for: the same switch as in How words are dealt, a click away). Saved;
+        the card, the duel cards, the definitions and Browse show it at once, and a comparison carries on."""
+        self.store.set_censor(self.censor_var.get())
+        if self.censor_var.get():
+            self.censor_note()
+        self.refresh()
+        self._render_defs()
+        for b in self.browsers:
+            if b.alive():
+                b.reload(keep_view=True)
+
+    CENSOR_NOTED = "censor_noted"        # meta: the note on censoring has been shown once in this save
+
+    def censor_note(self, show=None, toast=True):
+        """Censoring was just turned on (asked for: say it may not be fully accurate). The first time in a save the
+        whole note, in the window it was turned on in (asked for: never a window of its own): show(text), as the
+        How words are dealt page does under its tick box, or else a longer toast; after that a short toast
+        (`toast`), or nothing."""
+        if self.store.get_meta(self.CENSOR_NOTED) != "1":
+            self.store.set_meta(self.CENSOR_NOTED, "1")
+            text = f"{CENSOR_CAVEAT_HEAD}. {CENSOR_CAVEAT}"
+            if show:
+                show(text)
+            else:
+                self.flash(text, kind="info", ms=9000)
+            return text
+        if toast:
+            self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
+        return None
 
     def toggle_auto(self):
         """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
@@ -683,7 +1079,7 @@ class App:
     def _update_focus_label(self):
         """Show 'Focus: word (N duels left)' and the Clear button while a refine session is running."""
         if self.mode == "refine" and self.focus:
-            self.focus_lbl.config(text=f"Focus: {self.focus} ({self.focus_left} duels left)")
+            self.focus_lbl.config(text=f"Focus: {self.shown(self.focus)} ({self.focus_left} duels left)")
             self.focus_clear.pack(side="left")
         else:
             self.focus_lbl.config(text="")
@@ -717,10 +1113,12 @@ class App:
             self.toasts.remove(t)
             t.destroy()
 
-    def flash(self, text, bg=PALETTE["ok"][0], fg=PALETTE["ok"][1], ms=3500):
-        """Show a message in the toast (a pill coloured bg / fg) for `ms` milliseconds. A new message
-        replaces the old one."""
-        self._new_toast().show(text, (bg, fg), ms, in_=self.center,
+    def flash(self, text, kind="ok", ms=3500, bg=None, fg=None):
+        """Show a message in a toast for `ms` milliseconds, coloured for its `kind` ("ok", "info", "warn":
+        PALETTE's pairs) or by `bg` / `fg` (a tier's colours). Each message is its own toast, the newest on top."""
+        if bg is None:
+            bg, fg = PALETTE[kind]
+        self._new_toast().show(text, (bg, fg or PALETTE[kind][1]), ms, in_=self.center,
                          wraplength=max(240, self.center.winfo_width() - 120))
 
     # ---- refresh ----------------------------------------------------------------------------------------
@@ -737,6 +1135,7 @@ class App:
     def after_external_change(self):
         """Call after something outside the normal flow changed the save (Browse edits, merge, anchors)."""
         self.cmp = None
+        self.censor_var.set(self.store.deal_settings()["censor"])     # (How words are dealt may have changed it)
         self.refresh()
 
     def _update_stats(self):
@@ -804,27 +1203,70 @@ class App:
     def _hint(self):
         """Bottom-right key reminder: only the keys no button on screen already shows. The tier pills,
         compare / don't-know buttons, Better / Same / Worse / Back, the duel cards and Tie / Skip carry
-        their own key hints, and the Definition (D) button names its key."""
+        their own key hints, and the Definition button names its key. All from the keymap (UI-48)."""
+        keys = lambda a: " or ".join(self.keys.display(a))
         if self.mode == "place" and self.cmp:
-            h = "Space stop comparing"           # (the Compare button that shows Space is hidden meanwhile)
-        else:
-            h = "Backspace or Ctrl+Z undo"
-            if len(self.mode_switch.visible) > 1:
-                h += "   \u00b7   Tab next tab"
+            h = f"{keys('stop')} stop comparing" if self.keys.keys_of("stop") else ""
+        else:                                    # (the Compare button that shows Space is hidden meanwhile)
+            h = f"{keys('undo')} undo" if self.keys.keys_of("undo") else ""
+            if len(self.mode_switch.visible) > 1 and self.keys.keys_of("next_tab"):
+                h += ("   \u00b7   " if h else "") + f"{keys('next_tab')} next tab"
         self.hint_lbl.config(text=h)
+
+    def apply_keys(self):
+        """Show the keymap's keys everywhere a key is named (UI-48): the buttons' little hints, the Definition
+        button, the menus' shortcut column and the bottom-right hint."""
+        km = self.keys
+        hint = lambda a, sep=" / ", short=True: sep.join(km.display(a, short=short))
+        tiers = km.keys_of("place")
+        for t, b in enumerate(self.tier_btns):
+            b.config(hint=display(tiers[t]) if t < len(tiers) else "")
+        for a in ("better", "same", "worse", "back"):
+            self.cmp_btns[a].config(hint=hint(a))
+        self.compare_btn.config(hint=hint("compare"))
+        self.later_btn.config(hint=hint("later"))
+        d = self.duel
+        d.left.config(hint="  ".join(km.display("left")))
+        d.right.config(hint="  ".join(reversed(km.display("right"))))
+        d.tie.config(hint="  ".join(km.display("tie")))
+        d.skip.config(hint=hint("skip"))
+        first = km.display("defs")
+        self.def_btn.config(text=f"Definition ({first[0]})" if first else "Definition")
+        for name, items in self._menu_items():
+            self.header.menus[name] = items
+            self.header.drops[name].items = items
+        self._hint()
+
+    def _show_frame(self, frame):
+        """Show one of the centre's views (place, pair) and hide the other."""
+        for f in (self.place_frame, self.pair_frame):
+            if f is not frame:
+                f.pack_forget()
+        frame.pack(fill="both", expand=True)
 
     # ---- place mode ------------------------------------------------------------------------------------------
     def _show_place(self):
         """Place view: show the next unplaced word (or the 'all placed' message) and set up its buttons."""
         self.progress_bar.mark([])                    # (the shelf marks only the duel tabs' words, UI-55)
-        self.pair_frame.pack_forget()
-        self.place_frame.pack(fill="both", expand=True)
-        row = self.store.next_unplaced()
+        self._show_frame(self.place_frame)
+        row = None
+        if self.looked_up:                            # a looked-up word comes first, until placed or skipped
+            row = self.store.get_word(self.looked_up)
+            if row is None or row["tier"] is not None:
+                row, self.looked_up, self._was_looked_up = None, None, self.looked_up
+        if row is None:
+            row = self.store.next_unplaced()
         if row is None:
             self.cur_word = None
             self.word_card.grid_remove()
-            self.place_empty.set("Every word is placed",
-                                 "Refine within tier and Boundary check can keep polishing the order.")
+            out = self.store.left_out()
+            if out:
+                self.place_empty.set("Every word you chose is placed",
+                                     f"{out:,} more are left out (Settings > How words are dealt). Refine within "
+                                     "tier and Boundary check can keep polishing the order.")
+            else:
+                self.place_empty.set("Every word is placed",
+                                     "Refine within tier and Boundary check can keep polishing the order.")
             self.place_empty.grid(row=0, column=0)
             self._set_question("")
             self.tier_row.grid_remove()
@@ -836,9 +1278,12 @@ class App:
         self.cur_word = row["word"]
         self.place_empty.grid_remove()
         self.word_card.grid()
-        notes = (" - revisiting a word you skipped" if row["skips"] > 0 else "") + \
-                (" - compound word" if row["pen"] else "")
-        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}")   # (it fits the word itself)
+        notes = (" - looked up" if row["word"] == self.looked_up else "") + \
+                (" - revisiting a word you skipped" if row["skips"] > 0 else "")
+        label = card_label(row["kinds"], RUDE_NAMES.get(self.store.rude_kind(row["word"])),     # ("noun · sexual";
+                           compound=bool(row["pen"]))                                            # compound: asked for)
+        self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}",   # (it fits the word itself)
+                           censor=self.store.censored(row["word"]), kind=label or None)
         anchors_ok = all(self.anchors)
         self.compare_btn.set_enabled(anchors_ok)
         if self.cmp is None and self.auto_compare and anchors_ok:
@@ -850,10 +1295,16 @@ class App:
 
     def _render_place_state(self):
         """Switch the place view between its three states: tier buttons, anchor question, or 'set anchors'."""
+        comparing = bool(self.cmp)
+        if comparing != self._was_comparing:  # (the comparison is taller or shorter than the tier buttons)
+            self._was_comparing = comparing
+            if comparing:
+                self._lines_before_cmp = self.def_frame.lines()
+            self.root.after_idle(self._refit_if_needed)
         if self.cmp:
             mid = self.cmp["mid"]
             anchor = self.anchors[mid]
-            self._set_question(f"Is it better or worse than  \"{anchor}\"  ?\n(anchor for tier {TIERS[mid]})")
+            self._set_question(f"Is it better or worse than  \"{self.shown(anchor)}\"  ?\n(anchor for tier {TIERS[mid]})")
             self.tier_row.grid_remove()
             self.act_row.grid_remove()
             self.cmp_row.grid()
@@ -878,23 +1329,32 @@ class App:
         else:
             self.vs_lbl.grid_remove()
 
+    def _word_to_act_on(self):
+        """The word on the card, for placing or skipping it, or None (none, or comparing). A word being typed on
+        the card is put back first (a button clicked while typing)."""
+        if not self.cur_word or self.cmp:
+            return None
+        self.word_card.end_typing()
+        return self.cur_word
+
     def place_word(self, tier):
         """Put the current word straight into `tier` (keys 1-6 or the tier buttons)."""
-        if not self.cur_word or self.cmp:
-            return
-        word = self.cur_word
-        self.store.place(word, tier)
-        self._after_place(word, tier)
+        word = self._word_to_act_on()
+        if word:
+            self.store.place(word, tier)
+            self._after_place(word, tier)
 
     def skip_word(self):
         """'Don't know / later': move the current word behind every fresh word."""
-        if not self.cur_word or self.cmp:
+        word = self._word_to_act_on()
+        if not word:
             return
-        word = self.cur_word
+        if word == self.looked_up:
+            self.looked_up, self._was_looked_up = None, word
         self.store.skip(word)
         self._count_action()
         old_sub = self.word_card.sub
-        self.flash(f"'{word}' moved to the back of the queue", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        self.flash(f"'{self.shown(word)}' moved to the back of the queue", kind="info", ms=1800)
         self.refresh()
         f = ui_factor(self.root)               # "later": it drifts back (up and away) instead of toward a tier
         self.word_card.transition_from(word, old_sub, dx=0, dy=-int(10 * f), animator=self.anim)
@@ -909,7 +1369,7 @@ class App:
         f = ui_factor(self.root)
         self.word_card.transition_from(word, old_sub, dx=int((tier - 2.5) * 5 * f), dy=int(12 * f),
                                        animator=self.anim)
-        self._fling_toast(f"{word}  \u2192  {TIERS[tier]}", tier)
+        self._fling_toast(f"{self.shown(word)}  \u2192  {TIERS[tier]}", tier)
 
     def _fling_toast(self, text, tier):
         """The placement message rises out of the word card's top edge, rests above it, then flies into its
@@ -941,8 +1401,9 @@ class App:
         """Begin placing the current word by comparing it to anchors (a binary search over the six tiers)."""
         if not self.cur_word or self.mode != "place" or self.cmp:
             return
+        self.word_card.end_typing()            # (a button clicked while typing on the card: the word is back)
         if not all(self.anchors):
-            self.flash("Set all six anchor words first (Settings > Anchor words...)", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+            self.flash("Set all six anchor words first (Settings > Anchor words...)", kind="warn")
             return
         self.cmp = {"lo": 0, "hi": len(TIERS) - 1, "stack": [], "log": [], "mid": None}
         self._cmp_step()
@@ -1006,7 +1467,7 @@ class App:
             a, b, t = res
             ctx = f"Refining tier {TIERS[t]}"
             if self.focus:
-                ctx += f"   -   focus word: {self.focus}"
+                ctx += f"   -   focus word: {self.shown(self.focus)}"
         elif self.mode == "boundary":
             sel = self.filter_var.get()
             bnd = TIERS.index(sel.split("|")[0].strip()) if "|" in sel else None
@@ -1035,13 +1496,12 @@ class App:
 
     def _show_pair(self):
         """Pair view: show the next duel, or a friendly message with the buttons disabled when none is available."""
-        self.place_frame.pack_forget()
-        self.pair_frame.pack(fill="both", expand=True)
+        self._show_frame(self.pair_frame)
         self.pair = self._pick_pair()
         if self.pair is None:
             title, text = self.EMPTY[self.mode]
             if self.focus:
-                self.flash(f"No fresh opponents left for '{self.focus}'", bg=PALETTE["warn"][0], fg=PALETTE["warn"][1])
+                self.flash(f"No fresh opponents left for '{self.shown(self.focus)}'", kind="warn")
                 self.focus = None
                 self._update_focus_label()
             for w in (self.pair_title, self.duel, self.ctx_lbl):
@@ -1058,7 +1518,8 @@ class App:
             words = [self.pair["left"], self.pair["right"]]
             tiers = [self.store.get_word(w)["tier"] for w in words]
             # the duel cards wear their word's tier colour (a neutral pastel without a tier)
-            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers])
+            self.duel.show(*words, colors=[TIER_COLORS[t] if t is not None else PALETTE["neutral"] for t in tiers],
+                           censor=[self.store.censored(w) for w in words])
             self._fit_big_text()
             self.ctx_lbl.config(text=self.pair["ctx"])
             self._render_defs(words)
@@ -1078,7 +1539,7 @@ class App:
         self._count_action()
         if info["swapped"]:
             w, wt, l, lt = info["swapped"]
-            self.flash(f"Swapped: {w} \u2192 {TIERS[wt]},  {l} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
+            self.flash(f"Swapped: {self.shown(w)} \u2192 {TIERS[wt]},  {self.shown(l)} \u2192 {TIERS[lt]}", bg=TIER_COLORS[wt], fg=TIER_TEXT)
             self.note_anchor_changes(info["anchors"])
         elif info["conflict"]:
             self.flash("Conflict: that contradicts earlier answers. Pair saved for review "
@@ -1087,11 +1548,12 @@ class App:
             win, lose = (a, b) if ans != "right" else (b, a)
             tier = self.store.get_word(win)["tier"]
             tint = TIER_COLORS[tier] if tier is not None else PALETTE["info"][0]
-            self.flash(f"{win}  {'=' if ans == 'tie' else '>'}  {lose}", bg=tint, fg=TIER_TEXT, ms=1400)
+            self.flash(f"{self.shown(win)}  {'=' if ans == 'tie' else '>'}  {self.shown(lose)}", bg=tint, fg=TIER_TEXT,
+                       ms=1400)
         if self.focus:
             self.focus_left -= 1
             if self.focus_left <= 0:
-                self.flash(f"Finished refining '{self.focus}'", bg=PALETTE["ok"][0])
+                self.flash(f"Finished refining '{self.shown(self.focus)}'")
                 self.focus = None
         self.pair = None                       # answered: nothing more to click until the next pair is up
         if ans in ("left", "right"):
@@ -1129,11 +1591,66 @@ class App:
         self.focus = None
         self.refresh()
 
+    # ---- looking up a word to sort it now (UI-51) --------------------------------------------------------------
+    def start_lookup(self):
+        """The magnifier on the card (or its key): type a word on the card, Enter brings it up to sort now (the
+        queue order of the rest does not change). The magnifier again, or Escape, goes back."""
+        card = self.word_card
+        if card.typing:
+            card.end_typing()
+            return
+        if self.mode != "place" or not self.cur_word or self.busy:
+            return
+        if self.cmp:
+            self._cancel_compare()
+        self._to_add = None
+        card.begin_typing()
+
+    def lookup_word(self, text):
+        """Enter on the card: an unplaced word comes up to sort; a placed one, or one not in the list, shakes the
+        card and says so (Enter again adds a word the list does not have)."""
+        card = self.word_card
+        text = typed_word(text)
+        if not text:
+            card.end_typing()
+            return
+        if not any(ch.isalnum() for ch in text):
+            card.note("Type a word: letters or numbers", self.anim)
+            return
+        row = self.store.get_word(text) or self.store.get_word(text.lower())
+        if row is not None and row["tier"] is not None:
+            card.note(f"Already placed in {TIERS[row['tier']]}  \u00b7  Browse to change it", self.anim)
+            return
+        if row is None:
+            if self._to_add != text:
+                self._to_add = text
+                card.note("Not in the word list  \u00b7  Enter again to add it", self.anim)
+                return
+            text = text.lower()                # (the list is all lower case: "Zorp" is the word zorp)
+            self.store.add_word(text)
+            row = self.store.get_word(text)
+            self.flash(f"'{text}' added to the word list", kind="info", ms=1800)
+        self._to_add = None
+        self.looked_up = row["word"]
+        card.end_typing(restore=False)
+        self.refresh()
+
+    def _card_note(self, e):
+        """The magnifier's hover note."""
+        x, y, size = self.word_card.find_box()
+        if not (x - 4 <= e.x <= x + size + 4 and y - 4 <= e.y <= y + size + 4):
+            return None
+        if self.word_card.typing:
+            return "Back to the word"
+        keys = self.keys.display("find")
+        return "Look up a word" + (f" ({keys[0]})" if keys else "")
+
     def on_mode_change(self):
         """The mode was switched (mode switch, or mode_var set by code): save it and reset any in-progress
         comparison, pair or focus."""
         self.anim.finish(self.duel.anim_key)   # a duel result still showing finishes first (it loads a pair)
         self.mode = self.mode_var.get()
+        self.word_card.end_typing()            # (a word half typed on the card is dropped)
         self.mode_switch.set(self.mode)
         self.store.set_meta("mode", self.mode)
         self.cmp = None
@@ -1150,14 +1667,22 @@ class App:
         if self.mode == "place" and self.cmp and not saved_only:
             self.cmp_back()
             return
+        self.word_card.end_typing()            # (Edit > Undo while typing on the card: the word is back first)
         word = self.store.undo()
         if word is None:
-            self.flash("Nothing to undo", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1500)
+            self.flash("Nothing to undo", kind="info", ms=1500)
             return
         self.session_count = max(0, self.session_count - 1)
         self.cmp = None
-        self.flash(f"Undid last action ({word})", bg=PALETTE["info"][0], fg=PALETTE["info"][1], ms=1800)
+        if word == self._was_looked_up and (self.store.get_word(word) or {"tier": 0})["tier"] is None:
+            self.looked_up = word              # (a looked-up word comes back where it was: on the card, not the queue)
+        self.flash(f"Undid last action ({self.shown(word)})", kind="info", ms=1800)
         self.refresh()
+
+    def shown(self, word):
+        """How `word` is written in messages and labels: masked (b\u2022\u2022\u2022\u2022\u2022d) when Censor obscene words
+        is on and it is one (ST-6); the big cards smear it instead."""
+        return mask_word(word) if self.store.censored(word) else word
 
     # ---- keys --------------------------------------------------------------------------------------------------------------
     # A held key repeats like a keyboard does (the usual defaults): nothing for REPEAT_DELAY_MS after the first
@@ -1194,42 +1719,45 @@ class App:
             h["down"], h["release"] = False, getattr(e, "time", None)
 
     def on_key(self, e):
-        """Every key press. D and Backspace work everywhere; the rest depends on mode and comparison state
-        (see _hint for the full list of keys).
-        """
+        """Every key press: the keymap (UI-48) says what it does in the current view (its own keys first, then the
+        Everywhere ones: Backspace is Back while comparing, Undo otherwise). While a word is being typed on the
+        card (UI-51) every key is the card's."""
+        if self.word_card.typing and self.mode == "place":
+            self.word_card.type_key(e)
+            return "break"
         if not self._repeat_allowed(e):
             return
         # a key press never waits for an animation: running ones speed out of the way (the new one starts on
         # top), except the duel result, which the next pair waits for
         self.anim.hurry_all(HURRY_MS, finish=(self.duel.anim_key,))
-        ks = e.keysym
         if self.header.open_name is not None:      # a header menu is open: Escape closes it, nothing else runs
-            if ks == "Escape":
+            if e.keysym == "Escape":
                 self.header.close()
             return
-        if ks in ("Tab", "ISO_Left_Tab"):         # Tab / Shift+Tab: the next / previous tab (UI-47)
-            self.next_tab(-1 if ks == "ISO_Left_Tab" or getattr(e, "state", 0) & 0x1 else 1)
-            return "break"                         # (and no focus traversal in the main window)
-        low = ks.lower()
-        if low == "d":
-            self.toggle_defs()
+        spec = spec_of(e, self._ws)
+        if spec is None:
             return
-        if ks == "BackSpace" and not (self.mode == "place" and self.cmp):
-            self.undo()
-            return
-        if self.mode == "place" and not self.cmp and ks == "Escape":
-            return
-        target = self._key_target(ks, low)
-        if target is None:
-            return
-        button, action = target
+        view = ("compare" if self.cmp else "place") if self.mode == "place" else "duel"
+        action = self.keys.lookup(view, spec)
+        tab = action in ("next_tab", "prev_tab") or e.keysym in ("Tab", "ISO_Left_Tab")
+        if action is None:
+            return "break" if tab else None        # (no focus traversal in the main window)
+        everywhere = {"next_tab": lambda: self.next_tab(1), "prev_tab": lambda: self.next_tab(-1),
+                      "defs": self.toggle_defs, "undo": self.undo, "zoom_in": lambda: self.zoom_step(1),
+                      "zoom_out": lambda: self.zoom_step(-1), "zoom_reset": lambda: self.set_zoom(1.0)}
+        if action in everywhere:
+            everywhere[action]()
+            self._action_done(e)
+            return "break" if tab or action.startswith("zoom") else None
+        button, act = self._key_target(action, spec)
         if button is not None and not button.enabled:
             return                                 # a greyed-out button's key is off too
-        action()                                   # the action first: input is never delayed (UI-18) ...
+        act()                                      # the action first: input is never delayed (UI-18) ...
         self._action_done(e)
         if button is not None:
             button.flash()                         # ... then the button it stands for dips (not when disabled,
                                                    # not with Reduce motion: RoundButton.flash checks both)
+        return "break" if tab else None
 
     def next_tab(self, d):
         """Go to the next (d=1) or previous (d=-1) tab, wrapping round and skipping hidden ones (UI-47); the
@@ -1240,36 +1768,19 @@ class App:
         if key != self.mode:
             self._on_mode_switch(key)
 
-    def _key_target(self, ks, low):
-        """The one key -> (button, action) map (UI-18), for the current view; None if the key does nothing here.
-        Every hotkey that has a button on screen names it, so pressing the key looks like pressing it."""
-        if self.mode == "place":
-            if self.cmp:
-                b = self.cmp_btns
-                if ks == "Up" or low == "b":
-                    return b["better"], lambda: self.cmp_answer("better")
-                if ks == "Down" or low == "w":
-                    return b["worse"], lambda: self.cmp_answer("worse")
-                if low == "e" or ks in ("equal", "Return"):
-                    return b["same"], lambda: self.cmp_answer("same")
-                if ks == "BackSpace":
-                    return b["back"], self.cmp_back
-                if ks in ("space", "Escape"):              # Space toggles comparing (UI-37); Escape still works
-                    return None, self._cancel_compare
-                return None
-            if ks in ("1", "2", "3", "4", "5", "6"):
-                t = int(ks) - 1
-                return self.tier_btns[t], lambda: self.place_word(t)
-            if ks == "space":
-                return self.compare_btn, self.start_compare
-            if low == "u" or ks == "question":
-                return self.later_btn, self.skip_word
-            return None
-        sides = {"Left": "left", "a": "left", "Right": "right", "l": "right", "Down": "tie", "t": "tie", "s": "skip"}
-        side = sides.get(ks) or sides.get(low)
-        if side is None:
-            return None
-        return self.duel.buttons[side], lambda: self._on_duel(side)
+    def _key_target(self, action, spec):
+        """(button, action) for a view's own key (UI-18): every hotkey that has a button on screen names it, so
+        pressing the key looks like pressing it."""
+        if action == "place":
+            t = self.keys.place_tier(spec)
+            return self.tier_btns[t], lambda: self.place_word(t)
+        if action in ("better", "same", "worse"):
+            return self.cmp_btns[action], lambda: self.cmp_answer(action)
+        if action in ("left", "right", "tie", "skip"):
+            return self.duel.buttons[action], lambda: self._on_duel(action)
+        return {"compare": (self.compare_btn, self.start_compare), "later": (self.later_btn, self.skip_word),
+                "find": (None, self.start_lookup),
+                "back": (self.cmp_btns["back"], self.cmp_back), "stop": (None, self._cancel_compare)}[action]
 
     def _cancel_compare(self):
         self.cmp = None
@@ -1286,12 +1797,167 @@ class App:
         return text
 
     def _render_defs(self, words=None):
-        """Redraw the definition pane for the words on screen (pass `words` to change which; no-op when hidden)."""
+        """Redraw the definition pane for the words on screen (pass `words` to change which; no-op when hidden).
+        A word clicked in it (W-1) shows instead, under a "Back to ..." line, until then or until the words change."""
         if words is not None:
+            if words != self.def_words:
+                self.def_lookup = None
             self.def_words = words
         if not self.show_defs:
             return
-        self.def_frame.show_words(self.def_words, self.get_def)
+        back = None
+        if self.def_lookup:
+            back = ("Back to " + ", ".join(self.shown(w) for w in self.def_words), self._def_back)
+        self.def_frame.show_words([self.def_lookup] if self.def_lookup else self.def_words, self.get_def,
+                                  self.store.censored,
+                                  self.store.smeared_meanings if self.store.deal_settings()["censor"] else None,
+                                  on_word=self._def_clicked, back=back, link=self.wiktionary_link())
+        self._fit_defs()
+
+    # ---- the word's Wiktionary page, from a definition (asked for: its etymology and the rest) ------------------
+    ONLINE_POLL_MS = 3000
+
+    def wiktionary_link(self):
+        """What a definitions pane's link opens with (open_wiktionary), or None while Wiktionary cannot be reached."""
+        return self.open_wiktionary if self.online.online else None
+
+    def open_wiktionary(self, word):
+        """Open `word`'s Wiktionary page in the browser."""
+        self.open_page(wiktionary_url(word))
+
+    def open_page(self, url):
+        """Open a web page in the browser (a new tab); with no browser to open, say where it is."""
+        try:
+            webbrowser.open(url, new=2)
+        except Exception:
+            self.flash(f"No web browser could be opened: {url}", kind="warn", ms=6000)
+
+    def _watch_online(self):
+        """Every few seconds: when the connection comes or goes, the definitions panes show or hide the link."""
+        now = self.online.online
+        if now != self._was_online:
+            self._was_online = now
+            self._render_defs()
+            for b in self.browsers:
+                if b.alive():
+                    b.render_def()
+        self.root.after(self.ONLINE_POLL_MS, self._watch_online)
+
+    # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
+    def look_up(self, word, parent=None):
+        """A word clicked in a definition (the drawer, or Browse's pane): True if it is in the word list, and then
+        it waits in Browse for the moment (self.lookups, shown at the bottom until Browse refreshes or closes, so it
+        can be placed there). A word the list does not have is offered to add first; no keeps it out."""
+        if not self.store.has_word(word):
+            if not ask_yes_no("Look up a word", f"'{self.shown(word)}' is not in the word list",
+                              "Add it, so you can sort it in Browse? Its definition shows either way.",
+                              yes="Add it", no="Just show it", parent=parent or self.root):
+                return False
+            self.store.add_word(word)
+            self.flash(f"'{self.shown(word)}' added to the word list", kind="info", ms=1800)
+        if word not in self.lookups:
+            self.lookups.append(word)
+        return True
+
+    def _def_clicked(self, word):
+        """A word clicked in the main window's definitions: shown there in their place, and waiting in Browse."""
+        if self.look_up(word):
+            for bw in self.browsers:
+                if bw.alive():
+                    bw.show_lookups()
+            row = self.store.get_word(word)
+            if row is not None and row["tier"] is None:
+                self.flash(f"'{self.shown(word)}' is in Browse for now, at the bottom, to sort it", kind="info",
+                           ms=2200)
+        self.def_lookup = word
+        self._render_defs()
+
+    def _def_back(self):
+        """The definitions' "Back to ..." line: the words on screen again."""
+        self.def_lookup = None
+        self._render_defs()
+
+    DEF_LINES, DEF_LINES_MAX = 9, 40     # the definition pane's usual height in lines, and the most it asks for
+    DEF_LINES_MIN = 3                    # the fit shortens it this far before taking a smaller text size
+
+    def _fit_defs(self):
+        """Make the definition pane tall enough to show every sense on it (UI-56), growing the window if the
+        screen has room; where it has not, _fit_window gives the pane what fits. The pane only grows from word
+        to word (shrinking back for each short definition would make the page jump on every word); it goes
+        back to its usual height when it is closed."""
+        for _ in range(3):             # a taller window may grow the fonts (UI-25), and the text then needs more
+            want = min(self.DEF_LINES_MAX, max(self.DEF_LINES, self.def_frame.lines_needed()))
+            if want <= self._def_want:
+                return
+            self._def_want = want
+            if not self.def_frame.is_open:   # about to slide open: _layout_defs makes room for it at this height
+                self.def_frame.set_lines(want)
+                return
+            d, r = self.def_frame, self.root
+            d.hold()                         # (settled first: a definition arriving while it slides open, fitted
+                                             # against the half-open pane, ended taller than fits, over the card)
+            self._room_from = r.winfo_height()          # the room the window gains goes to the pane (as opening)
+            self._fit_window(folded_drawer=True)        # (counted at its new height, though it has not grown yet)
+            self._give_room(r.winfo_height())
+            d.open()                         # then it eases the rest of the way (asked for: it jumped)
+
+    # ---- Wiktionary's meanings for a save without them (OB-6), read in the background ------------------------
+    def _start_rude_read(self):
+        """A save from before OB-6 (or from a word list) keeps no Wiktionary meanings for the rudeness rules: read
+        them once in the background (a 3 GB download, resumable), then score and save them a little at a time.
+        Until then the words smeared before (and the short hand-picked list) stand in."""
+        if not wordsource.wants_rude_fetch(self.store):
+            return
+        self.store.set_meta("rude_tried", time.time())
+        state = self.rude_read = {"line": "", "result": None, "error": None}
+        path = self.store.path
+
+        def work():                                  # (no tkinter, and its own read-only connection)
+            try:
+                db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
+                try:
+                    words = {r[0] for r in db.execute("SELECT word FROM words")}
+                finally:
+                    db.close()
+                log = lambda text: state.__setitem__("line", text)      # noqa: E731
+                saved = wordsource.fetch_rude_senses(path, words, log)
+                log("Scoring rude meanings (100%)")
+                state["result"] = (saved, wordsource.find_rude(words, saved, log=log))
+            except Exception as exc:                 # offline, disk full, ...: tried again later (RUDE_RETRY_S)
+                state["error"] = str(exc) or type(exc).__name__
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(2000, self._poll_rude_read)
+
+    def rude_read_note(self):
+        """How far the background read has come ("12%"), or None when none is running (How words are dealt)."""
+        if not self.rude_read:
+            return None
+        m = re.search(r"\((\d+)%\)", self.rude_read["line"])
+        return m.group(1) + "%" if m else "starting"
+
+    def _poll_rude_read(self):
+        state = self.rude_read
+        if state["error"]:
+            self.rude_read = None
+            return
+        if state["result"] is None or self.busy:
+            self.root.after(2000, self._poll_rude_read)
+            return
+        saved, found = state["result"]
+        steps = [self.store.save_rude_senses(saved, chunk=4000), self.store.set_rude(found, chunk=4000)]
+
+        def tick():                                  # a few thousand rows a frame, never while a reshuffle writes
+            if not self.busy:
+                if next(steps[0], StopIteration) is StopIteration:
+                    steps.pop(0)
+                    if not steps:
+                        self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
+                        self.rude_read = None
+                        self.after_external_change()
+                        self.flash("Rude meanings read from Wiktionary", ms=2500)
+                        return
+            self.root.after(15, tick)
+        tick()
 
     def _poll_defs(self):
         """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
@@ -1321,9 +1987,9 @@ class App:
         """A short message for each anchor that moved and handed its tier's anchor on (UI-40)."""
         for word, old, new_tier, new in changes:
             where = f"moved to {TIERS[new_tier]}" if new_tier is not None else "left its tier"
-            then = (f"the {TIERS[old]} anchor is now {new}" if new else
+            then = (f"the {TIERS[old]} anchor is now {self.shown(new)}" if new else
                     f"tier {TIERS[old]} has no anchor until you pick one (Settings)")
-            self.flash(f"{word} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
+            self.flash(f"{self.shown(word)} {where}; {then}", bg=TIER_COLORS[old], fg=TIER_TEXT, ms=3500)
 
     # ---- dialogs / misc -------------------------------------------------------------------------------------------------------------
     def _click_background(self, e):
@@ -1401,7 +2067,7 @@ class App:
 
     @staticmethod
     def parse_queue_settings(seed_text, spread_text, shape, compound_text):
-        """Check the Queue randomness fields. Returns (settings for Store.reshuffle, None) or (None, error)."""
+        """Check the order fields of How words are dealt (seed, spread, shape, compound strength). Returns (settings for Store.reshuffle, None) or (None, error)."""
         try:
             seed = int(seed_text.strip())
             spread = float(spread_text.strip().replace(",", ""))
@@ -1412,7 +2078,7 @@ class App:
             return None, "Spread must be at least 100 (it is measured in frequency ranks)."
         if not 0 <= compound <= 10:
             return None, "Compound strength must be between 0 (off) and 10."
-        if shape not in ("exp", "gauss"):
+        if shape not in QUEUE_SHAPES:
             return None, "Pick a shape."
         return {"seed": seed, "spread": spread, "shape": shape, "compound": compound}, None
 
@@ -1422,118 +2088,46 @@ class App:
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
 
-    def edit_queue(self):
-        """Dialog for the queue's seed, spread, shape and compound strength. Apply reshuffles the unplaced words
-        in the background (a moving bar while it runs: with ~1M words it takes a while), or says that
-        nothing changed."""
-        cfg = self.store.queue_settings()
-        dlg = StyledDialog(self.root, "Queue randomness", "Queue randomness",
-                           "New words come up at random, commoner ones sooner. The same seed, the same order.",
-                           animator=self.anim, wrap_chars=84)                     # one line
-        box = dlg.body
-        seed_v, spread_v = tk.StringVar(value=str(cfg["seed"])), tk.StringVar(value=f"{cfg['spread']:.0f}")
-        comp_v, shape_v = tk.StringVar(value=f"{cfg['compound']:g}"), tk.StringVar(value=cfg["shape"])
-        ttk.Label(box, text="Seed:").grid(row=0, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=seed_v, width=14).grid(row=0, column=1, sticky="w")
-        new_seed = RoundButton(box, "New random seed",
-                               lambda: seed_v.set(str(random.SystemRandom().randrange(1, 2 ** 31))),
-                               bg=PALETTE["surface"], font=font("body"), padx=12, pady=3, radius=10,
-                               animator=self.anim)
-        new_seed.grid(row=0, column=2, sticky="w", padx=12)
-        ttk.Label(box, text="Spread (ranks):").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=spread_v, width=14).grid(row=1, column=1, sticky="w")
-        # the shape: a card per choice with its curve (UI-41); clicking a card picks it
-        ttk.Label(box, text="Shape:").grid(row=2, column=0, sticky="ne", padx=(0, 8), pady=(10, 4))
-        sh = ttk.Frame(box)
-        sh.grid(row=2, column=1, columnspan=2, sticky="w", pady=(8, 4))
-        cards = {}
-        for shape, name, colour in (("exp", "Exponential", TIER_COLORS[1]), ("gauss", "Gaussian", TIER_COLORS[4])):
-            cards[shape] = ShapeCard(sh, shape, name, colour, on_pick=shape_v.set)
-            cards[shape].pack(side="left", padx=(0, 10))
-        ttk.Label(box, text="Compound strength:").grid(row=3, column=0, sticky="e", padx=(0, 8), pady=4)
-        ttk.Entry(box, textvariable=comp_v, width=14).grid(row=3, column=1, sticky="w")
-        ttk.Label(box, text="0 = treat compounds like any word, 1 = default, higher = rarer",
-                  foreground=PALETTE["muted"]).grid(row=3, column=2, sticky="w", padx=12)
-        # shown only when there is something to say: a problem, "no settings changed", or the shuffle running
-        status = ttk.Label(box, text="", foreground=PALETTE["bad"][1])
-        bar = ttk.Progressbar(box, mode="indeterminate")
-        for v in (seed_v, spread_v, comp_v, shape_v):
-            v.trace_add("write", lambda *_: status.grid_remove())       # an edit clears the last note
-
-        def redraw(*_):  # live: the curves follow the spread as it is typed (an unreadable one keeps the last)
-            try:
-                spread = float(spread_v.get().replace(",", ""))
-            except ValueError:
-                spread = None
-            if spread is not None and spread <= 0:
-                spread = None
-            for shape, card in cards.items():
-                card.set(spread=spread, chosen=shape == shape_v.get())
-
-        spread_v.trace_add("write", redraw)
-        shape_v.trace_add("write", redraw)
-        redraw()
-
-        def say(text, colour):
-            status.config(text=text, foreground=colour)
-            status.grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 0))
-            dlg.refit()
-
-        def apply():
-            new, err = self.parse_queue_settings(seed_v.get(), spread_v.get(), shape_v.get(), comp_v.get())
-            if err:
-                say(err, PALETTE["bad"][1])
-                return
-            if self.queue_unchanged(new):
-                say("No settings changed, so there is nothing to reshuffle.", PALETTE["muted"])
-                return
-            for b in (*dlg.buttons.values(), new_seed):
-                b.set_enabled(False)
-            dlg.on_cancel = lambda: None             # it cannot be stopped halfway: wait for it
-            say("Shuffling the words you haven't placed yet...", PALETTE["muted"])
-            bar.grid(row=5, column=0, columnspan=3, sticky="we", pady=(6, 0))
-            if not self.reduce_motion:
-                bar.start(12)                        # the back-and-forth bar: no percentage to show
-            dlg.refit()
-            self.busy = True                         # nothing else writes to the save meanwhile (_poll_defs)
-            gc.collect()                             # tk objects may only be freed on this thread: tidy up now and
-            gc.disable()                             # pause the collector, so it never runs inside the worker
-            result = {}
-            worker = threading.Thread(target=lambda: result.update(error=self._reshuffle_quietly(new)), daemon=True)
-            worker.start()
-
-            def wait():
-                if worker.is_alive():
-                    dlg.win.after(50, wait)
-                    return
-                self.busy = False
-                gc.enable()
-                bar.stop()
-                if result.get("error"):
-                    for b in (*dlg.buttons.values(), new_seed):
-                        b.set_enabled(True)
-                    dlg.on_cancel = dlg.close
-                    bar.grid_remove()
-                    say(f"Could not reshuffle: {result['error']}", PALETTE["bad"][1])
-                    return
-                self.cmp = None
-                dlg.close()
-                self.after_external_change()
-                self.flash("Queue reshuffled", ms=2000)
-            wait()
-
-        dlg.button("Cancel", dlg.close)
-        dlg.button("Apply & reshuffle", apply, default=True)
-        dlg.show()
-        return dlg
-
-    def _reshuffle_quietly(self, cfg):
-        """Worker thread: reshuffle, and return the error instead of raising (no tkinter here)."""
+    def add_launcher(self, platform=None):
+        """File > Add to applications menu (Linux, ST-5: a launcher that starts the program with no terminal), or
+        File > Add to Start menu (Windows, asked for: a shortcut, with no console window)."""
+        script = None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py")
+        windows = (platform or sys.platform).startswith("win")
+        menu = "Start menu" if windows else "applications menu"
         try:
-            self.store.reshuffle(**cfg)
-        except (sqlite3.Error, OSError, ValueError) as exc:
-            return str(exc)
-        return None
+            path, how = (deps.add_to_start_menu if windows else deps.add_to_menu)(sys.executable, script)
+        except OSError as exc:
+            show_exception(menu[0].upper() + menu[1:], exc, self.root, f"Could not add Word Tier List to the {menu}.")
+            return
+        quiet = "a console window" if windows else "a terminal"
+        text = (f"Word Tier List added to your {menu} (it starts without {quiet})" if how == "added"
+                else f"Word Tier List updated in your {menu}")
+        self.flash(text, kind="info", ms=2600)
+        return path
+
+    def source_updates(self):
+        """File > Source & Updates... (T-6, T-7): from source, make a standalone program for this computer; in the
+        program, unpack the source code it was built from."""
+        return SourceDialog(self)
+
+    def edit_tier_colours(self):
+        """Settings > Tier colours... (UI-61)."""
+        return TierColoursDialog(self)
+
+    def toggle_dark(self):
+        """View > Dark mode (UI-62, not the default): saved, and the window reopens in it."""
+        self.store.set_meta("dark_mode", "1" if self.dark_var.get() else "0")
+        self.reopen()
+
+    def edit_keys(self):
+        """Settings > Keyboard shortcuts... (UI-48)."""
+        return ShortcutsDialog(self)
+
+    def edit_dealing(self, first=False, on_done=None):
+        """Settings > How words are dealt... (ST-6; it grew out of Queue randomness): the order new words come in,
+        which kinds of words, censoring obscene ones. `first`: the three-step version for the first start."""
+        self._dealing = DealDialog(self, first=first, on_done=on_done)
+        return self._dealing
 
     # ---- earlier progress ------------------------------------------------------------------------
     def show_save_location(self):
@@ -1633,16 +2227,96 @@ class App:
                 filetypes=[("Text", "*.txt"), ("CSV", "*.csv"), ("Markdown", "*.md")])
         if not path:
             return
+        note = None
+        if is_code_note(path):                # (tierlist.md beside tierlist.py is its note, never an export's place)
+            path = os.path.join(os.path.dirname(path), "tierlist-export.md")
+            note = f"; saved as {os.path.basename(path)} (tierlist.md there is the program's own notes)"
         rows = self.store.export_rows()
         try:
             write_export(path, rows, self.store.skipped_words())
         except OSError as exc:
             show_exception("Export failed", exc, self.root, f"The tier list could not be saved to\n{path}")
             return
-        self.flash(f"Exported {len(rows):,} placed words", ms=3000)
+        self.flash(f"Exported {len(rows):,} placed words" + (note or ""), ms=3000 if not note else 6000)
+
+    reopening = False         # set by reopen(): main() builds the window again, in the look now chosen
+    _browse_was_open = False
+    _old = None               # the window this one replaces (take_over), until it is closed
+
+    def _drop_old(self):
+        """Close the window this one replaced (its save stays open: it is this one's)."""
+        old, self._old = self._old, None
+        if old is not None:
+            try:
+                old._shut(close_store=False)
+            except tk.TclError:
+                pass
+
+    def take_over(self, old):
+        """Become the window `old` was (reopening in a new look): its place and size, maximized or not, the word
+        looked up on its card and its Browse window (closed there, opened here as it was)."""
+        try:
+            maximized = is_maximized(old.root)
+            geometry = old.root.geometry()
+        except tk.TclError:
+            return
+        self.root.geometry(geometry)
+        if maximized:
+            try:
+                self.root.state("zoomed")            # (Windows, macOS)
+            except tk.TclError:
+                try:
+                    self.root.attributes("-zoomed", True)     # (Linux)
+                except tk.TclError:
+                    pass
+        self._old = old
+        self.looked_up = old.looked_up
+        for bw in list(old.browsers):
+            if bw.alive():
+                bw.close()                           # (it saves what it showed: browse_state)
+        self.browse_state = old.browse_state
+        self.refresh()
+        if old._browse_was_open:
+            self.root.after(150, self.open_browser)
+
+    def reopen(self):
+        """Close this window but keep the save open: main() builds it again at once, so a new look (dark mode, the
+        tier colours: UI-61, UI-62) shows everywhere. Waits while a long job writes the save, as on_close."""
+        if self.busy:
+            self.root.after(200, self.reopen)
+            return
+        self.reopening = True
+        for bw in self.browsers:                 # (a Browse window open now opens again in the new look)
+            if bw.alive():
+                self._browse_was_open = True
+        self.root.after(0, self.root.quit)       # (main() builds the new window over this one, then closes it;
+                                                 # from the event loop: a quit asked before it runs is forgotten)
 
     def on_close(self):
-        """Close the save cleanly and quit."""
+        """Close the save cleanly and quit. While a long job writes the save (a reshuffle: App.busy) it waits for
+        it to finish (closing then would shut the save under the worker thread). Timers still waiting are dropped
+        first, so none fires into a window that is gone (each was logged as an error at every quit)."""
+        if self.busy:
+            self.root.after(200, self.on_close)
+            return
+        self._shut(close_store=True)
+
+    shut = False                            # (_shut: timers that slip through its cancelling see it and stop)
+
+    def _shut(self, close_store):
+        self.shut = True
+        self.online.stop()
+        self._drop_old()                         # (closed before the window it replaced was: that one goes too)
+        for bw in list(self.browsers):
+            if bw.alive():
+                bw.close()
         self.anim.cancel_all()
-        self.store.close()
+        try:
+            for job in self.root.tk.splitlist(self.root.tk.call("after", "info")):
+                self.root.tk.call("after", "cancel", job)   # (not after_cancel: it frees a command its widget
+                                                            # still lists, and destroy then fails freeing it again)
+        except tk.TclError:
+            pass
+        if close_store:
+            self.store.close()
         self.root.destroy()

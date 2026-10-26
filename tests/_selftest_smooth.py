@@ -101,5 +101,34 @@ half_up = SM.arrow_image(ic, 11, 6, dark, pale, 0.5, up=True)
 assert px(half_up, 4)[0] < 120 and px(half_up, 1)[0] > 180
 full = SM.arrow_image(ic, 11, 6, dark, pale, 1.0)
 assert px(full, 4)[0] < 120 and full.transparency_get(0, 5)                       # full; clear beside its tip
+
+# F-32: a letter whose ink reaches past its box (Young Serif's j to the left, its f to the right) is noted when the
+# text is made, with an invisible guard over its whole reach that follows every change (Tk repaints only the box:
+# the rest stayed on screen when the word moved or went); text that keeps inside its box costs nothing
+import fonts
+fonts.init_fonts(root)
+big = fonts.font("word")
+assert fonts.text_overhang(root, big, "jill")[0] > 5 and fonts.text_overhang(root, big, "jill")[1] == 0
+assert fonts.text_overhang(root, big, "mf")[1] > 5 and fonts.text_overhang(root, big, "table") == (0, 0)
+assert fonts.text_overhang(root, ("Helvetica", 30), "jill") == (0, 0)              # (not a bundled font)
+cv = SmoothCanvas(root, width=600, height=200); cv.pack(); root.update()
+plain = cv.create_text(300, 50, text="table", font=big)
+word = cv.create_text(300, 100, text="jilf", font=big)
+assert plain not in cv._ink and word in cv._ink
+guard = cv._ink[word][2]
+box, ink = cv.bbox(word), cv.ink_box(word)
+assert ink[0] < box[0] - 5 and ink[2] > box[2] + 5                                  # (wider both ways)
+gb = cv.coords(guard)
+assert gb[0] <= ink[0] and gb[2] >= ink[2] and not cv.gettags(guard) == ("jilf",)
+cv.move(word, 10, -20)
+assert cv.coords(guard)[0] == gb[0] + 10 and cv.coords(guard)[1] == gb[1] - 20     # (follows the word)
+cv.itemconfigure(word, text="table")                                                # (no overhang now: no guard)
+assert word not in cv._ink and not cv.find_withtag("inkguard")
+cv.itemconfigure(word, text="jif")
+assert word in cv._ink and len(cv.find_withtag("inkguard")) == 1
+cv.delete(word)
+assert word not in cv._ink and not cv.find_withtag("inkguard")                      # (gone with its word)
+cv.create_text(10, 10, text="jam", font=big); cv.delete("all")
+assert not cv._ink
 root.destroy()
 print("SMOOTH OK")

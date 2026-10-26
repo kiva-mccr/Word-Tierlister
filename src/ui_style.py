@@ -1,6 +1,9 @@
 """ttk / tk styling for the word tier list (UI-3): one place that gives every standard widget the
 pastel look. Call apply_ttk_style(root) after init_fonts(root). Uses the 'clam' theme because it
-is the only built-in ttk theme that honours custom colours on every platform."""
+is the only built-in ttk theme that honours custom colours on every platform. It also gives the program its icon
+(IC-1: set_icon, on every window and the taskbar)."""
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -20,6 +23,7 @@ def apply_ttk_style(root):
         pass
     body = font("body")
     root.configure(bg=P["bg"])
+    set_icon(root)
 
     # ---- plain tk widgets (menus, text panes, dialogs, listboxes) via the option database ----
     for pat, val in {
@@ -106,8 +110,15 @@ def apply_ttk_style(root):
 
 def _tick_boxes(root, style, line):
     """Tick boxes drawn as images (the clam theme's own is a tiny cross that is hard to read): a rounded
-    white box with a hairline, and when ticked a lilac box with a white tick. Sized from the body font."""
+    white box with a hairline, when ticked a lilac box with a white tick, and when only some of what it stands
+    for is ticked (the "alternate" state: tick.state(["alternate"])) a lilac box with a white minus. Sized from the
+    body font."""
     n = max(13, int(line * 0.8)) | 1
+    name = f"Tick{n}.indicator"
+    kept = getattr(root, "_tick_images", {})
+    if name in style.element_names() and name in kept:
+        _tick_layout(style, name)              # styled again (the main window after start-up): the same images,
+        return                                 # since new ones would free those the element still draws
 
     def box(fill, edge):
         img = tk.PhotoImage(master=root, width=n, height=n)
@@ -127,12 +138,46 @@ def _tick_boxes(root, style, line):
             x = int((x1 + (x2 - x1) * i / steps) * n)
             y = int((y1 + (y2 - y1) * i / steps) * n)
             on.put(P["surface"], to=(x - t // 2, y - t // 2, x - t // 2 + t, y - t // 2 + t))
-    root._tick_images = (off, on)                            # keep references (Tk images are freed otherwise)
-    name = f"Tick{n}.indicator"
+    mixed = box(P["accent"], P["accent"])
+    y = n // 2 - t // 2
+    mixed.put(P["surface"], to=(int(n * 0.26), y, n - int(n * 0.26), y + t))
+    kept[name] = (off, on, mixed)                            # keep references (Tk images are freed otherwise)
+    root._tick_images = kept
     if name not in style.element_names():
-        style.element_create(name, "image", off, ("selected", on), width=n + max(6, n // 2), sticky="w")
+        style.element_create(name, "image", off, ("alternate", mixed), ("selected", on),
+                              width=n + max(6, n // 2), sticky="w")
+    _tick_layout(style, name)
+
+
+def _tick_layout(style, name):
     style.layout("TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [
         (name, {"side": "left", "sticky": ""}),
         ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [
             ("Checkbutton.label", {"sticky": "nswe"})]})]})])
     style.configure("TCheckbutton", padding=(2, 3, 2, 3))
+
+
+# the program's icon (IC-1; drawn by tools/make_icon.py): beside this file in src/icons, and in a built program in the
+# folder it unpacks to (PyInstaller puts this module's file there; standalone.pyinstaller_args packs "icons")
+ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
+ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
+APP_ID = "WordTierList"          # (Windows: the taskbar groups the program's windows under its own icon, not Python's)
+
+
+def set_icon(root):
+    """The program's icon on `root` and every window opened from it later (iconphoto's default), in each size, so
+    the title bar, taskbar and window switcher each pick a sharp one. Quietly nothing when the files are missing."""
+    if getattr(root, "_icons", None):
+        return
+    try:
+        root._icons = [tk.PhotoImage(master=root, file=os.path.join(ICONS, f"icon-{n}.png")) for n in ICON_SIZES]
+        root.iconphoto(True, *reversed(root._icons))          # (the biggest first: some window managers take it)
+    except (tk.TclError, OSError):
+        root._icons = None
+        return
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
+        except (AttributeError, OSError):
+            pass

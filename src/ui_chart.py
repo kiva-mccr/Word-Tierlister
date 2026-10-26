@@ -10,6 +10,7 @@ S..F order, not from colour, so the colours can stay pastel (the user's choice o
 """
 import math
 
+from constants import SHELF_SPINES, SHELF_ZIPF
 from constants import TIERS as TIERS_LETTERS
 from theme import PALETTE, TIER_BAR, TIER_COLORS, tier_blend
 from ui_motion import lerp_color
@@ -116,6 +117,10 @@ class DistributionChart(SmoothCanvas):
         goal = self._goal = [c / peak for c in counts]
         start = list(self._shown)
         self.counts = counts
+        self._ease(start, goal, animate)
+
+    def _ease(self, start, goal, animate):
+        """The bars from `start` to `goal` (their shares of the tallest), easing over GROW_MS or at once."""
         if not animate or self._anim is None or start == goal:
             self._shown = goal
             self._paint()
@@ -215,15 +220,7 @@ class SettledChart(DistributionChart):
         goal = [s or 0.0 for s in self.shares]
         start = list(self._shown)
         self.counts = [1 if s else 0 for s in self.shares]           # a sliver for any settled word
-        if not animate or self._anim is None or start == goal:
-            self._shown = goal
-            self._paint()
-            return
-
-        def frame(p):
-            self._shown = [a + (b - a) * p for a, b in zip(start, goal)]
-            self._paint()
-        self._anim.run(f"chart{id(self)}", GROW_MS, frame)
+        self._ease(start, goal, animate)
 
 
 class ConflictCard(SmoothCanvas):
@@ -318,13 +315,15 @@ def leaning(tiers, overall):
     return max((k for k in range(len(tiers)) if overall[k]), key=lambda k: (tiers[k] / total) / (overall[k] / whole))
 
 
-MARK_COLOR = lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)   # the lilac of selections, a little deeper
+def _mark_lilac():
+    """The lilac of selections, a little deeper (read when drawing: the look can change, UI-62)."""
+    return lerp_color(PALETTE["accent"], PALETTE["text"], 0.3)
 
 
 def mark_color(tier):
     """A shelf mark's colour: its word's tier pastel, deepened so a small triangle still shows on the page
     (M-4); the lilac for a word with no tier."""
-    return MARK_COLOR if tier is None else lerp_color(TIER_COLORS[tier], PALETTE["text"], 0.3)
+    return _mark_lilac() if tier is None else lerp_color(TIER_COLORS[tier], PALETTE["text"], 0.3)
 
 
 class Bookshelf(SmoothCanvas):
@@ -338,7 +337,8 @@ class Bookshelf(SmoothCanvas):
     A spine's height is the share of its words placed. Its colour is the median tier of those words, part way
     to the next tier and blended round the colour wheel (theme.tier_blend), so it stays as bright as the pastels.
     Spines are equal steps of commonness (each a fixed factor rarer than the last), not equal word counts: one
-    near the start holds a few words, one near the end thousands; the hover note says how many.
+    near the start holds a few words, one near the end thousands; the hover note says how many. Every spine is the
+    same width (UI-79, asked for): a short list, with fewer spines, has a shorter shelf.
     Hovering a spine darkens its outline and lifts it a little off the shelf, its two neighbours less
     (hover(i); eased over LIFT_MS, at once with Reduce motion).
     mark([i, j]) puts a little triangle over those spines, pointing down at them (UI-55: where the words
@@ -365,8 +365,11 @@ class Bookshelf(SmoothCanvas):
         self._draw()
 
     def _metrics(self):
+        """(line, spine width, tallest spine): every spine is one width however many there are (asked for), the
+        width that puts a full list's spines (about SHELF_SPINES, a log scale) in 30 lines; a short list's shelf is
+        shorter."""
         line = self._font.metrics("linespace") if self._font else 16
-        return line, int(line * 30), 2 * line          # line, shelf width, tallest spine
+        return line, (line * 30 - self.GAP * len(SHELF_ZIPF)) / SHELF_SPINES, 2 * line
 
     def _rise(self):
         """How far the hovered spine lifts, in pixels (there is that much room above the tallest spine)."""
@@ -379,13 +382,11 @@ class Bookshelf(SmoothCanvas):
 
     def _draw(self):
         self.delete("all")
-        line, width, hmax = self._metrics()
+        line, sw, hmax = self._metrics()
         zones, spines = self.data["zones"], self.data["spines"]
         top = 1 + self.MARK_ROOM + self._mark_size()[1] + 2 + self._rise()   # room for a mark, a spine lifting
         self._edges = []
         base = top + hmax
-        n = max(1, len(spines))
-        sw = (width - self.GAP * max(0, len(zones) - 1)) / n
         self._x = []
         x, i = 1.0, 0
         labels = []
@@ -427,7 +428,7 @@ class Bookshelf(SmoothCanvas):
             self.create_text(right + line // 2, top + hmax / 2, text=format_coverage(self.data["coverage"]),
                              font=self._font, fill=PALETTE["muted"], anchor="w", tags="tag")
             right += line // 2 + (self._font.measure("99.999% of text") if self._font else 100)
-        super().configure(width=max(width, right) + 2, height=base + 4 + line + 2)
+        super().configure(width=max(right, line * 4) + 2, height=base + 4 + line + 2)
         self._top = top
         self._marks = [i for i in self._marks if i < len(self._x)]
         self._draw_marks(lifted=False)
@@ -448,7 +449,7 @@ class Bookshelf(SmoothCanvas):
         mw, mh = self._mark_size()
         for i in self._marks:
             x0, w, _zi = self._x[i]
-            cols = self._mark_colors.get(i, (MARK_COLOR,))
+            cols = self._mark_colors.get(i, (_mark_lilac(),))
             up = min(self.MARK_ROOM, self._lift.get(i, 0.0) * self.MARK_LIFT) if lifted else 0
             self.create_image(int(round(x0 + (w - 1.5) / 2 - mw / 2)), self._top - self._rise() - mh - 1 - up,
                               image=self.triangle_image(mw, mh, *cols[:2]), anchor="nw", tags=("mark", f"mark{i}"))

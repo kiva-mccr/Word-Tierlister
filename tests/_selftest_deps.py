@@ -1,7 +1,7 @@
 """Missing packages (deps.py, startup.ensure_packages, errors.ask_yes_no / ask_choices): detection, asking,
 installing."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, subprocess, sys
+import os, subprocess, sys, tempfile
 import tkinter as tk
 from widgets import RoundButton
 import deps, errors as E, startup as S
@@ -11,7 +11,9 @@ from fonts import init_fonts
 from ui_style import apply_ttk_style
 
 # ---- detection and the package table (every package has a purpose and a size for the install dialog)
-assert set(deps.SIZE) == set(deps.PACKAGES) == set(deps.PURPOSE) - {"tkinter"}
+assert set(deps.SIZE) == set(deps.PIP_NAMES) == set(deps.DOWNLOAD) == set(deps.PURPOSE) - {"tkinter"} \
+    == set(deps.HOMEPAGE) - {"tkinter"}
+assert not set(deps.BUILD_PACKAGES) & set(deps.PACKAGES)               # (the builder is not in requirements.txt)
 assert deps.missing(["os", "sys"]) == []
 assert deps.missing(["os", "surely_not_installed_pkg_xyz"]) == ["surely_not_installed_pkg_xyz"]
 req = [l.split("#")[0].strip() for l in open(os.path.join(_paths.ROOT, "requirements.txt"))]
@@ -81,6 +83,9 @@ state.update(missing=["wordfreq"])
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(True, clears=False)); raise AssertionError          # pip "succeeded" but still missing
 except SetupError as e: assert "Could not install" in str(e)
 state.update(missing=["wordfreq"], pip=False)
+S.deps.ensure_pip = lambda: False                                    # (never the real ensurepip in a test)
+system_install_command = deps.system_install_command
+S.deps.system_install_command = lambda what, window=False: None      # (nothing known to install pip with: told)
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(True)); raise AssertionError
 except SetupError as e: assert "pip is not available" in str(e) and "pip install wordfreq" in str(e)
 state.update(pip=True, missing=["wordfreq"]); n = len(asked)
@@ -139,6 +144,58 @@ state.update(missing=["wordfreq"], venv_ok=False)                               
 try: S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
                        restart=restarted.append, home="/prog"); raise AssertionError
 except SetupError as e: assert "-m venv" in str(e) and len(restarted) == 1
+
+# ---- asked for: what comes from the system (pip, venv, Python) is offered too, not only told (the system's
+# package manager; from the window the desktop's own password prompt, pkexec)
+def which_of(tools):
+    return lambda name: f"/usr/bin/{name}" if name in tools else None
+real_euid = deps.os.geteuid
+deps.os.geteuid = lambda: 1000
+assert system_install_command("pip", "linux", which_of({"dnf", "pkexec"}), window=True) == \
+    ["pkexec", "dnf", "install", "-y", "python3-pip"]
+assert system_install_command("venv", "linux", which_of({"apt-get"})) == ["sudo", "apt-get", "install", "-y", "python3-venv"]
+assert system_install_command("venv", "linux", which_of({"dnf"})) is None          # (Fedora's Python has it)
+assert system_install_command("python", "linux", which_of({"pacman", "pkexec"}), window=True)[-2:] == ["python", "tk"]
+assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True) is None   # (no password prompt)
+assert system_install_command("python", "win32", which_of({"winget"}))[:2] == ["winget", "install"]
+assert system_install_command("python", "darwin", which_of({"brew"})) == ["brew", "install", "python-tk"]
+assert system_install_command("tkinter", "linux", which_of({"zypper"})) == ["sudo", "zypper", "--non-interactive",
+                                                                                 "install", "python3-tk"]
+deps.os.geteuid = lambda: 0
+assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True)[0] == "apt-get"     # (as root)
+deps.os.geteuid = real_euid
+assert deps.run_system_install([sys.executable, "-c", "print('done')"], log=installs.append) is True and "  done" in installs
+assert deps.run_system_install(["/nonexistent/tool"], log=installs.append) is False
+# no pip: ensurepip first, then the system's package (asked); a required package then installs as usual
+state.update(missing=["wordfreq"], answer=["wordfreq"], pip=False)
+S.deps.ensure_pip = lambda: False
+S.deps.system_install_command = lambda what, window=False: ["pkexec", "dnf", "install", "-y", f"python3-{what}"]
+yes_no.clear(); ran = []
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), True)[1]
+def system(cmd, log):
+    ran.append(cmd); state["pip"] = True
+    return True
+installs.clear()
+assert S.ensure_packages(root, ["wordfreq"], installer=installer(True), system_installer=system) is True
+assert yes_no == ["Install pip, Python's package installer?"] and ran == [["pkexec", "dnf", "install", "-y", "python3-pip"]]
+assert installs == [["wordfreq"]]
+state.update(missing=["wordfreq"], pip=False); yes_no.clear()               # said no: the old message, nothing run
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), False)[1]
+try: S.ensure_packages(root, ["wordfreq"], installer=installer(True), system_installer=system); raise AssertionError
+except SetupError as e: assert "pip is not available" in str(e) and len(ran) == 1
+# the private environment needs venv (Debian keeps it apart): offered, then made again
+state.update(missing=["wordfreq"], pip=True)
+tries = []
+def venv_missing_once(home, names, log):
+    tries.append(1)
+    return (len(tries) > 1, "Could not make the private environment.", "/nonexistent/venv/bin/python")
+S.deps.make_private_env = venv_missing_once
+S.ask_yes_no = lambda *a, **k: (yes_no.append(a[1]), True)[1]
+yes_no.clear(); restarted.clear()
+S.ensure_packages(root, ["wordfreq"], installer=installer(False, "error: externally-managed-environment"),
+                  restart=restarted.append, home="/prog", system_installer=system)
+assert yes_no == ["Make a private environment for the program?", "Install Python's venv module?"] and len(tries) == 2
+assert ran[-1][-1] == "python3-venv" and restarted == ["/nonexistent/venv/bin/python"]
 
 # ---- the real question dialog: buttons, Return, Escape and closing the window all answer
 def walk(w):
@@ -212,4 +269,130 @@ with contextlib.redirect_stderr(io.StringIO()):
     assert E.ask_yes_no("T", "H", "M", parent=root) is False
 E._dialog = real_dialog
 root.destroy()
+
+# ---- ST-5: started from a terminal on Linux / macOS, the program carries on in its own session
+class Tty:
+    def __init__(self, tty=True): self.tty = tty
+    def isatty(self): return self.tty
+term, desk = (Tty(), Tty()), {"DISPLAY": ":0"}
+assert deps.should_detach(env=desk, streams=term, posix=True)
+assert not deps.should_detach(console=True, env=desk, streams=term, posix=True)              # --console keeps it
+assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True)            # output redirected
+assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True)   # never twice
+assert not deps.should_detach(env=desk, streams=term, posix=False, windows=False)            # (neither: stays)
+# Windows (reported: the console window stayed open behind it): again with pythonw.exe, which has no console
+assert deps.should_detach(env={}, streams=term, windows=True, pythonw="C:/Python312/pythonw.exe")
+assert not deps.should_detach(env={}, streams=term, windows=True, pythonw="")            # (no pythonw.exe: stays)
+assert not deps.should_detach(console=True, env={}, streams=term, windows=True, pythonw="C:/P/pythonw.exe")
+assert not deps.should_detach(env={deps.DETACHED_ENV: "1"}, streams=term, windows=True, pythonw="C:/P/pythonw.exe")
+assert not deps.should_detach(env={}, streams=(Tty(), Tty(False)), windows=True, pythonw="C:/P/pythonw.exe")
+assert deps.windowless_python("C:/Python312/python.exe", exists=lambda p: True).replace("\\", "/") == \
+    "C:/Python312/pythonw.exe"
+assert deps.windowless_python("C:/Python312/pythonw.exe", exists=lambda p: False) == "C:/Python312/pythonw.exe"
+assert deps.windowless_python("C:/odd/python.exe", exists=lambda p: False) is None
+if sys.platform != "darwin":
+    assert not deps.should_detach(env={}, streams=term, posix=True)                         # no desktop: stay put
+    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True)
+said, started = [], []
+
+
+class Child:
+    def __init__(self, code, after, text=b""):
+        self.code, self.after, self.text, self.polls = code, after, text, 0
+    def poll(self):
+        self.polls += 1
+        return self.code if self.polls > self.after else None
+
+
+def popen_of(child):
+    def popen(cmd, stdin=None, stdout=None, stderr=None, start_new_session=False, env=None, **kw):
+        started.append((cmd, start_new_session, env.get(deps.DETACHED_ENV)) + ((kw,) if kw else ()))
+        stdout.write(child.text); stdout.flush()
+        return child
+    return popen
+clock = [0.0]
+tick = lambda: clock[0]
+step = lambda dt: clock.__setitem__(0, clock[0] + 0.05)
+# it gets going: the terminal is told it can close, and gets its prompt back (exit 0)
+assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
+                         clock=tick, sleep=step) == 0
+assert started[-1] == ([sys.executable, "tierlist.py", "--db", "x.db"], True, "1") and "close this terminal" in said[-1]
+# it fails straight away (no window could open): what it said is shown here, with its exit code
+clock[0] = 0.0
+assert deps.detach_terminal(["tierlist.py"], out=said.append, popen=popen_of(Child(1, 2, b"TclError: no display")),
+                         clock=tick, sleep=step) == 1
+assert said[-1] == "TclError: no display"
+# Windows: pythonw.exe, detached from the console (which then closes with this copy), the same arguments and save
+clock[0] = 0.0
+assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
+                            clock=tick, sleep=step, windows=True, pythonw="C:/P/pythonw.exe") == 0
+cmd, new_session, marked, kw = started[-1]
+assert cmd == ["C:/P/pythonw.exe", "tierlist.py", "--db", "x.db"] and marked == "1" and not new_session
+assert kw["creationflags"] & 0x8 and kw["close_fds"]                                   # (DETACHED_PROCESS)
+# File > Add to applications menu: a launcher with no terminal; adding it again updates it
+entry = deps.desktop_entry("/usr/bin/python3", '/home/me/My "Tier" List/tierlist.py')
+assert 'Exec="/usr/bin/python3" "/home/me/My \\"Tier\\" List/tierlist.py"' in entry and "Terminal=false" in entry
+assert "Path=/home/me/My \"Tier\" List" in entry and entry.startswith("[Desktop Entry]")
+assert 'Exec="/opt/word-tierlist"' in deps.desktop_entry("/opt/word-tierlist", None)        # a built program
+home = tempfile.mkdtemp()
+os.environ.pop("XDG_DATA_HOME", None)
+path, how = deps.add_to_menu("/usr/bin/python3", "/x/tierlist.py", home=home)
+assert how == "added" and path == os.path.join(home, ".local", "share", "applications", "word-tierlist.desktop")
+icon = os.path.join(home, ".local", "share", "icons", "word-tierlist.png")        # (IC-1: the icon copied beside)
+assert open(path).read() == deps.desktop_entry("/usr/bin/python3", "/x/tierlist.py", icon=icon)
+assert f"Icon={icon}" in open(path).read() and open(icon, "rb").read() == open(deps.ICON, "rb").read()
+assert deps.add_to_menu("/usr/bin/python3", "/y/tierlist.py", home=home)[1] == "updated" and "/y/tierlist.py" in open(path).read()
+# the taskbar's icon (reported: none on Fedora's GNOME, which shows a window's icon only through a launcher naming
+# its class): every launcher names the windows' class; at every start one is written if there is none, kept out
+# of the menu, and an existing one is brought up to date without changing whether it is in the menu
+from constants import WM_CLASS, WM_CLASS_NAME
+assert f"StartupWMClass={WM_CLASS_NAME}" in open(path).read() and "NoDisplay" not in open(path).read()
+assert deps.ensure_launcher("/usr/bin/python3", "/z/tierlist.py", home=home, platform="linux") == path
+assert "/z/tierlist.py" in open(path).read() and "NoDisplay" not in open(path).read()          # (still in the menu)
+home2 = tempfile.mkdtemp()
+p2 = deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="linux")
+text = open(p2).read()
+assert "NoDisplay=true" in text and f"StartupWMClass={WM_CLASS_NAME}" in text and 'Exec="/opt/word-tierlist"' in text
+assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlist.png") in text
+deps.add_to_menu("/opt/word-tierlist", None, home=home2)                                  # (asked for: in the menu)
+assert "NoDisplay" not in open(p2).read()
+assert deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="win32") is None
+# Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu, written by PowerShell (faked
+# here: the values reach it through the environment, so a path with quotes or spaces needs no quoting in the script)
+appdata = tempfile.mkdtemp()
+lnk = deps.start_menu_path(appdata)
+assert lnk == os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+src = os.path.join(os.sep, "Users", "me", 'My "Tier" List', "tierlist.py")      # (this system's separators)
+py = os.path.join(os.sep, "Py", "python.exe")
+assert deps.shortcut_parts(py, src, exists=lambda p: True) == (
+    os.path.join(os.sep, "Py", "pythonw.exe"), f'"{src}"', os.path.dirname(src), deps.ICO + ",0")   # (no console)
+prog = os.path.join(os.sep, "Prog", "word-tierlist.exe")
+assert deps.shortcut_parts(prog, None) == (prog, "", os.path.dirname(prog), prog + ",0")
+ran = []
+def fake_ps(cmd, env=None, **kw):
+    ran.append((cmd, env))
+    open(env["WTL_LNK"], "w").write("lnk")
+    return subprocess.CompletedProcess(cmd, 0, "", "")
+assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps) == (lnk, "added")
+cmd, env = ran[-1]
+assert cmd[0] == "powershell" and cmd[-1] == deps.SHORTCUT_PS and "$env:WTL_TARGET" in cmd[-1]
+assert env["WTL_LNK"] == lnk and env["WTL_TARGET"] == "/opt/word-tierlist" and env["WTL_ICON"] == "/opt/word-tierlist,0"
+assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps)[1] == "updated"
+failed = lambda cmd, env=None, **kw: subprocess.CompletedProcess(cmd, 1, "", "Access is denied.")
+try:
+    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=failed)
+    raise AssertionError("a failed shortcut must say so")
+except OSError as exc:
+    assert "Access is denied" in str(exc)
+def no_ps(cmd, **kw):
+    raise FileNotFoundError("powershell")
+try:
+    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=no_ps)
+    raise AssertionError("no PowerShell must say so")
+except OSError as exc:
+    assert "PowerShell could not be started" in str(exc)
+assert os.path.exists(deps.ICO)                                             # (the icon the shortcut shows, IC-1)
+# and every window has that class (what the launcher names)
+root = tk.Tk(className=WM_CLASS); assert root.winfo_class() == WM_CLASS_NAME; root.destroy()
+assert os.path.basename(path) == WM_CLASS + ".desktop"                    # (GNOME pairs these too)
 print("DEPS OK")

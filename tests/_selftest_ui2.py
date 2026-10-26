@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, tempfile, time
+import os, sys, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
@@ -126,25 +126,29 @@ app.center.event_generate("<ButtonPress-1>", x=2, y=2); pump(2)
 assert not bw.alive() and not app.browsers
 app.browse_state = None
 import browser as _B
-_B.Browser.EASE_OPEN = True                                      # (Windows / macOS)
+# it opens complete (its rows in) and in its place, like every other window: no growing, nothing moves, no fade of
+# its own (reported: a bounce on Linux and Windows; then, faded, it opened unlike the other windows)
+mapped = []
+real_init = _B.Browser._open
+def spy(self):
+    self.win.bind("<Map>", lambda e, w=self.win: e.widget is w and mapped.append(
+        (w.winfo_width(), w.winfo_height(), len(self.tree.get_children()), self.fsize)), add="+")
+    real_init(self)
+_B.Browser._open = spy
 app.open_browser(); bw = app.browsers[0]
-assert bw._opening and not bw.tree.get_children()                # it eases open first; the rows come after
-pump(8)
-assert not bw._opening and bw.tree.get_children() and bw.search_var.get() == ""
+geos = set()
+for _ in range(12):
+    pump(1); geos.add(bw.win.geometry())
+assert mapped and mapped[0][2] > 0, mapped                        # rows already in when it first shows
+assert len(geos) == 1, geos                                       # never resized or moved while opening
+assert mapped[0][3] == bw.fsize                                   # its text size already final when it first shows
+assert float(bw.win.attributes("-alpha")) == 1.0 and bw.search_var.get() == ""   # never see-through
 w_full = bw.win.winfo_width()
 bw.close()
-_B.Browser.EASE_OPEN = None                                      # automatic: on X11 (M-5) it opens complete, still
+_B.Browser._open = real_init
+app.anim.reduce_motion = True                                    # Reduce motion: the same
 app.open_browser(); bw = app.browsers[0]
-if bw.win.tk.call("tk", "windowingsystem") == "x11":
-    assert not bw._opening and bw.tree.get_children()
-    sizes = set()
-    for _ in range(8):
-        pump(1); sizes.add((bw.win.winfo_width(), bw.win.winfo_height()))
-    assert len(sizes) == 1 and abs(bw.win.winfo_width() - w_full) <= 2, sizes   # no size change at all
-bw.close()
-app.anim.reduce_motion = True                                    # Reduce motion: no ease, rows at once
-app.open_browser(); bw = app.browsers[0]
-assert not bw._opening and bw.tree.get_children()
+assert bw.tree.get_children()
 pump(4); assert abs(bw.win.winfo_width() - w_full) <= 2
 bw.close()
 app.anim.reduce_motion = False
@@ -158,29 +162,58 @@ for i in range(2, len(ws)):                                                     
 bw.reload(); pump(2)
 rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
 arrow = lambda: bw.arrow[:2]
-assert arrow() == ("tier", "up") and bw.tree.heading("tier", "image")                # Default: S..F, arrow up
+assert arrow() == ("tier", "down") and bw.tree.heading("tier", "image")              # Tier: S..F, arrow down (asked for)
 bw.tree.tk.call(bw.tree.heading("games", "command"))                                # (what a click runs)
 root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # rows in; the arrow fills from here
 pump(8)                                                                             # ...and is full once loaded
 duels = [int(v) for v in rows("games")]
 assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0
-assert bw.arrow == ("games", "down", 1.0) and not bw.tree.heading("tier", "image") and bw.tree.heading("tier", "text") == "Tier"
+assert bw.arrow == ("games", "up", 1.0) and not bw.tree.heading("tier", "image") and bw.tree.heading("tier", "text") == "Tier"
 bw.tree.tk.call(bw.tree.heading("games", "command")); pump(8)                       # same heading: turned round
 duels = [int(v) for v in rows("games")]
-assert bw.reverse and duels == sorted(duels) and arrow() == ("games", "up")
+assert bw.reverse and duels == sorted(duels) and arrow() == ("games", "down")
 bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
 assert bw.sort_var.get() == "A-Z" and not bw.reverse and rows("word") == sorted(rows("word"))
-assert bw.tree.heading("word", "text").strip() == "Word  (A\u2013Z)" and arrow() == ("word", "up")   # in words too
+assert bw.tree.heading("word", "text").strip() == "Word  (A\u2013Z)" and arrow() == ("word", "down")   # in words too
 bw.tree.tk.call(bw.tree.heading("word", "command")); pump(8)
 assert rows("word") == sorted(rows("word"), reverse=True) and "(Z\u2013A)" in bw.tree.heading("word", "text")
-assert arrow() == ("word", "down")
+assert arrow() == ("word", "up")
 bw.close(); app.open_browser(); pump(4); bw = app.browsers[0]                       # remembered, either way round
 assert bw.sort_var.get() == "A-Z" and bw.reverse and rows("word") == sorted(rows("word"), reverse=True)
-assert bw.arrow == ("word", "down", 1.0)                                             # (no fill on opening)
+assert bw.arrow == ("word", "up", 1.0)                                             # (no fill on opening)
 bw.sort_var.set("Rating"); bw.sort_by("Rating"); pump(8)                            # the drop-down: its usual order
-assert not bw.reverse and arrow() == ("rating", "down")
+assert not bw.reverse and arrow() == ("rating", "up")
 bw.close(); app.browse_state = None
 app.on_close()
+
+# --- ST-5: File > Add to applications menu (Linux): a launcher that starts the program with no terminal
+if sys.platform.startswith("linux"):
+    ls = T.Store(os.path.join(tempfile.mkdtemp(), "launch.db")); ls.insert_words(WORDS[:50])
+    root = tk.Tk(); app = T.App(root, ls, T.Definitions(ls)); pump(4)
+    assert "Add to applications menu" in [it[1] for it in app.header.menus["File"] if len(it) > 1]
+    os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
+    path = app.add_launcher(); pump(2)
+    text = open(path).read()
+    assert "Terminal=false" in text and "tierlist.py" in text and app.toast.cget("text").startswith("Word Tier List added")
+    app.add_launcher(); pump(2); assert app.toast.cget("text") == "Word Tier List updated in your applications menu"
+    del os.environ["XDG_DATA_HOME"]
+    assert "Add to Start menu" not in [it[1] for it in app.header.menus["File"] if len(it) > 1]   # (Windows only)
+    # Windows (asked for): the same item, as File > Add to Start menu (the shortcut itself: _selftest_deps)
+    made = []
+    import deps as D
+    keep = D.add_to_start_menu
+    D.add_to_start_menu = lambda python, script: (made.append(script), ("C:\\x\\Word Tier List.lnk", "added"))[1]
+    assert app.add_launcher(platform="win32") == "C:\\x\\Word Tier List.lnk" and made[0].endswith("tierlist.py")
+    pump(2)
+    assert app.toast.cget("text") == "Word Tier List added to your Start menu (it starts without a console window)"
+    D.add_to_start_menu = lambda python, script: (_ for _ in ()).throw(OSError("Access is denied."))
+    import app as A_mod
+    shown = []
+    keep_show = A_mod.show_exception
+    A_mod.show_exception = lambda title, exc, *a, **k: shown.append((title, str(exc)))
+    assert app.add_launcher(platform="win32") is None and shown == [("Start menu", "Access is denied.")]
+    A_mod.show_exception, D.add_to_start_menu = keep_show, keep
+    app.on_close()
 
 # --- every word placed (UI-20): a friendly card in Place, and no tier buttons
 done = T.Store(os.path.join(tempfile.mkdtemp(), "done.db"))

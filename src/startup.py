@@ -351,10 +351,10 @@ _VENV_ADVICE = ("Your system's Python does not allow installing packages into it
 
 
 def ensure_packages(root, required, optional=(), declined=(), on_decline=None, installer=None,
-                    restart=None, home=None):
+                    restart=None, home=None, system_installer=None):
     """Make sure the packages in `required` (and, if wanted, `optional`) can be imported (ST-4, stage 2).
 
-    Names are import names (see deps.PACKAGES). Does nothing unless something is missing. Then one
+    Names are import names (see deps.PIP_NAMES). Does nothing unless something is missing. Then one
     dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
     or optional (required ones marked with a red asterisk; all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
     the usual progress window and checks again, without a restart.
@@ -375,12 +375,13 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
     gone = need + extra
     if not gone or getattr(sys, "frozen", False):
         return not need
-    cmd = "pip install " + " ".join(deps.PACKAGES.get(n, n) for n in gone)
+    cmd = "pip install " + " ".join(deps.PIP_NAMES.get(n, n) for n in gone)
     if not deps.pip_available():
         if not need:
             return True                                   # only optional things missing: not worth an error
-        raise SetupError(f"A required package is missing ({', '.join(need)}) and pip is not available "
-                         f"to install it.\n\nInstall pip, then run:\n    {cmd}")
+        if not _get_pip(root, need, system_installer):
+            raise SetupError(f"A required package is missing ({', '.join(need)}) and pip is not available "
+                             f"to install it.\n\nInstall pip, then run:\n    {cmd}")
     headline = ("Some packages are needed" if len(gone) > 1 else "A package is needed") if need \
         else ("Optional packages are available" if len(extra) > 1 else "An optional package is available")
     def label(n):                                         # the name itself is the link to its page (UI-30)
@@ -404,19 +405,51 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
         root, lambda log: (installer or deps.install)(chosen, log), title="Installing packages",
         initial_stage=f"Installing {what}...",
         intro="This only happens once. You can close this window to stop; the program will ask again next time.")
-    if not ok and "externally-managed-environment" in tail and _private_env(root, chosen, need, restart, home):
+    managed = "externally-managed-environment" in tail
+    if not ok and managed and _private_env(root, chosen, need, restart, home, system_installer):
         return True                       # restarted in the private environment (a real restart never returns)
     still = deps.missing(chosen)
     if not ok or still:
         if set(need) & set(still):
             raise SetupError(f"Could not install {what}.\n\n{tail}\n\nTry running this yourself, then start "
-                             f"the program again:\n    pip install {' '.join(deps.PACKAGES.get(n, n) for n in chosen)}")
+                             f"the program again:\n    pip install {' '.join(deps.PIP_NAMES.get(n, n) for n in chosen)}")
         if still and sys.stderr is not None:
             print(f"Could not install {', '.join(still)} (optional); carrying on without it.", file=sys.stderr)
     return not deps.missing(need)
 
 
-def _private_env(root, names, need, restart, home):
+def offer_system_install(root, what, why, installer=None):
+    """Something the program needs comes from the system, not from pip (deps.SYSTEM_PACKAGES: pip itself, Python's
+    venv module, Python): ask to install it with the system's package manager (asked for: offered, not only told),
+    then do it behind the progress window. True once the command worked; False if there is no command we know,
+    or the answer was no. `installer(cmd, log)`: tests."""
+    cmd = deps.system_install_command(what, window=True)
+    if not cmd:
+        return False
+    name = deps.SYSTEM_NAMES[what]
+    if not ask_yes_no("Word Tier List", f"Install {name}?",
+                      f"{why}\n\nIt can be installed with:\n    {' '.join(cmd)}\n\nYour system may ask for your "
+                      "password.", yes="Install it", no="Not now", parent=root, wrap_chars=56):
+        return False
+    try:
+        return bool(run_with_progress(root, lambda log: (installer or deps.run_system_install)(cmd, log),
+                                      title=f"Installing {name}", initial_stage="Installing...",
+                                      intro="Your system may ask for your password."))
+    except SystemExit:                                    # (the progress window was closed: stopped)
+        return False
+
+
+def _get_pip(root, need, installer=None):
+    """pip is missing: Python's own ensurepip first (nothing to ask), then the system's package. True once pip
+    works."""
+    if run_with_progress(root, lambda log: (log("Setting up pip..."), deps.ensure_pip())[1], title="Setting up pip",
+                         initial_stage="Setting up pip..."):
+        return True
+    return offer_system_install(root, "pip", f"Installing {', '.join(need)} needs pip, Python's package "
+                                "installer, which this Python does not have.", installer) and deps.pip_available()
+
+
+def _private_env(root, names, need, restart, home, installer=None):
     """This Python refuses pip installs: offer a private environment next to the program, install there and
     restart with it (True). Returns False when the user says no to an optional-only install."""
     if restart is None or home is None:
@@ -430,8 +463,14 @@ def _private_env(root, names, need, restart, home):
         if need:
             raise SetupError(_VENV_ADVICE)
         return False
-    ok, tail, vpy = run_with_progress(root, lambda log: deps.make_private_env(home, names, log),
-                                      title="Making a private environment", initial_stage="Making it...")
+    def make():
+        return run_with_progress(root, lambda log: deps.make_private_env(home, names, log),
+                                 title="Making a private environment", initial_stage="Making it...")
+    ok, tail, vpy = make()
+    if not ok and not os.path.exists(vpy) and offer_system_install(
+            root, "venv", "Making the private environment needs Python's venv module, which this system "
+            "keeps in a package of its own.", installer):
+        ok, tail, vpy = make()                            # (once more, now that venv is there)
     if not ok:
         raise SetupError(f"Could not set up the private environment.\n\n{tail}")
     restart(vpy)

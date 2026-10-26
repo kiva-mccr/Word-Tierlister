@@ -171,9 +171,9 @@ for name, key in (("Rating", "rating"), ("Duels", "games")):
     lo, _ = p.list_words("", "All placed", name, limit=50, reverse=True)
     assert [r[key] for r in hi] == sorted((r[key] for r in hi), reverse=True) and [r[key] for r in lo] == sorted(r[key] for r in lo)
     assert hi[0][key] >= lo[0][key]
-back, _ = p.list_words("", "All placed", "Default", limit=5, reverse=True)
+back, _ = p.list_words("", "All placed", "Tier", limit=5, reverse=True)
 assert back[0]["tier"] == max(r["tier"] for r in p.list_words("", "All placed", limit=7000)[0])   # F first
-dq, utotal = p.list_words("", "Unplaced", "Default", limit=2000)
+dq, utotal = p.list_words("", "Unplaced", "Tier", limit=2000)
 assert utotal == 2000 and [r["word"] for r in dq] == [r[0] for r in p.db.execute(
     "SELECT word FROM words WHERE tier IS NULL ORDER BY skips, qkey, rank")]
 assert dq[0]["rank"] != 7000 or dq[1]["rank"] != 7001      # unplaced default order is the shuffled queue
@@ -191,16 +191,55 @@ per = (time.time() - t) / 50
 print(f"next+stats at 300k: {per * 1000:.2f} ms")
 assert per < 0.05
 
+# ---- F-10: big writes take the indexes away and build them again once; the shelf's totals are kept in the save
+import store as _store
+def indexes(st):
+    return {r[0] for r in st.db.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='words' "
+                                        "AND sql IS NOT NULL")}
+want = {n for n, _spec in _store.WORD_INDEXES}
+assert indexes(big) == want, want ^ indexes(big)                 # (after a 300k insert and a 300k reshuffle)
+try:
+    with big.bulk_write():
+        assert not indexes(big)
+        big.db.execute("UPDATE words SET skips=7 WHERE rank < 10")
+        raise RuntimeError("stopped halfway")
+except RuntimeError:
+    pass
+assert indexes(big) == want and not big.db.execute("SELECT 1 FROM words WHERE skips=7").fetchone()   # rolled back
+with big.bulk_write(("idx_unplaced_queue",)):                    # a sort named after its index still works meanwhile
+    assert big.list_words("", "Unplaced", "Tier", limit=3)[0]
+big.db.execute("DROP INDEX idx_words_tg"); big.db.commit()       # (stopped halfway: opening the save mends it)
+assert indexes(T.Store(big.path)) == want
+sh = big.shelf(); assert big.get_meta("shelf_totals")
+big._prog = None; assert big.shelf() == sh                        # (read back from the save, not counted again)
+big.add_word("zzzznewword"); big.place("zzzznewword", 0)
+assert big.get_meta("shelf_totals") is None                     # (a new word: counted again)
+total = sum(sp["words"] for sp in big.shelf()["spines"])
+assert total == big.count_words(), (total, big.count_words())
+
 # ---- M-11: the duel pickers read indexes instead of sorting whole tiers
 import random as _r
 _r.seed(3)
 rows = [(t % 6, 1300 + (i * 37) % 600 if i % 5 else 1500.0, i % 9, f"w{i:07d}") for t, i in enumerate(range(10, 300000, 7))]
 big.db.executemany("UPDATE words SET tier=?, rating=?, games=? WHERE word=?", rows); big.db.commit()
-assert big.tier_counts() == {t: n for t, n in big.db.execute(
-    "SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")}     # a direct write is noticed
+big._forget_tallies()                       # (a write around the Store: its running tallies are counted again)
+def counted(st):
+    return {t: n for t, n in st.db.execute("SELECT tier, COUNT(*) FROM words WHERE tier IS NOT NULL GROUP BY tier")}
+assert big.tier_counts() == counted(big)
+# the counts are kept up to date by every change of tier, not counted again each time (25 ms per placement)
+big.place("w0000003", 0); big.place("w0000038", 5); big.unplace("w0000038"); big.place("w0000024", 2)
+big.undo()
+upper = big.db.execute("SELECT word FROM words WHERE tier=1 LIMIT 1").fetchone()[0]
+lower = big.db.execute("SELECT word FROM words WHERE tier=2 LIMIT 1").fetchone()[0]
+assert big.record_comparison(lower, upper, "a", "boundary")["swapped"]        # (a boundary duel swaps tiers)
+assert big.tier_counts() == counted(big), (big.tier_counts(), counted(big))
+t = time.time()
+for _ in range(20):
+    big.place("w0000031", 3); big.stats()
+assert (time.time() - t) / 20 < 0.02, (time.time() - t) / 20              # a placement and the header's numbers
 plan = " ".join(r[3] for r in big.db.execute("EXPLAIN QUERY PLAN SELECT * FROM words WHERE tier=2 AND rating>1500 "
                                              "ORDER BY rating LIMIT 80"))
-assert "idx_words_tr" in plan and "TEMP B-TREE" not in plan, plan
+assert ("idx_words_tr" in plan or "idx_placed_order" in plan) and "TEMP B-TREE" not in plan, plan
 for order in ("word DESC", "word ASC", "rank DESC"):                    # Browse's A-Z / Z-A / rarest first
     plan = " ".join(r[3] for r in big.db.execute(f"EXPLAIN QUERY PLAN SELECT word FROM words WHERE tier IS NOT NULL "
                                                  f"ORDER BY {order} LIMIT 1000"))
@@ -217,7 +256,7 @@ for _ in range(20):
     assert big.pick_within() and big.pick_boundary()
 per = (time.time() - t) / 20
 print(f"pick_within + pick_boundary at 300k: {per * 1000:.1f} ms")
-assert per < 0.04
+assert per < 0.08                                     # (was ~110 ms before the indexes; a busy machine ~40)
 # the least-dueled words have met everyone near them: words with more duels are tried too (never "no pair")
 tiny = fresh("tiny.db", 5)
 for i, w in enumerate(["w0000000", "w0000001", "w0000002", "w0000003"]):

@@ -14,15 +14,16 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from constants import TIERS
+from constants import KINDS, TIERS, typed_word
 from errors import show_message
-from fonts import family, font
+from fonts import ROLES, family, font
+from keymap import spec_of
 from sizing import center_geometry, fit_size, ui_factor, usable_area
 from smooth import arrow_image
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT
+from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_ROW_TEXT, TIER_TEXT
 from ui_motion import lerp_color
-from widgets import ChoiceButton, RoundButton, Toast, refresh_widgets
+from widgets import ChoiceButton, RoundButton, Toast, TreeSmears, fill_definitions, refresh_widgets
 
 
 class Browser:
@@ -30,25 +31,21 @@ class Browser:
 
     CHUNK = 1000                 # rows fetched per page; the next page loads when you scroll near the end (3000
                                  # cost ~50 ms more to open Browse on a big save, for rows far off screen)
-    BASE_W, BASE_H = 980, 760    # window size at which the text is 12 pt (it grows/shrinks from there)
+    BASE_W, BASE_H = 980, 760    # window size at which the text is the body size (it grows/shrinks from there)
     # the columns: heading, the Sort it stands for (M-7: a click on the heading sorts by it), alignment
-    COLUMNS = (("tier", "Tier", "Default", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
+    COLUMNS = (("tier", "Tier", "Tier", "center"), ("word", "Word", "A-Z", "w"), ("rating", "Rating", "Rating", "e"),
                ("games", "Duels", "Duels", "e"), ("freq", "Freq #", "Frequency", "e"))
-    RISING = ("Default", "A-Z", "Frequency")     # sorts whose values go up down the list (S..F, a..z, commonest
+    RISING = ("Tier", "A-Z", "Frequency")        # sorts whose values go up down the list (S..F, a..z, commonest
                                                  # first: rank 1, 2...); Rating and Duels start with the highest
     SORT_MS = 260                                # the sort arrow fills like a loading bar as the rows load
-    OPEN_MS, OPEN_FROM = 150, 0.94   # opening: it eases out from this share of its size, round its centre (UI-38)
-    # ...except on Linux (X11), where each step of the ease re-lays out the whole window under a window manager
-    # that redraws its frame a beat later, and the rows popped in afterwards: it read as a bounce (M-5). There
-    # it opens complete and still. None = automatic; True / False force it (tests).
-    EASE_OPEN = None
 
     def __init__(self, app):
         """Build the window and load the first page of rows. `app` is the main App (store, fonts, definitions)."""
         self.app = app
         self.win = tk.Toplevel(app.root)
+        self.win.withdraw()                      # (shown once built, placed and filled: _open)
         self.win.title("Browse & edit tier list")
-        # base_w/base_h: the window size at which the text is 12 pt (the reference scaled for dpi, then
+        # base_w/base_h: the window size at which the text is the body size (the reference scaled for dpi, then
         # raised to what the contents need in _fit_to_contents). On a small screen the window opens
         # smaller than that, so the text starts proportionally smaller (it keeps scaling with resizes).
         f = ui_factor(app.root)
@@ -62,16 +59,14 @@ class Browser:
         self._seen_version = -1
         self._loading = False
         self._toast = None                         # the zoom message (_say_zoom)
-        self._opening = True                       # easing open; the list fills when it ends (_open_animation)
+        self._shown_size = False                   # the first size it is shown at was taken (_on_configure)
+        self._open_size = None                     # the size it opens at (_fit_to_contents), for the text size
         self.fsize = 0
-        try:
-            self.zoom = max(-4, min(30, int(app.store.get_meta("browse_zoom", "0"))))
-        except ValueError:
-            self.zoom = 0
+        self.zoom = app.store.meta_number("browse_zoom", 0, int, lo=-4, hi=30)
 
         # Shared fonts: resizing these two updates every widget that uses them at once.
-        self.f_body = tkfont.Font(family=family(), size=12)
-        self.f_bold = tkfont.Font(family=family(), size=12, weight="bold")
+        self.f_body = tkfont.Font(family=family(), size=ROLES["body"][0])
+        self.f_bold = tkfont.Font(family=family(), size=ROLES["body"][0], weight="bold")
         self.sid = f"Br{id(self)}"
         self.style = ttk.Style(self.win)
         self.tstyle = f"{self.sid}.Treeview"
@@ -98,10 +93,11 @@ class Browser:
         self.search_var.trace_add("write", lambda *_: self._debounce())
         ttk.Label(top, text="Show:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
         self.filter_var = tk.StringVar(value="All placed")
-        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"],
+        ChoiceButton(top, self.filter_var, ["All placed"] + [f"Tier {t}" for t in TIERS] + ["Unplaced"]
+                     + [label for _, label, _ in KINDS] + ["Obscene words"],      # (ST-6: placed words of a kind)
                      on_change=self.reload, font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
         ttk.Label(top, text="Sort:", style=f"{self.sid}.Bar.TLabel").pack(side="left", padx=(10, 0))
-        self.sort_var = tk.StringVar(value="Default")
+        self.sort_var = tk.StringVar(value="Tier")
         self.reverse = False                       # the sort turned round (a second click on its heading)
         ChoiceButton(top, self.sort_var, list(Store.SORTS), on_change=lambda: self.sort_by(self.sort_var.get()),
                      font=self.f_body, animator=anim, canvas_bg=surf).pack(side="left", padx=6)
@@ -123,7 +119,10 @@ class Browser:
             self.tree.column(col, anchor=anchor)
         self._show_sort()
         for t in range(len(TIERS)):
-            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_TEXT)
+            self.tree.tag_configure(f"t{t}", background=TIER_ROW[t], foreground=TIER_ROW_TEXT[0])
+        self.tree.tag_configure("lookup", foreground=PALETTE["disabled"])    # (W-1: looked up, not placed yet)
+        self._temp = []                            # rows shown for the moment (W-1: app.lookups), at the bottom
+        self.showing = None                        # a word whose definition shows with no row (not in the list)
         self.tree.pack(side="left", fill="both", expand=True)
         self.vsb.pack(side="right", fill="y")
         # Selection is shown as an outline round the row (the row keeps its tier colour). Treeview
@@ -132,6 +131,8 @@ class Browser:
         self.tree.bind("<<TreeviewSelect>>", lambda e: (self._on_select(), self._draw_outline()))
         self.tree.bind("<Configure>", lambda e: self._draw_outline(), add="+")
         self.tree.bind("<Double-1>", lambda e: self.refine())
+        # censored words smeared over their (blank) cells, as on the cards (asked for: not b\u2022\u2022\u2022\u2022\u2022d)
+        self.smears = TreeSmears(self.tree, "word", self.f_body, self._row_colors, animator=anim)
 
         btns = self.btn_bar = ttk.Frame(self.win, padding=(10, 8))
         btns.pack(fill="x")
@@ -153,23 +154,13 @@ class Browser:
         self.def_text.tag_configure("head", font=self.f_bold)
         self.def_text.pack(fill="x", padx=10, pady=(2, 10))
 
-        # Ctrl + / Ctrl - / Ctrl 0 and Ctrl+mouse wheel zoom the text.
-        for seq, delta in (("<Control-plus>", 1), ("<Control-equal>", 1), ("<Control-KP_Add>", 1),
-                           ("<Control-minus>", -1), ("<Control-KP_Subtract>", -1), ("<Control-0>", 0),
-                           ("<Control-KP_0>", 0)):
-            self.win.bind(seq, lambda e, d=delta: self.zoom_by(d))
-        for widget in (self.win, self.tree):
+        # the keys come from the keymap (UI-48): zoom, undo, and Unplace (Delete) for the selected word
+        self._ws = self.win.tk.call("tk", "windowingsystem")
+        self.win.bind("<Key>", self._on_key)
+        for widget in (self.win, self.tree):            # Ctrl+mouse wheel zooms the text
             widget.bind("<Control-MouseWheel>", self._wheel_zoom)
             widget.bind("<Control-Button-4>", lambda e: self._wheel_zoom(e, 1))
             widget.bind("<Control-Button-5>", lambda e: self._wheel_zoom(e, -1))
-        # Delete unplaces the selected word, like the Unplace button (UI-39; Backspace too on macOS, where the
-        # key marked delete sends it); Ctrl+Z undoes it from here. Not while typing in the search box.
-        keys = ["<Delete>", "<KP_Delete>"] + (["<BackSpace>"] if self.win.tk.call("tk", "windowingsystem") == "aqua"
-                                                 else [])
-        for seq in keys:
-            self.tree.bind(seq, lambda e: (self.unplace(), "break")[1])
-        for seq in ("<Control-z>", "<Command-z>"):
-            self.win.bind(seq, lambda e: self.undo())
         self.win.bind("<Configure>", self._on_configure)
         self.win.bind("<FocusIn>", lambda e: self._maybe_refresh() if e.widget is self.win else None)
         self.win.protocol("WM_DELETE_WINDOW", self.close)
@@ -177,9 +168,8 @@ class Browser:
         self._apply_scale()
         entry.focus_set()
         state = getattr(app, "browse_state", None)
-        # the rows load once the window has eased open: re-laying out a full list on every frame of the ease
-        # made it stutter (40-60 ms a frame)
-        self._open_animation(lambda: self._restore(state) if state else self.reload())
+        self._restore(state) if state else self.reload(keep_lookups=True)
+        self._open()
 
     # ---- window lifecycle ---------------------------------------------------------------------
     @property
@@ -200,6 +190,7 @@ class Browser:
         nothing (UI-38; for this run of the program only)."""
         if self in self.app.browsers:
             self.app.browsers.remove(self)
+        self.app.lookups.clear()                     # (looked-up words were only there for the moment, W-1)
         try:
             self.app.browse_state = {"search": self.search_var.get(), "filter": self.filter_var.get(),
                                      "sort": self.sort_var.get(), "reverse": self.reverse, "selected": self.current,
@@ -219,82 +210,63 @@ class Browser:
         self.reverse = state.get("reverse", False)
         self._show_sort()
         self.current, self.loaded = state["selected"], state["loaded"]
-        self.reload(keep_view=True, view=state["view"])
+        self.reload(keep_view=True, view=state["view"], keep_lookups=True)
         if self.current and self.tree.exists(self.current):
             self.render_def()
 
-    def _open_animation(self, then):
-        """Ease the window out from slightly smaller round its centre (about 150 ms; none with Reduce motion),
-        then call then() (which fills the list). The text is not re-scaled meanwhile: that waits for the size
-        to settle (_on_configure)."""
-        anim = self.app.anim
-        try:
-            w, h, x, y = (int(v) for v in self.win.geometry().replace("x", "+").split("+"))
-        except ValueError:
-            w = 0
-        ease = self.EASE_OPEN
-        if ease is None:
-            ease = self.win.tk.call("tk", "windowingsystem") != "x11"
-        if anim.reduce_motion or not w or not ease:
-            self._opening = False
-            then()                                   # (before the window is first drawn: it appears full)
-            return
-        cx, cy = x + w / 2, y + h / 2
-
-        def frame(p):
-            k = self.OPEN_FROM + (1 - self.OPEN_FROM) * p
-            ww, hh = int(round(w * k)), int(round(h * k))
-            try:
-                self.win.geometry(f"{ww}x{hh}+{int(round(cx - ww / 2))}+{int(round(cy - hh / 2))}")
-            except tk.TclError:
-                pass                                 # closed while opening
-        frame(0.0)                                   # it first appears at the small size...
-
-        def start(e=None):
-            self.win.unbind("<Map>")
-            # ...and the clock starts once it is on screen and drawn: the first draw of a full list takes a
-            # while, and an ease timed from before it was over before anyone saw it
-            self.win.after_idle(lambda: self.win.after(0, lambda: anim.run(f"browse-open{id(self)}",
-                                                                          self.OPEN_MS, frame, done)))
-
-        def done():
-            self._opening = False
-            if self.alive():
-                then()
-        if self.win.winfo_ismapped():
-            start()
-        else:
-            self.win.bind("<Map>", start)
+    def _open(self):
+        """Show the window, already built, sized, placed and filled with its rows, the way every other window
+        appears: the system's own opening (Windows 11 animates it). It once grew from 94% round its centre and
+        filled its rows afterwards, which read as a bounce (M-5); a fade of our own then made it open faster
+        and differently from the rest (a see-through window gets no system animation). Every pending layout and
+        redraw is finished first, while it is still hidden, so it never appears half-settled."""
+        self.win.update_idletasks()
+        self.win.deiconify()
 
     # ---- scaling ------------------------------------------------------------------------------------
     def _on_configure(self, e):
-        """Window resized: re-scale the text, but only after resizing pauses for 80 ms."""
+        """Window resized: re-scale the text, but only after resizing pauses for 80 ms. The first size after it
+        appears is taken at once: should the system open it a little differently from what was asked (display
+        scaling on Windows), the text settles before the first paint instead of changing in view."""
         if e.widget is not self.win:
             return
         if self._scale_job:
             self.win.after_cancel(self._scale_job)
+            self._scale_job = None
+        if not self._shown_size:
+            self._shown_size = True
+            self._apply_scale()
+            return
         self._scale_job = self.win.after(80, self._apply_scale)
 
     def _apply_scale(self):
-        """Text size follows the window size (12 pt at the starting size), plus the manual zoom."""
+        """Text size follows the window size (the body size at the starting size), plus the manual zoom."""
         self._scale_job = None
         try:
             w, h = self.win.winfo_width(), self.win.winfo_height()
         except tk.TclError:
             return
-        if w < 100 or h < 100:  # not mapped yet
-            w, h = self.base_w, self.base_h
-        size = max(8, min(64, int(round(12 * min(w / self.base_w, h / self.base_h))) + self.zoom))
+        if w < 100 or h < 100:  # not shown yet: the size it is about to open at (Tk says 1x1 until then)
+            w, h = self._open_size or (self.base_w, self.base_h)
+        size = max(8, min(64, int(round(ROLES["body"][0] * min(w / self.base_w, h / self.base_h))) + self.zoom))
         if size == self.fsize:
             return
+        self._set_size(size)
+        self._update_minsize()
+        self.win.after_idle(self._draw_outline)     # (rows moved: the outline and the smeared words follow)
+
+    def _row_height(self):
+        """A list row's height for the current text size (the tree does not derive it from the font)."""
+        return int(self.f_body.metrics("linespace") * 1.5) + 6
+
+    def _set_size(self, size):
+        """The text at `size` points: fonts, row height, columns, and every widget using the shared fonts."""
         self.fsize = size
         self.f_body.configure(size=size)
         self.f_bold.configure(size=size)
-        # Row height must be set explicitly: the tree does not derive it from the font.
-        self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
+        self.style.configure(self.tstyle, rowheight=self._row_height())
         self._set_columns()
         refresh_widgets(self.win)                   # the tier buttons and Show / Sort use the shared fonts
-        self._update_minsize()
 
     def _col_widths(self):
         """Column widths in pixels, measured from the current fonts so headings and numbers never clip."""
@@ -304,10 +276,16 @@ class Browser:
         return {
             "tier": max(b("Tier") + arrow, m("S")) + pad * 2,
             "word": m("0") * 22,
-            "rating": max(b("Rating") + arrow, m("0000")) + pad,
+            "rating": max(b("Rating") + arrow, m(self.NOT_PLACED) if self._waiting() else 0, m("0000")) + pad,
             "games": max(b("Duels") + arrow, m("0000")) + pad,
             "freq": max(b("Freq #") + arrow, m("000,000,000")) + pad,
         }
+
+    NOT_PLACED = "not placed yet"                 # (W-1: in the Rating column of a looked-up word's row)
+
+    def _waiting(self):
+        """True while a looked-up word that is not placed yet has a row here (its note needs the room)."""
+        return any(self.tree.exists(w) and "lookup" in self.tree.item(w, "tags") for w in getattr(self, "_temp", ()))
 
     def _set_columns(self):
         for col, width in self._col_widths().items():
@@ -322,7 +300,7 @@ class Browser:
         count_w = self.f_body.measure(self._longest_count()) + 4
         top_w = self.top_bar.winfo_reqwidth() - self.count_lbl.winfo_reqwidth() + count_w
         w = max(top_w, self.btn_bar.winfo_reqwidth(), tree_w)
-        row_h = int(self.f_body.metrics("linespace") * 1.5) + 6
+        row_h = self._row_height()
         fixed = sum(x.winfo_reqheight() for x in self.win.pack_slaves() if x is not self.tree.master)
         return w, fixed + row_h * 8 + 16
 
@@ -332,21 +310,40 @@ class Browser:
         self.win.minsize(min(nw, area[2]), min(nh, area[3]))
 
     def _fit_to_contents(self):
-        """First sizing, once the widgets exist: at the 12 pt reference text, make sure the preferred
+        """First sizing, once the widgets exist: at the reference text size (body), make sure the preferred
         size is not smaller than what the toolbars and columns need, then place the window."""
-        self.fsize = 12
-        self.f_body.configure(size=12)
-        self.f_bold.configure(size=12)
-        self.style.configure(self.tstyle, rowheight=int(self.f_body.metrics("linespace") * 1.5) + 6)
-        self._set_columns()
-        refresh_widgets(self.win)
+        self._set_size(ROLES["body"][0])
         area = usable_area(self.app.root)
         nw, nh = self._needed_size()
         self.base_w, self.base_h = max(self.base_w, nw + 20), max(self.base_h, nh + 20)
         w, h = fit_size((min(nw, area[2]), min(nh, area[3])), (self.base_w, self.base_h), (area[2], area[3]))
         self.win.geometry(center_geometry(w, h, area))
+        self._open_size = (w, h)
         self._update_minsize()
         self.fsize = 0                                         # force the first _apply_scale to run
+
+    def _on_key(self, e):
+        """A key in this window, through the app's keymap: Browse's own keys (Unplace), then Undo and zoom from
+        the Everywhere ones. While typing in the search box only Ctrl / Alt keys act, so Backspace still edits
+        the text; on macOS the key marked delete (Backspace) unplaces too (UI-39)."""
+        spec = spec_of(e, self._ws)
+        if spec is None:
+            return None
+        typing = isinstance(e.widget, (ttk.Entry, tk.Entry))
+        if typing and not spec.startswith(("Ctrl+", "Alt+")):
+            return None
+        if self._ws == "aqua" and spec == "BackSpace":
+            spec = "Delete"
+        action = self.app.keys.lookup("browse", spec)
+        do = {"unplace": self.unplace, "undo": self.undo, "zoom_in": lambda: self.zoom_by(1),
+              "zoom_out": lambda: self.zoom_by(-1), "zoom_reset": lambda: self.zoom_by(0)}.get(action)
+        tier = self.app.keys.place_tier(spec) if do is None and not typing else None
+        if tier is not None:                         # (the placing keys move the selected word, as the buttons do)
+            do = lambda: self.move(tier)                                  # noqa: E731
+        if do is None:
+            return None
+        do()
+        return "break"
 
     def zoom_by(self, delta):
         """Manual text zoom on top of the automatic scaling (0 resets). Saved with the save file."""
@@ -357,7 +354,7 @@ class Browser:
         return "break"
 
     def _say_zoom(self):
-        """'Zoom 100%' (the manual zoom against the 12 pt text) at the bottom of the definition pane, every time
+        """'Zoom 100%' (the manual zoom against the body text size) at the bottom of the definition pane, every time
         a zoom key is pressed, even when nothing changed (M-6). One message, replaced by the next."""
         if self._toast is None:
             self._toast = Toast(self.win, font("label"), animator=self.app.anim, page_bg=PALETTE["surface"])
@@ -379,16 +376,13 @@ class Browser:
         self._job = self.win.after(200, self.reload)
 
     def _maybe_refresh(self):
-        """Reload (keeping the scroll position) if anything changed in the save since the last load. Not while
-        the window is still opening: the list fills when the ease ends (a load mid-ease made it stutter)."""
-        if self._opening:
-            return
+        """Reload (keeping the scroll position) if anything changed in the save since the last load."""
         if self.store.version != self._seen_version:
             self.reload(keep_view=True)
 
     def _query(self, **kw):
         """Ask the Store for a page of words using the current search text, tier filter and sort."""
-        return self.store.list_words(self.search_var.get().strip().lower(), self.filter_var.get(),
+        return self.store.list_words(typed_word(self.search_var.get()).lower(), self.filter_var.get(),
                                      self.sort_var.get(), reverse=self.reverse, **kw)
 
     def sort_by(self, sort, toggle=False):
@@ -411,12 +405,13 @@ class Browser:
         return 2 * h - 1, h
 
     def _show_sort(self, reveal=1.0):
-        """The headings, with a small arrow (an image, after the text) on the one the list is sorted by: up when
-        its values rise down the list (a..z, S..F, commonest first), down when they fall; filled `reveal` of
-        the way, the rest pale. The Word column also says which way round in words, "(A-Z)" or "(Z-A)"."""
+        """The headings, with a small arrow (an image, after the text) on the one the list is sorted by, pointing the
+        way its values grow (asked for: S to F points down): down when they rise down the list (S..F, a..z,
+        commonest first), up when they fall (the highest rating first); filled `reveal` of the way, the rest pale.
+        The Word column also says which way round in words, "(A-Z)" or "(Z-A)"."""
         try:
             sort = self.sort_var.get()
-            up = (sort in self.RISING) != self.reverse
+            up = (sort in self.RISING) == self.reverse
             fill = PALETTE["muted"]
             w, h = self._arrow_size()
             img = arrow_image(self.tree, w, h, fill, lerp_color(fill, PALETTE["surface2"], 0.7), reveal, up)
@@ -433,19 +428,24 @@ class Browser:
             pass                                          # closed meanwhile
 
     def _add_rows(self, rows):
-        """Append rows to the table, colouring placed words by tier. The word itself is the row id."""
+        """Append rows to the table, colouring placed words by tier. The word itself is the row id; a censored one
+        (ST-6) has a blank cell with the word smeared over it (TreeSmears)."""
+        hide = self.app.store.obscene_words() if self.app.store.deal_settings()["censor"] else ()
         for r in rows:
             tier = "-" if r["tier"] is None else TIERS[r["tier"]]
             tags = () if r["tier"] is None else (f"t{r['tier']}",)
             try:
                 self.tree.insert("", "end", iid=r["word"], tags=tags, values=(
-                    tier, r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
+                    tier, "" if r["word"] in hide else r["word"], "" if r["tier"] is None else f"{r['rating']:.0f}",
                     r["games"], f"{r['rank'] + 1:,}"))
             except tk.TclError:  # the same word arriving twice because the list changed under us
-                pass
+                continue
+            if r["word"] in hide:
+                self.smears.words.add(r["word"])
 
     def _clear_tree(self):
         """Empty the table (in slices, which is much faster than one huge delete)."""
+        self.smears.words.clear()
         kids = self.tree.get_children()
         for i in range(0, len(kids), 2000):
             self.tree.delete(*kids[i:i + 2000])
@@ -466,10 +466,13 @@ class Browser:
         else:
             self.count_lbl.config(text=f"{self.total:,} words")
 
-    def reload(self, keep_view=False, view=None):
+    def reload(self, keep_view=False, view=None, keep_lookups=False):
         """Reload the list from the top, or (keep_view) as many rows as were showing, at the same scroll spot
-        (or at `view`, a fraction of the list, when reopening)."""
+        (or at `view`, a fraction of the list, when reopening). The words looked up from a definition (W-1) go,
+        unless `keep_lookups` (opening the window, or the lookup itself)."""
         self._job = None
+        if not keep_lookups:
+            self.app.lookups.clear()
         keep = self.current
         want = max(self.CHUNK, self.loaded) if keep_view else self.CHUNK
         if view is None:
@@ -480,6 +483,7 @@ class Browser:
         self.loaded, self.total = len(rows), total
         self._seen_version = self.store.version
         self._update_count()
+        self._show_lookups()
         if keep and self.tree.exists(keep):
             self.tree.selection_set(keep)
             if not keep_view:
@@ -497,7 +501,10 @@ class Browser:
             self.win.after_idle(self._load_more)
 
     def _draw_outline(self):
-        """Place the selection outline round the selected row, or hide it when that row is scrolled out."""
+        """Place the selection outline round the selected row, or hide it when that row is scrolled out; and the
+        smeared words over their rows (TreeSmears)."""
+        self.smears.inset = max(2, self.fsize // 5) + 1
+        self.smears.refresh()
         try:
             sel = self.tree.selection()
             box = self.tree.bbox(sel[0]) if sel else None
@@ -519,6 +526,18 @@ class Browser:
             edge.place(x=ex, y=ey, width=ew, height=eh)
             edge.lift()
 
+    def _row_colors(self, iid):
+        """(ink, paper) of a row in the list: its tier's colour (stronger when selected), or the plain list's."""
+        tag = next((g for g in self.tree.item(iid, "tags") if g.startswith("t")), None)
+        if tag:
+            t = int(tag[1:])
+            if iid in self.tree.selection():
+                return TIER_TEXT, TIER_COLORS[t]
+            return TIER_ROW_TEXT[0], TIER_ROW[t]
+        state = ["selected"] if iid in self.tree.selection() else []
+        return (self.style.lookup(self.tstyle, "foreground", state) or PALETTE["text"],
+                self.style.lookup(self.tstyle, "background", state) or PALETTE["surface"])
+
     def _load_more(self):
         """Fetch and append the next page of rows (no-op if already loading or everything is loaded)."""
         if self._loading or not self.alive() or self.loaded >= self.total:
@@ -527,6 +546,9 @@ class Browser:
         try:
             rows, _ = self._query(limit=self.CHUNK, offset=self.loaded, with_total=False)
             self._add_rows(rows)
+            for w in self._temp:                         # (looked-up words stay at the bottom, under F)
+                if self.tree.exists(w):
+                    self.tree.move(w, "", "end")
             self.loaded += len(rows)
             if not rows:
                 self.total = self.loaded
@@ -543,17 +565,68 @@ class Browser:
     def _on_select(self):
         """Selection changed: remember it and show its definition."""
         self.current = self._selected()
+        if self.current:
+            self.showing = None
+        self.render_def()
+
+    # ---- looking up a word from a definition (W-1) ------------------------------------------------------------
+    def _show_lookups(self):
+        """The words looked up from a definition (app.lookups), as rows at the bottom of the list for the moment:
+        an unplaced one greyed, "not placed yet" (the tier buttons or keys place it for real); a placed one not
+        loaded here in its tier's colours. Refreshing or closing Browse lets them go."""
+        self._temp = []
+        hide = self.store.obscene_words() if self.store.deal_settings()["censor"] else ()
+        for w in self.app.lookups:
+            if self.tree.exists(w):
+                continue
+            r = self.store.get_word(w)
+            if r is None:
+                continue
+            placed = r["tier"] is not None
+            self.tree.insert("", "end", iid=w, tags=(f"t{r['tier']}",) if placed else ("lookup",), values=(
+                TIERS[r["tier"]] if placed else "-", "" if w in hide else w,
+                f"{r['rating']:.0f}" if placed else self.NOT_PLACED, r["games"] if placed else "",
+                f"{r['rank'] + 1:,}"))
+            if w in hide:
+                self.smears.words.add(w)
+            self._temp.append(w)
+        self._set_columns()                        # (room for "not placed yet" only while one shows)
+
+    def show_lookups(self):
+        """Show app.lookups now (W-1): reloading first if the list changed meanwhile (a word just added)."""
+        if self.store.version != self._seen_version:
+            self.reload(keep_view=True, keep_lookups=True)
+        else:
+            for w in self._temp:
+                if self.tree.exists(w):
+                    self.tree.delete(w)
+                self.smears.words.discard(w)
+            self._show_lookups()
+
+    def look_up(self, word):
+        """A word clicked in the definition (W-1): its row selected, at the bottom for the moment if it is not
+        loaded (app.look_up: a word not in the list is offered to add first), and its definition shown."""
+        known = self.app.look_up(word, parent=self.win)
+        if known:
+            self.show_lookups()
+            self.tree.selection_set(word)
+            self.tree.see(word)
+            self.current = word
+        else:
+            self.showing = word                    # (not in the list: its definition only)
         self.render_def()
 
     def render_def(self):
         """Fill the definition pane for the selected word (shows 'Looking up...' until the lookup finishes)."""
-        w = self.current
-        self.def_text.config(state="normal")
-        self.def_text.delete("1.0", "end")
-        if w:
-            self.def_text.insert("end", w + "\n", "head")
-            self.def_text.insert("end", self.app.get_def(w) or "Looking up definition...")
-        self.def_text.config(state="disabled")
+        w = self.showing or self.current
+        # like the main window's drawer: senses one per line, the rude ones smeared while censoring (OB-2, OB-6);
+        # a censored word smeared too, un-smearing while the pointer is over the pane
+        store = self.app.store
+
+        def entry(word):
+            return word, self.app.get_def(word), store.smeared_meanings(word), store.censored(word)
+        fill_definitions(self.def_text, [entry(w)] if w else [], self.f_body, censor=store.deal_settings()["censor"],
+                         animator=self.app.anim, base=entry, on_word=self.look_up, link=self.app.wiktionary_link())
 
     def move(self, tier):
         """Move the selected word to `tier` and refresh every window. An anchor word may move too: its old tier's
@@ -575,7 +648,8 @@ class Browser:
         if not w:
             return
         if w in self.store.get_anchors():
-            show_message("Anchor word", f"'{w}' is an anchor", "Change anchors in Settings first.", parent=self.win)
+            show_message("Anchor word", f"'{self.app.shown(w)}' is an anchor", "Change anchors in Settings first.",
+                         parent=self.win)
             return
         self.store.unplace(w)
         self.app.after_external_change()
@@ -593,7 +667,7 @@ class Browser:
             return
         row = self.store.get_word(w)
         if row is None or row["tier"] is None:
-            show_message("Not placed", f"'{w}' is not placed yet", "Place the word in a tier first, then refine it.",
-                         parent=self.win)
+            show_message("Not placed", f"'{self.app.shown(w)}' is not placed yet",
+                         "Place the word in a tier first, then refine it.", parent=self.win)
             return
         self.app.start_focus(w)

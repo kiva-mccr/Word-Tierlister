@@ -7,4 +7,10 @@ nltk
 # Pillow is optional too: only the tests use it, to save screenshots (they skip it if missing)
 # pillow
 
+# fontTools is only for tools/make_typefaces.py (tightens the bundled fonts' line spacing)
+# fonttools
+
+# PyInstaller is only for making the program (File > Source & Updates, tools/build.py): installed when needed
+# pyinstaller
+
 # tkinter is also needed but comes with Python, not pip. On Debian/Ubuntu: sudo apt install python3-tk

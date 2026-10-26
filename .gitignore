@@ -226,4 +226,15 @@ __marimo__/
 *.part
 tierlist.txt
 tierlist.csv
-tierlist.md
+/tierlist-export.md
+# (tierlist.md beside tierlist.py is its note: tracked; a Markdown export there goes to tierlist-export.md)
+word_categories.tsv
+word_categories.state.json*
+.word_lists/
+# a program made by File > Source & Updates (T-6) sits next to tierlist.py, with its build manifest
+/word-tierlist
+/word-tierlist.exe
+/Word Tier List.app/
+.word-tierlist-build.json
+.word-tierlist-source.json
+*.py.bak

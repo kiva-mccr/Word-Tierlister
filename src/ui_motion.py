@@ -10,8 +10,11 @@ Rules every animation here follows (they are the promises in the roadmap guardra
     * per-frame callbacks must be tiny and must never query the database.
 
 tkinter has no transparency, so a "fade" is a colour blend toward the background (lerp_color).
+A frame (or its end) that finds its widget gone (its window closed meanwhile) is dropped quietly (_gone): such
+an error used to reach the safety net and show an error dialog.
 """
 import time
+import tkinter as tk
 
 HURRY_MS = 90          # how fast a running animation gets out of the way when a new action starts
 
@@ -33,19 +36,38 @@ def lerp_color(c1, c2, t):
     return "#%02X%02X%02X" % tuple(out)
 
 
+def _gone(exc):
+    """True for a Tk error that only says the widget was destroyed (its window closed while it animated)."""
+    text = str(exc)
+    return isinstance(exc, tk.TclError) and ("invalid command name" in text or "bad window path" in text
+                                              or "application has been destroyed" in text)
+
+
+def _call(fn, *args):
+    """fn(*args), quietly skipping a widget that is gone (see _gone)."""
+    try:
+        fn(*args)
+    except tk.TclError as exc:
+        if not _gone(exc):
+            raise
+
+
 class Animator:
     """Runs short animations on the Tk event loop (about 60 frames a second).
 
     animator.run("word", 180, on_frame, on_done) calls on_frame(p) with p easing from 0 to 1
     (the last call is always exactly 1.0), then on_done(). Animations are identified by `key`;
-    at most one runs per key. Callbacks run on the UI thread, so they may touch widgets.
+    at most one runs per key. Callbacks run on the UI thread, so they may touch widgets. A frame held up by
+    other work moves it on by STALL_MS at most: it slows down rather than skipping ahead.
     """
     FRAME_MS = 16
+    STALL_MS = 50                          # the most one frame moves an animation on (about three frames)
 
     def __init__(self, root, reduce_motion=False, clock=time.perf_counter):
         self.root = root
         self.reduce_motion = reduce_motion
         self.clock = clock                 # injectable so tests need not wait in real time
+        self._real = clock is time.perf_counter     # (a test's clock jumps on purpose: never a stall)
         self._running = {}                 # key -> {"start", "ms", "frame", "done", "ease", "job"}
 
     @property
@@ -65,8 +87,9 @@ class Animator:
             if on_done:
                 on_done()
             return
-        anim = {"start": self.clock(), "ms": ms, "frame": on_frame, "done": on_done,
-                "ease": ease, "job": None}
+        now = self.clock()
+        anim = {"start": now, "ms": ms, "frame": on_frame, "done": on_done,
+                "ease": ease, "job": None, "last": now}
         self._running[key] = anim
         on_frame(ease(0.0))
         anim["job"] = self.root.after(self.FRAME_MS, lambda: self._tick(key, anim))
@@ -75,12 +98,18 @@ class Animator:
         """One frame: advance, or finish when the time is up. Ignores stale timers."""
         if self._running.get(key) is not anim:
             return
-        p = (self.clock() - anim["start"]) * 1000.0 / anim["ms"]
+        now = self.clock()
+        late = now - anim["last"] - self.STALL_MS / 1000.0
+        if self._real and late > 0:
+            anim["start"] += late          # held up (slow work, a busy machine): on by STALL_MS from the frame last
+                                           # shown, never a leap to where the clock says (a pane popped open at once)
+        anim["last"] = now
+        p = (now - anim["start"]) * 1000.0 / anim["ms"]
         if p >= 1.0:
             self.finish(key)
             return
         try:
-            anim["frame"](anim["ease"](p))
+            _call(anim["frame"], anim["ease"](p))
         except Exception:
             self._running.pop(key, None)   # a broken frame must never leave a timer looping
             raise
@@ -93,11 +122,12 @@ class Animator:
             return
         if anim["job"] is not None:
             self.root.after_cancel(anim["job"])
-        anim["frame"](anim["ease"](1.0))
+        _call(anim["frame"], anim["ease"](1.0))
         if anim["done"]:
-            anim["done"]()
+            _call(anim["done"])
 
     def is_running(self, key):
+        """True while the animation `key` runs (tests)."""
         return key in self._running
 
     def hurry(self, key, ms):

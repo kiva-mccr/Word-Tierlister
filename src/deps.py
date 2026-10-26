@@ -16,7 +16,7 @@ import tempfile
 import threading
 import time
 
-from constants import plan_line
+from constants import WM_CLASS_NAME, plan_line
 
 # import name -> what to hand to pip
 PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
@@ -25,23 +25,30 @@ PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
 REQUIRED = ["wordfreq"]
 OPTIONAL = ["nltk"]
 
+# what making the program (File > Source & Updates, T-6) needs as well: the builder. Not in requirements.txt (the
+# program itself never imports it); offered with the program's own packages before a build (sources.py)
+BUILD_PACKAGES = {"PyInstaller": "pyinstaller"}
+PIP_NAMES = {**PACKAGES, **BUILD_PACKAGES}      # import name -> what to hand to pip, for anything offered
+
 # disk space each one takes in MB, shown next to its tick box. Measured with pip for wordfreq 3.1 (57 MB to
 # download, 70 installed, mostly frequency data) and nltk 3.10 (3 MB download, 23 installed, plus 11 MB of
 # WordNet data on first use), Python 3.12; re-measure when the requirements change.
-SIZE = {"wordfreq": 70, "nltk": 35}
+SIZE = {"wordfreq": 70, "nltk": 35, "PyInstaller": 15}   # (PyInstaller 6.22: 2 MB to download, 15 installed)
 # what pip downloads for each, with the packages it pulls in (MB; measured with pip 24 for wordfreq 3.1 and
 # nltk 3.10): the installing window measures the download against this to show a percentage and a speed
-DOWNLOAD = {"wordfreq": 59, "nltk": 3}
+DOWNLOAD = {"wordfreq": 59, "nltk": 3, "PyInstaller": 3}
 
 # what each one is for, in the words used in the install question
 PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",
-           "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)"}
+           "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)",
+           "PyInstaller": "the builder that turns the program into one file: needed to make the program"}
 
 # each one's own web page (UI-30): a link on its name in the install dialog, printed in the terminal
 HOMEPAGE = {"wordfreq": "https://pypi.org/project/wordfreq/",
             "nltk": "https://www.nltk.org/",
-            "tkinter": "https://docs.python.org/3/library/tkinter.html"}
+            "tkinter": "https://docs.python.org/3/library/tkinter.html",
+            "PyInstaller": "https://pyinstaller.org/"}
 
 
 def missing(names):
@@ -85,7 +92,7 @@ def install(names, log=print, python=None, plan=True):
     tmp = tempfile.mkdtemp(prefix="wordtier-pip-")
     env = dict(os.environ, TMPDIR=tmp, TEMP=tmp, TMP=tmp)
     cmd = [python or sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-           "--no-input", "--progress-bar", "off", *[PACKAGES.get(n, n) for n in names]]
+           "--no-input", "--progress-bar", "off", *[PIP_NAMES.get(n, n) for n in names]]
     state = {"done": 0.0, "current": 0.0, "installing": False, "finished": False}
     watcher = threading.Thread(target=_watch_download, args=(tmp, total, state, log), daemon=True)
     lines = []
@@ -173,26 +180,86 @@ def tk_available():
         return False
 
 
-def tk_install_command(platform=None, which=None):
-    """The system command that installs tkinter for this Python, as a list, or None if we do not know one.
+# What the system's own package manager installs for each piece the program needs from outside Python's packages
+# (asked for: anything missing is offered, not only told). None: nothing to install there (it comes with Python).
+SYSTEM_PACKAGES = {
+    "apt-get": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": ["python3-venv"],
+                "python": ["python3", "python3-tk"]},
+    "dnf": {"tkinter": ["python3-tkinter"], "pip": ["python3-pip"], "venv": None,
+            "python": ["python3", "python3-tkinter"]},
+    "pacman": {"tkinter": ["tk"], "pip": ["python-pip"], "venv": None, "python": ["python", "tk"]},
+    "zypper": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": None, "python": ["python3", "python3-tk"]},
+}
+_MANAGERS = {"apt-get": ["apt-get", "install", "-y"], "dnf": ["dnf", "install", "-y"],
+             "pacman": ["pacman", "-S", "--noconfirm"], "zypper": ["zypper", "--non-interactive", "install"]}
+SYSTEM_NAMES = {"tkinter": "tkinter", "pip": "pip, Python's package installer", "venv": "Python's venv module",
+                "python": "Python"}
 
-    Linux: the distribution's package manager (only for the system Python, which is what those packages
-    serve). macOS: Homebrew's python-tk for this Python version. Windows: None (tkinter is an option of the
-    python.org installer, not something to install afterwards).
-    """
+
+def system_install_command(what, platform=None, which=None, window=False):
+    """The system command that installs `what` ("tkinter", "pip", "venv" or "python") for this computer, as a
+    list, or None if there is nothing we know to run.
+
+    Linux: the distribution's package manager (only for the system Python, which is what those packages serve),
+    as root: through sudo in a terminal, through pkexec (the desktop's own password prompt) from a `window`.
+    macOS: Homebrew (python-tk brings Python with it). Windows: winget for Python (for this user, no admin);
+    tkinter is an option of the python.org installer, not something to install afterwards."""
     platform = platform or sys.platform
     which = which or shutil.which
     if platform.startswith("linux"):
-        sudo = [] if hasattr(os, "geteuid") and os.geteuid() == 0 else ["sudo"]
-        for tool, cmd in (("apt-get", ["apt-get", "install", "-y", "python3-tk"]),
-                          ("dnf", ["dnf", "install", "-y", "python3-tkinter"]),
-                          ("pacman", ["pacman", "-S", "--noconfirm", "tk"]),
-                          ("zypper", ["zypper", "--non-interactive", "install", "python3-tk"])):
+        root = hasattr(os, "geteuid") and os.geteuid() == 0
+        if root:
+            elevate = []
+        elif window:
+            if not which("pkexec"):
+                return None                          # (no way to ask for the password without a terminal)
+            elevate = ["pkexec"]
+        else:
+            elevate = ["sudo"]
+        for tool, packages in SYSTEM_PACKAGES.items():
             if which(tool):
-                return sudo + cmd
+                names = packages.get(what)
+                return elevate + _MANAGERS[tool] + names if names else None
     elif platform == "darwin" and which("brew"):
-        return ["brew", "install", f"python-tk@{sys.version_info[0]}.{sys.version_info[1]}"]
+        version = f"{sys.version_info[0]}.{sys.version_info[1]}"
+        return {"tkinter": ["brew", "install", f"python-tk@{version}"], "python": ["brew", "install", "python-tk"],
+                "pip": None, "venv": None}.get(what)
+    elif platform.startswith("win") and what == "python" and which("winget"):
+        return ["winget", "install", "-e", "--id", "Python.Python.3.12", "--scope", "user",
+                "--accept-package-agreements", "--accept-source-agreements"]
     return None
+
+
+def tk_install_command(platform=None, which=None):
+    """The system command that installs tkinter for this Python in a terminal (see system_install_command)."""
+    return system_install_command("tkinter", platform, which)
+
+
+def run_system_install(cmd, log=print):
+    """Run a system install command (system_install_command), its output through `log`; True if it worked. Runs
+    on a worker thread behind the progress window (never touches tkinter)."""
+    log("Installing: " + " ".join(cmd))
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                stdin=subprocess.DEVNULL, **_hidden())
+    except OSError as exc:
+        log(f"  could not run it: {exc}")
+        return False
+    for line in proc.stdout:
+        if line.strip():
+            log("  " + line.rstrip()[:200])
+    return proc.wait() == 0
+
+
+def ensure_pip(python=None, run=subprocess.run):
+    """Python's own way to put pip back (ensurepip: no password, nothing from the system); True if pip works then.
+    Debian's Python leaves it out: then the system package is needed (system_install_command("pip"))."""
+    try:
+        run([python or sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True, timeout=300,
+            **_hidden())
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return pip_available()
 
 
 def tk_advice(platform=None):
@@ -322,3 +389,208 @@ def wants_terminal_setup(no_install):
         return sys.stdin is not None and sys.stdin.isatty() and sys.stdout is not None and sys.stdout.isatty()
     except (AttributeError, ValueError):
         return False
+
+
+# --------------------------------------------------------------------------
+# ST-5: give the terminal back (Linux / macOS), and a launcher in the applications menu (Linux)
+# --------------------------------------------------------------------------
+DETACHED_ENV = "WORD_TIERLIST_DETACHED"     # set in the copy started in its own session (so it never loops)
+DETACH_WAIT = 1.5                           # seconds the terminal waits to see the new copy get going
+
+
+def windowless_python(python=None, exists=os.path.exists):
+    """Windows: pythonw.exe, the Python with no console window, beside this python.exe (every python.org install
+    and every venv has it), or None."""
+    exe = python or sys.executable
+    folder, name = os.path.split(exe)
+    if name.lower() == "pythonw.exe":
+        return exe
+    w = os.path.join(folder, "pythonw.exe")
+    return w if exists(w) else None
+
+
+def should_detach(console=False, env=None, streams=None, posix=None, windows=None, pythonw=None):
+    """True when the program, started from a terminal (or a console window a double-click opened), should carry
+    on without it and let it go (so closing it no longer closes the program): Linux and macOS in a session of
+    their own; Windows with pythonw.exe (reported: the console window stayed open behind it; letting go of it
+    alone is not enough when the py launcher that opened it waits on). Not with --console, not when output is
+    redirected on purpose, not twice, on Linux only with a desktop to draw on (else the window could not open,
+    and the message saying so must stay in the terminal), on Windows only with a pythonw.exe. Arguments are for
+    tests."""
+    env = os.environ if env is None else env
+    windows = (os.name == "nt") if windows is None else windows
+    posix = (os.name == "posix") if posix is None else posix
+    if console or env.get(DETACHED_ENV):
+        return False
+    if windows:
+        if not (pythonw if pythonw is not None else windowless_python()):
+            return False
+        try:
+            return all(s is not None and s.isatty() for s in (streams or (sys.stdin, sys.stdout)))
+        except (AttributeError, ValueError):
+            return False
+    if not posix:
+        return False
+    if sys.platform != "darwin" and not (env.get("DISPLAY") or env.get("WAYLAND_DISPLAY")):
+        return False
+    try:
+        return all(s is not None and s.isatty() for s in (streams or (sys.stdin, sys.stdout)))
+    except (AttributeError, ValueError):
+        return False
+
+
+def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, clock=time.monotonic,
+                    sleep=time.sleep, windows=None, pythonw=None):
+    """Start the program again on its own, not tied to this terminal, and return the exit code for this one:
+    Linux / macOS in a session of its own (setsid), Windows with pythonw.exe (no console window), detached; this
+    copy then ends, so the console window a double-click opened closes and a terminal gets its prompt back. It
+    waits a moment: if the new copy fails straight away (it could not open its window), what it said is shown
+    here, so a failure is never silent. The new copy writes its messages to tierlist.log next to the save. The
+    keyword arguments are for tests."""
+    early = tempfile.TemporaryFile()             # what it says while getting going (shown only if it fails)
+    env = dict(os.environ, **{DETACHED_ENV: "1"})
+    windows = (os.name == "nt") if windows is None else windows
+    if windows:
+        flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+        child = popen([pythonw or windowless_python(), *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
+                      creationflags=flags, close_fds=True, env=env)
+    else:
+        child = popen([sys.executable, *argv], stdin=subprocess.DEVNULL, stdout=early, stderr=early,
+                      start_new_session=True, env=env)
+    end = clock() + wait
+    while clock() < end:
+        code = child.poll()
+        if code is not None:
+            if code:
+                early.seek(0)
+                said = early.read().decode("utf-8", "replace").strip()
+                out(said or f"The program stopped straight away (exit code {code}).")
+            return code
+        sleep(0.05)
+    out("Word Tier List is open in its own window: you can close this terminal. "
+        "(Messages go to tierlist.log next to your save; --console keeps them here.)")
+    return 0
+
+
+ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon-256.png")   # (IC-1)
+
+
+def kept_icon(home=None):
+    """The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy
+    is in a folder that is gone once it closes), for a launcher or a file's custom icon; its path, or None."""
+    if not os.path.exists(ICON):
+        return None
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    icon = os.path.join(data, "icons", "word-tierlist.png")
+    try:
+        os.makedirs(os.path.dirname(icon), exist_ok=True)
+        shutil.copyfile(ICON, icon)
+    except OSError:
+        return None
+    return icon
+
+
+def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary", hidden=False):
+    """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
+    program, started by itself); `icon`: a picture's path, or the name of one the desktop has. StartupWMClass
+    names the windows' class (constants.WM_CLASS), which is how the taskbar knows their icon; `hidden`: kept out
+    of the applications menu (NoDisplay: only for the taskbar's icon, ensure_launcher)."""
+    q = lambda p: '"' + p.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    run = f"{q(python)} {q(script)}" if script else q(python)
+    return "\n".join([
+        "[Desktop Entry]", "Type=Application", f"Name={name}",
+        "Comment=Tier-list every English word, at your own pace",
+        f"Exec={run}", f"Path={os.path.dirname(script or python)}", "Terminal=false",
+        f"Icon={icon}", "Categories=Education;Game;", "StartupNotify=true", f"StartupWMClass={WM_CLASS_NAME}",
+        *(["NoDisplay=true"] if hidden else []), ""])
+
+
+def launcher_path(home=None):
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    return os.path.join(data, "applications", "word-tierlist.desktop")
+
+
+def ensure_launcher(python, script, home=None, platform=None):
+    """Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a
+    launcher that names its class): write the launcher if there is none, kept out of the applications menu
+    (NoDisplay), or bring the one there up to date (where the program is now, its icon), keeping whether it is in
+    the menu (File > Add to applications menu puts it there). Returns its path, or None (not Linux, or it could not
+    be written); never raises."""
+    if not (platform or sys.platform).startswith("linux"):
+        return None
+    path = launcher_path(home)
+    try:
+        with open(path, encoding="utf-8") as f:
+            hidden = "NoDisplay=true" in f.read()
+    except OSError:
+        hidden = True                             # (none yet: only for the taskbar until it is asked for)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        text = desktop_entry(python, script, icon=kept_icon(home) or "accessories-dictionary", hidden=hidden)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        os.chmod(path, 0o755)
+    except OSError:
+        return None
+    return path
+
+
+def add_to_menu(python, script, home=None):
+    """Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to
+    ~/.local/share/icons (a built program's own copy is gone once it closes). Returns (path, "added" or "updated")."""
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    folder = os.path.join(data, "applications")
+    os.makedirs(folder, exist_ok=True)
+    icon = kept_icon(home) or "accessories-dictionary"
+    path = os.path.join(folder, "word-tierlist.desktop")
+    was = os.path.exists(path)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(desktop_entry(python, script, icon=icon))
+    os.chmod(path, 0o755)
+    return path, "updated" if was else "added"
+
+
+# Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu
+ICO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon.ico")
+# (written by Windows' own PowerShell through WScript.Shell: no package needed; the values come in through the
+# environment, so no path is ever quoted inside the script)
+SHORTCUT_PS = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:WTL_LNK); "
+               "$s.TargetPath = $env:WTL_TARGET; $s.Arguments = $env:WTL_ARGS; "
+               "$s.WorkingDirectory = $env:WTL_DIR; $s.IconLocation = $env:WTL_ICON; "
+               "$s.Description = 'Tier-list every English word, at your own pace'; $s.Save()")
+
+
+def start_menu_path(appdata=None):
+    """Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed)."""
+    appdata = appdata or os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+
+
+def shortcut_parts(python, script, exists=os.path.exists):
+    """(target, arguments, working folder, icon) for the shortcut: from source pythonw.exe (no console window,
+    ST-9) running tierlist.py with the program's icon; a built program (`script` None) itself, with its own icon."""
+    if script:
+        target = windowless_python(python, exists=exists) or python
+        return target, f'"{script}"', os.path.dirname(script), ICO + ",0"
+    return python, "", os.path.dirname(python), python + ",0"
+
+
+def add_to_start_menu(python, script, appdata=None, run=subprocess.run):
+    """Write (or update) the Start menu shortcut. Returns (path, "added" or "updated"); raises OSError when it could
+    not be made (the message says why)."""
+    path = start_menu_path(appdata)
+    was = os.path.exists(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    target, args, folder, icon = shortcut_parts(python, script)
+    env = dict(os.environ, WTL_LNK=path, WTL_TARGET=target, WTL_ARGS=args, WTL_DIR=folder, WTL_ICON=icon)
+    try:
+        r = run(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+                 SHORTCUT_PS], env=env, capture_output=True, text=True, timeout=60, **_hidden())
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise OSError(f"PowerShell could not be started ({exc})") from exc
+    if r.returncode != 0 or not os.path.exists(path):
+        raise OSError((r.stderr or r.stdout or "").strip() or "the shortcut was not written")
+    return path, "updated" if was else "added"

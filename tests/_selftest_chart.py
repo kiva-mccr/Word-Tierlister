@@ -128,6 +128,15 @@ gap = sh.coords("spine2")[0] - sh.coords("spine1")[2]
 assert gap > 2 * (sh.coords("spine1")[0] - sh.coords("spine0")[2])                # a gap between zones
 assert [sh.itemcget(f"zone{i}", "text") for i in (0, 1)] == ["page", "chapter"] and sh.itemcget("tag", "text") == "95% of text"
 x = lambda i: (sh.coords(f"spine{i}")[0] + sh.coords(f"spine{i}")[2]) / 2
+# every spine one width however many there are (UI-79): five spines or sixty-four, the same; fewer, a shorter shelf
+wid = lambda i: sh.coords(f"spine{i}")[2] - sh.coords(f"spine{i}")[0]
+w5, shelf5 = wid(0), sh.winfo_reqwidth()
+assert all(abs(wid(i) - w5) < 0.01 for i in range(5))
+many = {"zones": [("page", 30), ("chapter", 34)], "coverage": 0.952,
+        "spines": [{"zone": "page" if k < 30 else "chapter", "words": 9, "placed": 0, "tiers": [0] * 6} for k in range(64)]}
+sh.set(many); root.update()
+assert abs(wid(40) - w5) < 0.01 and sh.winfo_reqwidth() > shelf5 + 50 * w5
+sh.set(data); root.update()
 # hover: the spine lifts and its outline darkens; its neighbours lift less; leaving puts them all back
 top = lambda i: sh.coords(f"spine{i}")[1]
 rest = [top(i) for i in range(5)]
@@ -156,7 +165,7 @@ sh.mark([]); assert not sh.find_withtag("mark")
 # M-4: a mark wears its word's tier colour (deepened); two tiers in one spine split one triangle down the middle
 import ui_chart as UC
 from theme import TIER_COLORS
-assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC.MARK_COLOR
+assert UC.mark_color(0) != UC.mark_color(5) and UC.mark_color(None) == UC._mark_lilac()
 sh.mark([1, 3], [0, 4]); assert sh._mark_colors == {1: (UC.mark_color(0),), 3: (UC.mark_color(4),)}
 sh.mark([2, 2], [1, 3]); assert sh._marks == [2] and sh._mark_colors[2] == (UC.mark_color(1), UC.mark_color(3))
 img = sh.itemcget("mark2", "image")

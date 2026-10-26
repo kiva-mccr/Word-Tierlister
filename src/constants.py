@@ -1,13 +1,22 @@
 """Shared constants: tier names, modes, ranking defaults. Only the standard library, so anything can use it.
 """
 import math
+import unicodedata
 
 
 # Tier index 0..5 everywhere in the code and the database means S..F in this order.
 TIERS = ["S", "A", "B", "C", "D", "F"]
 DEFAULT_ANCHORS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"]
+VERSION = "1.0.0"     # this program's version: a release is tagged v + VERSION (T-8; the build workflow checks it)
+REPO = "kiva-mccr/Word-Tierlister"     # on GitHub: its Releases carry the programs and the source (T-8)
+REPO_PAGE = f"https://github.com/{REPO}"   # the project's page (the GitHub link in the menu bar, UI-75)
+WM_CLASS = "word-tierlist"   # every window's name for the desktop (tk.Tk(className=)): X sees WM_CLASS "word-tierlist",
+WM_CLASS_NAME = "Word-tierlist"   # "Word-tierlist" (Tk lowers it and capitalizes it); a Linux launcher's StartupWMClass
+                             # names the second and its file is word-tierlist.desktop, so the taskbar shows the
+                             # program's icon (reported: none on Fedora's GNOME)
+OFFLINE_ENV = "WORD_TIERLIST_OFFLINE"   # set (the self-tests do): never go online (Wiktionary, definitions)
 FOCUS_ROUNDS = 8  # duels in one "Refine this word" session
-# (key, menu label) for the four sorting modes; the key is also what is saved in meta "mode".
+# (key, menu label) for the sorting modes; the key is also what is saved in meta "mode".
 MODES = [
     ("place", "Place new words"),
     ("refine", "Refine within tier"),
@@ -32,7 +41,9 @@ def tier_base(t):
 
 # Queue order (see Store.reshuffle). "spread" is in frequency ranks: with the exponential shape a
 # word `spread` ranks further down the list is e times (about 2.7x) less likely to come up early.
+# qshape "rank" is "Most common first" (ST-6): strictly by frequency, no randomness.
 QUEUE_DEFAULTS = {"qspread": "20000", "qshape": "exp", "qcompound": "1.0"}
+QUEUE_SHAPES = ("exp", "gauss", "rank")
 # Push-back for compound words, in multiples of `spread` x the compound-strength setting:
 # 0 = normal word, 1 = closed compound ("bookshelf"), 2 = hyphenated / multi-word ("well-known").
 PEN_UNITS = {0: 0.0, 1: 1.0, 2: 1.5}
@@ -49,6 +60,81 @@ QUEUE_MEDIAN = {"exp": math.log(2), "gauss": 0.6745}
 QUEUE_AXIS = 100_000             # the queue dialog's diagrams (UI-41) always run from rank #1 to this
 
 
+# Kinds of words (ST-6): (key, label, bit in words.kinds). A word can be several kinds ("run": noun and verb);
+# "other" is every other part of speech. words.kinds is NULL until known (counted as "other").
+KINDS = [("noun", "Nouns", 1), ("verb", "Verbs", 2), ("adj", "Adjectives", 4), ("adv", "Adverbs", 8),
+         ("other", "Other", 16)]
+ALL_KINDS = 31
+KIND_OF_POS = {"noun": 1, "verb": 2, "adj": 4, "adjective": 4, "adv": 8, "adverb": 8}
+# What each tick box of "Which words" holds, shown on hover (ST-6)
+KIND_NOTES = {
+    "noun": "Nouns: names of things, people, places and ideas (table, teacher, happiness).",
+    "verb": "Verbs: doing and being words (run, think, become).",
+    "adj": "Adjectives: words that describe a thing (blue, quick, enormous).",
+    "adv": "Adverbs: words that say how, when or where (quickly, soon, here).",
+    "other": ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, contractions "
+              "and the like (she, under, because, wow, seven, etc., don't)."),
+    "obscene": ("Obscene words: words whose meanings are all rude (vulgar, offensive or derogatory words and "
+                "slurs). Tick it to choose which kinds of rude meaning come up."),
+    # the kinds of rude meaning (obscene.RUDE_KINDS), under Obscene words (OB-5)
+    "clinical": "Clinical: the proper words for the body, sex and its waste (penis, urinate).",
+    "crude": "Crude: rude words for the body and its waste.",
+    "swear": "Swear words: words said to curse or swear.",
+    "insult": "Insults: words that call a person stupid or nasty (idiot, jerk, moron).",
+    "sexual": "Sexual: slang for sex and the parts of the body it uses.",
+    "slur": "Slurs: offensive words for a group of people.",
+}
+RUDE_NAMES = {"clinical": "clinical", "crude": "crude", "swear": "swear word", "insult": "insult", "sexual": "sexual",
+              "slur": "slur"}      # one word's kind, faintly above it on the card (after its parts of speech)
+POS_NAMES = (("noun", 1), ("verb", 2), ("adjective", 4), ("adverb", 8))   # on the card, in this order ("other" is
+                                                                           # too vague to show: pronouns, numbers...)
+
+
+def card_label(kinds, rude=None, compound=False):
+    """What the word card writes faintly above a word (asked for): its parts of speech, "compound word" for one
+    made of words (it was on the frequency line), then for a censored word its kind of rude word: "noun · verb",
+    "noun · compound word · sexual"; "" when there is nothing to say. `kinds`: words.kinds (KINDS bits, None when
+    not known); `rude`: a RUDE_NAMES value or None; `compound`: words.pen (a compound word)."""
+    parts = [name for name, bit in POS_NAMES if (kinds or 0) & bit]
+    return " · ".join(parts + (["compound word"] if compound else []) + ([rude] if rude else []))
+
+
+RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
+               "sexual": "Sexual", "slur": "Slurs"}
+KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "
+                  "of word is ticked. Censoring smears Crude, Swear, Sexual and Slur meanings, never Clinical or "
+                  "Insult.")
+# what is said when censoring is turned on (asked for: it is not fully accurate): a dialog the first time in a save,
+# a toast every time after, and a line beside the tick box in How words are dealt
+CENSOR_CAVEAT_HEAD = "Censoring is not perfect"
+CENSOR_CAVEAT = ("Obscene words are picked out by rules that read each word's dictionary labels and meanings, not by "
+                 "a person. They can miss a rude word, or smear an ordinary one that has a rude meaning too. Point at a "
+                 "smeared word to see it. Censoring only hides words: it never changes what you have placed.")
+CENSOR_CAVEAT_SHORT = "Censoring on \u00b7 it may miss a rude word or smear an ordinary one"
+CENSOR_CAVEAT_LINE = "picked out by rules: it may miss some, or smear an ordinary word"
+KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of its kinds are ticked."
+
+
+def kind_bits(pos):
+    """The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it."""
+    return KIND_OF_POS.get((pos or "").strip().lower(), 16)
+
+
+def typed_word(text):
+    """A word typed to look up (UI-51): spaces at the ends gone, runs of spaces made one, and characters that show
+    nothing (zero-width spaces, joiners) dropped: "  ice  cream" is "ice cream"."""
+    shown = "".join(ch for ch in str(text or "") if unicodedata.category(ch) != "Cf")
+    return " ".join(shown.split())
+
+
+def mask_word(word):
+    """A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d. Everywhere a
+    widget can draw (cards, definitions, Browse's list) the word is smeared instead (widgets.smear_items)."""
+    if len(word) <= 2:
+        return "•" * len(word)
+    return word[0] + "•" * (len(word) - 2) + word[-1]
+
+
 # A long job can tell its progress window the main steps it will go through, up front: log(plan_line([...]))
 # with the start of each step's stage line ("Downloading English Wiktionary", "Reading entries"). The window
 # then shows "Step 2 of 4" in its corner as each of those stages starts (startup.run_with_progress). The plan
@@ -57,6 +143,7 @@ PLAN_MARK = "\x1eplan:"
 
 
 def plan_line(steps):
+    """A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan)."""
     return PLAN_MARK + "\x1f".join(steps)
 
 

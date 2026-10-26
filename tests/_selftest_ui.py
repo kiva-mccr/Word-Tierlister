@@ -18,7 +18,6 @@ for i in range(6500):
 root = tk.Tk()
 shown = []
 import app as A, browser as B
-from widgets import ShapeCard
 A.show_message = B.show_message = lambda *a, **k: shown.append(a)   # no modal dialogs in the test
 A.show_error = lambda *a, **k: shown.append(a)
 app = T.App(root, s, T.Definitions(s))
@@ -37,7 +36,7 @@ def key(ks):                                       # a press and its release (a 
 
 pump()
 # ---------------------------------------------------------------- place mode
-assert app.hint_lbl.cget("text") == "Backspace or Ctrl+Z undo   \u00b7   Tab next tab"   # 1-6, Space, U, D are on their buttons
+assert app.hint_lbl.cget("text") == "Backspace or Ctrl Z undo   \u00b7   Tab next tab"   # 1-6, Space, U, D are on their buttons
 first = s.next_unplaced()["word"]
 assert app.word_card.word == first, (app.word_card.word, first)
 assert "frequency rank" in app.word_card.sub
@@ -47,7 +46,7 @@ second = s.next_unplaced()["word"]
 assert second != first and app.word_card.word == second
 key("space")
 assert app.cmp is not None
-assert app.hint_lbl.cget("text") == "Space stop comparing"        # only keys no button shows
+assert app.hint_lbl.cget("text") == "Space or Esc stop comparing"   # only keys no button shows
 assert not app.cmp_btns["back"].enabled                            # nothing to step back to yet...
 key("BackSpace"); assert app.cmp is not None                       # ...so Backspace does not leave (UI-37)
 key("space"); assert app.cmp is None and app.tier_row.winfo_manager()       # Space again leaves
@@ -96,43 +95,46 @@ assert err is None and cfg == {"seed": 77, "spread": 8000, "shape": "gauss", "co
 s.reshuffle(**cfg); assert app.queue_unchanged(cfg)
 s.reshuffle(**app.parse_queue_settings("11", "3000", "exp", "1")[0])
 # the dialogs (UI-24): the shared StyledDialog, problems shown inline, the default button on Enter
-qd = app.edit_queue(); pump(3)
-assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply & reshuffle"]
-assert qd.buttons["Apply & reshuffle"].cget("bg") == T.PALETTE["select_bg"]
-spread = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
-spread.delete(0, "end"); spread.insert(0, "5")
-qd.win.event_generate("<Return>"); pump(2)
-assert qd.alive() and any("at least 100" in str(w.cget("text")) for w in qd.body.winfo_children() if w.winfo_class() == "TLabel")
-qd.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
-labels = lambda d: " ".join(str(w.cget("text")) for w in d.body.winfo_children() if w.winfo_class() == "TLabel" and w.winfo_manager())
-qd = app.edit_queue(); pump(3)
+qd = app.edit_dealing(); pump(3)
+assert qd.alive() and list(qd.buttons) == ["Cancel", "Apply"]
+assert qd.buttons["Apply"].cget("bg") == T.PALETTE["select_bg"]
+qd.order_v.set("shuffled"); pump(1)
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "5")
+qd.dlg.win.event_generate("<Return>"); pump(2)
+assert qd.alive() and "at least 100" in str(qd.status.cget("text")) and qd.status.winfo_manager()
+qd.dlg.win.event_generate("<Escape>"); pump(2); assert not qd.alive()
+labels = lambda d: str(d.status.cget("text")) if d.status.winfo_manager() else ""
+qd = app.edit_dealing(); pump(3)
 # UI-41: a card per shape instead of radio buttons; a click picks it, the curves follow the spread as it is typed
-cards = {c.shape: c for f in qd.body.winfo_children() for c in f.winfo_children() if isinstance(c, ShapeCard)}
+cards = qd.cards
 assert set(cards) == {"exp", "gauss"} and cards[s.queue_settings()["shape"]].chosen
 other = "gauss" if cards["exp"].chosen else "exp"
 cards[other].event_generate("<Button-1>", x=5, y=5); pump(1)
 assert cards[other].chosen and not cards["gauss" if other == "exp" else "exp"].chosen
-spread_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][1]
 before = cards["exp"].coords("curve")
-spread_e.delete(0, "end"); spread_e.insert(0, "5000"); pump(1)
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "5000"); pump(1)
 assert cards["exp"].coords("curve") != before and cards["exp"].spread == 5000
-spread_e.delete(0, "end"); spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+qd.spread_e.delete(0, "end"); qd.spread_e.insert(0, "oops"); pump(1); assert cards["exp"].spread == 5000   # keeps the last
+# ST-6: "Most common first" hides the shuffle's settings (and an unreadable spread there no longer matters)
+assert qd.shuffle_f.winfo_manager()
+qd.order_btns["rank"].invoke(); pump(1)
+assert qd.order_v.get() == "rank" and not qd.shuffle_f.winfo_manager()
+assert qd.order_btns["rank"].cget("bg") == T.PALETTE["select_bg"] != qd.order_btns["shuffled"].cget("bg")
+qd.order_btns["shuffled"].invoke(); pump(1); assert qd.shuffle_f.winfo_manager()
 qd.close(); pump(2)
-qd = app.edit_queue(); pump(3)
-qd.buttons["Apply & reshuffle"].invoke(); pump(2)                               # nothing changed: says so, stays open
+qd = app.edit_dealing(); pump(3)
+qd.buttons["Apply"].invoke(); pump(2)                                           # nothing changed: says so, stays open
 assert qd.alive() and "No settings changed" in labels(qd)
-seed_e = [w for w in qd.body.winfo_children() if w.winfo_class() == "TEntry"][0]
-seed_e.delete(0, "end"); seed_e.insert(0, "424242"); pump(1)
+qd.seed_e.delete(0, "end"); qd.seed_e.insert(0, "424242"); pump(1)
 assert "No settings changed" not in labels(qd)                                  # an edit clears the note
 real_reshuffle, gate = s.reshuffle, []
 s.reshuffle = lambda **k: (gate.append(1), time.sleep(0.6), real_reshuffle(**k))
 v0 = s.version
-qd.buttons["Apply & reshuffle"].invoke(); pump(2, 0.05)
+qd.buttons["Apply"].invoke(); pump(2, 0.05)
 assert qd.alive() and app.busy and "Shuffling" in labels(qd)                    # runs in the background ...
-assert not qd.buttons["Apply & reshuffle"].enabled and not qd.buttons["Cancel"].enabled
-bars = [w for w in qd.body.winfo_children() if w.winfo_class() == "TProgressbar"]
-assert bars and bars[0].winfo_manager() and str(bars[0].cget("mode")) == "indeterminate"   # the back-and-forth bar
-qd.win.event_generate("<Escape>"); pump(1); assert qd.alive()                    # ... and cannot be cancelled halfway
+assert not qd.buttons["Apply"].enabled and not qd.buttons["Cancel"].enabled
+assert qd.bar.winfo_manager() and str(qd.bar.cget("mode")) == "indeterminate"   # the back-and-forth bar
+qd.dlg.win.event_generate("<Escape>"); pump(1); assert qd.alive()                # ... and cannot be cancelled halfway
 t_end = time.time() + 30
 while qd.alive() and time.time() < t_end:
     pump(2, 0.05)
@@ -227,7 +229,7 @@ assert list(kids) == sorted(kids)
 bw.sort_var.set("Frequency"); bw.reload(); pump(2)
 fr = [int(bw.tree.set(k, "freq").replace(",", "")) for k in bw.tree.get_children()[:50]]
 assert fr == sorted(fr)
-bw.sort_var.set("Default")
+bw.sort_var.set("Tier")
 bw.filter_var.set("All placed"); bw.search_var.set("serend"); bw.reload(); pump(2)
 assert "serendipity" in bw.tree.get_children()
 bw.tree.selection_set("serendipity"); pump(2)
@@ -249,6 +251,19 @@ key("1")                                                           # main-window
 pump(2)
 bw._maybe_refresh()
 assert bw._seen_version == s.version >= v
+# the search box (F-17): spaces at the ends and runs of them are tidied, capitals do not matter, % and _ are plain
+# letters to skip (never wildcards); keys typed there are text (a digit is not "move to a tier", Delete not
+# "unplace"), and the main window does not hear them
+for typed in ("  SERENDIPITY ", "seren\u200bdipity", "seren%dip_ity"):
+    bw.search_var.set(typed); bw.reload(); pump(2)
+    assert list(bw.tree.get_children()) == ["serendipity"], (typed, bw.tree.get_children())
+bw.search_var.set("serend"); bw.reload(); pump(2); bw.tree.selection_set("serendipity"); pump(2)
+tier_s, cur = s.get_word("serendipity")["tier"], app.cur_word
+bw.entry.focus_force(); bw.entry.icursor("end"); pump(2)
+for ks in ("1", "Home", "Delete"):
+    bw.entry.event_generate("<KeyPress>", keysym=ks); bw.entry.event_generate("<KeyRelease>", keysym=ks); pump(1)
+assert bw.search_var.get() == "erend1" and s.get_word("serendipity")["tier"] == tier_s, bw.search_var.get()
+assert app.cur_word == cur and s.get_word(cur)["tier"] is None
 bw.search_var.set(""); bw.reload(); pump(2)
 
 # screenshots (best effort)
@@ -396,11 +411,11 @@ time.monotonic = lambda: clock["t"]
 calls = []
 real_apply = app._apply_zoom
 app._apply_zoom = lambda z: (calls.append(z), real_apply(z))
-ev = lambda t: types.SimpleNamespace(keysym="plus", time=t)
-app._zoom_key(ev(1), 1)                                                         # first press: one step
+ev = lambda t: types.SimpleNamespace(keysym="plus", time=t, state=0x4)          # Ctrl +
+app.on_key(ev(1))                                                               # first press: one step
 for i in range(40):                                                            # held: 30 repeats a second
     clock["t"] += 0.033
-    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app._zoom_key(ev(100 + i), 1)
+    app.on_key_release(types.SimpleNamespace(keysym="plus", time=100 + i)); app.on_key(ev(100 + i))
 assert len(calls) <= 1 + (40 * 33 - 500) // 250 + 1, calls                     # paced, not 40 refits
 app._zoom_cap[app._layout_key()] = round(app.zoom * app.grow + app.ZOOM_STEP, 2)   # the next step is known not to fit
 n_calls = len(calls)
