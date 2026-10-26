@@ -3211,16 +3211,28 @@ class StyledDialog:
         label.pack(**dict({"anchor": "w"}, **pack))
         return label
 
-    def button(self, text, command, default=False, side="right"):
-        """Add a rounded button; `default` makes it the lilac one Enter presses."""
-        row = self._right if side == "right" else self.button_row
+    def button(self, text, command, default=False, side="right", row=None):
+        """Add a rounded button; `default` makes it the lilac one Enter presses. `row`: a frame of the body's to put
+        it in instead of the bottom row (a section's own buttons), packed left to right."""
+        row = row or (self._right if side == "right" else self.button_row)
+        pad = 0 if row is self.button_row or not row.winfo_children() else 8
         b = RoundButton(row, text, command, bg=PALETTE["select_bg"] if default else PALETTE["surface"],
                         font=font("body"), padx=16, pady=6, radius=12, animator=self._anim)
-        b.pack(side="left", padx=(8, 0) if row is self._right and self.buttons else 0)
+        b.pack(side="left", padx=(pad, 0))
         self.buttons[text] = b
         if default:
-            self._default = b
+            self.make_default(b)
         return b
+
+    def make_default(self, button):
+        """Make `button` the lilac one Enter presses (the one before goes back to the plain look)."""
+        if self._default is not None and self._default is not button:
+            try:
+                self._default.config(bg=PALETTE["surface"])
+            except tk.TclError:
+                pass
+        self._default = button
+        button.config(bg=PALETTE["select_bg"])
 
     def clear_buttons(self):
         """Take every button (and anything else in the button row) away, to put others there (a page of steps)."""

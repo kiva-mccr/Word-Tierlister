@@ -2,7 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """T-8: the newest release on GitHub (asked for nothing online here: GitHub's answers are stand-ins), downloading a
 release's source ready to unpack or build from, `tools/build.py --all` (the Build programs workflow on GitHub,
 through gh; stand-ins again) and the workflow itself (the names the README's download links and the program use)."""
-import io, json, os, re, sys, tempfile, zipfile
+import io, json, os, re, sys, tempfile, urllib.error, zipfile
 import standalone as S
 from constants import REPO, VERSION
 import importlib.util
@@ -32,6 +32,12 @@ try:
         raise OSError("no network")
     assert S.latest_release(broken) is None
     assert S.latest_release(lambda url, timeout=10: b'{"message": "Not Found"}') is None
+    # U-4 (reported): a private repository answers a bare 404, said plainly; a rate limit (403) too
+    for code, said in ((404, "probably private"), (403, "too many checks")):
+        def refused(url, timeout=10, code=code):
+            raise urllib.error.HTTPError(url, code, "Not Found", {}, None)
+        assert S.latest_release(refused) is None and said in S.last_error, S.last_error
+    assert S.latest_release(broken) is None and S.last_error == "GitHub could not be reached: no network"
 finally:
     os.environ["WORD_TIERLIST_OFFLINE"] = offline
 assert S.latest_release(fetch) is None and len(asked) == 1          # (the tests never go online)
@@ -186,7 +192,6 @@ env = {"SSL_CERT_FILE": "/mine.pem"}
 assert deps.use_system_certificates(env, frozen=True, platform="linux", exists=fedora) is None and env["SSL_CERT_FILE"] == "/mine.pem"
 os.environ.pop("WORD_TIERLIST_OFFLINE")
 try:
-    import urllib.error
     def untrusted(url, timeout=10):
         raise urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
     assert S.latest_release(untrusted) is None and "CERTIFICATE_VERIFY_FAILED" in S.last_error

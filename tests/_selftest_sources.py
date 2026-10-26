@@ -25,6 +25,11 @@ def project():
     return d
 
 
+def main(d):
+    """The dialog's own buttons, not the Updates section's (U-4: those come and go with GitHub's answer)."""
+    return [n for n, b in d.buttons.items() if b.master is not d.update_buttons]
+
+
 def pump(root, n=6):
     for _ in range(n):
         root.update(); time.sleep(0.02)
@@ -51,7 +56,7 @@ S.start = lambda path, popen=None: started.append(path)
 # no program yet: one button that makes it
 proj = project()
 d = sources.SourceDialog(app, root_dir=proj); pump(root)
-assert list(d.buttons) == ["Cancel", "Make the program"] and S.program_path(proj) in d.where.cget("text")
+assert main(d) == ["Close", "Make the program"] and S.program_path(proj) in d.where.cget("text")
 S.make_program = lambda root_dir, log: (built.append(root_dir), log("Building..."), S.program_path(root_dir))[2]
 d.buttons["Make the program"].invoke(); pump(root, 2)
 assert built == [proj] and started == [S.program_path(proj)]          # built, started, and this window closed
@@ -67,13 +72,13 @@ root, app = window()
 open(S.program_path(proj), "w").write("program")
 json.dump(dict(S.manifest(proj), made=time.time()), open(os.path.join(proj, S.SIDE_FILE), "w"))
 d = sources.SourceDialog(app, root_dir=proj); pump(root)
-assert list(d.buttons) == ["Cancel", "Build again", "Start it"] and "Nothing has changed" in d.state.cget("text")
-d.buttons["Cancel"].invoke(); pump(root)
+assert main(d) == ["Close", "Build again", "Start it"] and "Nothing has changed" in d.state.cget("text")
+d.buttons["Close"].invoke(); pump(root)
 assert not d.alive() and root.winfo_exists()
 # the source changed since: it says so and builds again
 open(os.path.join(proj, "src", "a.py"), "a").write("y = 2\n")
 d = sources.SourceDialog(app, root_dir=proj); pump(root)
-assert list(d.buttons) == ["Cancel", "Make the program"] and "has changed" in d.state.cget("text")
+assert main(d) == ["Close", "Make the program"] and "has changed" in d.state.cget("text")
 # a failed build says why; this window stays open
 shown = []
 sources.show_error = lambda *a, **kw: shown.append((a, kw))
@@ -137,7 +142,7 @@ S.python_for_source = lambda: "/usr/bin/python3"
 sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]
 S.start_source = lambda folder, python: popened.append([python, os.path.join(folder, "tierlist.py")])
 d = sources.SourceDialog(app, source=v2, frozen=True); pump(root)
-assert list(d.buttons) == ["Change folder...", "Cancel", "Unpack"] and target2 in d.where.cget("text")
+assert main(d) == ["Change folder...", "Close", "Unpack"] and target2 in d.where.cget("text")
 assert "every file is added" in d.state.cget("text")
 d.buttons["Unpack"].invoke(); pump(root)
 assert sorted(os.listdir(os.path.join(target2, "src"))) == ["a.py", "new.py"] and opened == [target2]
@@ -177,7 +182,7 @@ sources.offer_system_install = lambda root, what, why: False
 d = sources.SourceDialog(app, source=None, frozen=True); pump(root)
 S.bundled_source = lambda: None
 d.close(); d = sources.SourceDialog(app, frozen=True); pump(root)
-assert list(d.buttons) == ["Close"]
+assert main(d) == ["Close"]
 d.close()
 
 # ---- T-8: "Update to the newest version first", ticked to start with ------------------------------------------------
@@ -190,10 +195,11 @@ def settle(d, n=20):
     assert d.checked
 release = {"version": "9.1.0", "tag": "v9.1.0", "source": "zip", "page": ""}
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: None); settle(d)       # offline: says so
-assert d.update_var.get() and "could not be reached" in d.update_line.cget("text")
+assert d.update_var.get() and "Could not check" in d.line.cget("text") and "Try again" in d.buttons
+assert "Nothing newer" in d.update_line.cget("text") and d.tick.instate(["disabled"])    # (nothing to tick for)
 d.close()
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: dict(release, version=VERSION)); settle(d)
-assert "the newest there is" in d.update_line.cget("text"); d.close()
+assert "the newest there is" in d.line.cget("text") and "Nothing newer" in d.update_line.cget("text"); d.close()
 # a newer one, unpacking: Unpack downloads it first and shows what unpacking it changes; the next Unpack does it
 v3 = carried({"tierlist.py": "v3\n", "src/a.py": "a3\n", "tests/run_tests.sh": "t\n"})
 fetched = []
@@ -201,7 +207,8 @@ S.fetch_source = lambda rel, folder, log: (fetched.append(rel["version"]), log("
 target3 = os.path.join(tempfile.mkdtemp(), "Word Tier List source"); S.default_source_folder = lambda program=None: target3
 S.unpack(v2, target3)
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
-assert "Version 9.1.0 is out" in d.update_line.cget("text") and '"Unpack" downloads it' in d.update_line.cget("text")
+assert "Version 9.1.0 is out" in d.line.cget("text") and '"Unpack" downloads it' in d.update_line.cget("text")
+assert d.tick.instate(["!disabled"])
 d.buttons["Unpack"].invoke(); pump(root)
 assert fetched == ["9.1.0"] and d.alive() and "9.1.0 downloaded" in d.update_line.cget("text")
 assert "2 updated" in d.state.cget("text") and "1 removed" in d.state.cget("text"), d.state.cget("text")
@@ -210,7 +217,7 @@ assert open(os.path.join(target3, "tierlist.py")).read() == "v3\n" and fetched =
 # unticked: the version you have, nothing downloaded
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
 d.update_var.set(False); d._show_update()
-assert "unticked, yours is used" in d.update_line.cget("text")
+assert "Unticked: version" in d.update_line.cget("text")
 d.buttons["Unpack"].invoke(); pump(root)
 assert fetched == ["9.1.0"] and open(os.path.join(target3, "tierlist.py")).read() == "v2\n"
 # from source: Make the program builds the newer version (your files untouched); unticked, your source
@@ -224,20 +231,21 @@ d.buttons["Make the program"].invoke(); pump(root, 2)
 d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
 d.update_var.set(False); d.buttons["Make the program"].invoke(); pump(root, 2)
 assert made == ["9.1.0", None], made
-# from source, "Update the source only" (asked for): only once a newer version is found; it downloads it, says what
+# from source, "Update" (T-13: the source only; in the Updates section since U-4): only once a newer version is found; it downloads it, says what
 # it changes, brings this folder up to date (an edited file kept as .bak, the save and anything else untouched) and
 # starts again from it with the same save; nothing is built, and the folder is never offered to be cleaned up behind
 d = sources.SourceDialog(app, root_dir=proj2, check=lambda: None); settle(d)
-assert sources.UPDATE_SOURCE not in d.buttons; d.close()                    # (nothing newer: no button)
+assert sources.UPDATE not in d.buttons; d.close()                           # (nothing newer: no button)
 open(os.path.join(proj2, "src", "a.py"), "w").write("my edit\n")
 open(os.path.join(proj2, "tierlist.db"), "w").write("my save")
 asked.clear(); popened.clear(); made.clear(); fetched.clear()
 S.start_source = lambda folder, python, args=(): popened.append((folder, list(args)))
 d = sources.SourceDialog(app, root_dir=proj2, check=lambda: release); settle(d)
-pump(root, 2); assert sources.UPDATE_SOURCE in d.buttons and d.buttons[sources.UPDATE_SOURCE].winfo_ismapped()
-assert '"Make the program" builds' in d.update_line.cget("text")            # (the default button is still the build)
+pump(root, 2); assert sources.UPDATE in d.buttons and d.buttons[sources.UPDATE].winfo_ismapped()
+assert '"Make the program" builds' in d.update_line.cget("text") and "Nothing is built" in d.how.cget("text")
+assert d.dlg._default is d.buttons[sources.UPDATE]                         # (Enter updates; the build is a click)
 save = app.store.path
-d.buttons[sources.UPDATE_SOURCE].invoke(); pump(root, 3)
+d.buttons[sources.UPDATE].invoke(); pump(root, 3)
 assert fetched == ["9.1.0"] and not made                                    # downloaded, nothing built
 head, body = asked[-1][1], asked[-1][2]
 assert head == "Update the source to version 9.1.0?" and "kept as .bak" in body and "same save" in body, asked[-1]
@@ -257,7 +265,7 @@ root, app = window()
 sources.ask_yes_no = lambda *a, **kw: False
 proj3 = project()
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: release); settle(d)
-d.buttons[sources.UPDATE_SOURCE].invoke(); pump(root, 3)
+d.buttons[sources.UPDATE].invoke(); pump(root, 3)
 assert open(os.path.join(proj3, "tierlist.py")).read() == "x = 1\n" and d.alive()
 d.close()
 sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]

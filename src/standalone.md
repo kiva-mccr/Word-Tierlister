@@ -46,6 +46,7 @@ The module docstring has the details; this page is the map.
 - `open_folder`: Show a folder in the system's file manager.
 - `version_tuple`: (1, 2, 0) for "v1.2.0" (the numbers in it, three at most).
 - `read_version`: The VERSION in `root`'s src/constants.py (the source being built may be another version than this one).
+- `describe_fetch_error`: Why asking GitHub failed, in a line.
 - `latest_release`: The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when offline, GitHub cannot be reached or there is none yet.
 - `newer`: True if `release` (latest_release) is a newer version than `version`.
 - `fetch_source`: Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest, ready to unpack (plan_unpack) or build from; returns `folder`.
@@ -74,7 +75,7 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - What ships: `SHIP_DIRS` / `source_files`. Program names: `output_name` and, for releases, `RELEASE_ASSETS` (the workflow's names must match).
-- Release lookups: `latest_release` / `fetch_source` (tests pass their own `fetch`).
+- Release lookups: `latest_release` / `fetch_source` (tests pass their own `fetch`). GitHub's API answers a private repository's releases with 404 "Not Found" to anyone not signed in: `describe_fetch_error` says so (U-4); the program never signs in.
 - The unpack record (`UNPACKED`) says whether the folder came from the program (`from_program`; older records: yes, `came_from_program`). Only such a folder is offered to be cleaned up behind or removed (`cleanup_place`, `remove_source`): a source only updated from GitHub (T-13, `unpack(..., from_program=False)`) could be someone's own clone (T-13).
 - `give_icon` (IC-2) sets GNOME Files' custom icon on a Linux program (gio, to `deps.kept_icon`); it fails quietly where no desktop metadata service runs.
 - Removing a source (T-14) only ever takes the files written down for it: the unpack record's or `REMOVE_RECORD`'s (`mark_for_removal`: `source_files`), plus OURS; a folder with neither is never touched.

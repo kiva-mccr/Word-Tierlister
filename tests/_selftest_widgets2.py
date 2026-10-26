@@ -553,6 +553,14 @@ dlg.win.event_generate("<Return>"); update(); assert got == ["go"]
 cancelled = []
 dlg.on_cancel = lambda: cancelled.append(1)
 dlg.win.event_generate("<Escape>"); update(); assert cancelled == [1] and dlg.alive()
+# a section's own buttons in the body (U-4), one of them can become the default: Enter presses it, lilac moves to it
+section = tk.Frame(dlg.body); section.pack()
+dlg.button("Here", lambda: got.append("here"), row=section)
+dlg.button("Now", lambda: got.append("now"), default=True, row=section); update()
+assert dlg.buttons["Here"].master is section and dlg.buttons["Here"].winfo_rootx() < dlg.buttons["Now"].winfo_rootx()
+assert dlg.buttons["Now"].cget("bg") == PALETTE["select_bg"] and dlg.buttons["Go"].cget("bg") == PALETTE["surface"]
+dlg.win.event_generate("<Return>"); update(); assert got == ["go", "now"]
+dlg.make_default(dlg.buttons["Go"]); assert dlg.buttons["Now"].cget("bg") == PALETTE["surface"]
 dlg.close(); update(); assert not dlg.alive()
 
 # ---- WordCard's size never depends on the word (reported: the buttons moved / flashed when sorting fast)

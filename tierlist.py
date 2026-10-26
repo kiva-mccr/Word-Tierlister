@@ -100,7 +100,7 @@ before editing the file); the README has the same map with more detail)
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
     tiercolours.py  Settings > Tier colours... (UI-61).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
-    sources.py      File > Source & Updates...: make a standalone program; in the program, unpack its source (T-6, T-7).
+    sources.py      File > Source & Updates...: updates; make a standalone program; in the program, unpack its source.
     app.py          App: the main window and all modes.
 
 Layers: constants, obscene, rudeness, problems, deps, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> (UI) theme, fonts,
@@ -1816,7 +1816,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           can publish too: "Publish as a release" (from main only) builds the three programs and publishes them as
 #           the release v<VERSION>, making the tag itself on that commit; an existing release is never overwritten.
 # [x] U-1  Asked for (before the first release): update the .exe or the source from inside the program. File > Check
-#           for updates... (sources.UpdateDialog) asks GitHub for the newest release (its programs now read too:
+#           for updates... (then sources.UpdateDialog; part of Source & Updates since U-4) asks GitHub for the newest release (its programs now read too:
 #           latest_release "assets"). In the program, Update downloads this computer's program (RELEASE_ASSETS) into a
 #           folder beside it (the same disk; a folder it cannot write is said before anything downloads), renames the
 #           running one to .old (Windows allows renaming a running .exe, never overwriting it), moves the new one in
@@ -1835,6 +1835,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           download in the program would have failed the same way.
 # [x] U-2  Asked for: the note when censoring is turned on uses the same short line as How words are dealt
 #           (constants.CENSOR_CAVEAT_LINE; the toast is "Censoring on · " + it). The long first-time note is gone.
+# [x] U-4  Asked for ("things are all over the place"): one panel for updates, making the program and the source.
+#           File > Check for updates is gone; File > Source & Updates (sources.SourceDialog) has Updates on top (the
+#           version, which form you run, GitHub's answer; "Update" updates that form, the default once a newer one
+#           is found) and below it Make a standalone program (from source) or Unpack the source code (in the
+#           program), each with the "Update to the newest version first" tick, greyed until there is a newer one.
+#           Reported with it: the check said "What went wrong: Not Found". The repository is private, and GitHub
+#           answers a private repository's releases with 404 to anyone not signed in; the panel now says so
+#           (standalone.describe_fetch_error). The user then made the repository public.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---

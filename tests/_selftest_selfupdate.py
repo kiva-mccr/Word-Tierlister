@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""U-1: File > Check for updates. The program updates itself: this computer's program from the newest release is
+"""U-1: File > Source & Updates' Updates (one panel since U-4). The program updates itself: this computer's program from the newest release is
 downloaded beside the running one (the release's names: RELEASE_ASSETS), swapped in (the old one kept as .old until
 the new one removes it as it starts; a failed swap puts the old one back) and started on the same save. A source
 folder is brought up to date: git pull in a git checkout (your own changes never touched: git refuses instead), the
@@ -142,22 +142,25 @@ S.start_source = lambda folder, python, args=(): started.append((folder, list(ar
 
 root, app = window()
 labels = [it[1] for it in dict(app._menu_items())["File"] if it[0] == "command"]
-assert "Check for updates..." in labels and labels.index("Check for updates...") < labels.index("Source & Updates...")
-# offline / nothing newer: says so; "Try again" asks again
-S.last_error = "certificate verify failed"                                    # (U-3: why, when it is known)
-d = sources.UpdateDialog(app, check=lambda: None, frozen=True); settle(d, root)
-assert "could not be reached" in d.line.cget("text") and list(d.buttons) == ["Try again", "Close"]
+assert "Source & Updates..." in labels and "Check for updates..." not in labels          # (U-4: one panel)
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)          # (the program: nothing to unpack here)
+# offline / nothing newer: says so, and why; "Try again" asks again
+S.last_error = "GitHub could not be reached: certificate verify failed"            # (U-3: why, when it is known)
+d = Dialog(check=lambda: None, frozen=True); settle(d, root)
+assert "Could not check" in d.line.cget("text") and list(d.buttons) == ["Close", "Try again"], list(d.buttons)
 assert "certificate verify failed" in d.how.cget("text")
+assert "nothing to unpack" in str([w.cget("text") for w in d.dlg.body.winfo_children() if hasattr(w, "cget")
+                                    and "text" in w.keys()])
 S.last_error = None
 d.check = lambda: {"version": VERSION, "tag": "v" + VERSION, "source": "", "page": "", "assets": {}}
 d.buttons["Try again"].invoke(); settle(d, root)
 assert "the newest there is" in d.line.cget("text") and list(d.buttons) == ["Close"]
-d.dlg.close()
+d.close()
 # a newer one, but none built for this computer: the release page instead
-d = sources.UpdateDialog(app, check=lambda: dict(release, assets={}), frozen=True); settle(d, root)
+d = Dialog(check=lambda: dict(release, assets={}), frozen=True); settle(d, root)
 assert "9.1.0 is out" in d.line.cget("text") and "Update" not in d.buttons and "no program" in d.how.cget("text")
 d.buttons["Open the release page"].invoke(); assert links == ["page"]
-d.dlg.close()
+d.close()
 # in the program: Update downloads beside it, swaps it in and starts it on the same save; this window closes
 where = tempfile.mkdtemp()
 prog = os.path.join(where, "word-tierlist.exe"); open(prog, "w").write("old")
@@ -167,8 +170,9 @@ def fetch(r, folder, log):
     p = os.path.join(folder, "word-tierlist-windows.exe"); open(p, "w").write("new"); return p
 S.running_program = lambda: prog
 real_fetch, S.fetch_program = S.fetch_program, fetch
-d = sources.UpdateDialog(app, check=lambda: release, frozen=True); settle(d, root)
-assert list(d.buttons) == ["What's new", "Not now", "Update"] and "same save" in d.how.cget("text")
+d = Dialog(check=lambda: release, frozen=True); settle(d, root)
+assert list(d.buttons) == ["Close", "What's new", "Update"] and "same save" in d.how.cget("text")
+assert d.dlg._default is d.buttons["Update"]                                 # (Enter updates)
 save = app.store.path
 d.buttons["Update"].invoke(); pump(root, 3)
 assert fetched == [("9.1.0", where)] and open(prog).read() == "new" and open(prog + S.OLD_SUFFIX).read() == "old"
@@ -177,19 +181,20 @@ assert sorted(os.listdir(where)) == ["word-tierlist.exe", "word-tierlist.exe.old
 s = T.Store(save); assert s.get_meta(sources.UPDATED_FROM) == VERSION; s.close()
 # the download fails: says so, nothing changes, the window stays
 root, app = window()
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)
 S.fetch_program = lambda r, folder, log: (_ for _ in ()).throw(OSError("no network"))
-d = sources.UpdateDialog(app, check=lambda: release, frozen=True); settle(d, root)
+d = Dialog(check=lambda: release, frozen=True); settle(d, root)
 d.buttons["Update"].invoke(); pump(root, 3)
 assert errors_shown == ["Not updated"] and open(prog).read() == "new" and d.alive() and not gone(root)
 assert sorted(os.listdir(where)) == ["word-tierlist.exe", "word-tierlist.exe.old"]
-d.dlg.close()
+d.close()
 # from source, a git checkout: git pull, then it starts again from the source on the same save
 errors_shown.clear(); started.clear()
 proj = tempfile.mkdtemp()
 S.git_checkout = lambda root_dir: True
 pulled = []
 S.git_pull = lambda root_dir: (pulled.append(root_dir), (True, "Fast-forward"))[1]
-d = sources.UpdateDialog(app, check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
+d = Dialog(check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
 assert "git pull" in d.how.cget("text")
 save = app.store.path
 d.buttons["Update"].invoke(); pump(root, 3)
@@ -197,17 +202,18 @@ assert pulled == [proj] and asked[-1] == "Update the source to version 9.1.0?" a
 assert gone(root)
 # git refuses (your own changes): what it said is shown, nothing starts
 root, app = window()
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)
 started.clear()
 S.git_pull = lambda root_dir: (False, "error: Your local changes would be overwritten")
-d = sources.UpdateDialog(app, check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
+d = Dialog(check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
 d.buttons["Update"].invoke(); pump(root, 3)
 assert errors_shown == ["Not updated"] and not started and d.alive()
-d.dlg.close()
-# not a git checkout: the release's source synced in, shown first (as Source & Updates does: _selftest_sources)
+d.close()
+# not a git checkout: the release's source synced in, shown first (_selftest_sources)
 S.git_checkout = lambda root_dir: False
-d = sources.UpdateDialog(app, check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
+d = Dialog(check=lambda: release, frozen=False, root_dir=proj); settle(d, root)
 assert "shows what it changes" in d.how.cget("text")
-d.dlg.close()
+d.close()
 
 # ---- after an update: said once; at start, a newer version told once a day at most ----------------------------------
 app.store.set_meta(sources.UPDATED_FROM, "0.9.0")
