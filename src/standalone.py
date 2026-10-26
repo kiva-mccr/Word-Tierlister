@@ -74,7 +74,7 @@ def source_files(root=ROOT):
         top_level = os.sep not in f
         if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f in REPO_FILES or \
                 (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
-                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico"))) or \
+                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico", ".icns"))) or \
                 (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json"))):
             if top_level and f.endswith(".txt") and f != "requirements.txt":
                 continue                              # an export (tierlist.txt) next to tierlist.py is yours
@@ -155,6 +155,8 @@ def pyinstaller_args(dist, work, root=ROOT, platform=None, source=None):
     args += ["--add-data", f"{typefaces}{sep}typefaces"]
     if platform.startswith("win"):                                  # (the .exe file's own icon, in Explorer)
         args += ["--icon", os.path.join(icons, "icon.ico")]
+    elif mac:                                                       # (the app bundle's own icon, in Finder and the Dock)
+        args += ["--icon", os.path.join(icons, "icon.icns")]
     if source:
         args += ["--add-data", f"{source}{sep}{SOURCE_DIR}"]
     for mod in bundle.EXCLUDE:
@@ -640,7 +642,8 @@ def open_folder(path, popen=subprocess.Popen):
 
 # ---- updates (T-8): the newest release on GitHub ---------------------------------------------------------------------
 RELEASES = f"https://api.github.com/repos/{REPO}/releases/latest"
-RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe"}   # (the workflow's names)
+RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe",   # (the workflow's names;
+                  "darwin": "word-tierlist-macos.zip"}                                      # macOS: the zipped .app)
 
 
 def version_tuple(text):
