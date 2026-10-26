@@ -1604,7 +1604,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           word smeared whole its kind of rude word: "noun · verb", "adverb", "noun · sexual" (constants.card_label,
 #           from words.kinds; "other" is too vague to show, so a word that is only "other" or not known yet has no
 #           label and keeps its full size). The label's row and the 85% word are F-15's.
-# [x] UI-64 Asked for: turning on Censor obscene words says it may not be fully accurate. The first time in a save
+# [x] UI-64 (Since U-2: only the short line.) Asked for: turning on Censor obscene words says it may not be fully
+#           accurate. The first time in a save
 #           (meta censor_noted) a small dialog: "Censoring is not perfect" (rules, not a person, pick the words out;
 #           they can miss a rude word or smear an ordinary one; censoring never changes what is placed), over How
 #           words are dealt when ticked there; every later time from View a toast ("Censoring on · it may miss...").
@@ -1814,6 +1815,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] T-17 The tag could not be pushed from here (a session pushes only its own branch), so the Run workflow button
 #           can publish too: "Publish as a release" (from main only) builds the three programs and publishes them as
 #           the release v<VERSION>, making the tag itself on that commit; an existing release is never overwritten.
+# [x] U-1  Asked for (before the first release): update the .exe or the source from inside the program. File > Check
+#           for updates... (sources.UpdateDialog) asks GitHub for the newest release (its programs now read too:
+#           latest_release "assets"). In the program, Update downloads this computer's program (RELEASE_ASSETS) into a
+#           folder beside it (the same disk; a folder it cannot write is said before anything downloads), renames the
+#           running one to .old (Windows allows renaming a running .exe, never overwriting it), moves the new one in
+#           (a failed move puts the old one back) and starts it with --db and the same save; the new one removes the
+#           .old as it starts (standalone.remove_old_program, retried while the old one closes) and brings a source
+#           folder it unpacked beside itself (T-10) up to date. From source, a git checkout runs git pull --ff-only
+#           (refused changes: git's own words shown, nothing started), any other folder the T-13 sync. The first start
+#           after an update says "Updated to version X (from Y)" (meta updated_from). At start (main's starts only),
+#           at most once a day (meta update_checked), a newer version is told once in a toast (meta update_told).
+# [x] U-2  Asked for: the note when censoring is turned on uses the same short line as How words are dealt
+#           (constants.CENSOR_CAVEAT_LINE; the toast is "Censoring on · " + it). The long first-time note is gone.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
@@ -1968,6 +1982,9 @@ def main():
     if args.remove_source:                    # (cleaning up behind, T-12: in the background, while the old window
         import threading                      # closes; only the program's own files, never a save)
         threading.Thread(target=standalone.remove_source, args=(args.remove_source,), daemon=False).start()
+    if getattr(sys, "frozen", False):         # (U-1: the program an update replaced, once it has closed)
+        import threading
+        threading.Thread(target=standalone.remove_old_program, daemon=True).start()
     set_dpi_awareness()          # Windows: sharp at 125% / 150% display scaling (before any window opens)
     script_dir = app_dir()          # tierlist.py's folder, or a built program's own (T-1)
     # --- 1. packages, stage 1 (ST-4). A private environment made earlier is used straight away. In a

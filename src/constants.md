@@ -4,7 +4,7 @@ Shared constants and tiny pure helpers that every layer may use: tiers, modes, k
 
 - **Uses:** the standard library only
 - **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 

@@ -21,10 +21,15 @@ it and shows what unpacking it would change before it does it; offline, or with 
 uses the version you have. From source, a newer version also shows "Update the source only" (asked for): it
 downloads that version and brings this folder up to date with it (the same sync as unpacking, shown first), without
 making the program, then starts again from it with the same save. Such a folder is never offered to be cleaned up
-behind (standalone.came_from_program).
+behind (standalone.came_from_program). A git checkout is updated with git pull instead (U-1).
+
+File > Check for updates... (U-1): UpdateDialog asks GitHub and, with a newer version out, updates the form you are
+running: the program replaces itself with the release's program for this computer (update_program), a source folder
+is brought up to date (update_source); either way it starts again on the same save.
 """
 import os
 import queue
+import shutil
 import sys
 import tempfile
 import threading
@@ -33,6 +38,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 import deps
+import errors
 import standalone
 from errors import ask_buttons, ask_yes_no, show_error, show_message
 from filepicker import browse, use_themed
@@ -40,7 +46,7 @@ from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen, remember_save
 from startup import ensure_packages, offer_system_install, run_with_progress
 from widgets import StyledDialog
-from constants import VERSION
+from constants import REPO_PAGE, VERSION
 
 HEADLINE = "Make a standalone program"
 UPDATE_SOURCE = "Update the source only"
@@ -231,43 +237,8 @@ class SourceDialog:
             wrap_chars=62)
 
     def update_source(self, fetch=None):
-        """"Update the source only" (asked for): download the newest version's source and bring this folder up to
-        date with it, without making the program, then start again from it with the same save. What it changes is
-        shown first; only the program's own files change (an edited one is kept as .bak first), and the folder is
-        not marked as unpacked from the program (so it is never offered to be cleaned up behind). `fetch`: tests."""
-        app, release = self.app, self.release
-        folder = tempfile.mkdtemp(prefix="wtl-release-")
-        try:
-            folder = run_with_progress(app.root, lambda log: (fetch or standalone.fetch_source)(release, folder, log),
-                                       title="Downloading the newest version", delay_ms=0,
-                                       initial_stage="Connecting...", intro=f"Version {release['version']}, from GitHub.")
-        except SystemExit as exc:
-            if str(exc) != STOPPED_MESSAGE:
-                raise
-            return None
-        except OSError as exc:
-            show_error(HEADLINE, f"The newest version could not be downloaded:\n{exc}", parent=self.dlg.win,
-                       headline="Not updated")
-            return None
-        plan = standalone.plan_unpack(folder, self.root_dir)
-        git = os.path.isdir(os.path.join(self.root_dir, ".git"))
-        if not ask_yes_no("Source & Updates", f"Update the source to version {release['version']}?",
-                          f"{standalone.summary(plan)}\n\nIn {self.root_dir}. Only the program's own files change; "
-                          "your save and anything else there stay as they are. Word Tier List then starts again from "
-                          "the new source, with the same save."
-                          + ("\n\nThis folder is a git checkout: git pull is the usual way to update it." if git else ""),
-                          yes="Update", no="Cancel", parent=self.dlg.win, wrap_chars=60):
-            return None
-        try:
-            standalone.unpack(folder, self.root_dir, plan, from_program=False)
-        except OSError as exc:
-            show_error(HEADLINE, f"The source could not be updated in {self.root_dir}:\n{exc}", parent=self.dlg.win,
-                       headline="Not updated")
-            return None
-        self.dlg.close()
-        standalone.start_source(self.root_dir, sys.executable, args=["--db", app.store.path])
-        app.on_close()                            # (one at a time on a save: the new source takes over)
-        return plan
+        """"Update the source only" (asked for): update_source below, for this folder."""
+        return update_source(self.app, self.release, self.root_dir, self.dlg, fetch)
 
     def start_cleaned(self, path, place, zip_it=False):
         """Clean up behind (T-12, T-14): close this window and its save, move the save next to the new program if it
@@ -419,3 +390,190 @@ class SourceDialog:
 
     def close(self):
         self.dlg.close()
+
+
+# ---- U-1: File > Check for updates ---------------------------------------------------------------------------------
+UPDATED_FROM = "updated_from"        # meta: the version an update was made from (the new one says so, then forgets)
+
+
+def _download(app, title, release, work):
+    """Run `work(log)` (a download) behind the progress window: its result, or None if it was stopped."""
+    try:
+        return run_with_progress(app.root, work, title=title, delay_ms=0, initial_stage="Connecting...",
+                                 intro=f"Version {release['version']}, from GitHub.")
+    except SystemExit as exc:
+        if str(exc) != STOPPED_MESSAGE:
+            raise
+        return None
+
+
+def update_source(app, release, root_dir, dlg, fetch=None, git=None):
+    """Bring the source in `root_dir` up to `release`, then start again from it with the same save (this window
+    closes). A git checkout (with git installed) is updated with git pull, which never touches your own changes;
+    any other folder downloads the release's source and syncs it in: what it changes is shown first, only the
+    program's own files change (an edited one is kept as .bak first), and the folder is not marked as unpacked from
+    the program (so it is never offered to be cleaned up behind). `dlg`: the dialog asking; `fetch` / `git`: tests."""
+    if standalone.git_checkout(root_dir) if git is None else git:
+        if not ask_yes_no("Check for updates", f"Update the source to version {release['version']}?",
+                          f"This folder is a git checkout, so it is updated with git pull, which never touches "
+                          f"your own changes.\n\nIn {root_dir}. Word Tier List then starts again from the new "
+                          "source, with the same save.", yes="Update", no="Cancel", parent=dlg.win, wrap_chars=60):
+            return None
+        ok, said = standalone.git_pull(root_dir)
+        if not ok:
+            show_error("Check for updates", "git pull did not update this folder. What git said is below; nothing "
+                       "was changed.", details=said, parent=dlg.win, headline="Not updated")
+            return None
+        plan = said
+    else:
+        get = fetch or standalone.fetch_source
+        try:
+            folder = _download(app, "Downloading the newest version", release,
+                               lambda log: get(release, tempfile.mkdtemp(prefix="wtl-release-"), log))
+        except OSError as exc:
+            show_error(HEADLINE, f"The newest version could not be downloaded:\n{exc}", parent=dlg.win,
+                       headline="Not updated")
+            return None
+        if folder is None:
+            return None
+        plan = standalone.plan_unpack(folder, root_dir)
+        if not ask_yes_no("Source & Updates", f"Update the source to version {release['version']}?",
+                          f"{standalone.summary(plan)}\n\nIn {root_dir}. Only the program's own files change; "
+                          "your save and anything else there stay as they are. Word Tier List then starts again from "
+                          "the new source, with the same save.", yes="Update", no="Cancel", parent=dlg.win,
+                          wrap_chars=60):
+            return None
+        try:
+            standalone.unpack(folder, root_dir, plan, from_program=False)
+        except OSError as exc:
+            show_error(HEADLINE, f"The source could not be updated in {root_dir}:\n{exc}", parent=dlg.win,
+                       headline="Not updated")
+            return None
+    dlg.close()
+    app.store.set_meta(UPDATED_FROM, VERSION)
+    standalone.start_source(root_dir, sys.executable, args=["--db", app.store.path])
+    app.on_close()                            # (one at a time on a save: the new source takes over)
+    return plan
+
+
+def update_program(app, release, dlg, program=None, fetch=None):
+    """Download this computer's program from `release` beside the running one, put it in its place (the old one is
+    kept as .old until the new one removes it as it starts) and start it with the same save; this window closes.
+    `program`: the running program (tests); `fetch(release, folder, log) -> path`: tests."""
+    program = program or standalone.running_program()
+    try:
+        folder = standalone.update_folder(program)
+    except OSError as exc:
+        show_error("Check for updates", f"This program's folder cannot be written to, so the update cannot replace "
+                   f"it:\n{exc}\n\nThe release page has the new program to download by hand.", parent=dlg.win,
+                   headline="Not updated")
+        return None
+    try:
+        new = _download(app, "Downloading the newest version", release,
+                        lambda log: (fetch or standalone.fetch_program)(release, folder, log))
+    except OSError as exc:
+        new = None
+        show_error("Check for updates", f"The new program could not be downloaded:\n{exc}", parent=dlg.win,
+                   headline="Not updated")
+    try:
+        if new is not None:
+            standalone.replace_program(new, program)
+    except OSError as exc:
+        new = None
+        show_error("Check for updates", f"The new program could not be put in place of this one:\n{exc}\n\nThis "
+                   "one is unchanged.", parent=dlg.win, headline="Not updated")
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+    if new is None:
+        return None
+    dlg.close()
+    app.store.set_meta(UPDATED_FROM, VERSION)
+    standalone.start(program, args=["--db", app.store.path])
+    app.on_close()
+    return program
+
+
+class UpdateDialog:
+    """File > Check for updates... (U-1): asks GitHub for the newest release (on a worker thread) and says what it
+    found; with a newer one out, one button updates the form you are running: the program replaces itself with the
+    new one (update_program), a source folder is brought up to date (update_source: git pull in a git checkout).
+    Either way it starts again on the same save. `check() -> release or None`, `frozen`, `root_dir`: tests."""
+
+    def __init__(self, app, check=None, frozen=None, root_dir=None):
+        self.app = app
+        self.frozen = is_frozen() if frozen is None else frozen
+        self.root_dir = root_dir or standalone.ROOT
+        self.check = check or standalone.latest_release
+        self.release = None
+        self.dlg = dlg = StyledDialog(app.root, "Check for updates", "Updates", None, animator=app.anim,
+                                      wrap_chars=58)
+        self.line = dlg.text(f"You have version {VERSION}. Checking GitHub for a newer one...")
+        self.how = dlg.text("", muted=True, pady=(8, 0))
+        dlg.button("Close", dlg.close, default=True)
+        self._start()
+        dlg.show()
+
+    def _start(self):
+        answer = queue.Queue()
+        threading.Thread(target=lambda: answer.put(self.check()), daemon=True).start()
+
+        def collect():
+            if not self.dlg.alive():
+                return
+            try:
+                self.release = answer.get_nowait()
+            except queue.Empty:
+                self.dlg.win.after(100, collect)
+                return
+            self._show()
+        collect()
+
+    def _show(self):
+        r, dlg = self.release, self.dlg
+        dlg.clear_buttons()
+        how = ""
+        if not r:
+            text = (f"You have version {VERSION}. GitHub could not be reached (or has no release yet), so it is not "
+                    "known whether a newer one is out.")
+            dlg.button("Try again", self.again)
+            dlg.button("Close", dlg.close, default=True)
+        elif not standalone.newer(r):
+            text = f"You have version {VERSION}, the newest there is."
+            dlg.button("Close", dlg.close, default=True)
+        else:
+            text = f"Version {r['version']} is out (you have {VERSION})."
+            if r.get("page"):
+                dlg.button("What's new", lambda: errors.open_link(r["page"]), side="left")
+            dlg.button("Not now", dlg.close)
+            asset = standalone.program_download(r) if self.frozen else None
+            if self.frozen and not asset:
+                how = "It has no program for this computer: the release page has what there is."
+                dlg.buttons.pop("What's new", None)
+                dlg.button("Open the release page", lambda: errors.open_link(r.get("page") or REPO_PAGE),
+                           default=True)
+            elif self.frozen:
+                size = f" (about {asset['size'] / 1e6:.0f} MB)" if asset.get("size") else ""
+                how = (f"\"Update\" downloads the new program{size}, puts it in place of this one and starts it, "
+                       "with the same save.")
+                dlg.button("Update", lambda: update_program(self.app, r, dlg), default=True)
+            else:
+                how = ("\"Update\" brings this folder up to date with git pull, then starts again with the same save."
+                       if standalone.git_checkout(self.root_dir) else
+                       "\"Update\" downloads the new source and shows what it changes in this folder before it does "
+                       "it (only the program's own files; your save stays), then starts again with the same save.")
+                dlg.button("Update", lambda: update_source(self.app, r, self.root_dir, dlg), default=True)
+        self.line.config(text=text)
+        self.how.config(text=how)
+        dlg.refit()
+
+    def again(self):
+        self.line.config(text=f"You have version {VERSION}. Checking GitHub for a newer one...")
+        self.how.config(text="")
+        self._start()
+
+    @property
+    def buttons(self):
+        return self.dlg.buttons
+
+    def alive(self):
+        return self.dlg.alive()

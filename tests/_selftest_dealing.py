@@ -120,10 +120,10 @@ item[2].set(False); item[3](); pump(2)
 assert s.deal_settings()["censor"] is False and not card.censored and app.cur_word == "shit"
 item[2].set(True); item[3](); pump(2)
 assert s.deal_settings()["censor"] is True and card.censored and card.find_withtag("smear")
-# turning it on says it may not be fully accurate (asked for): the whole note the first time in a save, in this
-# window (asked for: not a window of its own), then a short toast
-from constants import CENSOR_CAVEAT, CENSOR_CAVEAT_SHORT
-assert s.get_meta("censor_noted") == "1" and CENSOR_CAVEAT in app.toast.cget("text")
+# turning it on says it may not be fully accurate (asked for): a short toast, the same words as How words are
+# dealt's line (U-2, asked for: never the long note), in this window (asked for: not a window of its own)
+from constants import CENSOR_CAVEAT_LINE, CENSOR_CAVEAT_SHORT
+assert app.toast.cget("text") == CENSOR_CAVEAT_SHORT and CENSOR_CAVEAT_LINE in CENSOR_CAVEAT_SHORT
 assert not [w for w in root.winfo_children() if isinstance(w, tk.Toplevel) and w.title() == "Censor obscene words"]
 item[2].set(False); item[3](); item[2].set(True); item[3](); pump(2)
 assert app.toast.cget("text") == CENSOR_CAVEAT_SHORT
@@ -301,11 +301,9 @@ assert "may miss some" in " ".join(str(w.cget("text")) for w in d.sections["cens
                                   if w.winfo_class() == "TLabel")                 # (a line beside the tick, always)
 tops = lambda: [w for w in root.winfo_children() if isinstance(w, tk.Toplevel)]
 before = tops()
-d.censor_v.set(True); pump(2)                                     # ticked the first time: the page says why
-assert CENSOR_CAVEAT in str(d.caveat.cget("text")) and s2.get_meta("censor_noted") == "1"
+d.censor_v.set(True); pump(2)                                     # ticked: the same short line, no longer note
+assert str(d.caveat.cget("text")) == CENSOR_CAVEAT_LINE           # (U-2, asked for)
 assert tops() == before                                           # (in this window: no new one)
-d.censor_v.set(False); d.censor_v.set(True); pump(2)               # (once a save: not again)
-assert tops() == before
 d.buttons["Done"].invoke(); pump(2)
 t_end = time.time() + 20
 while d.alive() and time.time() < t_end:

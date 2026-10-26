@@ -15,7 +15,10 @@ others. tools/build.py is the command-line way in.
 
 Updates (T-8): latest_release asks GitHub for the newest release, newer says whether it is newer than this
 VERSION, fetch_source downloads its source (the repository at its tag) ready to unpack or build from; the
-programs a release carries are named in RELEASE_ASSETS. No tkinter.
+programs a release carries are named in RELEASE_ASSETS. U-1 (File > Check for updates): the program updates itself
+(fetch_program downloads this computer's program from the release, replace_program swaps it in for the running one,
+which is kept as .old until the new one removes it: remove_old_program); a source that is a git checkout updates with
+git_pull. No tkinter.
 """
 import ast
 import collections
@@ -680,7 +683,10 @@ def latest_release(fetch=_download):
     tag = data.get("tag_name") if isinstance(data, dict) else None
     if not tag or not data.get("zipball_url") or not version_tuple(tag):
         return None
-    return {"version": tag.lstrip("vV"), "tag": tag, "source": data["zipball_url"], "page": data.get("html_url", "")}
+    assets = {a["name"]: {"url": a["browser_download_url"], "size": a.get("size") or 0}
+              for a in data.get("assets") or () if isinstance(a, dict) and a.get("name") and a.get("browser_download_url")}
+    return {"version": tag.lstrip("vV"), "tag": tag, "source": data["zipball_url"], "page": data.get("html_url", ""),
+            "assets": assets}
 
 
 def newer(release, version=VERSION):
@@ -711,3 +717,165 @@ def fetch_source(release, folder, log=print, fetch=_download):
         raise OSError(f"version {release['version']} on GitHub has no tierlist.py")
     _write_manifest(folder, folder, version=release["version"])
     return folder
+
+
+# ---- U-1: the program updates itself; a git checkout updates with git pull ------------------------------------------
+OLD_SUFFIX = ".old"                    # the program replaced by an update, until the new one removes it
+UPDATE_DIR = ".word-tierlist-update-"  # beside the program while the new one downloads (the same disk: one move)
+
+
+def _platform_key(platform=None):
+    platform = platform or sys.platform
+    return "win32" if platform.startswith("win") else "linux" if platform.startswith("linux") else platform
+
+
+def running_program(platform=None, exe=None, frozen=None):
+    """The program now running (the .exe or the Linux file; on macOS its .app), or None when running from source."""
+    if not (getattr(sys, "frozen", False) if frozen is None else frozen):
+        return None
+    exe = os.path.abspath(exe or sys.executable)
+    if _platform_key(platform) == "darwin":
+        app = os.path.dirname(os.path.dirname(os.path.dirname(exe)))
+        if app.endswith(".app"):
+            return app
+    return exe
+
+
+def program_download(release, platform=None):
+    """{"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it)."""
+    return ((release or {}).get("assets") or {}).get(RELEASE_ASSETS.get(_platform_key(platform)))
+
+
+def _download_to(url, dest, log=print, timeout=60):
+    """Download `url` into the file `dest` in pieces, saying how far it got ("  3.2 of 25.0 MB (12%)")."""
+    req = urllib.request.Request(url, headers={"Accept": "application/octet-stream",
+                                               "User-Agent": "word-tierlist/" + VERSION})
+    with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as out:
+        total, got, shown = int(r.headers.get("Content-Length") or 0), 0, -1
+        while True:
+            piece = r.read(1 << 16)
+            if not piece:
+                break
+            out.write(piece)
+            got += len(piece)
+            pct = int(got * 100 / total) if total else None
+            if pct != shown and pct is not None:
+                shown = pct
+                log(f"  {got / 1e6:.1f} of {total / 1e6:.1f} MB ({pct}%)")
+    return got
+
+
+def fetch_program(release, folder, log=print, platform=None, download=_download_to):
+    """Download this computer's program from `release` into `folder` (macOS: the .app out of its zip) and return its
+    path, ready for replace_program. Raises OSError if the release has none for this computer or it cannot."""
+    asset = program_download(release, platform)
+    if not asset:
+        raise OSError(f"version {release['version']} has no program for this computer")
+    name = RELEASE_ASSETS[_platform_key(platform)]
+    dest = os.path.join(folder, name)
+    log(f"Downloading version {release['version']}...")
+    try:
+        got = download(asset["url"], dest, log)
+    except Exception as exc:
+        raise OSError(f"could not download version {release['version']}: {exc}") from exc
+    if not got or (asset.get("size") and got != asset["size"]):
+        raise OSError(f"the download of version {release['version']} was cut short: try again")
+    if _platform_key(platform) != "darwin":
+        os.chmod(dest, 0o755)
+        return dest
+    log("Unpacking it...")
+    if shutil.which("ditto"):              # (keeps the app's links, permissions and signature)
+        subprocess.run(["ditto", "-x", "-k", dest, folder], check=True, env=clean_env())
+    else:
+        with zipfile.ZipFile(dest) as z:
+            for info in z.infolist():
+                if ".." in info.filename.split("/") or info.filename.startswith("/"):
+                    continue
+                path = z.extract(info, folder)
+                mode = info.external_attr >> 16
+                if mode & 0o111:
+                    os.chmod(path, 0o755)
+    os.remove(dest)
+    apps = [n for n in os.listdir(folder) if n.endswith(".app")]
+    if not apps:
+        raise OSError(f"version {release['version']}'s download holds no program")
+    return os.path.join(folder, apps[0])
+
+
+def update_folder(program):
+    """A new, empty folder beside `program` to download the new one into (the same disk, so swapping it in is one
+    move); raises OSError when the program's folder cannot be written to (then the update cannot replace it)."""
+    return tempfile.mkdtemp(prefix=UPDATE_DIR, dir=os.path.dirname(os.path.abspath(program)))
+
+
+def _remove(path):
+    if os.path.isdir(path) and not os.path.islink(path):
+        shutil.rmtree(path)
+    elif os.path.lexists(path):
+        os.remove(path)
+
+
+def replace_program(new, current):
+    """Put the program `new` where `current` is (the running one: Windows lets a running .exe be renamed, never
+    overwritten), keeping the old one as current + OLD_SUFFIX until the new one starts and removes it
+    (remove_old_program). If the new one cannot go in, the old one is put back. Returns the old one's new path."""
+    old = current + OLD_SUFFIX
+    if os.path.lexists(old):
+        try:
+            _remove(old)
+        except OSError:                    # (still in use by one that has not closed yet: another name)
+            old = f"{current}.{int(time.time())}{OLD_SUFFIX}"
+    os.rename(current, old)
+    try:
+        shutil.move(new, current)
+    except OSError:
+        if os.path.lexists(current):
+            _remove(current)
+        os.rename(old, current)
+        raise
+    return old
+
+
+def remove_old_program(current=None, tries=20, wait=0.5):
+    """As an updated program starts: remove the program it replaced (OLD_SUFFIX) and any download folder left beside
+    it (UPDATE_DIR). The old one may still be closing (on Windows it cannot be removed until then): tried `tries`
+    times. Returns how many were removed."""
+    current = current or running_program()
+    if not current:
+        return 0
+    where, base = os.path.dirname(current), os.path.basename(current)
+    try:
+        names = os.listdir(where)
+    except OSError:
+        return 0
+    left = [os.path.join(where, n) for n in names
+            if (n.startswith(base + ".") and n.endswith(OLD_SUFFIX)) or n.startswith(UPDATE_DIR)]
+    removed = 0
+    for _ in range(tries):
+        for path in list(left):
+            try:
+                _remove(path)
+                left.remove(path)
+                removed += 1
+            except OSError:
+                pass
+        if not left:
+            break
+        time.sleep(wait)
+    return removed
+
+
+def git_checkout(root=ROOT):
+    """True if `root` is a git checkout and git is installed: then an update is a git pull."""
+    return os.path.isdir(os.path.join(root, ".git")) and bool(shutil.which("git"))
+
+
+def git_pull(root=ROOT, run=subprocess.run):
+    """`git pull --ff-only` in `root`: (True, what git said) if it worked, else (False, why). It never merges or
+    overwrites your own changes: git refuses instead, and says why."""
+    try:
+        r = run(["git", "pull", "--ff-only"], cwd=root, capture_output=True, text=True, timeout=180, env=clean_env(),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return False, str(exc)
+    return r.returncode == 0, ((r.stdout or "") + (r.stderr or "")).strip()

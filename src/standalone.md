@@ -4,7 +4,7 @@ Turning the source into a program and back (T-3, T-6..T-8): the list of source f
 
 - **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_sources`, `_selftest_updates`
+- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
@@ -49,6 +49,14 @@ The module docstring has the details; this page is the map.
 - `latest_release`: The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when offline, GitHub cannot be reached or there is none yet.
 - `newer`: True if `release` (latest_release) is a newer version than `version`.
 - `fetch_source`: Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest, ready to unpack (plan_unpack) or build from; returns `folder`.
+- `running_program`: The program now running (the .exe or the Linux file; on macOS its .app), or None when running from source.
+- `program_download`: {"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it).
+- `fetch_program`: Download this computer's program from `release` into `folder` (macOS: the .app out of its zip) and return its path, ready for replace_program.
+- `update_folder`: A new, empty folder beside `program` to download the new one into (the same disk, so swapping it in is one move); raises OSError when the program's folder cannot be...
+- `replace_program`: Put the program `new` where `current` is (the running one: Windows lets a running .exe be renamed, never overwritten), keeping the old one as current + OLD_SUFFIX...
+- `remove_old_program`: As an updated program starts: remove the program it replaced (OLD_SUFFIX) and any download folder left beside it (UPDATE_DIR).
+- `git_checkout`: True if `root` is a git checkout and git is installed: then an update is a git pull.
+- `git_pull`: `git pull --ff-only` in `root`: (True, what git said) if it worked, else (False, why).
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -60,6 +68,7 @@ The module docstring has the details; this page is the map.
 - Cleaning up behind (T-12): `remove_source` removes only what the unpack record lists, `OURS` and `__pycache__`, and nothing without that record; `move_save` never writes over a file. The program goes where the source was, in its folder (T-15, asked for: not the folder holding it); `remove_source` keeps a program in the folder, its build record (`SIDE_FILE`) and the log. Only a folder unpacked from a program beside it replaces that program (`cleanup_place`). `.gitignore` and `.gitattributes` are source files (`REPO_FILES`, F-24): in every download and clone, left out they kept a removed source's folder alive. Checked for real: a built program removed its source and kept itself, the save, the log and the build record. The deleting is done by the new program (`--remove-source`), never by the window running from the folder (Windows keeps it locked).
 - `existing_source` decides whether the first start unpacks (T-10): tierlist.py beside the program, or any folder beside it with tierlist.py or the unpack record, counts as a copy already there.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
+- Self-update (U-1): `replace_program` renames the running program to `OLD_SUFFIX` and moves the new one in; a failed move puts the old one back. `remove_old_program` (main, frozen only) removes only `<name>.*.old` and `UPDATE_DIR` folders beside the program, retried while the old one closes. `fetch_program` refuses a download shorter than the release says (`size`). macOS unzips with `ditto` (keeps the app's links and signature).
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.
 
 ## Changing it
