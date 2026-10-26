@@ -82,6 +82,28 @@ assert started[0][0] == [S.program_path(proj)] and started[0][1]["start_new_sess
 hook = open(os.path.join(_paths.ROOT, "tools", "hooks", "hook-nltk.py")).read()
 assert "datas = []" in hook                                       # (PyInstaller's own packs ~/nltk_data)
 
+# the check never waits for ever: a program that leaves a process of its own running (as the Windows one-file
+# program does) once kept it waiting on its output; its output goes to files and the whole tree is stopped
+calls = []
+class Started:
+    pid = 42
+    def terminate(self): calls.append("terminate")
+    def wait(self, timeout=None): calls.append(("wait", timeout))
+build.stop_tree(Started(), run=lambda args, **kw: calls.append(args), windows=True)
+assert calls[0] == ["taskkill", "/F", "/T", "/PID", "42"] and calls[1] == ("wait", 10)
+if sys.platform.startswith("linux"):
+    import time
+    fake = os.path.join(tempfile.mkdtemp(), "word-tierlist")
+    with open(fake, "w") as f:
+        f.write(f"#!{sys.executable}\nimport os, subprocess, sys, time\n"
+                "open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'tierlist.db'), 'w').close()\n"
+                f"subprocess.Popen([{sys.executable!r}, '-c', 'import time; time.sleep(60)'])\n"
+                "time.sleep(60)\n")
+    os.chmod(fake, 0o755)
+    began = time.time()
+    assert build.check(fake, seconds=2, log=lambda *_: None)
+    assert time.time() - began < 30
+
 if importlib.util.find_spec("PyInstaller") is None:
     print("BUILD OK (PyInstaller is not installed: no real build; pip install pyinstaller to run one)")
 else:
