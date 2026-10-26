@@ -1843,6 +1843,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Reported with it: the check said "What went wrong: Not Found". The repository is private, and GitHub
 #           answers a private repository's releases with 404 to anyone not signed in; the panel now says so
 #           (standalone.describe_fetch_error). The user then made the repository public.
+# [x] U-5  Asked for: Add to applications menu in Source & Updates too, both while it runs and when making the
+#           program. The panel has an "Applications menu" (Linux) / "Start menu" (Windows) section, with
+#           "Add to ..." for the form running now (App.add_launcher); the File menu items are gone. Make a standalone
+#           program has a tick, "Add the program to the ...", ticked when Word Tier List is in the menu already
+#           (deps.in_menu), so the menu moves to the new program before it starts. macOS: no section (an app goes in
+#           Applications by hand).
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---

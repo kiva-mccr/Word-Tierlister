@@ -351,6 +351,10 @@ assert deps.ensure_launcher("/usr/bin/python3", "/z/tierlist.py", home=home, pla
 assert "/z/tierlist.py" in open(path).read() and "NoDisplay" not in open(path).read()          # (still in the menu)
 home2 = tempfile.mkdtemp()
 p2 = deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="linux")
+assert deps.in_menu("linux", home=home2) is False and deps.in_menu("linux", home=home)    # (U-5: hidden is not in it)
+assert deps.in_menu("linux", home=tempfile.mkdtemp()) is False
+assert deps.menu_name("linux") == "applications menu" and deps.menu_name("win32") == "Start menu"
+assert deps.menu_name("darwin") is None
 text = open(p2).read()
 assert "NoDisplay=true" in text and f"StartupWMClass={WM_CLASS_NAME}" in text and 'Exec="/opt/word-tierlist"' in text
 assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlist.png") in text
@@ -373,7 +377,9 @@ def fake_ps(cmd, env=None, **kw):
     ran.append((cmd, env))
     open(env["WTL_LNK"], "w").write("lnk")
     return subprocess.CompletedProcess(cmd, 0, "", "")
+assert not deps.in_menu("win32", appdata=appdata)
 assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps) == (lnk, "added")
+assert deps.in_menu("win32", appdata=appdata)
 cmd, env = ran[-1]
 assert cmd[0] == "powershell" and cmd[-1] == deps.SHORTCUT_PS and "$env:WTL_TARGET" in cmd[-1]
 assert env["WTL_LNK"] == lnk and env["WTL_TARGET"] == "/opt/word-tierlist" and env["WTL_ICON"] == "/opt/word-tierlist,0"

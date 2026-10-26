@@ -186,19 +186,19 @@ assert not bw.reverse and arrow() == ("rating", "up")
 bw.close(); app.browse_state = None
 app.on_close()
 
-# --- ST-5: File > Add to applications menu (Linux): a launcher that starts the program with no terminal
+# --- ST-5: Add to applications menu (Linux; in Source & Updates since U-5): a launcher that starts the program with
+# no terminal
 if sys.platform.startswith("linux"):
     ls = T.Store(os.path.join(tempfile.mkdtemp(), "launch.db")); ls.insert_words(WORDS[:50])
     root = tk.Tk(); app = T.App(root, ls, T.Definitions(ls)); pump(4)
-    assert "Add to applications menu" in [it[1] for it in app.header.menus["File"] if len(it) > 1]
+    assert "Add to applications menu" not in [it[1] for it in app.header.menus["File"] if len(it) > 1]   # (the panel)
     os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
     path = app.add_launcher(); pump(2)
     text = open(path).read()
     assert "Terminal=false" in text and "tierlist.py" in text and app.toast.cget("text").startswith("Word Tier List added")
     app.add_launcher(); pump(2); assert app.toast.cget("text") == "Word Tier List updated in your applications menu"
     del os.environ["XDG_DATA_HOME"]
-    assert "Add to Start menu" not in [it[1] for it in app.header.menus["File"] if len(it) > 1]   # (Windows only)
-    # Windows (asked for): the same item, as File > Add to Start menu (the shortcut itself: _selftest_deps)
+    # Windows (asked for): the same, as Add to Start menu (the shortcut itself: _selftest_deps)
     made = []
     import deps as D
     keep = D.add_to_start_menu

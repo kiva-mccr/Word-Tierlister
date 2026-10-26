@@ -37,8 +37,8 @@ definition, Tab moves to the next tab, Ctrl + / Ctrl - / Ctrl 0 zoom. Every key 
 Keyboard shortcuts. The other menus:
 
 - **File**: import earlier progress (another save, or an exported list), export the list, where your save file is,
-  add it to the applications menu (Linux) or the Start menu (Windows), and Source & Updates (one panel: check for
-  updates and update what you are running, make it a program, or give its source back; see below).
+  and Source & Updates (one panel: check for updates and update what you are running, add it to the applications
+  menu (Linux) or the Start menu (Windows), make it a program, or give its source back; see below).
 - **Edit**: Undo. **View**: Browse / edit the tier list (search, sort, move words between tiers), zoom, Show
   definitions, Reduce motion, Censor obscene words and Dark mode.
 - **Settings**: anchor words, How words are dealt (the order, which kinds of words), keyboard shortcuts, tier
@@ -276,9 +276,10 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   close the terminal, and the program keeps running. Its messages go to `tierlist.log` next to your save
   (`--console` keeps the terminal attached and prints there). If the window cannot open (no desktop), it
   stays in the terminal and says why.
-- File > Add to applications menu (Linux) puts Word Tier List in your desktop's applications menu, so it
-  starts with no terminal at all. Anything that must be installed is then asked in the window. On Windows the same
-  item is File > Add to Start menu: a shortcut in your own Start menu (no administrator needed), which starts it
+- **Add to applications menu** (Linux, in File > Source & Updates) puts Word Tier List in your desktop's
+  applications menu, so it starts with no terminal at all. Anything that must be installed is then asked in the
+  window. Making the program can do the same for the new program (a tick, already ticked when Word Tier List is in
+  the menu, so the menu moves over to the program). On Windows it is **Add to Start menu**: a shortcut in your own Start menu (no administrator needed), which starts it
   with no console window and shows its icon (`deps.add_to_start_menu`, made by Windows' own PowerShell).
 - The taskbar shows the program's icon: on Linux every start keeps a launcher for it
   (`~/.local/share/applications/word-tierlist.desktop`, out of the menu until you add it), which is how desktops

@@ -26,8 +26,8 @@ def project():
 
 
 def main(d):
-    """The dialog's own buttons, not the Updates section's (U-4: those come and go with GitHub's answer)."""
-    return [n for n, b in d.buttons.items() if b.master is not d.update_buttons]
+    """The dialog's bottom buttons, not the sections' (U-4: Updates' come and go with GitHub's answer)."""
+    return [n for n, b in d.buttons.items() if b.master in (d.dlg._right, d.dlg.button_row)]
 
 
 def pump(root, n=6):
@@ -269,6 +269,41 @@ d.buttons[sources.UPDATE].invoke(); pump(root, 3)
 assert open(os.path.join(proj3, "tierlist.py")).read() == "x = 1\n" and d.alive()
 d.close()
 sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]
+
+# ---- U-5: the applications menu / Start menu in the panel; making the program can put it there --------------------
+import deps
+os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)
+assert "Add to applications menu" in d.buttons and "Puts Word Tier List" in d.menu_line.cget("text")
+assert not d.menu_var.get() and not deps.in_menu("linux")                       # (not in the menu: unticked)
+d.buttons["Add to applications menu"].invoke(); pump(root)
+assert deps.in_menu("linux") and "tierlist.py" in open(deps.launcher_path()).read()
+assert "is in your applications menu" in d.menu_line.cget("text")
+d.close()
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)
+assert d.menu_var.get()                                                          # (in it already: ticked, so it moves)
+S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "word-tierlist")
+started.clear()
+d.buttons["Make the program"].invoke(); pump(root, 2)
+text = open(deps.launcher_path()).read()
+assert started == [os.path.join(proj3, "word-tierlist")] and "tierlist.py" not in text and "word-tierlist" in text
+del os.environ["XDG_DATA_HOME"]
+# Windows: the Start menu, the same way (the shortcut itself: _selftest_deps); macOS has nothing to add to
+root, app = window()
+added = []
+real_add, deps.add_to_start_menu = deps.add_to_start_menu, lambda python, script: (added.append((python, script)),
+                                                                                  ("C:\\x.lnk", "added"))[1]
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
+assert "Add to Start menu" in d.buttons and "without a console window" in d.menu_line.cget("text")
+d.buttons["Add to Start menu"].invoke(); pump(root)
+assert added and added[0][1].endswith("tierlist.py")
+d.menu_var.set(True); d.buttons["Make the program"].invoke(); pump(root, 2)
+assert added[-1] == (os.path.join(proj3, "word-tierlist"), None)               # (the new program, not the source)
+deps.add_to_start_menu = real_add
+root, app = window()
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="darwin"); settle(d)
+assert d.menu is None and not any("menu" in b for b in d.buttons) and not hasattr(d, "menu_var")
+d.close()
 app.on_close()
 
 # ---- T-9: the first start of each form offers the other once, when nothing else is being asked ----------------------

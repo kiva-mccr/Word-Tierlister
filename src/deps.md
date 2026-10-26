@@ -4,7 +4,7 @@ The third-party packages and installing them (ST-1..ST-5): the terminal step for
 
 - **Uses:** `constants`
 - **Used by:** `app`, `sources`, `standalone`, `startup`, `tierlist`
-- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_ui2`, `_selftest_updates`
+- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
@@ -34,6 +34,8 @@ The module docstring has the details; this page is the map.
 - `launcher_path`: (no docstring)
 - `ensure_launcher`: Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a launcher that names its class): write the launcher if there...
 - `add_to_menu`: Write (or update) the launcher in ~/.local/share/applications, with the program's icon copied to ~/.local/share/icons (a built program's own copy is gone once it closes).
+- `menu_name`: What the desktop's list of programs is called here: "applications menu" (Linux), "Start menu" (Windows), or None where Word Tier List cannot add itself (macOS: an app...
+- `in_menu`: True if Word Tier List is in the applications menu / Start menu already (Linux: the launcher that every start keeps for the taskbar counts only once it is shown, not...
 - `start_menu_path`: Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed).
 - `shortcut_parts`: (target, arguments, working folder, icon) for the shortcut: from source pythonw.exe (no console window, ST-9) running tierlist.py with the program's icon; a built...
 - `add_to_start_menu`: Write (or update) the Start menu shortcut.
