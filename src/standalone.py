@@ -674,6 +674,17 @@ def _download(url, timeout=10):
 last_error = None                  # why the last latest_release found nothing, when it failed (U-3)
 
 
+def describe_fetch_error(exc):
+    """Why asking GitHub failed, in a line. GitHub answers a private repository's releases with a bare "Not Found"
+    (404) to anyone not signed in, which the program never is (reported: U-4)."""
+    if getattr(exc, "code", None) == 404:
+        return (f"GitHub said Not Found (404). The project ({REPO}) is probably private, so its releases cannot be "
+                "seen without signing in; or it has no release yet.")
+    if getattr(exc, "code", None) == 403:
+        return "GitHub refused (403): usually too many checks in an hour from this network. Try again later."
+    return f"GitHub could not be reached: {getattr(exc, 'reason', None) or exc}"
+
+
 def latest_release(fetch=_download):
     """The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when
     offline, GitHub cannot be reached or there is none yet. `fetch(url) -> bytes` (tests pass their own)."""
@@ -684,7 +695,7 @@ def latest_release(fetch=_download):
     try:
         data = json.loads(fetch(RELEASES))
     except Exception as exc:                # offline, no release yet (404), rate-limited, an odd answer
-        last_error = str(getattr(exc, "reason", None) or exc)       # (U-3: the dialog says why)
+        last_error = describe_fetch_error(exc)                       # (U-3: the dialog says why)
         return None
     tag = data.get("tag_name") if isinstance(data, dict) else None
     if not tag or not data.get("zipball_url") or not version_tuple(tag):

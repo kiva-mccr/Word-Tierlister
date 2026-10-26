@@ -57,7 +57,7 @@ The module docstring has the details; this page is the map.
 - `watch_focus`: When the whole program loses focus (another program came to the front), close its drop-downs (close_popups) and call on_lost().
 - `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
-  - methods: text, button, clear_buttons, show, refit, rescale, close, alive
+  - methods: text, button, make_default, clear_buttons, show, refit, rescale, close, alive
 - `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; a definitions...
 
 ## Rules and pitfalls (fixed before: keep them fixed)

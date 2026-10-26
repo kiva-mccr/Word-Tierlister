@@ -140,7 +140,9 @@ F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (
 for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git
 checkout updates with git pull, other source folders sync; a quiet check at start once a day). U-2 (the censoring
 toast is the How words are dealt line). U-3 (a built program trusts this computer's certificates: SSL_CERT_FILE from
-deps.CA_BUNDLES; the update dialog says what went wrong).
+deps.CA_BUNDLES; the update dialog says what went wrong). U-4 (asked for: File > Check for updates merged into File > Source
+& Updates, one panel: Updates on top, then make the program / unpack the source with the update tick; a 404 "Not
+Found" is said to mean the repository is private, which it is: the program cannot update itself until it is public).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -186,6 +188,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   incomplete PyInstaller.
 - U-3's certificate fix was reproduced from source with the certificates hidden, not in a real built program on
   Fedora or a Mac.
+- The repository is private, so a built program's update check always gets 404 (GitHub hides private releases from
+  anyone not signed in). The user decides whether to make it public; never change its visibility.
 - U-1's self-update never ran against a real release or on Windows / macOS (renaming the running .exe, ditto):
   the first test is updating a 1.0.0 program to the next release.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published

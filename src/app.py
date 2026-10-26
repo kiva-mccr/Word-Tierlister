@@ -35,7 +35,7 @@ from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
-from sources import UPDATED_FROM, SourceDialog, UpdateDialog
+from sources import UPDATED_FROM, SourceDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
 import theme
@@ -259,7 +259,7 @@ class App:
     UPDATE_EVERY_S = 24 * 3600               # GitHub is asked at most this often at start (meta update_checked)
 
     def _after_update(self):
-        """Just updated (File > Check for updates left the old version in meta UPDATED_FROM): say so once; in the
+        """Just updated (File > Source & Updates left the old version in meta UPDATED_FROM): say so once; in the
         program, bring the source unpacked beside it from the program (T-10) up to the new version too (the same
         sync as unpacking: only the program's own files, an edited one kept as .bak). Returns the old version."""
         old = self.store.get_meta(UPDATED_FROM)
@@ -280,7 +280,7 @@ class App:
 
     def _check_for_update(self, check=None):
         """At start, at most once a day (asked for: say when a new version is out): ask GitHub on a worker thread;
-        a newer version is told once, in a toast pointing at File > Check for updates (meta update_told). Waits
+        a newer version is told once, in a toast pointing at File > Source & Updates (meta update_told). Waits
         while a question or settings page is open. `check`: tests."""
         try:
             last = float(self.store.get_meta("update_checked") or 0)
@@ -305,7 +305,7 @@ class App:
             if dialog_open(self.root) or self.busy:
                 return self.root.after(1000, lambda: collect(release, True))
             self.store.set_meta("update_told", release["version"])
-            self.flash(f"Version {release['version']} is out (you have {VERSION}): File > Check for updates",
+            self.flash(f"Version {release['version']} is out (you have {VERSION}): File > Source & Updates",
                        kind="info", ms=8000)
         collect()
 
@@ -374,7 +374,6 @@ class App:
                         if sys.platform.startswith("linux") else []),
                       *([("command", "Add to Start menu", self.add_launcher, None)]
                         if sys.platform.startswith("win") else []),
-                      ("command", "Check for updates...", self.check_updates, None),
                       ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
@@ -2184,13 +2183,10 @@ class App:
         return path
 
     def source_updates(self):
-        """File > Source & Updates... (T-6, T-7): from source, make a standalone program for this computer; in the
-        program, unpack the source code it was built from."""
+        """File > Source & Updates... (T-6, T-7, U-1; one panel since U-4): check for updates and update the form
+        you are running; from source, make a standalone program for this computer; in the program, unpack the
+        source code it was built from."""
         return SourceDialog(self)
-
-    def check_updates(self):
-        """File > Check for updates... (U-1): the newest version from GitHub, for the program or the source."""
-        return UpdateDialog(self)
 
     def edit_tier_colours(self):
         """Settings > Tier colours... (UI-61)."""
