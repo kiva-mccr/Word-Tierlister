@@ -1834,6 +1834,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           overhang.json (upright faces only: no smear is italic); the smear fills them, and the band, in its tone,
 #           and both are gone a tenth of the way into un-smearing (FILL_FADE). Rectangles inside the holes were
 #           tried first and left white crescents at their curves. Only on one line (not a wrapped meaning).
+# [x] F-41 Reported: switching tabs with the definitions pane open stuttered up and down, and from Refine within
+#           tier to Boundary check the duel buttons seemed to flash. The window's fit tried the pane a line at a time
+#           (and each smaller text size), and Tk drew every try: the page jumped, and the duel cards blinked out as
+#           the pane squeezed the page to nothing. Now the pane is pinned at the height it shows while the fit
+#           measures (DefinitionDrawer.pin), and the fit works out the lines that fit from one measurement
+#           (App._fit_lines). A held pane taller than the lines tried was counted at its old height, so each duel
+#           tab fitted at its own text size: they share one now, and a pane still sliding open when a tab is
+#           switched is counted at the height it is heading for (it ended past the window's bottom). From one duel
+#           tab to another the cards fade into the page and the new pair fades in (DuelCards.show(fade=True)).
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

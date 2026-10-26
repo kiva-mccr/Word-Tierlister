@@ -126,6 +126,12 @@ class Animator:
         if anim["done"]:
             _call(anim["done"])
 
+    def stop(self, key):
+        """Stop the animation under `key` where it is: no end state, no on_done. No-op if none."""
+        anim = self._running.pop(key, None)
+        if anim is not None and anim["job"] is not None:
+            self.root.after_cancel(anim["job"])
+
     def is_running(self, key):
         """True while the animation `key` runs (tests)."""
         return key in self._running
