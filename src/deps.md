@@ -4,12 +4,13 @@ The third-party packages and installing them (ST-1..ST-5): the terminal step for
 
 - **Uses:** `constants`
 - **Used by:** `app`, `sources`, `standalone`, `startup`, `tierlist`
-- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_ui2`
+- **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
 ## Public API
 
+- `use_system_certificates`: A built program (Linux, macOS) carries the OpenSSL of the machine it was built on, which looks for trusted certificates where that machine keeps them (GitHub's...
 - `missing`: The import names in `names` that cannot be imported right now.
 - `pip_available`: True if `python -m pip` works for this interpreter.
 - `install`: pip-install the packages for the import names `names`, streaming pip's output through `log`.
@@ -38,6 +39,8 @@ The module docstring has the details; this page is the map.
 - `add_to_start_menu`: Write (or update) the Start menu shortcut.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
+
+- A built program on Linux / macOS must trust this computer's certificates (`use_system_certificates`, called first in main; U-3, reported): its OpenSSL looks where the build machine kept them, and without them every https request fails quietly.
 
 - Keep `PACKAGES` in step with `requirements.txt` (a test checks); a new package also needs `SIZE`, `PURPOSE`, `HOMEPAGE`.
 - The Windows Start menu shortcut (ST-10) is written by PowerShell's WScript.Shell with every value passed through the environment (`SHORTCUT_PS` reads `$env:WTL_*`): never put a path inside the script's text (quotes and spaces in folder names). From source its target is pythonw.exe, never python.exe (a console window, ST-9).

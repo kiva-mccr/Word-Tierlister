@@ -144,8 +144,11 @@ root, app = window()
 labels = [it[1] for it in dict(app._menu_items())["File"] if it[0] == "command"]
 assert "Check for updates..." in labels and labels.index("Check for updates...") < labels.index("Source & Updates...")
 # offline / nothing newer: says so; "Try again" asks again
+S.last_error = "certificate verify failed"                                    # (U-3: why, when it is known)
 d = sources.UpdateDialog(app, check=lambda: None, frozen=True); settle(d, root)
 assert "could not be reached" in d.line.cget("text") and list(d.buttons) == ["Try again", "Close"]
+assert "certificate verify failed" in d.how.cget("text")
+S.last_error = None
 d.check = lambda: {"version": VERSION, "tag": "v" + VERSION, "source": "", "page": "", "assets": {}}
 d.buttons["Try again"].invoke(); settle(d, root)
 assert "the newest there is" in d.line.cget("text") and list(d.buttons) == ["Close"]

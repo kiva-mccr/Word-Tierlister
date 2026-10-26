@@ -671,14 +671,20 @@ def _download(url, timeout=10):
         return r.read()
 
 
+last_error = None                  # why the last latest_release found nothing, when it failed (U-3)
+
+
 def latest_release(fetch=_download):
     """The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when
     offline, GitHub cannot be reached or there is none yet. `fetch(url) -> bytes` (tests pass their own)."""
+    global last_error
+    last_error = None
     if os.environ.get(OFFLINE_ENV):
         return None
     try:
         data = json.loads(fetch(RELEASES))
-    except Exception:                       # offline, no release yet (404), rate-limited, an odd answer
+    except Exception as exc:                # offline, no release yet (404), rate-limited, an odd answer
+        last_error = str(getattr(exc, "reason", None) or exc)       # (U-3: the dialog says why)
         return None
     tag = data.get("tag_name") if isinstance(data, dict) else None
     if not tag or not data.get("zipball_url") or not version_tuple(tag):

@@ -1826,6 +1826,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (refused changes: git's own words shown, nothing started), any other folder the T-13 sync. The first start
 #           after an update says "Updated to version X (from Y)" (meta updated_from). At start (main's starts only),
 #           at most once a day (meta update_checked), a newer version is told once in a toast (meta update_told).
+# [x] U-3  Reported: v1.0.0 was out, but the program's Check for updates said GitHub could not be reached. A built
+#           Linux / macOS program carries its build machine's OpenSSL, which looks for trusted certificates where that
+#           machine keeps them (GitHub's Ubuntu: /usr/lib/ssl); elsewhere (Fedora: /etc/pki) nothing is trusted and
+#           every https request fails (reproduced from source with the certificates hidden). main() now points it at
+#           this computer's own list (deps.use_system_certificates: SSL_CERT_FILE; not on Windows, which uses its own
+#           store), and the dialog says what went wrong (standalone.last_error). Online definitions and the Wiktionary
+#           download in the program would have failed the same way.
 # [x] U-2  Asked for: the note when censoring is turned on uses the same short line as How words are dealt
 #           (constants.CENSOR_CAVEAT_LINE; the toast is "Censoring on · " + it). The long first-time note is gone.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
@@ -1964,6 +1971,7 @@ def main():
         for key in set(os.environ) - set(clean):
             del os.environ[key]
         os.environ.update(clean)
+    deps.use_system_certificates()            # (U-3: a built program trusts this computer's certificates)
     ap = argparse.ArgumentParser(description="Tier-list every word in the English dictionary.")
     ap.add_argument("--db", default=None,
                     help="save file to use. By default your earlier save is found automatically "

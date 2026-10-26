@@ -18,6 +18,29 @@ import time
 
 from constants import WM_CLASS_NAME, plan_line
 
+# U-3: this computer's own list of trusted certificates, where each system keeps it (Debian / Ubuntu, Fedora / RHEL,
+# openSUSE, older Fedora, macOS / Arch / Alpine)
+CA_BUNDLES = ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/ca-bundle.pem",
+              "/etc/pki/tls/cacert.pem", "/etc/ssl/cert.pem")
+
+
+def use_system_certificates(env=None, frozen=None, platform=None, exists=os.path.isfile):
+    """A built program (Linux, macOS) carries the OpenSSL of the machine it was built on, which looks for trusted
+    certificates where that machine keeps them (GitHub's Ubuntu: /usr/lib/ssl; a python.org Python on a Mac: none
+    at all). Anywhere else nothing is trusted and every https request fails (reported: Check for updates said
+    GitHub could not be reached). Point it at this computer's own list (SSL_CERT_FILE) unless one is set already.
+    Windows reads its own certificate store. Returns the file used, or None."""
+    env = os.environ if env is None else env
+    frozen = getattr(sys, "frozen", False) if frozen is None else frozen
+    if not frozen or (platform or sys.platform).startswith("win") or env.get("SSL_CERT_FILE"):
+        return None
+    for path in CA_BUNDLES:
+        if exists(path):
+            env["SSL_CERT_FILE"] = path
+            return path
+    return None
+
+
 # import name -> what to hand to pip
 PACKAGES = {"wordfreq": "wordfreq>=3.0", "nltk": "nltk"}
 
