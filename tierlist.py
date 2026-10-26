@@ -1842,7 +1842,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           program), each with the "Update to the newest version first" tick, greyed until there is a newer one.
 #           Reported with it: the check said "What went wrong: Not Found". The repository is private, and GitHub
 #           answers a private repository's releases with 404 to anyone not signed in; the panel now says so
-#           (standalone.describe_fetch_error). The program cannot update itself while the repository is private.
+#           (standalone.describe_fetch_error). The user then made the repository public.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
