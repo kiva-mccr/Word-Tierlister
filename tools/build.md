@@ -1,6 +1,6 @@
 # `tools/build.py`
 
-Building the program from the command line (T-3, T-8): for this computer, or with `--all` for Linux and Windows on GitHub (the Build programs workflow, through `gh`).
+Building the program from the command line (T-3, T-8): for this computer, or with `--all` for Linux, Windows and macOS on GitHub (the Build programs workflow, through `gh`).
 
 - **Uses:** `standalone`
 - **Used by:** nothing (run directly)

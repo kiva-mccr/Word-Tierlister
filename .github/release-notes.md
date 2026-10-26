@@ -5,6 +5,10 @@ the first time.
   also ask; allow it.
 - **Linux:** a downloaded file cannot be started until it is allowed to run: in its Properties tick "Allow executing
   file as program", or run `chmod +x word-tierlist-linux`.
+- **macOS** (Apple Silicon): unzip `word-tierlist-macos.zip` and move "Word Tier List" into a folder of its own. The
+  first time, macOS says it cannot check the app: open **System Settings > Privacy & Security**, scroll down and click
+  **Open Anyway**. If it says the app "is damaged", run `xattr -dr com.apple.quarantine "Word Tier List.app"` in
+  Terminal, then open it again.
 
 Put the program in a folder of its own: your save stays next to it, and the first start unpacks the program's
 source code into "Word Tier List source" beside it (File > Source & Updates has it too). To run from the source

@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """IC-1: the program's icon (tools/make_icon.py draws it into src/icons): every size is there and square, every window
 wears it (ui_style.set_icon, from apply_ttk_style), the source and a build carry it, the Windows program has the .ico
-as its own icon, and the Linux launcher points at a copy that outlives a built program."""
+and the macOS one the .icns as its own icon, and the Linux launcher points at a copy that outlives a built program."""
 import os
 import tkinter as tk
 import standalone as S
@@ -36,12 +36,14 @@ root.destroy()
 
 # ---- the source and the build carry it; only Windows' program gets the .ico as its own icon
 files = {f.replace(os.sep, "/") for f in S.source_files()}
-assert {f"src/icons/icon-{n}.png" for n in ui_style.ICON_SIZES} | {"src/icons/icon.ico"} <= files
-for platform, ico in (("win32", True), ("linux", False), ("darwin", False)):
+assert {f"src/icons/icon-{n}.png" for n in ui_style.ICON_SIZES} | {"src/icons/icon.ico", "src/icons/icon.icns"} <= files
+for platform, ico in (("win32", "icon.ico"), ("linux", None), ("darwin", "icon.icns")):
     args = S.pyinstaller_args("dist", "work", platform=platform)
     sep = ";" if platform == "win32" else ":"
     assert f"{os.path.join(S.ROOT, 'src', 'icons')}{sep}icons" in args
-    assert ("--icon" in args) == ico and (not ico or args[args.index("--icon") + 1].endswith("icon.ico"))
+    assert ("--icon" in args) == bool(ico) and (not ico or args[args.index("--icon") + 1].endswith(ico))
+with open(os.path.join(ui_style.ICONS, "icon.icns"), "rb") as f:
+    assert f.read(4) == b"icns"                                         # (the macOS app bundle's icon)
 # Linux (reported: no icon on the built program's file on Fedora): a program file cannot carry one there, so the
 # file manager's custom icon is set with gio, to a copy of the icon that stays (~/.local/share/icons)
 import deps, tempfile

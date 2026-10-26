@@ -1,8 +1,10 @@
-# Build programs (T-8): Word Tier List as a program for Linux and Windows, built at the same time on GitHub's
+# Build programs (T-8): Word Tier List as a program for Linux, Windows and macOS, built at the same time on GitHub's
 # machines from the pushed source (PyInstaller builds only for the system it runs on).
 #   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the two programs as downloads of the run
 #   - pushing a tag v<VERSION> (src/constants.py): the same, published as a GitHub Release (the README links there)
-# The release's page starts with .github/release-notes.md (T-5: what an unsigned program asks). Each build is started once to check that it runs (tools/build.py --check). macOS is not built here.
+# The release's page starts with .github/release-notes.md (T-5: what an unsigned program asks). Each build is started
+# once to check that it runs (tools/build.py --check). macOS (T-16): an app bundle for Apple Silicon (macos-latest),
+# zipped as word-tierlist-macos.zip; Intel Macs are not built for.
 name: Build programs
 
 on:
@@ -25,6 +27,9 @@ jobs:
           - os: windows-latest
             built: dist/word-tierlist.exe
             asset: word-tierlist-windows.exe
+          - os: macos-latest              # (Apple Silicon)
+            built: dist/Word Tier List.app
+            asset: word-tierlist-macos.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -47,12 +52,16 @@ jobs:
       - name: Build and check (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a python tools/build.py --check
-      - name: Build and check (Windows)
-        if: runner.os == 'Windows'
+      - name: Build and check (Windows, macOS)
+        if: runner.os != 'Linux'
         run: python tools/build.py --check
       - name: Name it for the release
+        if: runner.os != 'macOS'
         shell: bash
         run: mkdir -p out && cp "${{ matrix.built }}" "out/${{ matrix.asset }}"
+      - name: Zip the app for the release (macOS)
+        if: runner.os == 'macOS'
+        run: mkdir -p out && ditto -c -k --keepParent "${{ matrix.built }}" "out/${{ matrix.asset }}"   # (keeps its links and signature)
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}

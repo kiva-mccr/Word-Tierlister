@@ -3,7 +3,7 @@
 the cream tile with rounded corners and a slightly darker border, the lilac shelf mark over the fourth spine. The user
 chose this design.
 
-    python tools/make_icon.py          # icon-16.png .. icon-256.png, icon-1024.png and icon.ico (needs Pillow)
+    python tools/make_icon.py          # icon-16.png .. icon-256.png, icon-1024.png, icon.ico, icon.icns (needs Pillow)
 
 Each size is drawn from the shapes, four times over and scaled down (never one big picture shrunk), so the small
 ones stay crisp. The colours are the light look's defaults (theme.LIGHT, DEFAULT_TIERS), whatever the user picked:
@@ -80,7 +80,9 @@ def main():
         im.save(os.path.join(OUT, f"icon-{n}.png"), optimize=True)
     small = [images[n] for n in SIZES]
     small[-1].save(os.path.join(OUT, "icon.ico"), sizes=[(n, n) for n in SIZES], append_images=small[:-1])
-    print(f"Wrote {len(images)} PNGs and icon.ico into {os.path.relpath(OUT, ROOT)}.")
+    # the macOS program's own icon (an app bundle's .icns), from the same drawings
+    images[BIG].save(os.path.join(OUT, "icon.icns"), append_images=[images[n] for n in (16, 32, 64, 128, 256)])
+    print(f"Wrote {len(images)} PNGs, icon.ico and icon.icns into {os.path.relpath(OUT, ROOT)}.")
 
 
 if __name__ == "__main__":

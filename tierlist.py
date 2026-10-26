@@ -1806,6 +1806,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           smeared (card, duel, panes, Browse), so the strips are gone (widgets.smear_items, _smear_lines).
 # [x] F-34 Asked for: the definitions pane had no scroll bar. A slim one beside each column, only while its meanings
 #           do not all fit; its room is kept, so showing it never re-wraps the text or resizes the pane.
+# [x] T-16 Asked for: a macOS program in the release too. The Build programs workflow builds it on GitHub's Apple
+#           Silicon machines (macos-latest), starts it once (tools/build.py --check) and zips the app bundle with
+#           ditto as word-tierlist-macos.zip; tools/make_icon.py writes icon.icns, the app's own icon. Unsigned: the
+#           release notes say how to open it (Privacy & Security > Open Anyway; xattr if it says "damaged").
+#           Intel Macs are not built for. Never run here (no Mac): the first release is its first build.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---

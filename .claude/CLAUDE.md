@@ -133,7 +133,8 @@ the word: line ends smear inward, the user's rules), F-34 (the definitions pane'
 words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported), F-40 (the letters' holes filled, gone at
 the very start of un-smearing),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). Docs reviewed for the first release
-(README: Using it, Licence; release notes; code map). Next: the release (merge to main, tag v1.0.0). Dropped: UI-21 (next-up peek), UI-74 (film grain)
+(README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
+.app, icon.icns). Next: the release (PR #7 into main, then tag v1.0.0). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.
@@ -179,6 +180,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
+- T-16's macOS job (macos-latest, ditto zip, icon.icns) never ran: the first release is its first build; Intel Macs
+  get no program.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
   on; this container is Linux). The macOS build is an app bundle (--onedir).
 - A read-only save file's dialog could not be verified (the test machine ran as root).

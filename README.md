@@ -5,9 +5,11 @@ action and resumes automatically, even if you replace these files.
 
 **Download the program** (no Python needed): [for Windows](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-windows.exe)
 · [for Linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-linux)
+· [for macOS](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-macos.zip) (Apple Silicon)
 · [all releases](https://github.com/kiva-mccr/Word-Tierlister/releases). Put it in a folder of its own: it keeps
 its save beside itself. On Linux, make it runnable first (`chmod +x word-tierlist-linux`). Windows may warn that it
-does not know the program (it is not signed): More info > Run anyway. Or run it from source:
+does not know the program (it is not signed): More info > Run anyway. On macOS, unzip it; the first time, System
+Settings > Privacy & Security > Open Anyway. Or run it from source:
 
     python tierlist.py                 # options: python tierlist.py --help
 
@@ -93,7 +95,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and of rude meaning, the ones left out; ST-6, OB-5), the meanings the rudeness rules read and what they found (OB-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
-| `.github/workflows/build.yml` | Build programs (T-8): builds the Linux and Windows programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
+| `.github/workflows/build.yml` | Build programs (T-8, T-16): builds the Linux, Windows and macOS (Apple Silicon) programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; the swatches, Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
@@ -126,7 +128,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
 | `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, "Update the source only" updates this folder without making the program (T-13). |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
-| `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux and Windows at once on GitHub (T-8). |
+| `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
@@ -244,15 +246,15 @@ keeps its save next to itself (or in your user data folder when that folder is r
 used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one,
 or on GitHub:
 
-- `python tools/build.py --all` builds for Linux and Windows at once on GitHub's machines (the "Build programs"
-  workflow, `.github/workflows/build.yml`, also on the Actions tab's Run workflow button), waits, and fetches
-  `word-tierlist-linux` and `word-tierlist-windows.exe` into `dist/`. It needs your commits pushed and GitHub's
+- `python tools/build.py --all` builds for Linux, Windows and macOS at once on GitHub's machines (the "Build
+  programs" workflow, `.github/workflows/build.yml`, also on the Actions tab's Run workflow button), waits, and
+  fetches `word-tierlist-linux`, `word-tierlist-windows.exe` and `word-tierlist-macos.zip` into `dist/`. It needs your commits pushed and GitHub's
   command-line tool logged in (`gh auth login`); without them it says what is missing and builds for this
   computer only. GitHub only starts the workflow once it is on the repository's default branch.
 - **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py`, commit,
-  then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds both programs,
+  then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds the three programs,
   starts each once to check it runs, and attaches them to a new release, whose page starts with
-  `.github/release-notes.md`. (macOS is not built there.)
+  `.github/release-notes.md`. (The macOS one is for Apple Silicon; it is not signed either.)
 
 ## Windows notes
 

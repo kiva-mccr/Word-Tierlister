@@ -2,13 +2,14 @@
 
     python tools/build.py            build into dist/ (installs PyInstaller first if it is missing)
     python tools/build.py --check    build, then start the new program for a moment to make sure it runs
-    python tools/build.py --all      Linux and Windows at once, on GitHub (T-8): runs the "Build programs" workflow
-                                     (.github/workflows/build.yml) on the pushed source, waits, and fetches
-                                     word-tierlist-linux and word-tierlist-windows.exe into dist/
+    python tools/build.py --all      Linux, Windows and macOS at once, on GitHub (T-8, T-16): runs the "Build
+                                     programs" workflow (.github/workflows/build.yml) on the pushed source, waits,
+                                     and fetches word-tierlist-linux, word-tierlist-windows.exe and
+                                     word-tierlist-macos.zip into dist/
 
 --all needs the code pushed to GitHub and GitHub's command-line tool, logged in (gh auth login); without them
 it says what is missing and builds for this computer only. A release (the README's download links) is published
-by pushing a tag v<VERSION>: the same workflow then attaches both programs to it.
+by pushing a tag v<VERSION>: the same workflow then attaches the three programs to it.
 
 What comes out (PyInstaller builds only for the system it runs on; T-8 covers the others):
     Linux     dist/word-tierlist            one file
@@ -127,7 +128,7 @@ def build_all(dist=None, log=print, run=subprocess.run, which=shutil.which, wait
         wait(2)
     if not run_id:
         return None, "the workflow was started but its run did not show up; see the Actions tab on GitHub"
-    log(f"Building on Linux and Windows (run {run_id}; about 5 minutes)...")
+    log(f"Building on Linux, Windows and macOS (run {run_id}; about 5 minutes)...")
     code, out = _run(["gh", "run", "watch", run_id, "--exit-status", "--interval", "15"], run)
     if code:
         return None, f"the builds failed; see `gh run view {run_id} --log-failed`:\n" + out.strip()[-1500:]
@@ -141,7 +142,7 @@ def build_all(dist=None, log=print, run=subprocess.run, which=shutil.which, wait
         for f in files:
             target = os.path.join(dist, f)
             shutil.move(os.path.join(base, f), target)
-            if not f.endswith(".exe"):
+            if not f.endswith((".exe", ".zip")):
                 os.chmod(target, 0o755)
             paths.append(target)
     shutil.rmtree(got, ignore_errors=True)
@@ -154,7 +155,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description="Build Word Tier List as a program for this system (PyInstaller).")
     ap.add_argument("--dist", help="where to put it (default: dist/ in the project)")
     ap.add_argument("--check", action="store_true", help="start the new program for a moment to make sure it runs")
-    ap.add_argument("--all", action="store_true", help="Linux and Windows at once, on GitHub (needs gh and a push)")
+    ap.add_argument("--all", action="store_true", help="Linux, Windows and macOS at once, on GitHub (needs gh and a push)")
     args = ap.parse_args(argv)
     if args.all:
         paths, why = build_all(args.dist)
