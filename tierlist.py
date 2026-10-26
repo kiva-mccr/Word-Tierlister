@@ -1871,6 +1871,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           terminating the outer one left the inner one holding the check's output pipe, and the check waited on it
 #           for ever. Its output now goes to files and the whole tree is stopped (build.stop_tree: taskkill /T on
 #           Windows); each build job also gives up after 30 minutes.
+# [x] F-43 Reported: the holes of a d, g or o still showed through the smear, at the word's far left and right
+#           letters (the user: "make letters on the end smear in more"). A line's first and last letters now smear
+#           inward END_SPREAD (2) times as far as the rest, behind them, never past the word's other end.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

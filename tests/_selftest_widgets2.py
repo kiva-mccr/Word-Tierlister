@@ -699,6 +699,17 @@ smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
 assert len(fills()) == 5 and all(b3[0] <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] for i in fills())
 cv.delete("s"); smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0 - _W.FILL_FADE - 0.01, ("s",))
 assert not fills() and not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]
+# F-43 (asked for): the end letters smear inward END_SPREAD times as far, never past the word
+cv.delete("s"); smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
+lay = _W._smear_layout(cv, w3, b3)
+half = lay["n"] * _W.SMEAR_SPREAD / 2
+firsts = [cv.coords(i)[0] - 20 for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "g"]
+lasts = [cv.coords(i)[0] for i in cv.find_withtag("s") if cv.type(i) == "text" and cv.itemcget(i, "text") == "d"]
+assert max(firsts) > half + 1 and abs(max(firsts) - half * _W.END_SPREAD) <= 1, (firsts, half)
+assert all(b3[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
+cv.delete("s"); cv.itemconfigure(w3, text="ox"); root.update(); smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
+b4 = cv.bbox(w3)
+assert all(b4[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b4[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
