@@ -28,6 +28,8 @@ SMEAR_BODY = 0.48       # the band filling the gaps between the letters, in em u
                         # x-height of the roundest fonts used; a more generous one would show a flat top)
 SHORT_LETTERS = frozenset("acemnorsuvwxz")   # no ascender, descender or dot: smeared twice as far as the others
 SHORT_SPREAD = 2.0                            # (F-38, the user's idea), filling the gaps between round letters
+END_SPREAD = 2.0        # a line's first and last letters smear inward this many times as far (F-43, asked for: their
+                        # counters, a d's or an o's, still showed at the word's ends)
 FILL_FADE = 0.1         # the band and the holes' fill are gone this far into un-smearing (F-40: at its very start)
 _TEXT_OPTS = ("text", "font", "anchor", "justify", "width")
 
@@ -84,6 +86,15 @@ def smear_items(canvas, item, ink, paper, amount=1.0, tags=()):
                     make(c, rx + dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
                 if dist <= left_room:
                     make(c, rx - dist, y, text=run, font=fnt, anchor="nw", fill=side, tags=tags)
+    # (F-43) the end letters reach further inward, behind the rest, never past the word's other end
+    far = half * END_SPREAD
+    if far - half >= gap:
+        steps = max(1, int((far - half) / gap))
+        for dist in sorted({round(half + (far - half) * k / steps) for k in range(1, steps + 1)}, reverse=True):
+            for first, fx, last, lx, y, room in lay["ends"]:
+                if dist <= room:
+                    make(c, fx + dist, y, text=first, font=fnt, anchor="nw", fill=side, tags=tags)
+                    make(c, lx - dist, y, text=last, font=fnt, anchor="nw", fill=side, tags=tags)
     # (F-33, the user's rules) the end letters move only inward; the letters next to them outward only as far as the
     # space between letters (`near`), never over the end letter; the rest both ways. A copy moved right is the line
     # less its last letter (or, past `near`, less its last two), one moved left less its first (or first two): still
@@ -132,6 +143,12 @@ def _smear_layout(c, item, box):
             rows.append((text, x, y, text[0], text[0], w1, text[1], w1, text[1]))
             continue
         rows.append((text, x, y, text[:-1], text[:-2], w1, text[1:], x + _measure(c, fnt, text[:2]), text[2:]))
+    ends = []                        # (first letter, its x, last letter, its x, y, how far each may move inward)
+    for text, x, y in lines:
+        if len(text.strip()) >= 2:
+            whole, last_x = _measure(c, fnt, text), _measure(c, fnt, text[:-1])
+            ends.append((text[0], x, text[-1], x + last_x, y,
+                         min(whole - _measure(c, fnt, text[0]), last_x)))
     band = None
     if len(lines) == 1 and len(lines[0][0]) > 2:   # (inside the end letters, never to the word's edges: F-37)
         line, x = lines[0][0], lines[0][1]
@@ -158,7 +175,7 @@ def _smear_layout(c, item, box):
         base = box[1] + float(c.tk.call("font", "metrics", fnt, "-ascent"))
         holes = [[x + v if k % 2 == 0 else base - v for k, v in enumerate(shape)] for shape in letter_holes(c, fnt, line)]
     out, right = text_overhang(c, fnt, opts["text"])
-    lay = {"font": fnt, "lines": rows, "band": band, "short": short, "holes": holes,
+    lay = {"font": fnt, "lines": rows, "band": band, "short": short, "ends": ends, "holes": holes,
            "n": _measure(c, fnt, "n"), "gap": max(1, round(em / 40)), "near": max(1, round(em / 20)),
            "reach": (box[0] - out - 2, box[1] - 1, box[2] + right + 2, box[3] + 1)}
     if len(cache) > 64:

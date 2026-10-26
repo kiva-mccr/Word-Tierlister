@@ -133,7 +133,7 @@ UI-78 (borders: of six slight changes, only softer button and pill edges, widget
 current style), F-32 (letters reaching past their boxes: smeared and repainted whole), F-33 (smears never reach past
 the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar), F-35 / F-37 (no bar under a smear: its band only between the end letters), F-38 (short letters smear further), F-39 (second letters never over the end letters; the user checked 194 smeared
 words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported), F-40 (the letters' holes filled, gone at
-the very start of un-smearing),
+the very start of un-smearing), F-43 (the end letters smear inward twice as far: their holes showed),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (switching tabs with the pane open: the fit never draws the line counts it tries (pane pinned, lines worked out from one measurement), the duel tabs share one text size, and their cards fade over to the new pair). Docs reviewed for the first release
 (README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
 .app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). F-42 (the Windows build's check hung on the one-file program's inner process holding its pipe: output to files, the whole tree stopped, jobs time out after 30 min). U-1 (File > Check
