@@ -539,8 +539,8 @@ def ensure_launcher(python, script, home=None, platform=None):
     """Linux, at every start (reported: no icon in Fedora's taskbar; GNOME shows a window's icon only through a
     launcher that names its class): write the launcher if there is none, kept out of the applications menu
     (NoDisplay), or bring the one there up to date (where the program is now, its icon), keeping whether it is in
-    the menu (File > Add to applications menu puts it there). Returns its path, or None (not Linux, or it could not
-    be written); never raises."""
+    the menu (Source & Updates > Add to applications menu puts it there). Returns its path, or None (not Linux, or it
+    could not be written); never raises."""
     if not (platform or sys.platform).startswith("linux"):
         return None
     path = launcher_path(home)
@@ -576,7 +576,28 @@ def add_to_menu(python, script, home=None):
     return path, "updated" if was else "added"
 
 
-# Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu
+def menu_name(platform=None):
+    """What the desktop's list of programs is called here: "applications menu" (Linux), "Start menu" (Windows), or
+    None where Word Tier List cannot add itself (macOS: an app goes in the Applications folder by hand)."""
+    platform = platform or sys.platform
+    return ("applications menu" if platform.startswith("linux") else "Start menu" if platform.startswith("win")
+            else None)
+
+
+def in_menu(platform=None, home=None, appdata=None):
+    """True if Word Tier List is in the applications menu / Start menu already (Linux: the launcher that every
+    start keeps for the taskbar counts only once it is shown, not NoDisplay)."""
+    platform = platform or sys.platform
+    if platform.startswith("win"):
+        return os.path.exists(start_menu_path(appdata))
+    try:
+        with open(launcher_path(home), encoding="utf-8") as f:
+            return "NoDisplay=true" not in f.read()
+    except OSError:
+        return False
+
+
+# Windows (asked for): Add to Start menu, a shortcut in the user's own Start menu
 ICO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon.ico")
 # (written by Windows' own PowerShell through WScript.Shell: no package needed; the values come in through the
 # environment, so no path is ever quoted inside the script)

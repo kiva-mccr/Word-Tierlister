@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `SourceDialog`: File > Source & Updates...
-  - methods: again, update_source, wants_update, make, ask_behind, start_cleaned, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
+  - methods: again, update_source, add_to_menu, wants_update, make, ask_behind, start_cleaned, packages_ready, start, change_folder, fetch, unpack, buttons, alive, close
 - `update_source`: Bring the source in `root_dir` up to `release`, then start again from it with the same save (this window closes).
 - `update_program`: Download this computer's program from `release` beside the running one, put it in its place (the old one is kept as .old until the new one removes it as it starts)...
 
@@ -23,6 +23,7 @@ The module docstring has the details; this page is the map.
 - Starting the other form (the program, or tierlist.py after unpacking) always closes this one (`App.on_close`): two on one save would both write it.
 - Making the program checks its packages first (`packages_ready`: the program's own and the builder, `deps.BUILD_PACKAGES`) with the first start's dialog; a required one left out, or a failed install, says why and builds nothing.
 - One panel (U-4, asked for: there was a separate File > Check for updates): never add a second menu item or dialog for updates, building or unpacking. The Updates section's buttons sit in their own row (`update_buttons`, `StyledDialog.button(row=)`) and are replaced on every answer; "Update" becomes the default (Enter) when a newer version is out, and the bottom action is the default again when it goes.
+- The applications menu / Start menu section (U-5) shows only where Word Tier List can add itself (`deps.menu_name`: not macOS); it adds the form running now (`App.add_launcher`). Making the program has its own tick ("Add the program to the ..."), ticked when it is in the menu already (`deps.in_menu`: a Linux launcher with NoDisplay is not in it), and points the menu at the new program before it starts, so a source cleaned up behind never leaves a broken entry. No File menu item for it any more.
 - From source, "Update" (T-13's "Update the source only") appears only once the check found a newer version; it restarts with `--db` and the same save, and syncs with `from_program=False`. The tick is greyed until a newer version is found.
 - Why the check failed is said in plain words (`standalone.describe_fetch_error`): a private repository answers a bare 404 "Not Found" (reported, U-4).
 - Updating (U-1): the program's update downloads into a folder beside it (`standalone.update_folder`: the same disk, and a folder it cannot write is said before anything downloads), swaps with `replace_program` (never overwrite a running .exe: rename it to .old) and restarts with `--db`; the old version goes into meta `updated_from` first. A git checkout updates only with `git pull --ff-only`, never by syncing files over it. Tests fake `sources.show_error` / `ask_yes_no` / `errors.open_link`.

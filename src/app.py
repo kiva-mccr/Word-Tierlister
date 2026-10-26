@@ -370,10 +370,6 @@ class App:
             ("File", [("command", "Import earlier progress...", self.import_progress, None),
                       ("command", "Export tier list...", self.export, None),
                       ("command", "Where is my save file?", self.show_save_location, None),
-                      *([("command", "Add to applications menu", self.add_launcher, None)]
-                        if sys.platform.startswith("linux") else []),
-                      *([("command", "Add to Start menu", self.add_launcher, None)]
-                        if sys.platform.startswith("win") else []),
                       ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
@@ -2165,21 +2161,26 @@ class App:
         return (cfg["seed"] == cur["seed"] and cfg["shape"] == cur["shape"]
                 and abs(cfg["spread"] - cur["spread"]) < 1e-9 and abs(cfg["compound"] - cur["compound"]) < 1e-9)
 
-    def add_launcher(self, platform=None):
-        """File > Add to applications menu (Linux, ST-5: a launcher that starts the program with no terminal), or
-        File > Add to Start menu (Windows, asked for: a shortcut, with no console window)."""
-        script = None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py")
+    def add_launcher(self, platform=None, program=None, quiet=False):
+        """Source & Updates > Add to applications menu (Linux, ST-5: a launcher that starts the program with no
+        terminal), or Add to Start menu (Windows, asked for: a shortcut, with no console window); in the panel since
+        U-5. `program`: a built program to start from it instead of the form running now (made with the panel's
+        tick); `quiet`: no toast (this window is about to close). Returns the launcher's path, or None."""
+        if program:
+            python, script = program, None
+        else:
+            python, script = sys.executable, None if is_frozen() else os.path.join(SCRIPT_DIR, "tierlist.py")
         windows = (platform or sys.platform).startswith("win")
-        menu = "Start menu" if windows else "applications menu"
+        menu = deps.menu_name("win32" if windows else "linux")
         try:
-            path, how = (deps.add_to_start_menu if windows else deps.add_to_menu)(sys.executable, script)
+            path, how = (deps.add_to_start_menu if windows else deps.add_to_menu)(python, script)
         except OSError as exc:
             show_exception(menu[0].upper() + menu[1:], exc, self.root, f"Could not add Word Tier List to the {menu}.")
-            return
-        quiet = "a console window" if windows else "a terminal"
-        text = (f"Word Tier List added to your {menu} (it starts without {quiet})" if how == "added"
-                else f"Word Tier List updated in your {menu}")
-        self.flash(text, kind="info", ms=2600)
+            return None
+        quiet_start = "a console window" if windows else "a terminal"
+        if not quiet:
+            self.flash(f"Word Tier List added to your {menu} (it starts without {quiet_start})" if how == "added"
+                       else f"Word Tier List updated in your {menu}", kind="info", ms=2600)
         return path
 
     def source_updates(self):

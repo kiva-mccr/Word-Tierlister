@@ -1,10 +1,11 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""U-1: File > Source & Updates' Updates (one panel since U-4). The program updates itself: this computer's program from the newest release is
-downloaded beside the running one (the release's names: RELEASE_ASSETS), swapped in (the old one kept as .old until
-the new one removes it as it starts; a failed swap puts the old one back) and started on the same save. A source
-folder is brought up to date: git pull in a git checkout (your own changes never touched: git refuses instead), the
-release's source synced in otherwise. At start, at most once a day, a newer version is told once in a toast. The
-first start after an update says so. (GitHub's answers, downloads and git are stand-ins: the tests never go online.)"""
+"""U-1: File > Source & Updates' Updates (one panel since U-4). The program updates itself: this computer's program
+from the newest release is downloaded beside the running one (the release's names: RELEASE_ASSETS), swapped in (the
+old one kept as .old until the new one removes it as it starts; a failed swap puts the old one back) and started on
+the same save. A source folder is brought up to date: git pull in a git checkout (your own changes never touched:
+git refuses instead), the release's source synced in otherwise. At start, at most once a day, a newer version is
+told once in a toast. The first start after an update says so. (GitHub's answers, downloads and git are stand-ins:
+the tests never go online.)"""
 import io, json, os, tempfile, time, zipfile
 os.environ["HOME"] = tempfile.mkdtemp()
 import tkinter as tk
@@ -143,7 +144,7 @@ S.start_source = lambda folder, python, args=(): started.append((folder, list(ar
 root, app = window()
 labels = [it[1] for it in dict(app._menu_items())["File"] if it[0] == "command"]
 assert "Source & Updates..." in labels and "Check for updates..." not in labels          # (U-4: one panel)
-Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)          # (the program: nothing to unpack here)
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, platform="darwin", **kw)  # (nothing to unpack; no menu)
 # offline / nothing newer: says so, and why; "Try again" asks again
 S.last_error = "GitHub could not be reached: certificate verify failed"            # (U-3: why, when it is known)
 d = Dialog(check=lambda: None, frozen=True); settle(d, root)
@@ -181,7 +182,7 @@ assert sorted(os.listdir(where)) == ["word-tierlist.exe", "word-tierlist.exe.old
 s = T.Store(save); assert s.get_meta(sources.UPDATED_FROM) == VERSION; s.close()
 # the download fails: says so, nothing changes, the window stays
 root, app = window()
-Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, platform="darwin", **kw)
 S.fetch_program = lambda r, folder, log: (_ for _ in ()).throw(OSError("no network"))
 d = Dialog(check=lambda: release, frozen=True); settle(d, root)
 d.buttons["Update"].invoke(); pump(root, 3)
@@ -202,7 +203,7 @@ assert pulled == [proj] and asked[-1] == "Update the source to version 9.1.0?" a
 assert gone(root)
 # git refuses (your own changes): what it said is shown, nothing starts
 root, app = window()
-Dialog = lambda **kw: sources.SourceDialog(app, source=None, **kw)
+Dialog = lambda **kw: sources.SourceDialog(app, source=None, platform="darwin", **kw)
 started.clear()
 S.git_pull = lambda root_dir: (False, "error: Your local changes would be overwritten")
 d = Dialog(check=lambda: release, frozen=False, root_dir=proj); settle(d, root)

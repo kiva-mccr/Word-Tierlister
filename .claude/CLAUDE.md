@@ -142,7 +142,8 @@ checkout updates with git pull, other source folders sync; a quiet check at star
 toast is the How words are dealt line). U-3 (a built program trusts this computer's certificates: SSL_CERT_FILE from
 deps.CA_BUNDLES; the update dialog says what went wrong). U-4 (asked for: File > Check for updates merged into File > Source
 & Updates, one panel: Updates on top, then make the program / unpack the source with the update tick; a 404 "Not
-Found" is said to mean the repository is private; it was, and the user has made it public).
+Found" is said to mean the repository is private; it was, and the user has made it public). U-5 (Add to applications menu / Start menu
+moved into Source & Updates, plus a tick when making the program; none on macOS).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap

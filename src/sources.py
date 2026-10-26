@@ -69,12 +69,15 @@ class SourceDialog:
     update_source; either way it starts again on the same save). Below it, the other form: from source, make the
     program; in the program, unpack its source; with the "Update to the newest version first" tick (T-8)."""
 
-    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None, go=False):
+    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None, go=False, platform=None):
         """`root_dir`: the project (from source); `source`: the source the program carries, and `frozen`: which
         side to show; `check() -> release or None`: how to find the newest release (tests pass them; the program
         finds them itself). `go`: do it straight away, without showing the page (T-9's "yes": make the program,
-        or unpack beside it, from the version you have); if unpacking fails, the page shows to try elsewhere."""
+        or unpack beside it, from the version you have); if unpacking fails, the page shows to try elsewhere.
+        `platform`: which applications menu to offer (tests)."""
         self.app = app
+        self.platform = platform or sys.platform
+        self.menu = deps.menu_name(self.platform)      # (None: macOS, nothing to add to)
         self.frozen = is_frozen() if frozen is None else frozen
         self.root_dir = root_dir or standalone.ROOT
         self.check = check or standalone.latest_release
@@ -86,6 +89,8 @@ class SourceDialog:
         self.dlg = StyledDialog(app.root, TITLE, f"Word Tier List {VERSION}", f"You are running {form}.",
                                 animator=app.anim, wrap_chars=64)
         self._updates_section()
+        if self.menu:
+            self._menu_section()
         if self.frozen:
             self.source = source or standalone.bundled_source()
             self._unpack_page()
@@ -187,6 +192,39 @@ class SourceDialog:
         """"Update" from source: update_source below, for this folder."""
         return update_source(self.app, self.release, self.root_dir, self.dlg, fetch)
 
+    # ---- the applications menu / Start menu (ST-5, ST-10; in the panel since U-5) --------------------------------
+    def _menu_section(self):
+        self._heading(self.menu[0].upper() + self.menu[1:])
+        self.menu_line = self.dlg.text("")
+        row = tk.Frame(self.dlg.body, bg=PALETTE["bg"])
+        row.pack(anchor="w", pady=(8, 0))
+        self.menu_button = f"Add to {self.menu}"
+        self.dlg.button(self.menu_button, self.add_to_menu, row=row)
+        self._show_menu()
+
+    def _show_menu(self):
+        what = "the program" if self.frozen else "this source (tierlist.py)"
+        quiet = "a console window" if self.platform.startswith("win") else "a terminal"
+        if deps.in_menu(self.platform):
+            text = (f"Word Tier List is in your {self.menu}. Adding it again makes it start {what}, the one "
+                    "running now.")
+        else:
+            text = f"Puts Word Tier List in your {self.menu}, so it opens like any other program, without {quiet}."
+        self.menu_line.config(text=text)
+
+    def add_to_menu(self):
+        """"Add to applications menu" / "Add to Start menu": for the form running now (App.add_launcher)."""
+        path = self.app.add_launcher(self.platform)
+        self._show_menu()
+        self.dlg.refit()
+        return path
+
+    def _menu_for(self, program):
+        """Making the program, ticked "Add the program to the ... menu": point the menu at the new program before
+        it starts (a launcher left on the source would break once the source is cleaned up behind)."""
+        if self.menu and self.menu_var.get():
+            self.app.add_launcher(self.platform, program=program, quiet=True)
+
     # ---- "Update to the newest version first" (T-8) -------------------------------------------------------------
     def _update_row(self):
         """The tick box and the line under it saying what ticking it does (once the check has answered)."""
@@ -245,10 +283,14 @@ class SourceDialog:
         if self.fresh:
             self.main = "Start it"
             dlg.button("Build again", self.make)
-            dlg.button("Start it", lambda: self.start(path), default=True)
+            dlg.button("Start it", lambda: (self._menu_for(path), self.start(path)), default=True)
         else:
             dlg.button("Make the program", self.make, default=True)
         self._update_row()
+        if self.menu:                             # (ticked when it is in the menu already: it moves to the program)
+            self.menu_var = tk.BooleanVar(value=deps.in_menu(self.platform))
+            ttk.Checkbutton(dlg.body, text=f"Add the program to the {self.menu}", variable=self.menu_var,
+                            takefocus=1).pack(anchor="w", pady=(6, 0))
     def make(self):
         """Build behind the progress window, then start the new program and close this one."""
         app = self.app
@@ -290,6 +332,7 @@ class SourceDialog:
                        "your save and the source are unchanged.", details="\n".join(lines[-40:]), parent=app.root,
                        headline="Not built")
             return None
+        self._menu_for(path)
         if place:
             self.start_cleaned(path, place, zip_it=self.behind == "zip")
         else:
