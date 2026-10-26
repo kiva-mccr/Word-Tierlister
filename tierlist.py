@@ -1811,6 +1811,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ditto as word-tierlist-macos.zip; tools/make_icon.py writes icon.icns, the app's own icon. Unsigned: the
 #           release notes say how to open it (Privacy & Security > Open Anyway; xattr if it says "damaged").
 #           Intel Macs are not built for. Never run here (no Mac): the first release is its first build.
+# [x] T-17 The tag could not be pushed from here (a session pushes only its own branch), so the Run workflow button
+#           can publish too: "Publish as a release" (from main only) builds the three programs and publishes them as
+#           the release v<VERSION>, making the tag itself on that commit; an existing release is never overwritten.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
