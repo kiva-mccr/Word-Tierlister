@@ -26,7 +26,7 @@ def fetch(url, timeout=10):
 offline = os.environ.pop("WORD_TIERLIST_OFFLINE")
 try:
     r = S.latest_release(fetch)
-    assert r == {"version": "9.1.0", "tag": "v9.1.0", "source": answer["zipball_url"], "page": "page"}, r
+    assert r == {"version": "9.1.0", "tag": "v9.1.0", "source": answer["zipball_url"], "page": "page", "assets": {}}, r
     assert asked == [f"https://api.github.com/repos/{REPO}/releases/latest"]
     def broken(url, timeout=10):
         raise OSError("no network")

@@ -104,14 +104,10 @@ RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words",
 KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "
                   "of word is ticked. Censoring smears Crude, Swear, Sexual and Slur meanings, never Clinical or "
                   "Insult.")
-# what is said when censoring is turned on (asked for: it is not fully accurate): a dialog the first time in a save,
-# a toast every time after, and a line beside the tick box in How words are dealt
-CENSOR_CAVEAT_HEAD = "Censoring is not perfect"
-CENSOR_CAVEAT = ("Obscene words are picked out by rules that read each word's dictionary labels and meanings, not by "
-                 "a person. They can miss a rude word, or smear an ordinary one that has a rude meaning too. Point at a "
-                 "smeared word to see it. Censoring only hides words: it never changes what you have placed.")
-CENSOR_CAVEAT_SHORT = "Censoring on \u00b7 it may miss a rude word or smear an ordinary one"
+# what is said when censoring is turned on (asked for: it is not fully accurate): a line under the tick box in How
+# words are dealt, and the same words in a toast when it is turned on from View (U-2, asked for: one short text)
 CENSOR_CAVEAT_LINE = "picked out by rules: it may miss some, or smear an ordinary word"
+CENSOR_CAVEAT_SHORT = "Censoring on \u00b7 " + CENSOR_CAVEAT_LINE
 KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of its kinds are ticked."
 
 
