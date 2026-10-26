@@ -4,7 +4,7 @@ Definitions: offline WordNet, the online dictionaryapi.dev fallback, splitting s
 
 - **Uses:** `constants`
 - **Used by:** `app`, `speed_check`, `tierlist`, `widgets`
-- **Tests:** `_selftest`, `_selftest_lookup`, `_selftest_widgets2`
+- **Tests:** `_selftest`, `_selftest_lookup`, `_selftest_tabswitch`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
 

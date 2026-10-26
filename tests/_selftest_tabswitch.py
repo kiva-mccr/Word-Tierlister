@@ -6,7 +6,8 @@ to ends at the height that fits."""
 import os, tempfile, types
 import tkinter as tk
 import app as A
-import tierlist as T
+from definitions import Definitions
+from store import Store
 from theme import PALETTE
 
 LONG = "\n".join(f"{i}. (noun) meaning {i} of a word, a fairly long line of text that goes on and on to wrap"
@@ -14,7 +15,7 @@ LONG = "\n".join(f"{i}. (noun) meaning {i} of a word, a fairly long line of text
 
 
 def make(mode, screen=(1500, 800)):
-    store = T.Store(os.path.join(tempfile.mkdtemp(), "s.db"))
+    store = Store(os.path.join(tempfile.mkdtemp(), "s.db"))
     words = [f"word{i}" for i in range(60)]
     store.insert_words(words)
     store.set_anchors(words[:6])
@@ -24,7 +25,7 @@ def make(mode, screen=(1500, 800)):
     store.set_meta("mode", mode)
     A.usable_area = lambda r: (0, 0, screen[0], screen[1])
     root = tk.Tk()
-    ap = A.App(root, store, T.Definitions(store))
+    ap = A.App(root, store, Definitions(store))
     ap.mem_defs.update({w: LONG for w in words})
     root.update()
     ap._render_defs(); settle(ap)
@@ -52,8 +53,10 @@ for lines in (4, 9, 15):
     app._measure_pane = False
 cw, ch, fit = app._fit_lines(root.winfo_height())
 assert fit >= app.DEF_LINES_MIN and (fit == app.DEF_LINES_MIN or ch <= root.winfo_height())
-d.set_lines(app.DEF_LINES)
-settle(app)
+app._fit_window()
+for mode in ("boundary", "refine"):                    # (each tab's words once: the pane grows to fit the longest)
+    app._on_mode_switch(mode)
+    settle(app)
 
 # 2. switching between duel tabs: every pass of the fit that Tk draws shows the pane at one height and the duel cards
 # in place (the fit used to draw each line count it tried: the page jumped and the cards blinked out)
