@@ -1849,6 +1849,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           program has a tick, "Add the program to the ...", ticked when Word Tier List is in the menu already
 #           (deps.in_menu), so the menu moves to the new program before it starts. macOS: no section (an app goes in
 #           Applications by hand).
+# [x] U-6  Asked for: that section only in the program, and only while it is not in the menu yet (added, its
+#           button goes). From source, the build's tick shows only while it is not in the menu; when it is, the
+#           menu moves to the new program by itself.
 # --- A less generated look (asked for: "make the UI style less AI generated"; mock-ups in two rounds, each beside
 #     the real window; the user picked these, kept the buttons, card, labels and borders as they are, and wants
 #     the borders and the card's shadowy edge in a pass of their own, with befores and afters to choose from) ---
