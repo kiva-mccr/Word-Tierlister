@@ -136,7 +136,11 @@ words covering the commonest start / end letter pairs and found them all good: a
 the very start of un-smearing),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (switching tabs with the pane open: the fit never draws the line counts it tries (pane pinned, lines worked out from one measurement), the duel tabs share one text size, and their cards fade over to the new pair). Docs reviewed for the first release
 (README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
-.app, icon.icns). Next: the release (PR #7 into main, then tag v1.0.0). Dropped: UI-21 (next-up peek), UI-74 (film grain)
+.app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). U-1 (File > Check
+for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git
+checkout updates with git pull, other source folders sync; a quiet check at start once a day). U-2 (the censoring
+toast is the How words are dealt line).
+Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
 shows which steps touch which window.
@@ -179,6 +183,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - The Windows zoom keys are now read by keycode with Ctrl held (keymap.WIN_CTRL_KEYS); not tried on real Windows.
   The PyInstaller.utils error was not reproduced here: the build now checks the parts it uses and repairs an
   incomplete PyInstaller.
+- U-1's self-update never ran against a real release or on Windows / macOS (renaming the running .exe, ditto):
+  the first test is updating a 1.0.0 program to the next release.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).

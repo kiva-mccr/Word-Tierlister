@@ -37,8 +37,8 @@ definition, Tab moves to the next tab, Ctrl + / Ctrl - / Ctrl 0 zoom. Every key 
 Keyboard shortcuts. The other menus:
 
 - **File**: import earlier progress (another save, or an exported list), export the list, where your save file is,
-  add it to the applications menu (Linux) or the Start menu (Windows), and Source & Updates (make it a program, or
-  update it).
+  add it to the applications menu (Linux) or the Start menu (Windows), Check for updates (see below), and Source &
+  Updates (make it a program, or give its source back).
 - **Edit**: Undo. **View**: Browse / edit the tier list (search, sort, move words between tiers), zoom, Show
   definitions, Reduce motion, Censor obscene words and Dark mode.
 - **Settings**: anchor words, How words are dealt (the order, which kinds of words), keyboard shortcuts, tier
@@ -126,7 +126,7 @@ either way the save you used last is found again, so switching between the two l
 | `tools/notes.py` | Keeps each code file's notes (`name.md` beside `name.py`) up to date: regenerates their uses / used by / tests / public API from the code, keeping the hand-written parts; `--check` lists what is missing or stale. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
-| `src/sources.py` | File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, "Update the source only" updates this folder without making the program (T-13). |
+| `src/sources.py` | File > Check for updates... (U-1): the program replaces itself with the newest release's, the source updates with git pull or a sync; both start again on the same save. File > Source & Updates... (T-6, T-7). From source: make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, "Update the source only" updates this folder without making the program (T-13). |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -251,8 +251,9 @@ or on GitHub:
   fetches `word-tierlist-linux`, `word-tierlist-windows.exe` and `word-tierlist-macos.zip` into `dist/`. It needs your commits pushed and GitHub's
   command-line tool logged in (`gh auth login`); without them it says what is missing and builds for this
   computer only. GitHub only starts the workflow once it is on the repository's default branch.
-- **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py`, commit,
-  then tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds the three programs,
+- **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py` and get
+  it onto `main`, then on GitHub open Actions > Build programs > **Run workflow**, tick **Publish as a release** and
+  run it (it makes the tag `v<VERSION>` itself); or tag and push it: `git tag v1.0.0 && git push origin v1.0.0`. The same workflow builds the three programs,
   starts each once to check it runs, and attaches them to a new release, whose page starts with
   `.github/release-notes.md`. (The macOS one is for Apple Silicon; it is not signed either.)
 
@@ -283,6 +284,21 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   (`~/.local/share/applications/word-tierlist.desktop`, out of the menu until you add it), which is how desktops
   such as GNOME know a window's icon.
 
+## Updating
+
+File > Check for updates... asks GitHub for the newest release. If a newer one is out, **Update** updates the form
+you are running, then starts it again with the same save:
+
+- **The program** (Windows `.exe`, Linux, macOS `.app`) downloads the new program for this computer beside itself,
+  puts it in its place and starts it. The old one is kept as `.old` until the new one has started, which then
+  removes it. If the program sits somewhere it cannot write (such as Program Files), it says so; the release page
+  has the download. A source folder the program unpacked beside itself is brought up to date too.
+- **The source** (`tierlist.py`): a git checkout is updated with `git pull` (git refuses rather than touch your own
+  changes, and the dialog shows what it said); any other folder downloads the new source and shows what it would
+  change before doing it (only the program's own files; a file you edited is kept as `.bak` first).
+
+At start, at most once a day, it checks quietly too: a newer version is mentioned once, in a short note.
+
 ## Making it a program
 
 File > Source & Updates... (when running `tierlist.py`) makes Word Tier List into one program for this computer:
@@ -311,7 +327,7 @@ the version you have. Your save is never touched.
 Running from source, a newer version also shows **Update the source only**: it downloads that version and brings
 this folder up to date with it, without making the program (what it will change is shown first; only the
 program's own files change, a file you edited is kept as `.bak` first), then Word Tier List starts again from the
-new source with the same save. In a git checkout, `git pull` is the usual way instead.
+new source with the same save. In a git checkout it runs `git pull` instead.
 
 In the program, the same menu item gives the source back: **Unpack the source code** writes it into a folder
 (beside the program, "Word Tier List source", or one you pick), laid out like this repository. Unpacking into a

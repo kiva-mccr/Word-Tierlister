@@ -22,7 +22,7 @@ run() {  # run <label> <command...>: show the last line of output, abort if the 
 for t in _selftest _selftest_wikt _selftest_queue _selftest_resume _selftest_install _selftest_keymap _selftest_obscene _selftest_appdir _selftest_bundle _selftest_rudeness _selftest_updates; do
     run $t $PY $t.py
 done
-for t in _selftest_ui _selftest_ui2 _selftest_zoom _selftest_tidy _selftest_fonts _selftest_style _selftest_motion _selftest_smooth _selftest_startup _selftest_sizing _selftest_errors _selftest_health _selftest_widgets _selftest_widgets2 _selftest_filepicker _selftest_shortcuts _selftest_looks _selftest_icon _selftest_lookup _selftest_defsize _selftest_drawer _selftest_tabswitch _selftest_freeze _selftest_dealing _selftest_sources _selftest_smoke _selftest_chart _selftest_deps _selftest_build _selftest_release; do
+for t in _selftest_ui _selftest_ui2 _selftest_zoom _selftest_tidy _selftest_fonts _selftest_style _selftest_motion _selftest_smooth _selftest_startup _selftest_sizing _selftest_errors _selftest_health _selftest_widgets _selftest_widgets2 _selftest_filepicker _selftest_shortcuts _selftest_looks _selftest_icon _selftest_lookup _selftest_defsize _selftest_drawer _selftest_tabswitch _selftest_freeze _selftest_dealing _selftest_sources _selftest_selfupdate _selftest_smoke _selftest_chart _selftest_deps _selftest_build _selftest_release; do
     if [ -z "$DISPLAY" ] && command -v xvfb-run >/dev/null 2>&1; then
         run $t xvfb-run -a -s "-screen 0 1920x1200x24" $TK_PYTHON $t.py
     else

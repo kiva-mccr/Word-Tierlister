@@ -13,6 +13,7 @@ import random
 import re
 import sqlite3
 import sys
+import queue
 import threading
 import time
 import webbrowser
@@ -27,14 +28,14 @@ import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_yes_no, show_error, show_exception, show_message
-from constants import (CENSOR_CAVEAT, CENSOR_CAVEAT_HEAD, CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
+from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
                        QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
-from sources import SourceDialog
+from sources import UPDATED_FROM, SourceDialog, UpdateDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
 import theme
@@ -250,6 +251,63 @@ class App:
             anchors()
         if self.offer_form:
             self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
+            self.root.after(self.UPDATE_CHECK_MS, self._check_for_update)
+        self._after_update()
+
+    # ---- U-1: updates -----------------------------------------------------------------------------------------
+    UPDATE_CHECK_MS = 4000                   # after the start's own questions
+    UPDATE_EVERY_S = 24 * 3600               # GitHub is asked at most this often at start (meta update_checked)
+
+    def _after_update(self):
+        """Just updated (File > Check for updates left the old version in meta UPDATED_FROM): say so once; in the
+        program, bring the source unpacked beside it from the program (T-10) up to the new version too (the same
+        sync as unpacking: only the program's own files, an edited one kept as .bak). Returns the old version."""
+        old = self.store.get_meta(UPDATED_FROM)
+        if not old:
+            return None
+        self.store.set_meta(UPDATED_FROM, "")
+        if old == VERSION:
+            return None
+        self.flash(f"Updated to version {VERSION} (from {old})", kind="info", ms=5000)
+        folder = standalone.default_source_folder()
+        if is_frozen() and standalone.bundled_source() and \
+                standalone.came_from_program(standalone.read_manifest(folder, standalone.UNPACKED)):
+            try:
+                standalone.unpack(standalone.bundled_source(), folder)
+            except OSError:
+                pass                                 # (File > Source & Updates can still unpack it)
+        return old
+
+    def _check_for_update(self, check=None):
+        """At start, at most once a day (asked for: say when a new version is out): ask GitHub on a worker thread;
+        a newer version is told once, in a toast pointing at File > Check for updates (meta update_told). Waits
+        while a question or settings page is open. `check`: tests."""
+        try:
+            last = float(self.store.get_meta("update_checked") or 0)
+        except ValueError:
+            last = 0
+        if self.shut or self.store.closed or time.time() - last < self.UPDATE_EVERY_S:
+            return
+        answer = queue.Queue()
+        threading.Thread(target=lambda: answer.put((check or standalone.latest_release)()), daemon=True).start()
+
+        def collect(release=None, got=False):
+            if self.shut or self.store.closed or not self.root.winfo_exists():
+                return
+            if not got:
+                try:
+                    release, got = answer.get_nowait(), True
+                    self.store.set_meta("update_checked", time.time())
+                except queue.Empty:
+                    return self.root.after(500, collect)
+            if not standalone.newer(release) or self.store.get_meta("update_told") == release["version"]:
+                return
+            if dialog_open(self.root) or self.busy:
+                return self.root.after(1000, lambda: collect(release, True))
+            self.store.set_meta("update_told", release["version"])
+            self.flash(f"Version {release['version']} is out (you have {VERSION}): File > Check for updates",
+                       kind="info", ms=8000)
+        collect()
 
     # ---- T-9: the other form, offered once --------------------------------------------------------------------
     FORM_OFFER_MS = 1500                     # after the start's own questions; then checked this often until quiet
@@ -316,6 +374,7 @@ class App:
                         if sys.platform.startswith("linux") else []),
                       *([("command", "Add to Start menu", self.add_launcher, None)]
                         if sys.platform.startswith("win") else []),
+                      ("command", "Check for updates...", self.check_updates, None),
                       ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
@@ -1063,24 +1122,10 @@ class App:
             if b.alive():
                 b.reload(keep_view=True)
 
-    CENSOR_NOTED = "censor_noted"        # meta: the note on censoring has been shown once in this save
-
-    def censor_note(self, show=None, toast=True):
-        """Censoring was just turned on (asked for: say it may not be fully accurate). The first time in a save the
-        whole note, in the window it was turned on in (asked for: never a window of its own): show(text), as the
-        How words are dealt page does under its tick box, or else a longer toast; after that a short toast
-        (`toast`), or nothing."""
-        if self.store.get_meta(self.CENSOR_NOTED) != "1":
-            self.store.set_meta(self.CENSOR_NOTED, "1")
-            text = f"{CENSOR_CAVEAT_HEAD}. {CENSOR_CAVEAT}"
-            if show:
-                show(text)
-            else:
-                self.flash(text, kind="info", ms=9000)
-            return text
-        if toast:
-            self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
-        return None
+    def censor_note(self):
+        """Censoring was just turned on from View (asked for: say it may not be fully accurate): a short toast, the
+        same words How words are dealt shows under its tick box (U-2, asked for: never the long note)."""
+        self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
 
     def toggle_auto(self):
         """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
@@ -2142,6 +2187,10 @@ class App:
         """File > Source & Updates... (T-6, T-7): from source, make a standalone program for this computer; in the
         program, unpack the source code it was built from."""
         return SourceDialog(self)
+
+    def check_updates(self):
+        """File > Check for updates... (U-1): the newest version from GitHub, for the program or the source."""
+        return UpdateDialog(self)
 
     def edit_tier_colours(self):
         """Settings > Tier colours... (UI-61)."""
