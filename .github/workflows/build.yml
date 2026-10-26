@@ -37,6 +37,7 @@ jobs:
             built: dist/Word Tier List.app
             asset: word-tierlist-macos.zip
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30                # (a stuck build or check fails instead of running for hours)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

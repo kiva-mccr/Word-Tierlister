@@ -136,7 +136,7 @@ words covering the commonest start / end letter pairs and found them all good: a
 the very start of un-smearing),
 F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (switching tabs with the pane open: the fit never draws the line counts it tries (pane pinned, lines worked out from one measurement), the duel tabs share one text size, and their cards fade over to the new pair). Docs reviewed for the first release
 (README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
-.app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). U-1 (File > Check
+.app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). F-42 (the Windows build's check hung on the one-file program's inner process holding its pipe: output to files, the whole tree stopped, jobs time out after 30 min). U-1 (File > Check
 for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git
 checkout updates with git pull, other source folders sync; a quiet check at start once a day). U-2 (the censoring
 toast is the How words are dealt line).

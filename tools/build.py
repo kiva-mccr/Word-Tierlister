@@ -54,25 +54,42 @@ def check(out, seconds=12, log=print):
     with open(words, "w", encoding="utf-8") as f:
         f.write("\n".join(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) + "\n")
     env = dict(os.environ, HOME=home, USERPROFILE=home, WORD_TIERLIST_OFFLINE="1")
-    p = subprocess.Popen([executable(target), "--wordlist", words, "--no-install", "--console"],
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    save = os.path.join(os.path.dirname(executable(target)) if not target.endswith(".app") else folder, "tierlist.db")
-    end = time.time() + seconds
-    while time.time() < end and p.poll() is None and not os.path.exists(save):
-        time.sleep(0.5)
-    time.sleep(3)                                          # (the window opens after the save is made)
-    alive = p.poll() is None
-    p.terminate()
-    try:
-        outtext, errtext = p.communicate(timeout=10)
-    except subprocess.TimeoutExpired:
-        p.kill()
-        outtext, errtext = p.communicate()
+    # (its output goes to files, not pipes: on Windows the one-file program runs as two processes, and the inner one,
+    # left holding a pipe, kept the check waiting for ever; the whole tree is stopped below)
+    with open(os.path.join(home, "out.txt"), "w+", encoding="utf-8", errors="replace") as out_f, \
+            open(os.path.join(home, "err.txt"), "w+", encoding="utf-8", errors="replace") as err_f:
+        p = subprocess.Popen([executable(target), "--wordlist", words, "--no-install", "--console"],
+                             stdout=out_f, stderr=err_f, env=env)
+        save = os.path.join(os.path.dirname(executable(target)) if not target.endswith(".app") else folder,
+                            "tierlist.db")
+        end = time.time() + seconds
+        while time.time() < end and p.poll() is None and not os.path.exists(save):
+            time.sleep(0.5)
+        time.sleep(3)                                      # (the window opens after the save is made)
+        alive = p.poll() is None
+        stop_tree(p)
+        out_f.seek(0)
+        err_f.seek(0)
+        outtext, errtext = out_f.read(), err_f.read()
     ok = alive and os.path.exists(save) and "Traceback" not in errtext
     log("The new program " + ("runs, and keeps its save beside itself." if ok else
                               f"did not run as it should:\n{outtext[-1500:]}\n{errtext[-1500:]}"))
     shutil.rmtree(home, ignore_errors=True)
     return ok
+
+
+def stop_tree(p, run=subprocess.run, windows=os.name == "nt"):
+    """Stop a started program and anything it started (on Windows, the one-file program's inner process too);
+    never waits for ever."""
+    if windows:
+        run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True, timeout=30)
+    else:
+        p.terminate()
+    try:
+        p.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait(timeout=10)
 
 
 WORKFLOW = "build.yml"
