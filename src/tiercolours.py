@@ -74,7 +74,7 @@ class TierColoursDialog:
             self.pills.round_rect(x - 4, 1, x + pw + 4, ph + 9, (ph + 8) // 2, outline="", width=2, tags=(f"ring{t}",))
             self.pills.round_rect(x, 5, x + pw, ph + 5, ph // 2, fill=self.colors[t], tags=(f"pill{t}", f"t{t}"))
             self.pills.create_text(x + pw / 2, 5 + ph / 2, text=name, font=head, fill=TIER_TEXT, tags=(f"t{t}",))
-            self.pills.tag_bind(f"t{t}", "<Button-1>", lambda e, t=t: self.select(t))
+        self.pills.bind("<Button-1>", lambda e: self.select(self.tier_at(e.x)))
         # the three bars: a letter, the track with its knob, the reading
         grid = tk.Frame(dlg.body, bg=bg)
         grid.pack(anchor="w")
@@ -124,6 +124,11 @@ class TierColoursDialog:
         """Edit `tier` now: it wears the ring, and the bars and the code show its colour."""
         self.current = tier
         self._draw()
+
+    def tier_at(self, x):
+        """The tier whose pill is at canvas x (the whole pill and half the gap each side: a pill's shape is an image,
+        which a tag_bind never sees, so only its letter answered clicks)."""
+        return max(0, min(len(TIERS) - 1, int((x - 5 + self._gap / 2) // (self._pill_w + self._gap))))
 
     def drag(self, bar, x):
         """A click or drag on bar 0 (H), 1 (S) or 2 (V) at canvas x: the current tier takes that value."""
