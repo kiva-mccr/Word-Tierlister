@@ -1196,6 +1196,21 @@ class Store:
         return rows, comps
 
     @staticmethod
+    def is_export(path):
+        """True when `path` starts the way a File > Export file does, so a README, a code file's note or any
+        other .md / .txt / .csv is never taken for a tier list: a .csv's header begins "word,tier"; a .txt or
+        .md listing's first line is a tier heading ("S tier (12 words)", "## S tier (...)") or the skipped one.
+        Reads only the first line."""
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                first = next((line.strip() for line in f if line.strip()), "")
+        except (OSError, UnicodeDecodeError):
+            return False
+        if path.lower().endswith(".csv"):
+            return [c.strip().strip('"').lower() for c in first.split(",")[:2]] == ["word", "tier"]
+        return bool(re.match(r"^(?:#+\s*)?(?:[SABCDF] tier|Skipped / unknown) \([\d,]+ words?\)$", first))
+
+    @staticmethod
     def parse_export(path):
         """Progress rows from a file made by File > Export (.csv, or the .txt/.md listing)."""
         rows = []
@@ -1283,6 +1298,8 @@ class Store:
             raise ValueError("that is the save file you are already using")
         with open(path, "rb") as f:
             is_db = f.read(16).startswith(b"SQLite format 3")
+        if not is_db and not self.is_export(path):
+            raise ValueError("that file is not a tier list save or an export from File > Export")
         rows, comps = self._read_save(path) if is_db else (self.parse_export(path), [])
         res = {"placed": 0, "skipped": 0, "added": 0, "same": 0, "differs": 0, "comparisons": 0, "backup": None}
         if backup:

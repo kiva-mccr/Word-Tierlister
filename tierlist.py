@@ -1892,6 +1892,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] F-43 Reported: the holes of a d, g or o still showed through the smear, at the word's far left and right
 #           letters (the user: "make letters on the end smear in more"). A line's first and last letters now smear
 #           inward END_SPREAD (2) times as far as the rest, behind them, never past the word's other end.
+# [x] F-44 Reported: Import offered tierlist.md (tierlist.py's note) as a tier list, since any .csv / .txt / .md
+#           with "tier" in its name was taken for an export. An export is now told by its first line
+#           (Store.is_export: a .csv's "word,tier" header, a listing's "S tier (N words)" heading), never its name:
+#           a renamed export is found, and Import refuses a file that is not one instead of bringing in nothing.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
