@@ -12,7 +12,7 @@ log = os.path.join(tempfile.mkdtemp(), "tierlist.log")
 # ---- sessions: started, closed; a start after one that never closed says so
 assert P.start_session(log, "1.0.0") is False
 text = open(log).read()
-assert "=== started" in text and "Word Tier List 1.0.0" in text and "Python" in text
+assert "=== started" in text and "Word Tierlister 1.0.0" in text and "Python" in text
 P.end_session(log)
 assert P.start_session(log, "1.0.0") is False                      # (the last one closed)
 assert P.start_session(log, "1.0.0") is True                       # (that one never closed: a crash, a kill)

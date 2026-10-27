@@ -16,7 +16,7 @@ that changes size and back inside one pass is still caught.
 """
 import argparse
 import os
-os.environ.setdefault("WORD_TIERLIST_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
+os.environ.setdefault("WORD_TIERLISTER_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
 import sys
 import tempfile
 import time

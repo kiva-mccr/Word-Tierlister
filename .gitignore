@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Word Tier List: your save, its log, downloads and exports live next to tierlist.py; never commit them
+# Word Tierlister: your save, its log, downloads and exports live next to tierlist.py; never commit them
 *.db
 *.db-wal
 *.db-shm
@@ -232,6 +232,12 @@ word_categories.tsv
 word_categories.state.json*
 .word_lists/
 # a program made by File > Source & Updates (T-6) sits next to tierlist.py, with its build manifest
+/word-tierlister
+/word-tierlister.exe
+/Word Tierlister.app/
+.word-tierlister-build.json
+.word-tierlister-source.json
+# (the same under the names before the rename to Word Tierlister, 1.0.2 and older)
 /word-tierlist
 /word-tierlist.exe
 /Word Tier List.app/

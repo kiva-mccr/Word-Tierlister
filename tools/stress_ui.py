@@ -19,7 +19,7 @@ import types
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [HERE, os.path.join(HERE, "src")]
-os.environ.setdefault("WORD_TIERLIST_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
+os.environ.setdefault("WORD_TIERLISTER_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
 
 AREA = (0, 0, 1311, 691)                                  # a 1366 x 768 laptop's usable area
 WORDS = ["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist", "shit", "bastard", "damn",

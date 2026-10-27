@@ -28,4 +28,4 @@ The module docstring has the details; this page is the map.
 ## Changing it
 
 - Text formats it understands: `parse_definition` (WordNet's numbered lines and the Wiktionary build's bullets).
-- `Online` (UI-67) only ever runs on a worker thread and never with WORD_TIERLIST_OFFLINE; the window just reads `online`.
+- `Online` (UI-67) only ever runs on a worker thread and never with WORD_TIERLISTER_OFFLINE; the window just reads `online`.

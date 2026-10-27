@@ -11,23 +11,33 @@ assert S.app_dir(frozen=False) == ROOT and os.path.exists(os.path.join(S.SOURCE_
 assert S.restart_args(["--db", "x.db"], frozen=False) == [os.path.join(ROOT, "tierlist.py"), "--db", "x.db"]
 # built: the program's folder ...
 tmp = tempfile.mkdtemp()
-prog = os.path.join(tmp, "Programs", "word-tierlist")
+prog = os.path.join(tmp, "Programs", "word-tierlister")
 os.makedirs(os.path.dirname(prog)); open(prog, "w").close()
 assert S.app_dir(frozen=True, executable=prog) == os.path.dirname(prog)
 assert S.restart_args(["--db", "x.db"], frozen=True) == ["--db", "x.db"]          # (the executable is the program)
 # ... on macOS the folder holding the .app, not inside the bundle
-mac = os.path.join(tmp, "Apps", "Word Tier List.app", "Contents", "MacOS", "word-tierlist")
+mac = os.path.join(tmp, "Apps", "Word Tierlister.app", "Contents", "MacOS", "word-tierlister")
 os.makedirs(os.path.dirname(mac)); open(mac, "w").close()
 assert S.program_dir(mac) == os.path.join(tmp, "Apps")
 # ... and when that folder is read-only (Program Files), the per-user data folder, made if needed
 home = os.path.join(tmp, "home")
 for plat, env, want in (("win32", {"APPDATA": os.path.join(home, "AppData", "Roaming")},
-                         os.path.join(home, "AppData", "Roaming", "Word Tier List")),
-                        ("darwin", {}, os.path.join(home, "Library", "Application Support", "Word Tier List")),
-                        ("linux", {}, os.path.join(home, ".local", "share", "word-tierlist")),
-                        ("linux", {"XDG_DATA_HOME": os.path.join(home, "xdg")}, os.path.join(home, "xdg", "word-tierlist"))):
+                         os.path.join(home, "AppData", "Roaming", "Word Tierlister")),
+                        ("darwin", {}, os.path.join(home, "Library", "Application Support", "Word Tierlister")),
+                        ("linux", {}, os.path.join(home, ".local", "share", "word-tierlister")),
+                        ("linux", {"XDG_DATA_HOME": os.path.join(home, "xdg")}, os.path.join(home, "xdg", "word-tierlister"))):
     got = S.app_dir(frozen=True, executable=prog, writable=lambda f: False, platform=plat, env=env, home=home)
     assert got == want and os.path.isdir(got), (plat, got)
+# a data folder under the program's old name (1.0.2 and older) is kept while it is the only one: its save stays found
+home2 = os.path.join(tmp, "home2")
+for plat, env, old, new in (("win32", {"APPDATA": os.path.join(home2, "R")}, os.path.join(home2, "R", "Word Tier List"),
+                             os.path.join(home2, "R", "Word Tierlister")),
+                            ("linux", {}, os.path.join(home2, ".local", "share", "word-tierlist"),
+                             os.path.join(home2, ".local", "share", "word-tierlister"))):
+    os.makedirs(old)
+    assert S.user_data_dir(platform=plat, env=env, home=home2) == old
+    os.makedirs(new)
+    assert S.user_data_dir(platform=plat, env=env, home=home2) == new
 assert S._writable(tmp) and not S._writable(os.path.join(tmp, "missing"))
 
 # a stand-in built program, in its own process: sys.frozen set and sys.executable somewhere else, as PyInstaller

@@ -1,20 +1,20 @@
-"""Build Word Tier List as a program for this computer's system (T-3), with PyInstaller.
+"""Build Word Tierlister as a program for this computer's system (T-3), with PyInstaller.
 
     python tools/build.py            build into dist/ (installs PyInstaller first if it is missing)
     python tools/build.py --check    build, then start the new program for a moment to make sure it runs
     python tools/build.py --all      Linux, Windows and macOS at once, on GitHub (T-8, T-16): runs the "Build
                                      programs" workflow (.github/workflows/build.yml) on the pushed source, waits,
-                                     and fetches word-tierlist-linux, word-tierlist-windows.exe and
-                                     word-tierlist-macos.zip into dist/
+                                     and fetches word-tierlister-linux, word-tierlister-windows.exe and
+                                     word-tierlister-macos.zip into dist/
 
 --all needs the code pushed to GitHub and GitHub's command-line tool, logged in (gh auth login); without them
 it says what is missing and builds for this computer only. A release (the README's download links) is published
 by pushing a tag v<VERSION>: the same workflow then attaches the three programs to it.
 
 What comes out (PyInstaller builds only for the system it runs on; T-8 covers the others):
-    Linux     dist/word-tierlist            one file
-    Windows   dist/word-tierlist.exe        one file, no console window
-    macOS     dist/Word Tier List.app       an app bundle (one-file apps are not how macOS does it)
+    Linux     dist/word-tierlister            one file
+    Windows   dist/word-tierlister.exe        one file, no console window
+    macOS     dist/Word Tierlister.app       an app bundle (one-file apps are not how macOS does it)
 
 The program keeps its save beside itself (T-1: saves.app_dir), carries only the data it reads (T-2: src/bundle.py)
 and its own source (T-7). The work is done by src/standalone.py, which File > Source & Updates uses too (T-6). WordNet stays an optional download, as from source: the build machine's own ~/nltk_data is never
@@ -53,7 +53,7 @@ def check(out, seconds=12, log=print):
     words = os.path.join(home, "words.txt")
     with open(words, "w", encoding="utf-8") as f:
         f.write("\n".join(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) + "\n")
-    env = dict(os.environ, HOME=home, USERPROFILE=home, WORD_TIERLIST_OFFLINE="1")
+    env = dict(os.environ, HOME=home, USERPROFILE=home, WORD_TIERLISTER_OFFLINE="1")
     # (its output goes to files, not pipes: on Windows the one-file program runs as two processes, and the inner one,
     # left holding a pipe, kept the check waiting for ever; the whole tree is stopped below)
     with open(os.path.join(home, "out.txt"), "w+", encoding="utf-8", errors="replace") as out_f, \
@@ -169,7 +169,7 @@ def build_all(dist=None, log=print, run=subprocess.run, which=shutil.which, wait
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Build Word Tier List as a program for this system (PyInstaller).")
+    ap = argparse.ArgumentParser(description="Build Word Tierlister as a program for this system (PyInstaller).")
     ap.add_argument("--dist", help="where to put it (default: dist/ in the project)")
     ap.add_argument("--check", action="store_true", help="start the new program for a moment to make sure it runs")
     ap.add_argument("--all", action="store_true", help="Linux, Windows and macOS at once, on GitHub (needs gh and a push)")

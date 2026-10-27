@@ -16,6 +16,7 @@ The module docstring has the details; this page is the map.
 - `output_name`: (no docstring)
 - `output_path`: Where the built program ends up in `dist` for `platform` (sys.platform).
 - `program_path`: Where File > Source & Updates puts the program: next to tierlist.py, so it keeps the same save.
+- `remove_renamed_program`: After a build put the program beside `root`: remove one built there under the program's old name (word-tierlist, "Word Tier List.app") and its build record, which the...
 - `executable`: The file to run inside what was built (the .app's own executable on macOS).
 - `last_build`: The manifest of the program beside tierlist.py ({"files": ..., "made": time}), or None.
 - `up_to_date`: True if the program beside tierlist.py exists and was built from the source exactly as it is now (every file the same, none added or removed).
@@ -29,7 +30,8 @@ The module docstring has the details; this page is the map.
 - `clean_env`: A copy of the environment fit for starting the other form, Python or the builder: without what a built program sets for itself, which outlives it and points into its...
 - `start`: Start the program at `path` on its own, not as a child of this window (which then closes); `args`: its command-line options.
 - `bundled_source`: The source carried inside this program (SOURCE_DIR), or None when running from source or built without it.
-- `read_manifest`: (no docstring)
+- `read_manifest`: The record `name` in `folder` (or under its name from before the rename, OLD_RECORDS), or None.
+- `remove_old_record`: Remove the record `name` under its name from before the rename, once it is written under the new one.
 - `plan_unpack`: What unpacking `source` (a folder with MANIFEST) into `target` would do, without doing it: {"add": [...], "update": [...], "remove": [...], "backup": [...], "same":...
 - `summary`: "3 updated, 1 added, 1 removed (1 edited file kept as .bak first).", or that it is all the same already.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
@@ -39,7 +41,7 @@ The module docstring has the details; this page is the map.
 - `zip_source`: Pack the source in `root` (source_files, with its folders, under one folder named like `root`) into a zip in `folder`, never over a file there ("name (2).zip", ...).
 - `move_save`: Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...).
 - `remove_source`: Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be closing: on Windows a folder in use cannot be removed, so it...
-- `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tier List source".
+- `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source".
 - `existing_source`: A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from that source: T-6 puts it next to tierlist.py), or a folder...
 - `start_source`: Start tierlist.py in `folder` with `python` (and `args`), on its own (not a child of this program, which then closes).
 - `python_for_source`: A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own Python inside, which cannot run loose source files).
@@ -62,6 +64,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - The build checks PyInstaller by importing what the build uses (`PYINSTALLER_CHECK`), repairs an incomplete one, and runs pip and PyInstaller from a neutral folder (reported: "No module named PyInstaller.utils").
+- The rename (Word Tier List -> Word Tierlister, after 1.0.2): every release also carries each program under its old name (`OLD_RELEASE_ASSETS`, copied by the workflow), which 1.0.2 and older look for to update; records under their old names (`OLD_RECORDS`) are still read; a build removes the old-named program beside it (`remove_renamed_program`). Keep the old asset names in every release.
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.

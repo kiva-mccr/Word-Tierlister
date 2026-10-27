@@ -171,7 +171,7 @@ for _ in range(4):
 z_big = app.zoom
 maximize(False, "1000x700")
 assert app.zoom == z_normal < z_big
-long = ("It builds Word Tier List into one program for this computer, next to tierlist.py (a minute or two), then "
+long = ("It builds Word Tierlister into one program for this computer, next to tierlist.py (a minute or two), then "
         "reopens as the program with the same save; Python is no longer needed to run it.")
 dlg = StyledDialog(root, "Source & Updates", "Make this a standalone program?", long, animator=app.anim)
 dlg.button("Not now", dlg.close); dlg.button("Make it", dlg.close, default=True)

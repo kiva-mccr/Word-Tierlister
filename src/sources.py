@@ -53,7 +53,7 @@ from constants import REPO_PAGE, VERSION
 TITLE = "Source & Updates"
 HEADLINE = "Make a standalone program"
 UPDATE = "Update"
-INTRO = ("Builds Word Tier List into one program for this computer, with its source code inside it. It keeps using "
+INTRO = ("Builds Word Tierlister into one program for this computer, with its source code inside it. It keeps using "
          "the same save, and Python is no longer needed to run it. It takes a minute or two; the first time, it "
          "asks to install the builder (PyInstaller, about 15 MB) and anything else the program needs.")
 UNPACK_HEADLINE = "Unpack the source code"
@@ -86,7 +86,7 @@ class SourceDialog:
         self.fetched = None                       # (unpacking) the newer version's source, once downloaded
         form = ("the program, built for this computer" if self.frozen else
                 f"the source code (tierlist.py, in {self.root_dir})")
-        self.dlg = StyledDialog(app.root, TITLE, f"Word Tier List {VERSION}", f"You are running {form}.",
+        self.dlg = StyledDialog(app.root, TITLE, f"Word Tierlister {VERSION}", f"You are running {form}.",
                                 animator=app.anim, wrap_chars=64)
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
@@ -196,7 +196,7 @@ class SourceDialog:
     def _menu_section(self):
         quiet = "a console window" if self.platform.startswith("win") else "a terminal"
         self._heading(self.menu[0].upper() + self.menu[1:])
-        self.menu_line = self.dlg.text(f"Puts Word Tier List in your {self.menu}, so it opens like any other "
+        self.menu_line = self.dlg.text(f"Puts Word Tierlister in your {self.menu}, so it opens like any other "
                                        f"program, without {quiet}.")
         self.menu_row = tk.Frame(self.dlg.body, bg=PALETTE["bg"])
         self.menu_row.pack(anchor="w", pady=(8, 0))
@@ -210,7 +210,7 @@ class SourceDialog:
         if path:
             self.dlg.buttons.pop(self.menu_button).destroy()
             self.menu_row.pack_forget()
-            self.menu_line.config(text=f"Word Tier List is in your {self.menu} now.")
+            self.menu_line.config(text=f"Word Tierlister is in your {self.menu} now.")
             self.dlg.refit()
         return path
 
@@ -530,7 +530,7 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
     if standalone.git_checkout(root_dir) if git is None else git:
         if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
                           f"This folder is a git checkout, so it is updated with git pull, which never touches "
-                          f"your own changes.\n\nIn {root_dir}. Word Tier List then starts again from the new "
+                          f"your own changes.\n\nIn {root_dir}. Word Tierlister then starts again from the new "
                           "source, with the same save.", yes="Update", no="Cancel", parent=dlg.win, wrap_chars=60):
             return None
         ok, said = standalone.git_pull(root_dir)
@@ -553,7 +553,7 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
         plan = standalone.plan_unpack(folder, root_dir)
         if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
                           f"{standalone.summary(plan)}\n\nIn {root_dir}. Only the program's own files change; "
-                          "your save and anything else there stay as they are. Word Tier List then starts again from "
+                          "your save and anything else there stay as they are. Word Tierlister then starts again from "
                           "the new source, with the same save.", yes="Update", no="Cancel", parent=dlg.win,
                           wrap_chars=60):
             return None

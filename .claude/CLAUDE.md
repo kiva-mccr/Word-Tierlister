@@ -1,4 +1,4 @@
-# Word Tier List: project notes for Claude Code
+# Word Tierlister: project notes for Claude Code
 
 A tkinter app that tier-lists (S/A/B/C/D/F) every English word. Words come from English Wiktionary
 (~1M, ranked by wordfreq). Progress autosaves to SQLite and is resumable. Entry point: `tierlist.py`
@@ -103,7 +103,7 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 
 ## Before handing a round over
 Run through `.claude/CHECKLIST.md` and `python tools/check_release.py --tests`; build the zip with
-`python tools/check_release.py --zip word-tierlist.zip` (never copy files by hand, that is how files get
+`python tools/check_release.py --zip word-tierlister.zip` (never copy files by hand, that is how files get
 missed). Keep the README current in the same commit as the change (the user asked for this explicitly).
 
 ## How the user likes to work
@@ -144,7 +144,9 @@ deps.CA_BUNDLES; the update dialog says what went wrong). U-4 (asked for: File >
 & Updates, one panel: Updates on top, then make the program / unpack the source with the update tick; a 404 "Not
 Found" is said to mean the repository is private; it was, and the user has made it public). U-5 (Add to applications menu / Start menu
 moved into Source & Updates, plus a tick when making the program; none on macOS). U-6 (that section only in the
-program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default).
+program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
+the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
+the old data folder, pointer file, records, launcher and shortcut are still found).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -177,7 +179,7 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents
   (scratch only): see OB-6). Never name a module like a PyPI package (src/ is first on the path: "packaging").
   Ask the user's examples of false matches.
-  Tests never go online (WORD_TIERLIST_OFFLINE in tests/_paths.py).
+  Tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
 - IC-2 (gio custom icon) works on Fedora (the user saw it); IC-3 (taskbar) could not be seen here (no GNOME Shell). Earlier:
   IC-2 could not be seen here (no desktop metadata service); confirm on Fedora's GNOME Files.
   ST-8's pkexec / winget installs were only faked in tests.

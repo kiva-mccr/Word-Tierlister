@@ -53,9 +53,9 @@ ran = []
 def run(cmd, **kw):
     ran.append(cmd)
     return type("R", (), {"returncode": 0})()
-assert S.give_icon("/opt/word-tierlist", platform="linux", which=lambda n: "/usr/bin/gio", run=run, home=home)
-kept = os.path.join(home, ".local", "share", "icons", "word-tierlist.png")
-assert ran == [["gio", "set", "/opt/word-tierlist", "metadata::custom-icon", "file://" + kept]]
+assert S.give_icon("/opt/word-tierlister", platform="linux", which=lambda n: "/usr/bin/gio", run=run, home=home)
+kept = os.path.join(home, ".local", "share", "icons", "word-tierlister.png")
+assert ran == [["gio", "set", "/opt/word-tierlister", "metadata::custom-icon", "file://" + kept]]
 assert open(kept, "rb").read() == open(deps.ICON, "rb").read()
 assert not S.give_icon("/opt/x", platform="linux", which=lambda n: None, run=run, home=home)      # (no gio: nothing)
 assert not S.give_icon("C:/x.exe", platform="win32", which=lambda n: "/usr/bin/gio", run=run, home=home)  # (its own)

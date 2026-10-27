@@ -14,7 +14,7 @@ SRC = os.path.join(ROOT, "src")
 for p in (SRC, ROOT):
     if p not in sys.path:
         sys.path.insert(0, p)
-os.environ["WORD_TIERLIST_OFFLINE"] = "1"         # (constants.OFFLINE_ENV; also seen by the program the tests start)
+os.environ["WORD_TIERLISTER_OFFLINE"] = "1"         # (constants.OFFLINE_ENV; also seen by the program the tests start)
 
 TMP = tempfile.mkdtemp(prefix="wtl-test-")
 tempfile.tempdir = TMP                             # (every mkdtemp / NamedTemporaryFile from here on goes inside)

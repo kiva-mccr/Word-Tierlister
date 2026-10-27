@@ -30,7 +30,7 @@ from theme import PALETTE
 from ui_style import apply_ttk_style
 from widgets import StyledDialog
 
-APP_TITLE = "Word Tier List"
+APP_TITLE = "Word Tierlister"
 open_link = webbrowser.open     # how a link in a dialog opens its page (tests replace it)
 REPEAT_SECONDS = 5      # the same error again within this time only goes to the log
 _state = {"open": False, "last_key": None, "last_time": 0.0}

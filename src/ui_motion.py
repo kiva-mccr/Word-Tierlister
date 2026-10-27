@@ -1,4 +1,4 @@
-"""Motion engine for the word tier list (UI-4): easing, colour blending and a tiny animator.
+"""Motion engine for Word Tierlister (UI-4): easing, colour blending and a tiny animator.
 
 Rules every animation here follows (they are the promises in the roadmap guardrails):
     * short: callers pass <= 250 ms, with ease-out so things settle gently;

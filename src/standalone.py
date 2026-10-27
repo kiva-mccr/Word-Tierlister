@@ -1,4 +1,4 @@
-"""Making Word Tier List into a program for this computer (T-6), and what goes into one (T-3, T-7).
+"""Making Word Tierlister into a program for this computer (T-6), and what goes into one (T-3, T-7).
 
     source_files(root)        the complete source: what the zip ships and the program carries inside it
     manifest(root, files)     {"files": {path: sha256}}: what was built from, to tell whether anything changed
@@ -40,11 +40,11 @@ import deps
 from constants import OFFLINE_ENV, REPO, VERSION, plan_line
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top of the project (tierlist.py)
-NAME = "word-tierlist"
-MAC_NAME = "Word Tier List"
+NAME = "word-tierlister"
+MAC_NAME = "Word Tierlister"
 SOURCE_DIR = "source"                          # inside the program: the source it was built from, and MANIFEST
 MANIFEST = "manifest.json"
-SIDE_FILE = ".word-tierlist-build.json"        # beside the program: the manifest of its last build
+SIDE_FILE = ".word-tierlister-build.json"        # beside the program: the manifest of its last build
 # what the source is made of (R-1): the folders that ship, and the files in them that do
 SHIP_DIRS = ("", "src", "tests", "tools", ".claude", "docs", ".github")
 SKIP = {".git", ".venv", "venv", "__pycache__", ".pytest_cache"}
@@ -113,6 +113,19 @@ def program_path(root=ROOT, platform=None):
     return output_path(root, platform)
 
 
+def remove_renamed_program(root, platform=None):
+    """After a build put the program beside `root`: remove one built there under the program's old name
+    (word-tierlist, "Word Tier List.app") and its build record, which the new one replaces."""
+    platform = platform or sys.platform
+    name = OLD_NAME + ".exe" if platform.startswith("win") else OLD_MAC_NAME + ".app" if platform == "darwin" \
+        else OLD_NAME
+    try:
+        _remove(os.path.join(root, name))
+    except OSError:
+        pass
+    remove_old_record(root, SIDE_FILE)
+
+
 def executable(out, platform=None):
     """The file to run inside what was built (the .app's own executable on macOS)."""
     if (platform or sys.platform) == "darwin":
@@ -122,11 +135,7 @@ def executable(out, platform=None):
 
 def last_build(root=ROOT):
     """The manifest of the program beside tierlist.py ({"files": ..., "made": time}), or None."""
-    try:
-        with open(os.path.join(root, SIDE_FILE), encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return None
+    return read_manifest(root, SIDE_FILE)
 
 
 def up_to_date(root=ROOT, platform=None):
@@ -302,6 +311,7 @@ def make_program(root=ROOT, log=print, release=None, place=None):
         shutil.move(out, target)
         shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace: the
                                                   # temporary folder can be on another disk, reported: Errno 18)
+        remove_renamed_program(place or root)
         log(f"  {target}")
         if give_icon(target):
             log("  with its icon (in the file manager)")
@@ -371,7 +381,7 @@ def start(path, popen=subprocess.Popen, args=()):
 
 
 # ---- back to source (T-7): the built program gives its source back ---------------------------------------------------
-UNPACKED = ".word-tierlist-source.json"     # in an unpacked folder: the manifest of what was last unpacked there
+UNPACKED = ".word-tierlister-source.json"     # in an unpacked folder: the manifest of what was last unpacked there
 
 
 def bundled_source():
@@ -390,11 +400,22 @@ def _sha(path):
 
 
 def read_manifest(folder, name=MANIFEST):
+    """The record `name` in `folder` (or under its name from before the rename, OLD_RECORDS), or None."""
+    for n in (name, OLD_RECORDS.get(name)):
+        try:
+            with open(os.path.join(folder, n), encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError, TypeError):
+            pass
+    return None
+
+
+def remove_old_record(folder, name):
+    """Remove the record `name` under its name from before the rename, once it is written under the new one."""
     try:
-        with open(os.path.join(folder, name), encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, ValueError):
-        return None
+        os.remove(os.path.join(folder, OLD_RECORDS[name]))
+    except OSError:
+        pass
 
 
 def plan_unpack(source, target):
@@ -466,6 +487,7 @@ def unpack(source, target, plan=None, from_program=True):
     record[FROM_PROGRAM] = from_program or bool(before and came_from_program(before))
     with open(os.path.join(target, UNPACKED), "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=1, sort_keys=True)
+    remove_old_record(target, UNPACKED)
     return plan
 
 
@@ -492,7 +514,12 @@ def cleanup_place(root=ROOT, platform=None):
     return root if os.access(root, os.W_OK) else None
 
 
-REMOVE_RECORD = ".word-tierlist-remove.json"   # in a source folder to be removed: the files that may go (T-14)
+REMOVE_RECORD = ".word-tierlister-remove.json"   # in a source folder to be removed: the files that may go (T-14)
+# the records' names before the program was called Word Tierlister (1.0.2 and older): still read, so a folder unpacked
+# or built by them, or marked for removal by one being updated, is still known
+OLD_RECORDS = {SIDE_FILE: ".word-tierlist-build.json", UNPACKED: ".word-tierlist-source.json",
+               REMOVE_RECORD: ".word-tierlist-remove.json"}
+OLD_NAME, OLD_MAC_NAME = "word-tierlist", "Word Tier List"     # the program's own names then
 
 
 def mark_for_removal(root=ROOT):
@@ -537,7 +564,8 @@ def move_save(save, folder):
     return dest
 
 
-OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache", REMOVE_RECORD)
+OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_cache", REMOVE_RECORD,
+        *OLD_RECORDS.values())
 
 
 def remove_source(folder, tries=120, wait=0.25):
@@ -552,7 +580,7 @@ def remove_source(folder, tries=120, wait=0.25):
     if not came_from_program(record) and not marked:
         return None
     listed = set((record or {}).get("files", {})) | set((marked or {}).get("files", []))
-    kept = (SIDE_FILE, "tierlist.log") if os.path.exists(program_path(folder)) else ()
+    kept = (SIDE_FILE, OLD_RECORDS[SIDE_FILE], "tierlist.log") if os.path.exists(program_path(folder)) else ()
 
     def ours(rel):
         parts = rel.split("/")
@@ -586,12 +614,12 @@ def remove_source(folder, tries=120, wait=0.25):
 
 
 def default_source_folder(program=None):
-    """Where the source goes unless you pick another folder: beside the program, in "Word Tier List source"."""
+    """Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source"."""
     program = program or (sys.executable if getattr(sys, "frozen", False) else ROOT)
     where = os.path.dirname(program)
     if where.endswith(os.path.join(".app", "Contents", "MacOS")):        # (beside the .app, not inside it)
         where = os.path.dirname(os.path.dirname(os.path.dirname(where)))
-    return os.path.join(where, "Word Tier List source")
+    return os.path.join(where, "Word Tierlister source")
 
 
 def existing_source(program=None):
@@ -608,7 +636,8 @@ def existing_source(program=None):
     for name in names:
         folder = os.path.join(where, name)
         if os.path.isdir(folder) and (os.path.isfile(os.path.join(folder, "tierlist.py"))
-                                      or os.path.isfile(os.path.join(folder, UNPACKED))):
+                                      or any(os.path.isfile(os.path.join(folder, n))
+                                             for n in (UNPACKED, OLD_RECORDS[UNPACKED]))):
             return folder
     return None
 
@@ -645,8 +674,12 @@ def open_folder(path, popen=subprocess.Popen):
 
 # ---- updates (T-8): the newest release on GitHub ---------------------------------------------------------------------
 RELEASES = f"https://api.github.com/repos/{REPO}/releases/latest"
-RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe",   # (the workflow's names;
-                  "darwin": "word-tierlist-macos.zip"}                                      # macOS: the zipped .app)
+RELEASE_ASSETS = {"linux": "word-tierlister-linux", "win32": "word-tierlister-windows.exe",   # (the workflow's names;
+                  "darwin": "word-tierlister-macos.zip"}                                      # macOS: the zipped .app)
+# a release also carries each program under its name from before the rename, which 1.0.2 and older look for (the
+# workflow copies them); this program looks for those too, should a release have only them
+OLD_RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe",
+                      "darwin": "word-tierlist-macos.zip"}
 
 
 def version_tuple(text):
@@ -666,7 +699,7 @@ def read_version(root=ROOT):
 
 def _download(url, timeout=10):
     req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
-                                               "User-Agent": "word-tierlist/" + VERSION})
+                                               "User-Agent": "word-tierlister/" + VERSION})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read()
 
@@ -738,7 +771,7 @@ def fetch_source(release, folder, log=print, fetch=_download):
 
 # ---- U-1: the program updates itself; a git checkout updates with git pull ------------------------------------------
 OLD_SUFFIX = ".old"                    # the program replaced by an update, until the new one removes it
-UPDATE_DIR = ".word-tierlist-update-"  # beside the program while the new one downloads (the same disk: one move)
+UPDATE_DIR = ".word-tierlister-update-"  # beside the program while the new one downloads (the same disk: one move)
 
 
 def _platform_key(platform=None):
@@ -760,13 +793,14 @@ def running_program(platform=None, exe=None, frozen=None):
 
 def program_download(release, platform=None):
     """{"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it)."""
-    return ((release or {}).get("assets") or {}).get(RELEASE_ASSETS.get(_platform_key(platform)))
+    assets, key = (release or {}).get("assets") or {}, _platform_key(platform)
+    return assets.get(RELEASE_ASSETS.get(key)) or assets.get(OLD_RELEASE_ASSETS.get(key))
 
 
 def _download_to(url, dest, log=print, timeout=60):
     """Download `url` into the file `dest` in pieces, saying how far it got ("  3.2 of 25.0 MB (12%)")."""
     req = urllib.request.Request(url, headers={"Accept": "application/octet-stream",
-                                               "User-Agent": "word-tierlist/" + VERSION})
+                                               "User-Agent": "word-tierlister/" + VERSION})
     with urllib.request.urlopen(req, timeout=timeout) as r, open(dest, "wb") as out:
         total, got, shown = int(r.headers.get("Content-Length") or 0), 0, -1
         while True:

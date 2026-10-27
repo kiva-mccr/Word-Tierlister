@@ -55,7 +55,7 @@ names = zipfile.ZipFile(os.path.join(tmp, "out.zip")).namelist()
 for need in ("tierlist.py", "requirements.txt", "README.md", "LICENSE", "src/app.py", "src/widgets.py",
              "tests/run_tests.sh", "tests/_selftest.py", "tests/_paths.py", "tools/check_release.py",
              ".claude/CLAUDE.md", ".claude/CHECKLIST.md"):
-    assert "word-tierlist/" + need in names, (need, names)
+    assert "word-tierlister/" + need in names, (need, names)
 assert not [n for n in names if n.endswith((".db", ".log", ".pyc")) or n.endswith("/tierlist.txt")], names
 assert not [n for n in names if "__pycache__" in n or "/.git/" in n]
 shutil.rmtree(tmp)
