@@ -65,9 +65,6 @@ DEFAULT_TIERS = ("#FFB3C1", "#FFCBA4", "#FFF0A8", "#BDEBC8", "#A9DDF5", "#D5C6F5
 DUSK_TIERS = ("#E6A39A", "#ECBE93", "#E9D79A", "#B6CCA7", "#A6C0D3", "#C2B0D2")      # the dark look's (UI-77)
 TIER_COLORS = list(DEFAULT_TIERS)
 LOOK = {"dark": False}          # the look apply() chose last
-# the colours a tier can be given (UI-61): pastels round the colour wheel, each light enough for the dark ink
-SWATCHES = ("#FFB3C1", "#FFB8A8", "#FFCBA4", "#FFDDA0", "#FFF0A8", "#E2F2A8", "#BDEBC8", "#B5EAE3", "#A9DDF5",
-            "#BFCBF7", "#D5C6F5", "#EBC4F0", "#F7C6DE", "#E3DDD5", "#D2D6DC")
 TIER_TEXT = "#3D3A4B"           # dark ink reads on every tier colour (in the dark look too: the tiers stay pastel)
 # The bars of the tier chart (UI-13) use the tier pastels themselves, drawn like the tier pills (a faint
 # edge of the same hue, so even the pale yellow reads on the cream). By choice, they are not tuned for

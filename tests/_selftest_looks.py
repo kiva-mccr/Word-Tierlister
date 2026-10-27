@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""UI-61, UI-62: the tier colours (Settings > Tier colours...: swatches, a #RRGGBB field, reset) and dark mode (View >
+"""UI-61, UI-62: the tier colours (Settings > Tier colours...: H / S / V bars, a hex code, reset) and dark mode (View >
 Dark mode, not the default). Both are kept in the save and shown by reopening the window with the save still open
 (App.reopen, app.reopen_while_asked): everything reads the palette when it is drawn."""
 import json, os, tempfile, time
@@ -25,14 +25,13 @@ assert theme.TIER_COLORS == ["#112233"] * 6 and theme.PALETTE["bg"] == theme.LIG
 theme.apply(tiers=["nonsense"] * 6)
 assert theme.TIER_COLORS == list(theme.DEFAULT_TIERS) and theme.default_tiers() == theme.DEFAULT_TIERS   # (not colours)
 assert theme.is_hex("#FFB3C1") and not theme.is_hex("FFB3C1") and not theme.is_hex("#FFB3C")
-assert all(theme.is_light(c) for c in theme.SWATCHES)                 # (every swatch takes the dark ink)
 # ---- contrast (UI-76): main and muted text about 7:1 or better on the page and on cards, in both looks; the dark ink
 # (a tier pill's letter and its key) at least WCAG's 4.5:1 on every tier colour there is
 assert round(theme.contrast("#000000", "#FFFFFF"), 1) == 21.0 and theme.contrast("#777777", "#777777") == 1
 for look in (theme.LIGHT, theme.DARK):
     for back in (look["bg"], look["surface"]):
         assert theme.contrast(look["text"], back) >= 7 and theme.contrast(look["muted"], back) >= 6.9, (look, back)
-assert min(theme.contrast(theme.TIER_TEXT, c) for c in theme.SWATCHES + theme.DEFAULT_TIERS + theme.DUSK_TIERS) >= 4.5
+assert min(theme.contrast(theme.TIER_TEXT, c) for c in theme.DEFAULT_TIERS + theme.DUSK_TIERS) >= 4.5
 
 # ---- the window, in a save
 s = T.Store(os.path.join(tempfile.mkdtemp(), "looks.db"))
@@ -57,22 +56,43 @@ app.open_window(); pump(root, 10)
 labels = [it[1] for it in dict(app._menu_items())["View"] if it[0] == "check"]
 assert "Dark mode" in labels and "Tier colours..." in [it[1] for it in dict(app._menu_items())["Settings"]
                                                      if it[0] == "command"]
-# Tier colours: a swatch recolours its tier's pill and field; typing a colour does too; reset puts the defaults back
+# Tier colours (UI-80): click a tier, then its H / S / V bars or a hex code; the bars and the code follow each other
+import tiercolours
 dlg = app.edit_tier_colours(); pump(root)
-dlg.pick(0, theme.SWATCHES[8]); pump(root)
-assert dlg.vars[0].get() == theme.SWATCHES[8] and dlg.chips[0]._color == theme.SWATCHES[8]
-assert dlg.strips[0].find_withtag("ring")                              # (the chosen swatch marked)
-dlg.vars[1].set("#ABCDEF"); pump(root)
-assert dlg.colors[1] == "#ABCDEF" and not dlg.strips[1].find_withtag("ring")      # (typed: no swatch marked)
-dlg.vars[2].set("#12"); dlg.apply(); pump(root)
-assert dlg.dlg.alive() and "#RRGGBB" in dlg.note.cget("text") and not app.reopening     # (not a colour: it says so)
+assert dlg.current == 0 and dlg.var.get() == theme.DEFAULT_TIERS[0]
+assert dlg.pills.itemcget("ring0", "outline") and not dlg.pills.itemcget("ring1", "outline")   # (S wears the ring)
+dlg.select(4); pump(root)
+assert dlg.var.get() == theme.DEFAULT_TIERS[4] and dlg.pills.itemcget("ring4", "outline")
+assert not dlg.pills.itemcget("ring0", "outline")
+_h, s_, v = dlg.hsv[4]
+dlg.drag(0, dlg._knob // 2 + 1 + dlg._bar_w * 0.5); pump(root)        # (H to the middle: cyan, S and V kept)
+assert abs(dlg.hsv[4][0] - 0.5) < 0.01 and dlg.hsv[4][1:] == [s_, v]
+assert dlg.var.get() == dlg.colors[4] == tiercolours.to_hex(dlg.hsv[4])          # (the code follows the bars)
+assert dlg.pills.itemcget("pill4", "fill") == dlg.colors[4]
+assert dlg.readings[0].cget("text") == "180°"
+dlg.var.set("ABCDEF"); pump(root)                                    # (typed, the # left out: the bars follow)
+assert dlg.colors[4] == "#ABCDEF" and dlg.var.get() == "ABCDEF"      # (what is being typed is left alone)
+assert tiercolours.to_hex(dlg.hsv[4]) == "#ABCDEF" and dlg.apply_button._enabled
+dlg.var.set("#12"); pump(root)                                       # (not a colour: it says so, Apply waits)
+assert "#RRGGBB" in dlg.note.cget("text") and not dlg.apply_button._enabled and dlg.colors[4] == "#ABCDEF"
+hue_sat = dlg.hsv[4][:2]
+dlg.drag(2, 0); pump(root)                                           # (V to 0: black, the hue and saturation kept)
+assert dlg.colors[4] == "#000000" and dlg.var.get() == "#000000" and dlg.hsv[4][:2] == hue_sat
+assert "Too dark" in dlg.note.cget("text") and "D" in dlg.note.cget("text") and not dlg.apply_button._enabled
+dlg.apply(); pump(root)
+assert dlg.dlg.alive() and not app.reopening                         # (too dark: Apply waits)
+dlg.var.set("#000000"); dlg.var.set("#808080"); pump(root)            # (a grey keeps the hue it had)
+assert dlg.hsv[4][0] == hue_sat[0] and dlg.colors[4] == "#808080"
 dlg.reset(); pump(root)
-assert dlg.colors == list(theme.DEFAULT_TIERS)
+assert dlg.colors == list(theme.DEFAULT_TIERS) and not dlg.note.cget("text") and dlg.apply_button._enabled
 dlg.apply(); pump(root)                                               # (nothing changed: closes, no reopening)
 assert not dlg.dlg.alive() and not app.reopening
+assert tiercolours.too_dark("#696145") and not any(tiercolours.too_dark(c) for c in theme.DEFAULT_TIERS + theme.DUSK_TIERS)
+assert tiercolours.to_hsv("#808080", [0.25, 0.5, 0.9])[0] == 0.25 and tiercolours.to_hsv("#000000", [0.25, 0.5, 0.9])[:2] == [0.25, 0.5]
 # applying new colours: saved, the window reopens in them (the save stays open), and the pills wear them
+PICK = "#A9DDF5"
 dlg = app.edit_tier_colours(); pump(root)
-dlg.pick(0, theme.SWATCHES[8])
+dlg.var.set(PICK)
 
 
 def check_reopened():
@@ -84,8 +104,8 @@ def check_reopened():
         results["first_gone"] = not first_root.winfo_exists()
     except tk.TclError:                               # (its interpreter is gone: destroyed)
         results["first_gone"] = True
-    assert theme.TIER_COLORS[0] == theme.SWATCHES[8] and theme.PALETTE["bg"] == theme.LIGHT["bg"]
-    assert app2.tier_row.buttons[0]._fill == theme.SWATCHES[8]
+    assert theme.TIER_COLORS[0] == PICK and theme.PALETTE["bg"] == theme.LIGHT["bg"]
+    assert app2.tier_row.buttons[0]._fill == PICK
     app2.dark_var.set(True); app2.toggle_dark()
 
 
@@ -130,7 +150,7 @@ assert results["dark_bg"] == theme.DARK["bg"] and results["store_open"] == "1", 
 assert results["pill_ink"] == theme.TIER_TEXT                          # (a tier pill keeps the dark ink)
 assert results["key_ink"].upper() == theme.TIER_TEXT                  # (its key too, UI-76: paler, it failed WCAG)
 assert results["light_bg"] == theme.LIGHT["bg"] and not last.reopening
-assert results["meta"] == ("0", theme.SWATCHES[8])
+assert results["meta"] == ("0", PICK)
 # asked for (closing and opening again was jarring): the new window is built while the old one is still on screen,
 # takes its place and size and its Browse window, and only then does the old one close
 assert results["old_up"] and results["first_gone"] and results["browse"], results

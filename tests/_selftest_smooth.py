@@ -130,5 +130,13 @@ cv.delete(word)
 assert word not in cv._ink and not cv.find_withtag("inkguard")                      # (gone with its word)
 cv.create_text(10, 10, text="jam", font=big); cv.delete("all")
 assert not cv._ink
+# a gradient bar (UI-80's H / S / V tracks): each column its own colour inside, the canvas colour outside the rounded ends
+cols = [(x * 2, 100, 255 - x * 2) for x in range(120)]
+img = SM.gradient_image(cv, 120, 14, cols, "#E6DFEA")
+assert (img.width(), img.height()) == (122, 16)
+assert img.get(61, 8) == cols[60] and img.get(101, 8) == cols[100]                   # (column x at image x + 1)
+bg = tuple(v // 257 for v in cv.winfo_rgb(cv.cget("bg")))
+assert img.get(0, 0) == bg and img.get(121, 15) == bg                               # (corners outside: the backdrop)
+assert img.get(61, 0) != cols[60] and img.get(61, 1) != cols[60]                    # (a soft hairline edge on top)
 root.destroy()
 print("SMOOTH OK")
