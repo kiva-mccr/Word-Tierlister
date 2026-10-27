@@ -278,7 +278,7 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   stays in the terminal and says why.
 - **Add to applications menu** (Linux; in File > Source & Updates, in the program, until it is there) puts Word
   Tier List in your desktop's applications menu, so it starts with no terminal at all. Making the program from
-  source has a tick that does the same for the new program; if Word Tier List is in the menu already, the menu
+  source has a tick, on to start with, that does the same for the new program; if Word Tier List is in the menu already, the menu
   moves over to the new program by itself. On Windows it is **Add to Start menu**: a shortcut in your own Start menu (no administrator needed), which starts it
   with no console window and shows its icon (`deps.add_to_start_menu`, made by Windows' own PowerShell).
 - The taskbar shows the program's icon: on Linux every start keeps a launcher for it
