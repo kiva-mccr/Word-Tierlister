@@ -3,11 +3,11 @@
 Tier-list every English word (S / A / B / C / D / F). Progress autosaves to SQLite after every
 action and resumes automatically, even if you replace these files.
 
-**Download the program** (no Python needed): [for Windows](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-windows.exe)
-· [for Linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-linux)
-· [for macOS](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlist-macos.zip) (Apple Silicon)
+**Download the program** (no Python needed): [for Windows](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-windows.exe)
+· [for Linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-linux)
+· [for macOS](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-macos.zip) (Apple Silicon)
 · [all releases](https://github.com/kiva-mccr/Word-Tierlister/releases). Put it in a folder of its own: it keeps
-its save beside itself. On Linux, make it runnable first (`chmod +x word-tierlist-linux`). Windows may warn that it
+its save beside itself. On Linux, make it runnable first (`chmod +x word-tierlister-linux`). Windows may warn that it
 does not know the program (it is not signed): More info > Run anyway. On macOS, unzip it; the first time, System
 Settings > Privacy & Security > Open Anyway. Or run it from source:
 
@@ -80,7 +80,7 @@ tools/             check_release.py (pre-hand-off checks, builds the zip), layou
 `tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
 replacing the other folders never loses your list. A built program (File > Source & Updates, or `tools/build.py`) keeps it next to
 the program instead (on macOS next to the .app), or, if that folder is read-only, in your user data folder
-(`%APPDATA%\Word Tier List`, `~/Library/Application Support/Word Tier List`, `~/.local/share/word-tierlist`);
+(`%APPDATA%\Word Tierlister`, `~/Library/Application Support/Word Tierlister`, `~/.local/share/word-tierlister`);
 either way the save you used last is found again, so switching between the two loses nothing.
 
 ## Files
@@ -239,8 +239,8 @@ to check them, is archived (see the roadmap's OB-3 / OB-4).
 
 ## Building a program
 
-`python tools/build.py` turns the source into a program for the system it runs on (`dist/word-tierlist` on
-Linux, `dist/word-tierlist.exe` on Windows, `dist/Word Tier List.app` on macOS; about 25 MB). It installs
+`python tools/build.py` turns the source into a program for the system it runs on (`dist/word-tierlister` on
+Linux, `dist/word-tierlister.exe` on Windows, `dist/Word Tierlister.app` on macOS; about 25 MB). It installs
 PyInstaller first if it is missing. Add `--check` to start the new program for a moment afterwards. The program
 keeps its save next to itself (or in your user data folder when that folder is read-only) and finds the save you
 used from source, so switching loses nothing. PyInstaller cannot build for another system: build on each one,
@@ -248,7 +248,7 @@ or on GitHub:
 
 - `python tools/build.py --all` builds for Linux, Windows and macOS at once on GitHub's machines (the "Build
   programs" workflow, `.github/workflows/build.yml`, also on the Actions tab's Run workflow button), waits, and
-  fetches `word-tierlist-linux`, `word-tierlist-windows.exe` and `word-tierlist-macos.zip` into `dist/`. It needs your commits pushed and GitHub's
+  fetches `word-tierlister-linux`, `word-tierlister-windows.exe` and `word-tierlister-macos.zip` into `dist/`. It needs your commits pushed and GitHub's
   command-line tool logged in (`gh auth login`); without them it says what is missing and builds for this
   computer only. GitHub only starts the workflow once it is on the repository's default branch.
 - **Publishing a release** (what the download links above point to): set `VERSION` in `src/constants.py` and get
@@ -277,12 +277,12 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   (`--console` keeps the terminal attached and prints there). If the window cannot open (no desktop), it
   stays in the terminal and says why.
 - **Add to applications menu** (Linux; in File > Source & Updates, in the program, until it is there) puts Word
-  Tier List in your desktop's applications menu, so it starts with no terminal at all. Making the program from
-  source has a tick, on to start with, that does the same for the new program; if Word Tier List is in the menu already, the menu
+  Tierlister in your desktop's applications menu, so it starts with no terminal at all. Making the program from
+  source has a tick, on to start with, that does the same for the new program; if Word Tierlister is in the menu already, the menu
   moves over to the new program by itself. On Windows it is **Add to Start menu**: a shortcut in your own Start menu (no administrator needed), which starts it
   with no console window and shows its icon (`deps.add_to_start_menu`, made by Windows' own PowerShell).
 - The taskbar shows the program's icon: on Linux every start keeps a launcher for it
-  (`~/.local/share/applications/word-tierlist.desktop`, out of the menu until you add it), which is how desktops
+  (`~/.local/share/applications/word-tierlister.desktop`, out of the menu until you add it), which is how desktops
   such as GNOME know a window's icon.
 
 ## Updating
@@ -308,8 +308,8 @@ Updating from inside the program only works while the repository is public.
 
 ## Making it a program
 
-Below the Updates section, File > Source & Updates... (when running `tierlist.py`) makes Word Tier List into one program for this computer:
-`word-tierlist` on Linux, `word-tierlist.exe` on Windows, `Word Tier List.app` on macOS, next to `tierlist.py`,
+Below the Updates section, File > Source & Updates... (when running `tierlist.py`) makes Word Tierlister into one program for this computer:
+`word-tierlister` on Linux, `word-tierlister.exe` on Windows, `Word Tierlister.app` on macOS, next to `tierlist.py`,
 so it keeps using the same save and no longer needs Python. It takes a minute or two, then starts the new program
 and closes this window. First it checks that what the build needs is installed: the builder (PyInstaller, about
 15 MB), wordfreq, and nltk if you want offline definitions in the program. Anything missing is offered in one
@@ -320,7 +320,7 @@ complete source inside it. If nothing has changed since the last build, it offer
 
 The first time each form starts, it offers the other once, when nothing else is being asked: `tierlist.py` asks
 "Make this a standalone program?" (yes builds it and reopens as it). The program does not ask: its first start
-unpacks its source into "Word Tier List source" beside it and says so, unless a copy of the source is there
+unpacks its source into "Word Tierlister source" beside it and says so, unless a copy of the source is there
 already (it sits next to `tierlist.py`, or a folder beside it holds one, whatever its name). Both are remembered in
 the save and stay in File > Source & Updates. Not done when a program already sits next to `tierlist.py`, nor
 with `--no-install`.
@@ -333,11 +333,11 @@ the version you have. Your save is never touched.
 
 Running from source, the Updates section's **Update** downloads the newer version and brings this folder up to
 date with it, without making the program (what it will change is shown first; only the
-program's own files change, a file you edited is kept as `.bak` first), then Word Tier List starts again from the
+program's own files change, a file you edited is kept as `.bak` first), then Word Tierlister starts again from the
 new source with the same save. In a git checkout it runs `git pull` instead.
 
 In the program, the same panel gives the source back: **Unpack the source code** writes it into a folder
-(beside the program, "Word Tier List source", or one you pick), laid out like this repository. Unpacking into a
+(beside the program, "Word Tierlister source", or one you pick), laid out like this repository. Unpacking into a
 folder you unpacked into before brings it up to date: changed files are updated, new ones added and ones the program
 no longer has removed. Only the program's own files are touched (your save, its log or a .venv never are), and a
 file you edited there is kept as `name.bak` first. What it will do is shown before it does it. Then the folder opens

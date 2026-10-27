@@ -18,18 +18,33 @@ from constants import VERSION
 answer = {"tag_name": "v9.1.0", "zipball_url": "zip", "html_url": "page",
           "assets": [{"name": n, "browser_download_url": "https://dl/" + n, "size": 5} for n in S.RELEASE_ASSETS.values()]
           + [{"name": "odd"}]}
-offline = os.environ.pop("WORD_TIERLIST_OFFLINE")
+offline = os.environ.pop("WORD_TIERLISTER_OFFLINE")
 try:
     release = S.latest_release(lambda url, timeout=10: json.dumps(answer).encode())
 finally:
-    os.environ["WORD_TIERLIST_OFFLINE"] = offline
+    os.environ["WORD_TIERLISTER_OFFLINE"] = offline
 assert sorted(release["assets"]) == sorted(S.RELEASE_ASSETS.values()), release
-assert S.program_download(release, "win32")["url"] == "https://dl/word-tierlist-windows.exe"
+assert S.program_download(release, "win32")["url"] == "https://dl/word-tierlister-windows.exe"
 assert S.program_download(release, "linux")["size"] == 5 and S.program_download(release, "darwin")
 assert S.program_download(release, "sunos5") is None and S.program_download(None) is None
+# the rename: a release has each program under its old name too (1.0.2 and older look for it); one with only those
+# names still updates this program
+old_names = {"assets": {n: {"url": "https://dl/" + n, "size": 5} for n in S.OLD_RELEASE_ASSETS.values()}}
+assert S.program_download(old_names, "linux")["url"] == "https://dl/word-tierlist-linux"
+assert set(S.OLD_RELEASE_ASSETS.values()).isdisjoint(S.RELEASE_ASSETS.values())
+# ... the records a source folder or a build kept under the old names still count, and the old-named program and
+# its record go once one is built under the new name
+folder = tempfile.mkdtemp()
+json.dump({"files": {"a": 1}}, open(os.path.join(folder, ".word-tierlist-source.json"), "w"))
+json.dump({"made": 1}, open(os.path.join(folder, ".word-tierlist-build.json"), "w"))
+assert S.read_manifest(folder, S.UNPACKED) == {"files": {"a": 1}} and S.last_build(folder) == {"made": 1}
+assert S.read_manifest(folder, "missing.json") is None
+open(os.path.join(folder, "word-tierlist"), "w").close()
+S.remove_renamed_program(folder, platform="linux")
+assert sorted(os.listdir(folder)) == [".word-tierlist-source.json"]
 assert S.running_program(frozen=False) is None                                     # (from source: no program)
-assert S.running_program("linux", "/opt/w/word-tierlist", True) == "/opt/w/word-tierlist"
-assert S.running_program("darwin", "/A/Word Tier List.app/Contents/MacOS/Word Tier List", True) == "/A/Word Tier List.app"
+assert S.running_program("linux", "/opt/w/word-tierlister", True) == "/opt/w/word-tierlister"
+assert S.running_program("darwin", "/A/Word Tierlister.app/Contents/MacOS/Word Tierlister", True) == "/A/Word Tierlister.app"
 
 # downloading it: the Linux / Windows file made runnable; a short download refused; macOS: the .app out of its zip
 def downloader(data):
@@ -38,7 +53,7 @@ def downloader(data):
     return download
 d = tempfile.mkdtemp()
 got = S.fetch_program(release, d, log=lambda t: None, platform="linux", download=downloader(b"12345"))
-assert got == os.path.join(d, "word-tierlist-linux") and os.access(got, os.X_OK)
+assert got == os.path.join(d, "word-tierlister-linux") and os.access(got, os.X_OK)
 for bad in (b"12", b""):
     try:
         S.fetch_program(release, tempfile.mkdtemp(), log=lambda t: None, platform="win32", download=downloader(bad))
@@ -52,27 +67,27 @@ except OSError as exc:
     assert "no program for this computer" in str(exc)
 buf = io.BytesIO()
 with zipfile.ZipFile(buf, "w") as z:
-    info = zipfile.ZipInfo("Word Tier List.app/Contents/MacOS/Word Tier List"); info.external_attr = 0o755 << 16
+    info = zipfile.ZipInfo("Word Tierlister.app/Contents/MacOS/Word Tierlister"); info.external_attr = 0o755 << 16
     z.writestr(info, "app")
-    z.writestr("Word Tier List.app/Contents/Info.plist", "plist")
+    z.writestr("Word Tierlister.app/Contents/Info.plist", "plist")
 mac = buf.getvalue()
-release_mac = dict(release, assets=dict(release["assets"], **{"word-tierlist-macos.zip": {"url": "u", "size": len(mac)}}))
+release_mac = dict(release, assets=dict(release["assets"], **{"word-tierlister-macos.zip": {"url": "u", "size": len(mac)}}))
 d = tempfile.mkdtemp()
 got = S.fetch_program(release_mac, d, log=lambda t: None, platform="darwin", download=downloader(mac))
-assert got == os.path.join(d, "Word Tier List.app") and os.listdir(d) == ["Word Tier List.app"]
+assert got == os.path.join(d, "Word Tierlister.app") and os.listdir(d) == ["Word Tierlister.app"]
 assert os.access(S.executable(got, "darwin"), os.X_OK)
 
 # swapping it in: the old one kept beside it, removed as the new one starts (with any download folder left over)
 where = tempfile.mkdtemp()
-prog = os.path.join(where, "word-tierlist")
+prog = os.path.join(where, "word-tierlister")
 open(prog, "w").write("old"); open(os.path.join(where, "tierlist.db"), "w").write("save")
 folder = S.update_folder(prog)
 assert os.path.dirname(folder) == where and os.path.basename(folder).startswith(S.UPDATE_DIR)
-new = os.path.join(folder, "word-tierlist-linux"); open(new, "w").write("new")
+new = os.path.join(folder, "word-tierlister-linux"); open(new, "w").write("new")
 old = S.replace_program(new, prog)
 assert open(prog).read() == "new" and open(old).read() == "old" and old == prog + S.OLD_SUFFIX
 assert S.remove_old_program(prog, tries=1) == 2                                     # (the .old and the folder)
-assert sorted(os.listdir(where)) == ["tierlist.db", "word-tierlist"]
+assert sorted(os.listdir(where)) == ["tierlist.db", "word-tierlister"]
 assert S.remove_old_program(prog, tries=1) == 0
 # a swap that fails puts the old one back
 real_move = S.shutil.move
@@ -87,7 +102,7 @@ finally:
 assert open(prog).read() == "new" and not os.path.exists(prog + S.OLD_SUFFIX)
 # a folder that cannot be written to: no update folder (then it says so before downloading anything)
 try:
-    S.update_folder(os.path.join(where, "missing", "word-tierlist")); raise AssertionError("should have failed")
+    S.update_folder(os.path.join(where, "missing", "word-tierlister")); raise AssertionError("should have failed")
 except OSError:
     pass
 
@@ -164,11 +179,11 @@ d.buttons["Open the release page"].invoke(); assert links == ["page"]
 d.close()
 # in the program: Update downloads beside it, swaps it in and starts it on the same save; this window closes
 where = tempfile.mkdtemp()
-prog = os.path.join(where, "word-tierlist.exe"); open(prog, "w").write("old")
+prog = os.path.join(where, "word-tierlister.exe"); open(prog, "w").write("old")
 fetched = []
 def fetch(r, folder, log):
     fetched.append((r["version"], os.path.dirname(folder)))
-    p = os.path.join(folder, "word-tierlist-windows.exe"); open(p, "w").write("new"); return p
+    p = os.path.join(folder, "word-tierlister-windows.exe"); open(p, "w").write("new"); return p
 S.running_program = lambda: prog
 real_fetch, S.fetch_program = S.fetch_program, fetch
 d = Dialog(check=lambda: release, frozen=True); settle(d, root)
@@ -178,7 +193,7 @@ save = app.store.path
 d.buttons["Update"].invoke(); pump(root, 3)
 assert fetched == [("9.1.0", where)] and open(prog).read() == "new" and open(prog + S.OLD_SUFFIX).read() == "old"
 assert started == [(prog, ["--db", save])] and gone(root) and not errors_shown
-assert sorted(os.listdir(where)) == ["word-tierlist.exe", "word-tierlist.exe.old"]          # (no download folder left)
+assert sorted(os.listdir(where)) == ["word-tierlister.exe", "word-tierlister.exe.old"]          # (no download folder left)
 s = T.Store(save); assert s.get_meta(sources.UPDATED_FROM) == VERSION; s.close()
 # the download fails: says so, nothing changes, the window stays
 root, app = window()
@@ -187,7 +202,7 @@ S.fetch_program = lambda r, folder, log: (_ for _ in ()).throw(OSError("no netwo
 d = Dialog(check=lambda: release, frozen=True); settle(d, root)
 d.buttons["Update"].invoke(); pump(root, 3)
 assert errors_shown == ["Not updated"] and open(prog).read() == "new" and d.alive() and not gone(root)
-assert sorted(os.listdir(where)) == ["word-tierlist.exe", "word-tierlist.exe.old"]
+assert sorted(os.listdir(where)) == ["word-tierlister.exe", "word-tierlister.exe.old"]
 d.close()
 # from source, a git checkout: git pull, then it starts again from the source on the same save
 errors_shown.clear(); started.clear()

@@ -314,7 +314,7 @@ assert old.get_meta("rude_done") == "list" and old.obscene_words() == {"bitch", 
 assert W.queue_steps(old) == []
 # the background read (App._start_rude_read): never while offline (as in every test), else once in a while
 assert not W.wants_rude_fetch(old)
-off = os.environ.pop("WORD_TIERLIST_OFFLINE")
+off = os.environ.pop("WORD_TIERLISTER_OFFLINE")
 try:
     assert W.wants_rude_fetch(old)
     old.set_meta("rude_tried", time.time())
@@ -322,7 +322,7 @@ try:
     old.set_meta("rude_tried", time.time() - W.RUDE_RETRY_S - 1)
     assert W.wants_rude_fetch(old)
 finally:
-    os.environ["WORD_TIERLIST_OFFLINE"] = off
+    os.environ["WORD_TIERLISTER_OFFLINE"] = off
 # ... it reads the meanings of the save's words from the download (a plain file here), scores them on its thread,
 # and the App writes the result a few thousand rows at a time
 dump = os.path.join(tmp, "rude.jsonl")

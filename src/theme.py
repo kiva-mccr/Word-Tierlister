@@ -1,4 +1,4 @@
-"""Colour palette for the word tier list (UI-1). Pure data + tiny helpers: no tkinter import,
+"""Colour palette for Word Tierlister (UI-1). Pure data + tiny helpers: no tkinter import,
 so it can be tested anywhere. Light by default; a dark one with the same keys (UI-62), and the tier colours can be
 chosen (UI-61). apply(dark, tiers) changes PALETTE, TIER_COLORS and TIER_ROW in place before a window is built
 (the App reopens its window to show a change): take colours from them when drawing, never copy one at import."""

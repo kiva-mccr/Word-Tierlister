@@ -43,7 +43,7 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
       later steps updated, no stale names (renamed functions, test files).
 - [ ] README: file map, layers, any new command-line option or behaviour.
 - [ ] `.claude/CLAUDE.md`: Status line (done / next) and Known gaps are current.
-- [ ] Zip built with `python tools/check_release.py --zip word-tierlist.zip` (not copied by hand), then the
+- [ ] Zip built with `python tools/check_release.py --zip word-tierlister.zip` (not copied by hand), then the
       file list looked at: every module, `requirements.txt`, `CLAUDE.md`, `CHECKLIST.md`, the tests,
       and no `.db`, `.log` or caches.
 - [ ] Summary to the user: what changed, what was verified and how, what was NOT verified (and why),

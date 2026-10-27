@@ -17,7 +17,7 @@ import time
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [HERE, os.path.join(HERE, "src")]
-os.environ.setdefault("WORD_TIERLIST_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
+os.environ.setdefault("WORD_TIERLISTER_OFFLINE", "1")      # (a throwaway save: no downloads, no lookups online)
 
 ACTION_MS, BROWSE_MS = 40, 200
 

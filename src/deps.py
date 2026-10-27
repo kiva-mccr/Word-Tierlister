@@ -191,7 +191,7 @@ def _hidden():
 # --------------------------------------------------------------------------
 # Stage 1: the terminal, before any window (ST-4)
 # --------------------------------------------------------------------------
-REEXEC_ENV = "WORD_TIERLIST_RESTARTED"      # set when we restart ourselves, so a restart never loops
+REEXEC_ENV = "WORD_TIERLISTER_RESTARTED"      # set when we restart ourselves, so a restart never loops
 
 
 def tk_available():
@@ -369,7 +369,7 @@ def terminal_setup(argv, ask=input, out=print, run=subprocess.call, has_tk=None,
         return True
     tk_cmd = tk_command if tk_command is not None else tk_install_command()
     out("")
-    out(f"Word Tier List needs tkinter, {PURPOSE['tkinter']}, to open its window.")
+    out(f"Word Tierlister needs tkinter, {PURPOSE['tkinter']}, to open its window.")
     out(f"More about it: {HOMEPAGE['tkinter']}")
     if not tk_cmd:
         raise SystemExit("tkinter cannot be installed from here. " + tk_advice())
@@ -417,7 +417,7 @@ def wants_terminal_setup(no_install):
 # --------------------------------------------------------------------------
 # ST-5: give the terminal back (Linux / macOS), and a launcher in the applications menu (Linux)
 # --------------------------------------------------------------------------
-DETACHED_ENV = "WORD_TIERLIST_DETACHED"     # set in the copy started in its own session (so it never loops)
+DETACHED_ENV = "WORD_TIERLISTER_DETACHED"     # set in the copy started in its own session (so it never loops)
 DETACH_WAIT = 1.5                           # seconds the terminal waits to see the new copy get going
 
 
@@ -490,7 +490,7 @@ def detach_terminal(argv, out=print, popen=subprocess.Popen, wait=DETACH_WAIT, c
                 out(said or f"The program stopped straight away (exit code {code}).")
             return code
         sleep(0.05)
-    out("Word Tier List is open in its own window: you can close this terminal. "
+    out("Word Tierlister is open in its own window: you can close this terminal. "
         "(Messages go to tierlist.log next to your save; --console keeps them here.)")
     return 0
 
@@ -499,13 +499,13 @@ ICON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", "icon-2
 
 
 def kept_icon(home=None):
-    """The program's icon copied where it stays (~/.local/share/icons/word-tierlist.png: a built program's own copy
+    """The program's icon copied where it stays (~/.local/share/icons/word-tierlister.png: a built program's own copy
     is in a folder that is gone once it closes), for a launcher or a file's custom icon; its path, or None."""
     if not os.path.exists(ICON):
         return None
     home = home or os.path.expanduser("~")
     data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
-    icon = os.path.join(data, "icons", "word-tierlist.png")
+    icon = os.path.join(data, "icons", "word-tierlister.png")
     try:
         os.makedirs(os.path.dirname(icon), exist_ok=True)
         shutil.copyfile(ICON, icon)
@@ -514,7 +514,7 @@ def kept_icon(home=None):
     return icon
 
 
-def desktop_entry(python, script, name="Word Tier List", icon="accessories-dictionary", hidden=False):
+def desktop_entry(python, script, name="Word Tierlister", icon="accessories-dictionary", hidden=False):
     """The text of a Linux .desktop launcher that starts the program with no terminal (`script` None: a built
     program, started by itself); `icon`: a picture's path, or the name of one the desktop has. StartupWMClass
     names the windows' class (constants.WM_CLASS), which is how the taskbar knows their icon; `hidden`: kept out
@@ -529,10 +529,24 @@ def desktop_entry(python, script, name="Word Tier List", icon="accessories-dicti
         *(["NoDisplay=true"] if hidden else []), ""])
 
 
-def launcher_path(home=None):
+def launcher_path(home=None, name="word-tierlister"):
     home = home or os.path.expanduser("~")
     data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
-    return os.path.join(data, "applications", "word-tierlist.desktop")
+    return os.path.join(data, "applications", name + ".desktop")
+
+
+OLD_NAME = "word-tierlist"     # the launcher's and icon's names until 1.0.2 (the program was "Word Tier List")
+
+
+def remove_old_launcher(home=None):
+    """Remove the launcher and icon kept under the program's old name, once the new launcher is written."""
+    home = home or os.path.expanduser("~")
+    data = os.environ.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share")
+    for path in (launcher_path(home, OLD_NAME), os.path.join(data, "icons", OLD_NAME + ".png")):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def ensure_launcher(python, script, home=None, platform=None):
@@ -544,11 +558,14 @@ def ensure_launcher(python, script, home=None, platform=None):
     if not (platform or sys.platform).startswith("linux"):
         return None
     path = launcher_path(home)
-    try:
-        with open(path, encoding="utf-8") as f:
-            hidden = "NoDisplay=true" in f.read()
-    except OSError:
-        hidden = True                             # (none yet: only for the taskbar until it is asked for)
+    hidden = True                                 # (none yet: only for the taskbar until it is asked for)
+    for was in (path, launcher_path(home, OLD_NAME)):         # (one under the old name: still in the menu or not)
+        try:
+            with open(was, encoding="utf-8") as f:
+                hidden = "NoDisplay=true" in f.read()
+            break
+        except OSError:
+            pass
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         text = desktop_entry(python, script, icon=kept_icon(home) or "accessories-dictionary", hidden=hidden)
@@ -557,6 +574,7 @@ def ensure_launcher(python, script, home=None, platform=None):
         os.chmod(path, 0o755)
     except OSError:
         return None
+    remove_old_launcher(home)
     return path
 
 
@@ -568,33 +586,36 @@ def add_to_menu(python, script, home=None):
     folder = os.path.join(data, "applications")
     os.makedirs(folder, exist_ok=True)
     icon = kept_icon(home) or "accessories-dictionary"
-    path = os.path.join(folder, "word-tierlist.desktop")
+    path = os.path.join(folder, "word-tierlister.desktop")
     was = os.path.exists(path)
     with open(path, "w", encoding="utf-8") as f:
         f.write(desktop_entry(python, script, icon=icon))
     os.chmod(path, 0o755)
+    remove_old_launcher(home)
     return path, "updated" if was else "added"
 
 
 def menu_name(platform=None):
     """What the desktop's list of programs is called here: "applications menu" (Linux), "Start menu" (Windows), or
-    None where Word Tier List cannot add itself (macOS: an app goes in the Applications folder by hand)."""
+    None where Word Tierlister cannot add itself (macOS: an app goes in the Applications folder by hand)."""
     platform = platform or sys.platform
     return ("applications menu" if platform.startswith("linux") else "Start menu" if platform.startswith("win")
             else None)
 
 
 def in_menu(platform=None, home=None, appdata=None):
-    """True if Word Tier List is in the applications menu / Start menu already (Linux: the launcher that every
+    """True if Word Tierlister is in the applications menu / Start menu already (Linux: the launcher that every
     start keeps for the taskbar counts only once it is shown, not NoDisplay)."""
     platform = platform or sys.platform
     if platform.startswith("win"):
-        return os.path.exists(start_menu_path(appdata))
-    try:
-        with open(launcher_path(home), encoding="utf-8") as f:
-            return "NoDisplay=true" not in f.read()
-    except OSError:
-        return False
+        return any(os.path.exists(start_menu_path(appdata, n)) for n in ("Word Tierlister", "Word Tier List"))
+    for path in (launcher_path(home), launcher_path(home, OLD_NAME)):    # (the old name's until a start renames it)
+        try:
+            with open(path, encoding="utf-8") as f:
+                return "NoDisplay=true" not in f.read()
+        except OSError:
+            pass
+    return False
 
 
 # Windows (asked for): Add to Start menu, a shortcut in the user's own Start menu
@@ -607,10 +628,11 @@ SHORTCUT_PS = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:W
                "$s.Description = 'Tier-list every English word, at your own pace'; $s.Save()")
 
 
-def start_menu_path(appdata=None):
-    """Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed)."""
+def start_menu_path(appdata=None, name="Word Tierlister"):
+    """Where the Start menu shortcut goes: the user's own Programs folder (no administrator needed). `name`: "Word
+    Tier List" for the one made before the rename (1.0.2 and older), which a new one replaces."""
     appdata = appdata or os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
-    return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+    return os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", name + ".lnk")
 
 
 def shortcut_parts(python, script, exists=os.path.exists):
@@ -637,4 +659,11 @@ def add_to_start_menu(python, script, appdata=None, run=subprocess.run):
         raise OSError(f"PowerShell could not be started ({exc})") from exc
     if r.returncode != 0 or not os.path.exists(path):
         raise OSError((r.stderr or r.stdout or "").strip() or "the shortcut was not written")
+    old = start_menu_path(appdata, "Word Tier List")
+    if os.path.exists(old):
+        was = True
+        try:
+            os.remove(old)
+        except OSError:
+            pass
     return path, "updated" if was else "added"

@@ -184,7 +184,7 @@ class App:
 
         init_fonts(root)
         apply_ttk_style(root)
-        root.title(f"Word Tier List  -  {store.path}")
+        root.title(f"Word Tierlister  -  {store.path}")
         self.defs_var = tk.BooleanVar(value=self.show_defs)
         self.auto_var = tk.BooleanVar(value=self.auto_compare)
         self.motion_var = tk.BooleanVar(value=self.reduce_motion)
@@ -335,7 +335,7 @@ class App:
             return self._unpack_beside()             # copy of the source is beside the program already)
         else:
             yes = ask_yes_no("Source & Updates", "Make this a standalone program?",
-                             "It builds Word Tier List into one program for this computer, next to tierlist.py "
+                             "It builds Word Tierlister into one program for this computer, next to tierlist.py "
                              "(a minute or two), then reopens as the program with the same save; Python is no "
                              "longer needed to run it. You can do it any time from File > Source & Updates.",
                              yes="Make it", no="Not now", parent=self.root)
@@ -344,7 +344,7 @@ class App:
         return None
 
     def _unpack_beside(self):
-        """The built program's first start (T-10): its source goes into "Word Tier List source" beside it, unless a
+        """The built program's first start (T-10): its source goes into "Word Tierlister source" beside it, unless a
         copy is there already (standalone.existing_source: tierlist.py beside it, or a folder holding one). Says
         where in a message; File > Source & Updates can unpack it again, or elsewhere. Returns the folder, or None."""
         if standalone.existing_source():
@@ -2175,12 +2175,12 @@ class App:
         try:
             path, how = (deps.add_to_start_menu if windows else deps.add_to_menu)(python, script)
         except OSError as exc:
-            show_exception(menu[0].upper() + menu[1:], exc, self.root, f"Could not add Word Tier List to the {menu}.")
+            show_exception(menu[0].upper() + menu[1:], exc, self.root, f"Could not add Word Tierlister to the {menu}.")
             return None
         quiet_start = "a console window" if windows else "a terminal"
         if not quiet:
-            self.flash(f"Word Tier List added to your {menu} (it starts without {quiet_start})" if how == "added"
-                       else f"Word Tier List updated in your {menu}", kind="info", ms=2600)
+            self.flash(f"Word Tierlister added to your {menu} (it starts without {quiet_start})" if how == "added"
+                       else f"Word Tierlister updated in your {menu}", kind="info", ms=2600)
         return path
 
     def source_updates(self):

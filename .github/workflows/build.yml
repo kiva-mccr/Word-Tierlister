@@ -1,11 +1,11 @@
-# Build programs (T-8): Word Tier List as a program for Linux, Windows and macOS, built at the same time on GitHub's
+# Build programs (T-8): Word Tierlister as a program for Linux, Windows and macOS, built at the same time on GitHub's
 # machines from the pushed source (PyInstaller builds only for the system it runs on).
 #   - "Run workflow" on the Actions tab, or `python tools/build.py --all`: the three programs as downloads of the run
 #   - "Run workflow" on main with "Publish as a release" ticked (T-17), or pushing a tag v<VERSION> (src/constants.py):
 #     the same, published as the GitHub Release v<VERSION> (the README links there); the button makes the tag itself
 # The release's page starts with .github/release-notes.md (T-5: what an unsigned program asks). Each build is started
 # once to check that it runs (tools/build.py --check). macOS (T-16): an app bundle for Apple Silicon (macos-latest),
-# zipped as word-tierlist-macos.zip; Intel Macs are not built for.
+# zipped as word-tierlister-macos.zip; Intel Macs are not built for.
 name: Build programs
 
 on:
@@ -28,14 +28,14 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04          # (an older Linux: the program then runs on newer ones too)
-            built: dist/word-tierlist
-            asset: word-tierlist-linux
+            built: dist/word-tierlister
+            asset: word-tierlister-linux
           - os: windows-latest
-            built: dist/word-tierlist.exe
-            asset: word-tierlist-windows.exe
+            built: dist/word-tierlister.exe
+            asset: word-tierlister-windows.exe
           - os: macos-latest              # (Apple Silicon)
-            built: dist/Word Tier List.app
-            asset: word-tierlist-macos.zip
+            built: dist/Word Tierlister.app
+            asset: word-tierlister-macos.zip
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30                # (a stuck build or check fails instead of running for hours)
     steps:
@@ -85,6 +85,11 @@ jobs:
         with:
           path: assets
           merge-multiple: true
+      - name: Copies under the old names (1.0.2 and older look for them to update; standalone.OLD_RELEASE_ASSETS)
+        run: |
+          cp assets/word-tierlister-linux assets/word-tierlist-linux
+          cp assets/word-tierlister-windows.exe assets/word-tierlist-windows.exe
+          cp assets/word-tierlister-macos.zip assets/word-tierlist-macos.zip
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -102,4 +107,4 @@ jobs:
             fi
           fi
           gh release create "$tag" assets/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "Word Tier List $tag" --notes-file .github/release-notes.md --generate-notes
+            --title "Word Tierlister $tag" --notes-file .github/release-notes.md --generate-notes

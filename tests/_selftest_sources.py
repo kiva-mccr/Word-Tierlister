@@ -99,7 +99,7 @@ def carried(files):
 
 
 v1 = carried({"tierlist.py": "v1\n", "src/a.py": "a1\n", "src/old.py": "old\n", "tests/run_tests.sh": "t\n"})
-target = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+target = os.path.join(tempfile.mkdtemp(), "Word Tierlister source")
 plan = S.plan_unpack(v1, target)                                  # a new folder: everything added
 assert plan["add"] == ["src/a.py", "src/old.py", "tests/run_tests.sh", "tierlist.py"] and not plan["update"]
 S.unpack(v1, target, plan)
@@ -129,12 +129,12 @@ _sys.frozen, _sys._MEIPASS = True, meipass
 assert S.bundled_source() == os.path.join(meipass, S.SOURCE_DIR)
 del _sys.frozen, _sys._MEIPASS
 assert S.bundled_source() is None                                # (from source: nothing carried)
-assert S.default_source_folder("/home/me/Programs/word-tierlist") == "/home/me/Programs/Word Tier List source"
-assert S.default_source_folder("/Apps/Word Tier List.app/Contents/MacOS/Word Tier List") == "/Apps/Word Tier List source"
+assert S.default_source_folder("/home/me/Programs/word-tierlister") == "/home/me/Programs/Word Tierlister source"
+assert S.default_source_folder("/Apps/Word Tierlister.app/Contents/MacOS/Word Tierlister") == "/Apps/Word Tierlister source"
 
 # the dialog in the built program: where, what it will do, then unpack, open the folder, offer to start tierlist.py
 root, app = window()
-target2 = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+target2 = os.path.join(tempfile.mkdtemp(), "Word Tierlister source")
 S.default_source_folder = lambda program=None: target2
 opened, asked, popened = [], [], []
 S.open_folder = lambda path, popen=None: opened.append(path)
@@ -204,7 +204,7 @@ assert "the newest there is" in d.line.cget("text") and "Nothing newer" in d.upd
 v3 = carried({"tierlist.py": "v3\n", "src/a.py": "a3\n", "tests/run_tests.sh": "t\n"})
 fetched = []
 S.fetch_source = lambda rel, folder, log: (fetched.append(rel["version"]), log("Downloading..."), v3)[2]
-target3 = os.path.join(tempfile.mkdtemp(), "Word Tier List source"); S.default_source_folder = lambda program=None: target3
+target3 = os.path.join(tempfile.mkdtemp(), "Word Tierlister source"); S.default_source_folder = lambda program=None: target3
 S.unpack(v2, target3)
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
 assert "Version 9.1.0 is out" in d.line.cget("text") and '"Unpack" downloads it' in d.update_line.cget("text")
@@ -279,7 +279,7 @@ assert "Add to applications menu" not in d.buttons and "Applications menu" not i
 assert "Add the program to the applications menu" in labels(d) and d.menu_var.get()   # (the build's tick: on, U-7)
 d.close()
 d = sources.SourceDialog(app, source=None, frozen=True, check=lambda: None, platform="linux"); settle(d)
-assert "Add to applications menu" in d.buttons and "Puts Word Tier List" in d.menu_line.cget("text")
+assert "Add to applications menu" in d.buttons and "Puts Word Tierlister" in d.menu_line.cget("text")
 d.buttons["Add to applications menu"].invoke(); pump(root)
 assert deps.in_menu("linux") and "Add to applications menu" not in d.buttons and "now" in d.menu_line.cget("text")
 d.close()
@@ -289,11 +289,11 @@ d.close()
 # from source, in the menu already: no tick, and making the program moves the menu to it
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)
 assert "Add the program to the applications menu" not in labels(d) and d.was_in_menu
-S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "word-tierlist")
+S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "word-tierlister")
 started.clear()
 d.buttons["Make the program"].invoke(); pump(root, 2)
 text = open(deps.launcher_path()).read()
-assert started == [os.path.join(proj3, "word-tierlist")] and 'Exec="' + os.path.join(proj3, "word-tierlist") in text
+assert started == [os.path.join(proj3, "word-tierlister")] and 'Exec="' + os.path.join(proj3, "word-tierlister") in text
 del os.environ["XDG_DATA_HOME"]
 # Windows: the Start menu, the same way (the shortcut itself: _selftest_deps); macOS has nothing to add to
 root, app = window()
@@ -309,7 +309,7 @@ d.close()
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
 assert "Add to Start menu" not in d.buttons
 assert d.menu_var.get(); d.buttons["Make the program"].invoke(); pump(root, 2)   # (ticked to start with: the program)
-assert added[-1] == (os.path.join(proj3, "word-tierlist"), None)
+assert added[-1] == (os.path.join(proj3, "word-tierlister"), None)
 root, app = window()
 n = len(added)
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
@@ -364,7 +364,7 @@ app.offer_form = True
 A.is_frozen = lambda: True
 S.bundled_source = lambda: v2
 home = tempfile.mkdtemp()
-beside = os.path.join(home, "Word Tier List source")
+beside = os.path.join(home, "Word Tierlister source")
 S.default_source_folder = lambda program=None: beside
 sources.is_frozen = lambda: True
 n = len(asked)
@@ -379,7 +379,7 @@ os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "
 app._offer_other_form(); pump(root, 4)
 assert not os.path.exists(beside) and S.existing_source() == os.path.join(home, "my copy")   # (a copy is there)
 S.default_source_folder = REAL_DEFAULT
-prog = os.path.join(tempfile.mkdtemp(), "word-tierlist")
+prog = os.path.join(tempfile.mkdtemp(), "word-tierlister")
 assert S.existing_source(prog) is None
 open(os.path.join(os.path.dirname(prog), "tierlist.py"), "w").write("")
 assert S.existing_source(prog) == os.path.dirname(prog)          # (built from source: it sits beside tierlist.py)
@@ -389,7 +389,7 @@ S.default_source_folder = lambda program=None: beside
 # it); a folder unpacked from a program beside it replaces that program, the save moves next to it, and the new
 # program removes the source as it starts
 home12 = tempfile.mkdtemp()
-src12 = os.path.join(home12, "Word Tier List source")
+src12 = os.path.join(home12, "Word Tierlister source")
 S.unpack(v2, src12)
 assert S.cleanup_place(src12) == src12                                             # (no program beside: here)
 anywhere = os.path.join(tempfile.mkdtemp(), "Word-Tierlister"); shutil.copytree(project(), anywhere)

@@ -64,6 +64,15 @@ T.remember_save(dl)
 path, best, others = T.choose_save(script)
 assert os.path.realpath(path) == os.path.realpath(dl) and best["pointer"]
 assert [os.path.realpath(o["path"]) for o in others] == [os.path.realpath(old)]
+# the pointer file under the program's old name (1.0.2 and older) is read while there is no new one, and goes once
+# the new one is written
+os.remove(T._pointer_file())
+with open(os.path.join(HOME, ".word_tierlist_path"), "w") as f:
+    f.write(dl)
+path, best, others = T.choose_save(script)
+assert os.path.realpath(path) == os.path.realpath(dl) and best["pointer"]
+T.remember_save(dl)
+assert os.path.exists(T._pointer_file()) and not os.path.exists(os.path.join(HOME, ".word_tierlist_path"))
 # ...but a pointer to a file with no progress does not hide a real save
 T.remember_save(stray)
 path, best, others = T.choose_save(script)

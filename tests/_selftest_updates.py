@@ -23,7 +23,7 @@ answer = {"tag_name": "v9.1.0", "zipball_url": "https://api.github.com/x/zipball
 asked = []
 def fetch(url, timeout=10):
     asked.append(url); return json.dumps(answer).encode()
-offline = os.environ.pop("WORD_TIERLIST_OFFLINE")
+offline = os.environ.pop("WORD_TIERLISTER_OFFLINE")
 try:
     r = S.latest_release(fetch)
     assert r == {"version": "9.1.0", "tag": "v9.1.0", "source": answer["zipball_url"], "page": "page", "assets": {}}, r
@@ -39,7 +39,7 @@ try:
         assert S.latest_release(refused) is None and said in S.last_error, S.last_error
     assert S.latest_release(broken) is None and S.last_error == "GitHub could not be reached: no network"
 finally:
-    os.environ["WORD_TIERLIST_OFFLINE"] = offline
+    os.environ["WORD_TIERLISTER_OFFLINE"] = offline
 assert S.latest_release(fetch) is None and len(asked) == 1          # (the tests never go online)
 
 # its source: GitHub's zip (one folder on top) unpacked with a manifest; nothing written outside the folder
@@ -158,6 +158,7 @@ assert "--notes-file .github/release-notes.md" in text and "Run anyway" in notes
 assert "Open Anyway" in notes and "ditto -c -k --keepParent" in text and "macos-latest" in text          # (T-16)
 for platform, asset in S.RELEASE_ASSETS.items():
     assert f"asset: {asset}" in text and f"built: dist/{S.output_name(platform)}" in text, asset
+    assert f"cp assets/{asset} assets/{S.OLD_RELEASE_ASSETS[platform]}" in text, asset   # (1.0.2 and older update)
     assert f"releases/latest/download/{asset}" in open(os.path.join(_paths.ROOT, "README.md"), encoding="utf-8").read()
 assert re.search(r"tools/build\.py --check", text) and "constants.VERSION" in text and "needs: build" in text
 # T-10: the other form, Python, the builder and the file manager start without a built program's leftovers (its
@@ -174,7 +175,7 @@ assert "LD_LIBRARY_PATH" not in got                                           # 
 src = S.clean_env({"TCL_LIBRARY": mei + "/_tcl_data", "TK_LIBRARY": tempfile.gettempdir(), "HOME": "/h"}, frozen=False)
 assert src == {"TK_LIBRARY": tempfile.gettempdir(), "HOME": "/h"}, src     # (from source: only the dead paths go)
 seen = []
-S.start("/x/word-tierlist", popen=lambda args, **kw: seen.append(kw.get("env")))
+S.start("/x/word-tierlister", popen=lambda args, **kw: seen.append(kw.get("env")))
 S.open_folder(tempfile.gettempdir(), popen=lambda args, **kw: seen.append(kw.get("env"))) if not sys.platform.startswith("win") else None
 S.start_source("/x/src", "/usr/bin/python3", popen=lambda args, **kw: seen.append(kw.get("env")))
 assert seen and all(e is not None and not any(k.startswith("_PYI_") for k in e) for e in seen)
@@ -190,12 +191,12 @@ assert deps.use_system_certificates({}, frozen=False, exists=fedora) is None    
 assert deps.use_system_certificates({}, frozen=True, platform="win32", exists=fedora) is None  # (Windows: its own store)
 env = {"SSL_CERT_FILE": "/mine.pem"}
 assert deps.use_system_certificates(env, frozen=True, platform="linux", exists=fedora) is None and env["SSL_CERT_FILE"] == "/mine.pem"
-os.environ.pop("WORD_TIERLIST_OFFLINE")
+os.environ.pop("WORD_TIERLISTER_OFFLINE")
 try:
     def untrusted(url, timeout=10):
         raise urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
     assert S.latest_release(untrusted) is None and "CERTIFICATE_VERIFY_FAILED" in S.last_error
     assert S.latest_release(fetch) and S.last_error is None
 finally:
-    os.environ["WORD_TIERLIST_OFFLINE"] = offline
+    os.environ["WORD_TIERLISTER_OFFLINE"] = offline
 print("UPDATES OK")

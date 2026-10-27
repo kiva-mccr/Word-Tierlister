@@ -94,7 +94,7 @@ def start_session(log_path, version="", now=None):
     if unclosed:
         append_log(log_path, f"--- {stamp}\nThe last session ended without closing (a crash, the program stopped "
                              "from outside, or the computer shutting down): anything it logged is above.")
-    append_log(log_path, f"{SESSION_START} {stamp}: Word Tier List {version}, Python {platform.python_version()}, "
+    append_log(log_path, f"{SESSION_START} {stamp}: Word Tierlister {version}, Python {platform.python_version()}, "
                          f"{platform.platform()}{' (built program)' if getattr(sys, 'frozen', False) else ''}")
     try:
         handle = open(log_path, "a", encoding="utf-8", errors="replace")

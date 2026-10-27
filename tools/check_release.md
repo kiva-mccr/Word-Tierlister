@@ -20,7 +20,7 @@ The module docstring has the details; this page is the map.
 - `check_pyflakes`: pyflakes finds nothing (when it is installed).
 - `shippable_files`: Files that belong in the zip, with their folders (standalone.source_files: also what a built program carries).
 - `check_stray`: No scratch files in the project (databases, logs, .pyc, .part, pictures that do not ship: screenshots outside docs/, anything but the icon in src/icons); the save and...
-- `build_zip`: Zip the shippable files into `target`, under one word-tierlist/ folder.
+- `build_zip`: Zip the shippable files into `target`, under one word-tierlister/ folder.
 - `main`: The checks, then --tests (run them) and --zip (build the zip).
 
 ## Rules and pitfalls (fixed before: keep them fixed)

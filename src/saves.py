@@ -1,7 +1,7 @@
 """Finding, choosing, remembering and exporting save files.
 
 Why this exists: replacing tierlist.py (even in another folder) must never lose progress. At start-up
-choose_save() looks at a pointer file in your home folder (~/.word_tierlist_path) and at the usual
+choose_save() looks at a pointer file in your home folder (~/.word_tierlister_path) and at the usual
 places for .db files, opens each read-only to count placed words, and picks the best one. Anything
 else with progress is offered for merging (Store.merge does the actual merge, in store.py).
 """
@@ -17,7 +17,8 @@ from constants import TIERS
 # --------------------------------------------------------------------------
 # Where the program keeps its things (T-1): the save, tierlist.log, the export, the Wiktionary download
 # --------------------------------------------------------------------------
-APP_NAME = "Word Tier List"
+APP_NAME = "Word Tierlister"
+OLD_APP_NAME = "Word Tier List"     # the program's name until 1.0.2: its folders and pointer file are still found
 SOURCE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # (tierlist.py's folder, above src/)
 
 
@@ -37,19 +38,24 @@ def _writable(folder):
 
 def user_data_dir(platform=None, env=None, home=None):
     """The per-user folder for programs' data: %APPDATA% on Windows, ~/Library/Application Support on macOS,
-    $XDG_DATA_HOME (~/.local/share) elsewhere; with this program's own folder in it."""
+    $XDG_DATA_HOME (~/.local/share) elsewhere; with this program's own folder in it (the one under its old name,
+    OLD_APP_NAME, while only that one is there)."""
     platform, env = platform or sys.platform, os.environ if env is None else env
     home = home or os.path.expanduser("~")
     if platform.startswith("win"):
-        return os.path.join(env.get("APPDATA") or os.path.join(home, "AppData", "Roaming"), APP_NAME)
-    if platform == "darwin":
-        return os.path.join(home, "Library", "Application Support", APP_NAME)
-    return os.path.join(env.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), "word-tierlist")
+        base, names = env.get("APPDATA") or os.path.join(home, "AppData", "Roaming"), (APP_NAME, OLD_APP_NAME)
+    elif platform == "darwin":
+        base, names = os.path.join(home, "Library", "Application Support"), (APP_NAME, OLD_APP_NAME)
+    else:
+        base, names = env.get("XDG_DATA_HOME") or os.path.join(home, ".local", "share"), ("word-tierlister",
+                                                                                          "word-tierlist")
+    new, old = (os.path.join(base, n) for n in names)
+    return old if os.path.isdir(old) and not os.path.exists(new) else new    # (the save in the old one stays)
 
 
 def program_dir(executable=None):
     """The folder a built program sits in: the executable's own, or on macOS the folder holding the .app (its
-    executable is inside, Word Tier List.app/Contents/MacOS/, which is replaced with every new version)."""
+    executable is inside, Word Tierlister.app/Contents/MacOS/, which is replaced with every new version)."""
     folder = os.path.dirname(os.path.realpath(executable or sys.executable))
     parts = Path(folder).parts
     if len(parts) >= 3 and parts[-1] == "MacOS" and parts[-2] == "Contents" and parts[-3].endswith(".app"):
@@ -86,6 +92,11 @@ def restart_args(argv=None, script=None, frozen=None):
 # --------------------------------------------------------------------------
 def _pointer_file():
     """Path of the small file that remembers which save was used last."""
+    return os.path.join(os.path.expanduser("~"), ".word_tierlister_path")
+
+
+def _old_pointer_file():
+    """The same file under the program's old name (1.0.2 and older), read while there is no new one."""
     return os.path.join(os.path.expanduser("~"), ".word_tierlist_path")
 
 
@@ -167,11 +178,13 @@ def choose_save(script_dir):
     """
     default = default_save_path(script_dir)
     pointer = None
-    try:
-        with open(_pointer_file(), encoding="utf-8") as f:
-            pointer = f.read().strip() or None
-    except OSError:
-        pass
+    for path in (_pointer_file(), _old_pointer_file()):
+        try:
+            with open(path, encoding="utf-8") as f:
+                pointer = f.read().strip() or None
+            break
+        except OSError:
+            pass
     cands, seen = [], set()
     for p in ([pointer] if pointer else []) + [default] + find_saves(script_dir):
         key = os.path.realpath(p)
@@ -197,6 +210,8 @@ def remember_save(path):
     try:
         with open(_pointer_file(), "w", encoding="utf-8") as f:
             f.write(os.path.abspath(path))
+        if os.path.exists(_old_pointer_file()):
+            os.remove(_old_pointer_file())
     except OSError:
         pass
 

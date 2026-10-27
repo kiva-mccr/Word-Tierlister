@@ -31,7 +31,7 @@ def wiktionary_url(word):
 
 class Online:
     """Whether Wiktionary can be reached, checked on a worker thread now and every EVERY seconds (never from the
-    window: it only reads `online`). Never online with WORD_TIERLIST_OFFLINE (the tests). `probe() -> bool`: tests."""
+    window: it only reads `online`). Never online with WORD_TIERLISTER_OFFLINE (the tests). `probe() -> bool`: tests."""
     EVERY = 60
 
     def __init__(self, probe=None):
@@ -43,7 +43,7 @@ class Online:
     @staticmethod
     def _reach():
         try:
-            req = urllib.request.Request(ONLINE_CHECK, method="HEAD", headers={"User-Agent": "word-tierlist"})
+            req = urllib.request.Request(ONLINE_CHECK, method="HEAD", headers={"User-Agent": "word-tierlister"})
             with urllib.request.urlopen(req, timeout=5):
                 return True
         except urllib.error.HTTPError:

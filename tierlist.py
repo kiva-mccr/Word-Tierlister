@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Word Tier List
+Word Tierlister
 ==============
 Tier-list every word in the English dictionary (S / A / B / C / D / F).
 
@@ -462,10 +462,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           already detached, and on Linux a desktop to draw on: without one the window cannot open and the
 #           message saying so stays in the terminal) and deps.detach_terminal: the program starts itself again
 #           in its own session (start_new_session) and waits up to 1.5 s; if the new copy fails straight away
-#           its words are printed here, else "Word Tier List is open in its own window: you can close this
+#           its words are printed here, else "Word Tierlister is open in its own window: you can close this
 #           terminal". That copy writes to tierlist.log next to the save (DETACHED_ENV). File > Add to
 #           applications menu (Linux; App.add_launcher, deps.add_to_menu) writes
-#           ~/.local/share/applications/word-tierlist.desktop (Terminal=false; again: "updated"). Checked in a
+#           ~/.local/share/applications/word-tierlister.desktop (Terminal=false; again: "updated"). Checked in a
 #           real pseudo-terminal: the prompt is back after ~1.7 s, the program runs on in its own session. macOS
 #           gets the terminal hand-back the same way (not tried on a Mac here); no launcher there.
 # [x] ST-6  How words are dealt (asked for): an extension of the start-up and of the Queue randomness window
@@ -529,7 +529,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           whose download is gone reads the pages of the words in Wiktionary's rude categories (50 a request,
 #           with a percentage and time left) and their forms from its own definitions. Until it can (offline),
 #           the hand-picked list stands in (obscene_done "list"; asked again after 6 hours). Store.OBSCENE_VERSION
-#           4. The self-tests never go online (WORD_TIERLIST_OFFLINE, set by tests/_paths.py).
+#           4. The self-tests never go online (WORD_TIERLISTER_OFFLINE, set by tests/_paths.py).
 #           Checked (asked for): every letter first and last, smeared. Wide spaces inside letters (the eye of "e",
 #           between the curves of "ss") and a last letter open on its right ("c", "z") left white slivers and
 #           notches; a band in the smear's tone now fills the letters' body behind the copies (SMEAR_BODY, about
@@ -1403,8 +1403,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #          the program sits in (saves.program_dir: on macOS the folder holding the .app, not inside the
 #          bundle, which a new version replaces); a read-only one (Program Files, a disk image; tested by
 #          really making a file, os.access is wrong there on Windows) falls back to saves.user_data_dir
-#          (%APPDATA%\Word Tier List, ~/Library/Application Support/Word Tier List, $XDG_DATA_HOME or
-#          ~/.local/share/word-tierlist), which find_saves also searches. The save you used last is still
+#          (%APPDATA%\Word Tierlister, ~/Library/Application Support/Word Tierlister, $XDG_DATA_HOME or
+#          ~/.local/share/word-tierlister), which find_saves also searches. The save you used last is still
 #          found first (the pointer file in your home folder), so source and program share one save.
 #          saves.restart_args: a built program restarts itself with its options only (no script name).
 #          tierlist.main and App.SCRIPT_DIR use them. _selftest_appdir.py (with a stand-in built program in
@@ -1451,7 +1451,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Putting it in place): PyInstaller is installed with pip if missing (asked first, in that page: the ST-4
 #           dialog is for the program's own requirements), the source (standalone.source_files: the same list the
 #           zip ships) and its manifest (sha256 per file) are copied inside the program under source/ for T-7, the
-#           program replaces any older one, and the manifest is left beside it (.word-tierlist-build.json). Then
+#           program replaces any older one, and the manifest is left beside it (.word-tierlister-build.json). Then
 #           the program starts on its own and this window closes; a failed build shows PyInstaller's last lines and
 #           changes nothing. tools/build.py and check_release.py now use src/standalone.py (which also took over
 #           tools/bundle.py, now src/bundle.py), so the zip and the program carry the same files. Checked here: a
@@ -1480,12 +1480,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           you have. Offline or no newer version: it says so in a line and carries on with yours. The
 #           update keeps your save untouched and, like any unpack, only changes files the program owns.
 #           Built (the update tick came with T-8): File > Source & Updates... in the built
-#           program shows "Unpack the source code" (src/sources.py): the folder (beside the program, "Word Tier List
+#           program shows "Unpack the source code" (src/sources.py): the folder (beside the program, "Word Tierlister
 #           source", or Change folder...: the themed folder browser on Linux) and what it will do there, before it
 #           does it. standalone.plan_unpack / unpack: the source the program carries (bundled_source: source/ in
 #           PyInstaller's folder) goes in with the repository's own layout (R-1 replaced the planned "tests in a
 #           separate folder", so run_tests.sh and check_release.py need no change). Into a folder unpacked before
-#           (its record: .word-tierlist-source.json) it syncs: updated / added / removed, only files in the
+#           (its record: .word-tierlister-source.json) it syncs: updated / added / removed, only files in the
 #           program's manifest or in that record; a file edited since the last unpack, or differing in a folder never
 #           unpacked into (a clone), is kept as name.bak first; a save, its log or a .venv are never looked at. Then
 #           the folder opens (file manager) and it offers to start tierlist.py from there with this computer's
@@ -1496,14 +1496,14 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           for the OS it runs on (T-3). `python build.py --all` (or the "Build programs" workflow
 #           button on GitHub) runs a GitHub Actions workflow (.github/workflows/build.yml) that builds
 #           on a Linux and a Windows machine at the same time from the pushed source and attaches
-#           word-tierlist-linux and word-tierlist-windows.exe as downloads; --all waits and fetches them
+#           word-tierlister-linux and word-tierlister-windows.exe as downloads; --all waits and fetches them
 #           into dist/. Needs the code pushed to GitHub and a GitHub login (gh) for --all; without
 #           them it explains and builds for this OS only. Building a Windows .exe on Linux through
 #           Wine was considered and rejected: fragile, and the result would still need testing on Windows.
 #           Built: .github/workflows/build.yml ("Build programs"): on the Actions tab's Run workflow button (or --all)
 #           it builds on ubuntu-22.04 (an older glibc, so newer Linux runs it too) and windows-latest, starts each
 #           program once to check it runs (tools/build.py --check; Linux under xvfb) and keeps them as the run's
-#           downloads, named word-tierlist-linux and word-tierlist-windows.exe (standalone.RELEASE_ASSETS). A pushed
+#           downloads, named word-tierlister-linux and word-tierlister-windows.exe (standalone.RELEASE_ASSETS). A pushed
 #           tag v<VERSION> does the same, checks the tag matches constants.VERSION (new: 1.0.0) and publishes a
 #           GitHub Release with both (gh release create): what the README's download links point to (R-1's last
 #           item). tools/build.py --all (build_all): gh installed and logged in, the commit pushed, else it says
@@ -1528,7 +1528,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           job runs (App.busy) or Wiktionary's meanings are downloading (App.rude_read). Asked once per form (meta
 #           offered_program / offered_source, set before asking, so "Not now" is remembered too); every save write
 #           commits already. Yes does Source & Updates' own action at once (SourceDialog(go=True): from source
-#           make the program and reopen as it; in the program unpack into "Word Tier List source" beside it, the page
+#           make the program and reopen as it; in the program unpack into "Word Tierlister source" beside it, the page
 #           showing only if that fails), from the version you have. Not asked when a program already sits next to
 #           tierlist.py, or when the program carries no source. App(offer_form=...) is off unless main() turns it on
 #           (not with --no-install), so tests never see it. _selftest_sources.py.
@@ -1659,8 +1659,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           on real Windows.
 # [x] IC-3 Reported: on Fedora the icon showed in Files but not in the taskbar. GNOME no longer takes a window's own
 #           icon there: it pairs the window with a launcher by its class. Every window is now named (tk.Tk(className=
-#           "word-tierlist"): X's WM_CLASS "word-tierlist", "Word-tierlist"), the launcher names it (StartupWMClass,
-#           and its file is word-tierlist.desktop), and on Linux every start writes the launcher if there is none,
+#           "word-tierlister"): X's WM_CLASS "word-tierlister", "Word-tierlister"), the launcher names it (StartupWMClass,
+#           and its file is word-tierlister.desktop), and on Linux every start writes the launcher if there is none,
 #           out of the applications menu (NoDisplay) until File > Add to applications menu, or brings it up to date
 #           (deps.ensure_launcher). Not seen here (no GNOME Shell): confirm on Fedora.
 # [x] T-14 Asked for: making the program did not ask to clean up behind (T-12 asked only for a source unpacked from the
@@ -1810,7 +1810,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           do not all fit; its room is kept, so showing it never re-wraps the text or resizes the pane.
 # [x] T-16 Asked for: a macOS program in the release too. The Build programs workflow builds it on GitHub's Apple
 #           Silicon machines (macos-latest), starts it once (tools/build.py --check) and zips the app bundle with
-#           ditto as word-tierlist-macos.zip; tools/make_icon.py writes icon.icns, the app's own icon. Unsigned: the
+#           ditto as word-tierlister-macos.zip; tools/make_icon.py writes icon.icns, the app's own icon. Unsigned: the
 #           release notes say how to open it (Privacy & Security > Open Anyway; xattr if it says "damaged").
 #           Intel Macs are not built for. Never run here (no Mac): the first release is its first build.
 # [x] T-17 The tag could not be pushed from here (a session pushes only its own branch), so the Run workflow button
@@ -1847,7 +1847,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] U-5  Asked for: Add to applications menu in Source & Updates too, both while it runs and when making the
 #           program. The panel has an "Applications menu" (Linux) / "Start menu" (Windows) section, with
 #           "Add to ..." for the form running now (App.add_launcher); the File menu items are gone. Make a standalone
-#           program has a tick, "Add the program to the ...", ticked when Word Tier List is in the menu already
+#           program has a tick, "Add the program to the ...", ticked when Word Tierlister is in the menu already
 #           (deps.in_menu), so the menu moves to the new program before it starts. macOS: no section (an app goes in
 #           Applications by hand).
 # [x] U-6  Asked for: that section only in the program, and only while it is not in the menu yet (added, its
@@ -1897,6 +1897,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           with "tier" in its name was taken for an export. An export is now told by its first line
 #           (Store.is_export: a .csv's "word,tier" header, a listing's "S tier (N words)" heading), never its name:
 #           a renamed export is found, and Import refuses a file that is not one instead of bringing in nothing.
+# [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
+#           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
+#           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data
+#           folder and records. Nothing already out there is left behind: every release also carries the programs
+#           under their old names (1.0.2 and older look for those to update), and the old data folder, pointer file,
+#           records, launcher and Start menu shortcut are still found (the last two replaced by the new ones).
+#           tierlist.py, tierlist.db and tierlist.log keep their names (saves are found by them). VERSION 1.0.3.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

@@ -333,12 +333,12 @@ assert kw["creationflags"] & 0x8 and kw["close_fds"]                            
 entry = deps.desktop_entry("/usr/bin/python3", '/home/me/My "Tier" List/tierlist.py')
 assert 'Exec="/usr/bin/python3" "/home/me/My \\"Tier\\" List/tierlist.py"' in entry and "Terminal=false" in entry
 assert "Path=/home/me/My \"Tier\" List" in entry and entry.startswith("[Desktop Entry]")
-assert 'Exec="/opt/word-tierlist"' in deps.desktop_entry("/opt/word-tierlist", None)        # a built program
+assert 'Exec="/opt/word-tierlister"' in deps.desktop_entry("/opt/word-tierlister", None)        # a built program
 home = tempfile.mkdtemp()
 os.environ.pop("XDG_DATA_HOME", None)
 path, how = deps.add_to_menu("/usr/bin/python3", "/x/tierlist.py", home=home)
-assert how == "added" and path == os.path.join(home, ".local", "share", "applications", "word-tierlist.desktop")
-icon = os.path.join(home, ".local", "share", "icons", "word-tierlist.png")        # (IC-1: the icon copied beside)
+assert how == "added" and path == os.path.join(home, ".local", "share", "applications", "word-tierlister.desktop")
+icon = os.path.join(home, ".local", "share", "icons", "word-tierlister.png")        # (IC-1: the icon copied beside)
 assert open(path).read() == deps.desktop_entry("/usr/bin/python3", "/x/tierlist.py", icon=icon)
 assert f"Icon={icon}" in open(path).read() and open(icon, "rb").read() == open(deps.ICON, "rb").read()
 assert deps.add_to_menu("/usr/bin/python3", "/y/tierlist.py", home=home)[1] == "updated" and "/y/tierlist.py" in open(path).read()
@@ -350,27 +350,27 @@ assert f"StartupWMClass={WM_CLASS_NAME}" in open(path).read() and "NoDisplay" no
 assert deps.ensure_launcher("/usr/bin/python3", "/z/tierlist.py", home=home, platform="linux") == path
 assert "/z/tierlist.py" in open(path).read() and "NoDisplay" not in open(path).read()          # (still in the menu)
 home2 = tempfile.mkdtemp()
-p2 = deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="linux")
+p2 = deps.ensure_launcher("/opt/word-tierlister", None, home=home2, platform="linux")
 assert deps.in_menu("linux", home=home2) is False and deps.in_menu("linux", home=home)    # (U-5: hidden is not in it)
 assert deps.in_menu("linux", home=tempfile.mkdtemp()) is False
 assert deps.menu_name("linux") == "applications menu" and deps.menu_name("win32") == "Start menu"
 assert deps.menu_name("darwin") is None
 text = open(p2).read()
-assert "NoDisplay=true" in text and f"StartupWMClass={WM_CLASS_NAME}" in text and 'Exec="/opt/word-tierlist"' in text
-assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlist.png") in text
-deps.add_to_menu("/opt/word-tierlist", None, home=home2)                                  # (asked for: in the menu)
+assert "NoDisplay=true" in text and f"StartupWMClass={WM_CLASS_NAME}" in text and 'Exec="/opt/word-tierlister"' in text
+assert "Icon=" + os.path.join(home2, ".local", "share", "icons", "word-tierlister.png") in text
+deps.add_to_menu("/opt/word-tierlister", None, home=home2)                                  # (asked for: in the menu)
 assert "NoDisplay" not in open(p2).read()
-assert deps.ensure_launcher("/opt/word-tierlist", None, home=home2, platform="win32") is None
+assert deps.ensure_launcher("/opt/word-tierlister", None, home=home2, platform="win32") is None
 # Windows (asked for): File > Add to Start menu, a shortcut in the user's own Start menu, written by PowerShell (faked
 # here: the values reach it through the environment, so a path with quotes or spaces needs no quoting in the script)
 appdata = tempfile.mkdtemp()
 lnk = deps.start_menu_path(appdata)
-assert lnk == os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tier List.lnk")
+assert lnk == os.path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Word Tierlister.lnk")
 src = os.path.join(os.sep, "Users", "me", 'My "Tier" List', "tierlist.py")      # (this system's separators)
 py = os.path.join(os.sep, "Py", "python.exe")
 assert deps.shortcut_parts(py, src, exists=lambda p: True) == (
     os.path.join(os.sep, "Py", "pythonw.exe"), f'"{src}"', os.path.dirname(src), deps.ICO + ",0")   # (no console)
-prog = os.path.join(os.sep, "Prog", "word-tierlist.exe")
+prog = os.path.join(os.sep, "Prog", "word-tierlister.exe")
 assert deps.shortcut_parts(prog, None) == (prog, "", os.path.dirname(prog), prog + ",0")
 ran = []
 def fake_ps(cmd, env=None, **kw):
@@ -378,26 +378,43 @@ def fake_ps(cmd, env=None, **kw):
     open(env["WTL_LNK"], "w").write("lnk")
     return subprocess.CompletedProcess(cmd, 0, "", "")
 assert not deps.in_menu("win32", appdata=appdata)
-assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps) == (lnk, "added")
+assert deps.add_to_start_menu("/opt/word-tierlister", None, appdata=appdata, run=fake_ps) == (lnk, "added")
 assert deps.in_menu("win32", appdata=appdata)
 cmd, env = ran[-1]
 assert cmd[0] == "powershell" and cmd[-1] == deps.SHORTCUT_PS and "$env:WTL_TARGET" in cmd[-1]
-assert env["WTL_LNK"] == lnk and env["WTL_TARGET"] == "/opt/word-tierlist" and env["WTL_ICON"] == "/opt/word-tierlist,0"
-assert deps.add_to_start_menu("/opt/word-tierlist", None, appdata=appdata, run=fake_ps)[1] == "updated"
+assert env["WTL_LNK"] == lnk and env["WTL_TARGET"] == "/opt/word-tierlister" and env["WTL_ICON"] == "/opt/word-tierlister,0"
+assert deps.add_to_start_menu("/opt/word-tierlister", None, appdata=appdata, run=fake_ps)[1] == "updated"
 failed = lambda cmd, env=None, **kw: subprocess.CompletedProcess(cmd, 1, "", "Access is denied.")
 try:
-    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=failed)
+    deps.add_to_start_menu("/opt/word-tierlister", None, appdata=tempfile.mkdtemp(), run=failed)
     raise AssertionError("a failed shortcut must say so")
 except OSError as exc:
     assert "Access is denied" in str(exc)
 def no_ps(cmd, **kw):
     raise FileNotFoundError("powershell")
 try:
-    deps.add_to_start_menu("/opt/word-tierlist", None, appdata=tempfile.mkdtemp(), run=no_ps)
+    deps.add_to_start_menu("/opt/word-tierlister", None, appdata=tempfile.mkdtemp(), run=no_ps)
     raise AssertionError("no PowerShell must say so")
 except OSError as exc:
     assert "PowerShell could not be started" in str(exc)
 assert os.path.exists(deps.ICO)                                             # (the icon the shortcut shows, IC-1)
+# the rename (Word Tier List -> Word Tierlister): a launcher, icon or shortcut under the old name counts as in the
+# menu, and writing the new one takes its place
+home3 = tempfile.mkdtemp()
+share = os.path.join(home3, ".local", "share")
+os.makedirs(os.path.join(share, "applications")); os.makedirs(os.path.join(share, "icons"))
+old_launcher, old_icon = os.path.join(share, "applications", "word-tierlist.desktop"), os.path.join(share, "icons", "word-tierlist.png")
+open(old_launcher, "w").write(deps.desktop_entry("/opt/word-tierlist", None)); open(old_icon, "w").close()
+assert deps.in_menu("linux", home=home3)
+p3 = deps.ensure_launcher("/opt/word-tierlister", None, home=home3, platform="linux")
+assert "NoDisplay" not in open(p3).read() and not os.path.exists(old_launcher) and not os.path.exists(old_icon)
+assert deps.in_menu("linux", home=home3)
+appdata2 = tempfile.mkdtemp()
+old_lnk = deps.start_menu_path(appdata2, "Word Tier List")
+os.makedirs(os.path.dirname(old_lnk)); open(old_lnk, "w").close()
+assert deps.in_menu("win32", appdata=appdata2)
+assert deps.add_to_start_menu("/opt/word-tierlister", None, appdata=appdata2, run=fake_ps)[1] == "updated"
+assert not os.path.exists(old_lnk) and os.path.exists(deps.start_menu_path(appdata2))
 # and every window has that class (what the launcher names)
 root = tk.Tk(className=WM_CLASS); assert root.winfo_class() == WM_CLASS_NAME; root.destroy()
 assert os.path.basename(path) == WM_CLASS + ".desktop"                    # (GNOME pairs these too)

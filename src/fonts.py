@@ -1,4 +1,4 @@
-"""Typography for the word tier list (UI-2, UI-73): two typefaces that ship with the program (src/typefaces, both
+"""Typography for Word Tierlister (UI-2, UI-73): two typefaces that ship with the program (src/typefaces, both
 under the SIL Open Font Licence) and a small set of named roles, shared as tkinter Font objects. Young Serif shows
 the words themselves (the card, a duel, a definition's heading); Atkinson Hyperlegible everything else. The text
 keeps to three sizes (20, 12 and 10 points) beside the big words. Call init_fonts(root) once after creating the Tk

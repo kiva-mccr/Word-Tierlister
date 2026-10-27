@@ -391,7 +391,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
     choices = [(n, label(n), deps.PURPOSE.get(n, ""), True, n in need, (n, deps.HOMEPAGE.get(n)))
                for n in gone]
     chosen = ask_choices(
-        "Word Tier List", headline,
+        "Word Tierlister", headline,
         "Tick what to install. It uses pip, needs an internet connection and takes a minute or so.",
         choices, yes="Install selected", no="Not now", parent=root)
     chosen = [n for n in gone if chosen and n in chosen]
@@ -427,7 +427,7 @@ def offer_system_install(root, what, why, installer=None):
     if not cmd:
         return False
     name = deps.SYSTEM_NAMES[what]
-    if not ask_yes_no("Word Tier List", f"Install {name}?",
+    if not ask_yes_no("Word Tierlister", f"Install {name}?",
                       f"{why}\n\nIt can be installed with:\n    {' '.join(cmd)}\n\nYour system may ask for your "
                       "password.", yes="Install it", no="Not now", parent=root, wrap_chars=56):
         return False
@@ -455,7 +455,7 @@ def _private_env(root, names, need, restart, home, installer=None):
     if restart is None or home is None:
         raise SetupError(_VENV_ADVICE)
     venv = os.path.join(home, ".venv")
-    if not ask_yes_no("Word Tier List", "Make a private environment for the program?",
+    if not ask_yes_no("Word Tierlister", "Make a private environment for the program?",
                       f"This Python does not allow installing packages into it directly. The program can make "
                       f"its own environment in\n    {venv}\ninstall {', '.join(names)} there, and start again "
                       "with it. Later starts use it automatically.",

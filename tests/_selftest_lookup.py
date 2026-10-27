@@ -205,7 +205,7 @@ assert gh.winfo_ismapped() and gh.winfo_rootx() > app.root.winfo_rootx() + app.r
 assert gh.winfo_rooty() < app.mode_switch.winfo_rooty()                                 # (in the menus' row)
 gh.event_generate("<ButtonRelease-1>"); pump(2)
 assert opened[-1] == REPO_PAGE == "https://github.com/kiva-mccr/Word-Tierlister"
-# the check itself: a probe on a worker thread, again every EVERY seconds; never with WORD_TIERLIST_OFFLINE
+# the check itself: a probe on a worker thread, again every EVERY seconds; never with WORD_TIERLISTER_OFFLINE
 calls = []
 o = D.Online(probe=lambda: calls.append(1) or True)
 assert o.start().online is False and not calls                                          # (the tests: offline)

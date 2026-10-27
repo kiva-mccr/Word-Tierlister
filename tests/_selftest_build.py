@@ -11,8 +11,8 @@ import build
 import standalone as S
 
 dist = os.path.join(tempfile.mkdtemp(), "dist")
-for plat, out, onefile in (("linux", "word-tierlist", True), ("win32", "word-tierlist.exe", True),
-                           ("darwin", "Word Tier List.app", False)):
+for plat, out, onefile in (("linux", "word-tierlister", True), ("win32", "word-tierlister.exe", True),
+                           ("darwin", "Word Tierlister.app", False)):
     args = S.pyinstaller_args(dist, "/tmp/work", platform=plat, source="/tmp/work/source")
     assert S.output_path(dist, plat) == os.path.join(dist, out)
     assert S.program_path(_paths.ROOT, plat) == os.path.join(_paths.ROOT, out)     # (next to tierlist.py: T-6)
@@ -52,8 +52,8 @@ open(os.path.join(work, "PKG-00.toc"), "w").write(repr(("p.pkg", {}, [("PYZ-00.p
 open(os.path.join(work, "PYZ-00.toc"), "w").write(repr(("p.pyz", [("numpy.core", small, "PYMODULE"),
                                                                   ("numpy.linalg", small, "PYMODULE")])))
 assert S.biggest_parts(work) == [("torch", 3.0), ("numpy", 2.0)] and S.biggest_parts(tempfile.mkdtemp()) == []
-assert S.executable("/x/Word Tier List.app", "darwin") == "/x/Word Tier List.app/Contents/MacOS/Word Tier List"
-assert S.executable("/x/word-tierlist", "linux") == "/x/word-tierlist"
+assert S.executable("/x/Word Tierlister.app", "darwin") == "/x/Word Tierlister.app/Contents/MacOS/Word Tierlister"
+assert S.executable("/x/word-tierlister", "linux") == "/x/word-tierlister"
 
 # the source: what the zip ships and the program carries; a manifest tells whether anything changed since a build
 files = S.source_files(_paths.ROOT)
@@ -93,7 +93,7 @@ build.stop_tree(Started(), run=lambda args, **kw: calls.append(args), windows=Tr
 assert calls[0] == ["taskkill", "/F", "/T", "/PID", "42"] and calls[1] == ("wait", 10)
 if sys.platform.startswith("linux"):
     import time
-    fake = os.path.join(tempfile.mkdtemp(), "word-tierlist")
+    fake = os.path.join(tempfile.mkdtemp(), "word-tierlister")
     with open(fake, "w") as f:
         f.write(f"#!{sys.executable}\nimport os, subprocess, sys, time\n"
                 "open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'tierlist.db'), 'w').close()\n"
@@ -124,7 +124,7 @@ else:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         open(dest, "wb").write(reader.extract(name))
     assert S.manifest(carried, list(built["files"]))["files"] == built["files"]     # every file, every byte
-    unpacked = os.path.join(tempfile.mkdtemp(), "Word Tier List source")
+    unpacked = os.path.join(tempfile.mkdtemp(), "Word Tierlister source")
     S.unpack(carried, unpacked)
     import subprocess
     r = subprocess.run([sys.executable, os.path.join(unpacked, "tests", "_selftest.py")], capture_output=True, text=True,

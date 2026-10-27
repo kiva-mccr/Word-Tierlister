@@ -1,4 +1,4 @@
-"""ttk / tk styling for the word tier list (UI-3): one place that gives every standard widget the
+"""ttk / tk styling for Word Tierlister (UI-3): one place that gives every standard widget the
 pastel look. Call apply_ttk_style(root) after init_fonts(root). Uses the 'clam' theme because it
 is the only built-in ttk theme that honours custom colours on every platform. It also gives the program its icon
 (IC-1: set_icon, on every window and the taskbar)."""
@@ -161,7 +161,7 @@ def _tick_layout(style, name):
 # folder it unpacks to (PyInstaller puts this module's file there; standalone.pyinstaller_args packs "icons")
 ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons")
 ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
-APP_ID = "WordTierList"          # (Windows: the taskbar groups the program's windows under its own icon, not Python's)
+APP_ID = "WordTierlister"          # (Windows: the taskbar groups the program's windows under its own icon, not Python's)
 
 
 def set_icon(root):

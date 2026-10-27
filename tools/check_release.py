@@ -195,8 +195,8 @@ def check_stray(problems):
 
 
 def build_zip(target):
-    """Zip the shippable files into `target`, under one word-tierlist/ folder."""
-    root = "word-tierlist"
+    """Zip the shippable files into `target`, under one word-tierlister/ folder."""
+    root = "word-tierlister"
     files = shippable_files()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as z:
         for f in files:
