@@ -89,8 +89,8 @@ class SourceDialog:
         self.dlg = StyledDialog(app.root, TITLE, f"Word Tier List {VERSION}", f"You are running {form}.",
                                 animator=app.anim, wrap_chars=64)
         self._updates_section()
-        if self.menu:
-            self._menu_section()
+        if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
+            self._menu_section()                                            # only until it is in the menu)
         if self.frozen:
             self.source = source or standalone.bundled_source()
             self._unpack_page()
@@ -194,35 +194,30 @@ class SourceDialog:
 
     # ---- the applications menu / Start menu (ST-5, ST-10; in the panel since U-5) --------------------------------
     def _menu_section(self):
-        self._heading(self.menu[0].upper() + self.menu[1:])
-        self.menu_line = self.dlg.text("")
-        row = tk.Frame(self.dlg.body, bg=PALETTE["bg"])
-        row.pack(anchor="w", pady=(8, 0))
-        self.menu_button = f"Add to {self.menu}"
-        self.dlg.button(self.menu_button, self.add_to_menu, row=row)
-        self._show_menu()
-
-    def _show_menu(self):
-        what = "the program" if self.frozen else "this source (tierlist.py)"
         quiet = "a console window" if self.platform.startswith("win") else "a terminal"
-        if deps.in_menu(self.platform):
-            text = (f"Word Tier List is in your {self.menu}. Adding it again makes it start {what}, the one "
-                    "running now.")
-        else:
-            text = f"Puts Word Tier List in your {self.menu}, so it opens like any other program, without {quiet}."
-        self.menu_line.config(text=text)
+        self._heading(self.menu[0].upper() + self.menu[1:])
+        self.menu_line = self.dlg.text(f"Puts Word Tier List in your {self.menu}, so it opens like any other "
+                                       f"program, without {quiet}.")
+        self.menu_row = tk.Frame(self.dlg.body, bg=PALETTE["bg"])
+        self.menu_row.pack(anchor="w", pady=(8, 0))
+        self.menu_button = f"Add to {self.menu}"
+        self.dlg.button(self.menu_button, self.add_to_menu, row=self.menu_row)
 
     def add_to_menu(self):
-        """"Add to applications menu" / "Add to Start menu": for the form running now (App.add_launcher)."""
+        """"Add to applications menu" / "Add to Start menu" (in the program only): this program (App.add_launcher).
+        Once added the button goes, and the section is not shown again."""
         path = self.app.add_launcher(self.platform)
-        self._show_menu()
-        self.dlg.refit()
+        if path:
+            self.dlg.buttons.pop(self.menu_button).destroy()
+            self.menu_row.pack_forget()
+            self.menu_line.config(text=f"Word Tier List is in your {self.menu} now.")
+            self.dlg.refit()
         return path
 
     def _menu_for(self, program):
-        """Making the program, ticked "Add the program to the ... menu": point the menu at the new program before
-        it starts (a launcher left on the source would break once the source is cleaned up behind)."""
-        if self.menu and self.menu_var.get():
+        """Making the program: point the menu at the new program before it starts, when it is in the menu already
+        (a launcher left on the source would break once the source is cleaned up behind) or the tick asks for it."""
+        if self.menu and (self.was_in_menu or self.menu_var.get()):
             self.app.add_launcher(self.platform, program=program, quiet=True)
 
     # ---- "Update to the newest version first" (T-8) -------------------------------------------------------------
@@ -287,8 +282,9 @@ class SourceDialog:
         else:
             dlg.button("Make the program", self.make, default=True)
         self._update_row()
-        if self.menu:                             # (ticked when it is in the menu already: it moves to the program)
-            self.menu_var = tk.BooleanVar(value=deps.in_menu(self.platform))
+        self.was_in_menu = bool(self.menu) and deps.in_menu(self.platform)    # (then it moves to the program anyway)
+        self.menu_var = tk.BooleanVar(value=False)
+        if self.menu and not self.was_in_menu:    # (asked for: offered only until it is in the menu)
             ttk.Checkbutton(dlg.body, text=f"Add the program to the {self.menu}", variable=self.menu_var,
                             takefocus=1).pack(anchor="w", pady=(6, 0))
     def make(self):

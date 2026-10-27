@@ -270,39 +270,51 @@ assert open(os.path.join(proj3, "tierlist.py")).read() == "x = 1\n" and d.alive(
 d.close()
 sources.ask_yes_no = lambda *a, **kw: (asked.append(a), True)[1]
 
-# ---- U-5: the applications menu / Start menu in the panel; making the program can put it there --------------------
+# ---- U-5: the applications menu / Start menu: in the program until it is there; making the program can put it there
 import deps
 os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
-d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)
-assert "Add to applications menu" in d.buttons and "Puts Word Tier List" in d.menu_line.cget("text")
-assert not d.menu_var.get() and not deps.in_menu("linux")                       # (not in the menu: unticked)
-d.buttons["Add to applications menu"].invoke(); pump(root)
-assert deps.in_menu("linux") and "tierlist.py" in open(deps.launcher_path()).read()
-assert "is in your applications menu" in d.menu_line.cget("text")
+labels = lambda d: [w.cget("text") for w in d.dlg.body.winfo_children() if "text" in w.keys()]
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)       # (from source)
+assert "Add to applications menu" not in d.buttons and "Applications menu" not in labels(d)   # (asked for: no section)
+assert "Add the program to the applications menu" in labels(d) and not d.menu_var.get()       # (the build's tick)
 d.close()
+d = sources.SourceDialog(app, source=None, frozen=True, check=lambda: None, platform="linux"); settle(d)
+assert "Add to applications menu" in d.buttons and "Puts Word Tier List" in d.menu_line.cget("text")
+d.buttons["Add to applications menu"].invoke(); pump(root)
+assert deps.in_menu("linux") and "Add to applications menu" not in d.buttons and "now" in d.menu_line.cget("text")
+d.close()
+d = sources.SourceDialog(app, source=None, frozen=True, check=lambda: None, platform="linux"); settle(d)
+assert "Add to applications menu" not in d.buttons and not hasattr(d, "menu_line")     # (in it already: no section)
+d.close()
+# from source, in the menu already: no tick, and making the program moves the menu to it
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)
-assert d.menu_var.get()                                                          # (in it already: ticked, so it moves)
+assert "Add the program to the applications menu" not in labels(d) and d.was_in_menu
 S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "word-tierlist")
 started.clear()
 d.buttons["Make the program"].invoke(); pump(root, 2)
 text = open(deps.launcher_path()).read()
-assert started == [os.path.join(proj3, "word-tierlist")] and "tierlist.py" not in text and "word-tierlist" in text
+assert started == [os.path.join(proj3, "word-tierlist")] and 'Exec="' + os.path.join(proj3, "word-tierlist") in text
 del os.environ["XDG_DATA_HOME"]
 # Windows: the Start menu, the same way (the shortcut itself: _selftest_deps); macOS has nothing to add to
 root, app = window()
 added = []
 real_add, deps.add_to_start_menu = deps.add_to_start_menu, lambda python, script: (added.append((python, script)),
                                                                                   ("C:\\x.lnk", "added"))[1]
-d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
+os.environ["APPDATA"] = tempfile.mkdtemp()
+d = sources.SourceDialog(app, source=None, frozen=True, check=lambda: None, platform="win32"); settle(d)
 assert "Add to Start menu" in d.buttons and "without a console window" in d.menu_line.cget("text")
 d.buttons["Add to Start menu"].invoke(); pump(root)
-assert added and added[0][1].endswith("tierlist.py")
-d.menu_var.set(True); d.buttons["Make the program"].invoke(); pump(root, 2)
-assert added[-1] == (os.path.join(proj3, "word-tierlist"), None)               # (the new program, not the source)
+assert len(added) == 1 and added[0][0] == _sys.executable                      # (the one running now)
+d.close()
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
+assert "Add to Start menu" not in d.buttons
+d.menu_var.set(True); d.buttons["Make the program"].invoke(); pump(root, 2)    # (ticked: the new program)
+assert added[-1] == (os.path.join(proj3, "word-tierlist"), None)
 deps.add_to_start_menu = real_add
+del os.environ["APPDATA"]
 root, app = window()
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="darwin"); settle(d)
-assert d.menu is None and not any("menu" in b for b in d.buttons) and not hasattr(d, "menu_var")
+assert d.menu is None and not any("menu" in b for b in d.buttons) and not any("menu" in t for t in labels(d))
 d.close()
 app.on_close()
 
