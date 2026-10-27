@@ -1924,6 +1924,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the colour as it changes, then click the next tier. Each bar's track runs through the colours it would
 #           give (smooth.gradient_image). A colour the dark ink does not read on at 4.5:1 is called too dark and Apply
 #           waits. Reset to defaults, Cancel, Apply as before. theme.SWATCHES went. _selftest_looks.py.
+#           Then (asked for): a click anywhere on a pill picks it, not only on its letter (tier_at).
 # [x] UI-79 Asked for: the shelf's spines are always one width, however many there are (a full list's ~64 fill
 #           30 lines, as before; a short list's shelf is shorter). Bookshelf._metrics.
 # [x] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first (only
