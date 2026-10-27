@@ -276,7 +276,7 @@ os.environ["XDG_DATA_HOME"] = tempfile.mkdtemp()
 labels = lambda d: [w.cget("text") for w in d.dlg.body.winfo_children() if "text" in w.keys()]
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="linux"); settle(d)       # (from source)
 assert "Add to applications menu" not in d.buttons and "Applications menu" not in labels(d)   # (asked for: no section)
-assert "Add the program to the applications menu" in labels(d) and not d.menu_var.get()       # (the build's tick)
+assert "Add the program to the applications menu" in labels(d) and d.menu_var.get()   # (the build's tick: on, U-7)
 d.close()
 d = sources.SourceDialog(app, source=None, frozen=True, check=lambda: None, platform="linux"); settle(d)
 assert "Add to applications menu" in d.buttons and "Puts Word Tier List" in d.menu_line.cget("text")
@@ -308,8 +308,13 @@ assert len(added) == 1 and added[0][0] == _sys.executable                      #
 d.close()
 d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
 assert "Add to Start menu" not in d.buttons
-d.menu_var.set(True); d.buttons["Make the program"].invoke(); pump(root, 2)    # (ticked: the new program)
+assert d.menu_var.get(); d.buttons["Make the program"].invoke(); pump(root, 2)   # (ticked to start with: the program)
 assert added[-1] == (os.path.join(proj3, "word-tierlist"), None)
+root, app = window()
+n = len(added)
+d = sources.SourceDialog(app, root_dir=proj3, check=lambda: None, platform="win32"); settle(d)
+d.menu_var.set(False); d.buttons["Make the program"].invoke(); pump(root, 2)       # (unticked: left alone)
+assert len(added) == n
 deps.add_to_start_menu = real_add
 del os.environ["APPDATA"]
 root, app = window()

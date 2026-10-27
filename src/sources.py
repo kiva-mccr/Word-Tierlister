@@ -283,7 +283,7 @@ class SourceDialog:
             dlg.button("Make the program", self.make, default=True)
         self._update_row()
         self.was_in_menu = bool(self.menu) and deps.in_menu(self.platform)    # (then it moves to the program anyway)
-        self.menu_var = tk.BooleanVar(value=False)
+        self.menu_var = tk.BooleanVar(value=True)  # (asked for: ticked to start with)
         if self.menu and not self.was_in_menu:    # (asked for: offered only until it is in the menu)
             ttk.Checkbutton(dlg.body, text=f"Add the program to the {self.menu}", variable=self.menu_var,
                             takefocus=1).pack(anchor="w", pady=(6, 0))
