@@ -61,7 +61,11 @@ import tiercolours
 dlg = app.edit_tier_colours(); pump(root)
 assert dlg.current == 0 and dlg.var.get() == theme.DEFAULT_TIERS[0]
 assert dlg.pills.itemcget("ring0", "outline") and not dlg.pills.itemcget("ring1", "outline")   # (S wears the ring)
-dlg.select(4); pump(root)
+x4 = 5 + 4 * (dlg._pill_w + dlg._gap)                                # (a click anywhere on a pill picks it, not only its letter)
+assert [dlg.tier_at(x4 + 2), dlg.tier_at(x4 + dlg._pill_w - 2), dlg.tier_at(x4 - 3)] == [4, 4, 4]
+assert dlg.tier_at(0) == 0 and dlg.tier_at(10 ** 4) == 5
+dlg.pills.event_generate("<Button-1>", x=x4 + 2, y=7); pump(root)
+assert dlg.current == 4
 assert dlg.var.get() == theme.DEFAULT_TIERS[4] and dlg.pills.itemcget("ring4", "outline")
 assert not dlg.pills.itemcget("ring0", "outline")
 _h, s_, v = dlg.hsv[4]
