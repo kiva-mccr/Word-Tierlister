@@ -25,6 +25,7 @@ from tkinter import ttk
 from errors import ask_yes_no
 from fonts import font
 from saves import find_saves, save_progress
+from store import Store
 from theme import PALETTE
 from widgets import FileList, RoundButton, StyledDialog
 
@@ -124,8 +125,9 @@ def path_steps(folder):
 
 
 def found_files(script_dir, current_save, now=None):
-    """What Import offers straight away: other saves with progress, and exports named like a tier list, in
-    the usual places; newest first. Rows for a FileList."""
+    """What Import offers straight away: other saves with progress, and exports (told by their first line,
+    Store.is_export, never by their name: tierlist.md beside tierlist.py is its note), in the usual places;
+    newest first. Rows for a FileList."""
     home = os.path.expanduser("~")
     rows, seen = [], {os.path.realpath(current_save)} if current_save else set()
 
@@ -150,11 +152,9 @@ def found_files(script_dir, current_save, now=None):
             names = os.listdir(root)
         except OSError:
             continue
-        for n in names:
-            low = n.lower()
+        for n in sorted(n for n in names if n.lower().endswith((".csv", ".txt", ".md")))[:300]:
             p = os.path.join(root, n)
-            if "tier" in low and low.endswith((".csv", ".txt", ".md")) and os.path.realpath(p) not in seen \
-                    and os.path.isfile(p):
+            if os.path.realpath(p) not in seen and os.path.isfile(p) and Store.is_export(p):
                 seen.add(os.path.realpath(p))
                 st = os.stat(p)
                 rows.append({"icon": FILE_ICON, "name": show(p), "value": p, "kind": "file", "mtime": st.st_mtime,

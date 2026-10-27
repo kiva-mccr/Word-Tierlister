@@ -16,6 +16,13 @@ for d in ("Documents/old", "Downloads", ".hidden"):
 open(os.path.join(HOME, "Documents", "tierlist.csv"), "w").write("word,tier\nox,S\n")
 open(os.path.join(HOME, "Documents", "notes.txt"), "w").write("not a tier list")
 open(os.path.join(HOME, "Documents", "photo.png"), "w").write("x")
+# told by their first line, never their name: a code file's note or a README named like a tier list is left out,
+# a renamed export is found (and Import refuses a file that is not one)
+open(os.path.join(HOME, "Documents", "tierlist.py"), "w").write("")
+open(os.path.join(HOME, "Documents", "tierlist.md"), "w").write("# `tierlist.py`\n\nThe entry point.\n")
+open(os.path.join(HOME, "Documents", "tiers-readme.txt"), "w").write("S tier is the best.\n")
+open(os.path.join(HOME, "Documents", "my words.md"), "w").write("\n## S tier (1 words)\n1. ox\n")
+open(os.path.join(HOME, "Documents", "quoted.csv"), "w").write('"Word","Tier","rating"\nox,A,1\n')
 other = T.Store(os.path.join(HOME, "Downloads", "tierlist-old.db"))
 other.insert_words([f"w{i}" for i in range(50)]); other.place("w1", 0); other.place("w2", 3); other.close()
 mine = T.Store(os.path.join(HOME, "mine.db")); mine.insert_words(["a", "b"]); mine.close()
@@ -30,7 +37,8 @@ assert [s[0] for s in steps] == ["Home", "Documents", "old"] and steps[-1][1] ==
 deep = FP.path_steps("/a/b/c/d/e/f/g")
 assert len(deep) == 5 and deep[1][0] == "…" and deep[-1][0] == "g"                  # a long path keeps both ends
 rows = FP.list_folder(os.path.join(HOME, "Documents"), FP.IMPORT_EXTS)
-assert [r["name"] for r in rows] == ["old/", "notes.txt", "tierlist.csv"]                # folders first; no .png
+assert [r["name"] for r in rows] == ["old/", "my words.md", "notes.txt", "quoted.csv", "tierlist.csv", "tierlist.md",
+                                     "tiers-readme.txt"]                                 # folders first; no .png
 assert FP.list_folder(HOME, FP.IMPORT_EXTS)[0]["name"] == "Documents/"                   # hidden folders left out
 assert all(r["dim"] for r in FP.list_folder(os.path.join(HOME, "Documents"), (".csv",), pick_files=False)
            if r["kind"] == "file")                                                       # choosing a folder: files grey
@@ -38,6 +46,15 @@ found = FP.found_files(HOME, os.path.join(HOME, "mine.db"))
 names = [r["name"] for r in found]
 assert os.path.join("Downloads", "tierlist-old.db") in names and os.path.join("Documents", "tierlist.csv") in names
 assert "mine.db" not in names and not any("notes" in n for n in names)                   # not this save; not a note
+assert os.path.join("Documents", "my words.md") in names and os.path.join("Documents", "quoted.csv") in names
+assert not any(n.endswith(("tierlist.md", "tiers-readme.txt")) for n in names)          # named like one, but not one
+assert T.Store.is_export(os.path.join(HOME, "Documents", "tierlist.csv"))
+assert not T.Store.is_export(os.path.join(HOME, "Documents", "photo.png"))
+try:
+    T.Store(os.path.join(HOME, "mine.db")).merge(os.path.join(HOME, "Documents", "tierlist.md"), backup=False)
+    raise AssertionError("a code file's note was imported")
+except ValueError as exc:
+    assert "not a tier list" in str(exc)
 assert next(r for r in found if r["name"].endswith(".db"))["info"] == "2 placed"
 assert [p[1] for p in FP.places(HOME)] == ["Home", "Documents", "Downloads", "Next to your save"]
 from smooth import ICONS

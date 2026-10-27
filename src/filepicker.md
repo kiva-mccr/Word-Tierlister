@@ -2,7 +2,7 @@
 
 Choosing files for Import and Export in the app's own style on Linux (UI-42); Windows and macOS keep their system dialogs (`use_themed`).
 
-- **Uses:** `errors`, `fonts`, `saves`, `theme`, `widgets`
+- **Uses:** `errors`, `fonts`, `saves`, `store`, `theme`, `widgets`
 - **Used by:** `app`, `sources`
 - **Tests:** `_selftest_filepicker`
 
@@ -16,7 +16,7 @@ The module docstring has the details; this page is the map.
 - `places`: [(icon, label, folder)] that exist: Home, Desktop, Documents, Downloads, and the save's own folder.
 - `list_folder`: Rows for a FileList: the folders (not hidden) and the files with these extensions, each sorted by name.
 - `path_steps`: [(label, path)] from the top down: '/' (or the drive), then each folder.
-- `found_files`: What Import offers straight away: other saves with progress, and exports named like a tier list, in the usual places; newest first.
+- `found_files`: What Import offers straight away: other saves with progress, and exports (told by their first line, Store.is_export, never by their name: tierlist.md beside...
 - `FolderBrowser`: Browse folders to pick a file (mode "file": one with `exts`) or a folder (mode "folder").
   - methods: go, up
 - `browse`: Open a FolderBrowser and wait; the chosen path, or None.
@@ -30,3 +30,4 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Each dialog keeps `.result` so tests can drive it; the `ask_*` helpers wait.
+- Exports are found by their first line (`Store.is_export`), never by their name: "tier" in the name once offered tierlist.md, tierlist.py's note (F-44).

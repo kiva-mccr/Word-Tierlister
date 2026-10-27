@@ -36,7 +36,7 @@ A tab only shows once it has work. Everywhere: Backspace or Ctrl+Z undoes (even 
 definition, Tab moves to the next tab, Ctrl + / Ctrl - / Ctrl 0 zoom. Every key can be changed under Settings >
 Keyboard shortcuts. The other menus:
 
-- **File**: import earlier progress (another save, or an exported list), export the list, where your save file is,
+- **File**: import earlier progress (another save, or an exported list, told by what is in it rather than its name), export the list, where your save file is,
   and Source & Updates (one panel: check for updates and update what you are running, make it a program, or give
   its source back; the program can also add itself to the applications menu (Linux) or the Start menu (Windows)).
 - **Edit**: Undo. **View**: Browse / edit the tier list (search, sort, move words between tiers), zoom, Show
