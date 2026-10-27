@@ -383,6 +383,6 @@ ended without closing. Each start is marked with the version and the system it r
 
 ## Licence
 
-Word Tier List is free software under the GNU General Public License, version 3 (`LICENSE`). The two typefaces in
+Word Tierlister is free software under the GNU General Public License, version 3 (`LICENSE`). The two typefaces in
 `src/typefaces/`, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1 (their licences
 are beside them); `tools/make_typefaces.py` tightens their line spacing, which that licence allows.
