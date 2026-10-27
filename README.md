@@ -1,4 +1,4 @@
-# Word Tier List
+# Word Tierlister
 
 Tier-list every English word (S / A / B / C / D / F). Progress autosaves to SQLite after every
 action and resumes automatically, even if you replace these files.
