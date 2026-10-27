@@ -1588,8 +1588,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #
 # --- Looks (asked for after W-1, before the icon) ---------------------------------------------------------------
 # [x] UI-61 Tier colours: Settings > Tier colours... (src/tiercolours.py): each tier's pill as it will look, a strip of
-#           pastel swatches (theme.SWATCHES, every one light enough for the dark ink) and its #RRGGBB to type any
-#           other; Reset to defaults; Apply saves them in the save (meta tier_colors) and reopens the window in them.
+#           pastel swatches (every one light enough for the dark ink) and its #RRGGBB to type any other; Reset to
+#           defaults; Apply saves them in the save (meta tier_colors) and reopens the window in them. (UI-80 replaced
+#           the swatches.)
 # [x] UI-62 Dark mode (asked for; not the default): View > Dark mode, a soft plum night (theme.DARK, the same roles as
 #           the light look) with the same pastel tiers; Browse's rows are a deeper wash under light text
 #           (TIER_ROW_TEXT). Kept in the save (meta dark_mode). How both show: theme.apply() changes the palette in
@@ -1917,6 +1918,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           plum night. The light look keeps its colours. theme.DARK; a save that never chose tier colours gets
 #           the look's own (theme.default_tiers: DUSK_TIERS in the dark), and Tier colours' Reset puts back the
 #           look's. Every text colour on its background is 7:1 or better, the dark ink on the tiers 5.3:1.
+# [x] UI-80 Asked for (Tier colours felt like a lot of drawing for little: six rows of the same 15 swatches): picked from
+#           mock-ups, the six tier pills in one row (click one: it wears a ring) and under them three bars, H, S and V,
+#           and a hex code; the bars and the code follow each other (a typed code may leave out the #), the pill shows
+#           the colour as it changes, then click the next tier. Each bar's track runs through the colours it would
+#           give (smooth.gradient_image). A colour the dark ink does not read on at 4.5:1 is called too dark and Apply
+#           waits. Reset to defaults, Cancel, Apply as before. theme.SWATCHES went. _selftest_looks.py.
 # [x] UI-79 Asked for: the shelf's spines are always one width, however many there are (a full list's ~64 fill
 #           30 lines, as before; a short list's shelf is shorter). Bookshelf._metrics.
 # [x] UI-78 Borders and the card's shadowy edge: a pass of their own, mock-ups with befores and afters first (only

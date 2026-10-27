@@ -17,7 +17,8 @@ image sits straight above it and follows it (move, delete, raise / lower, state)
 gives the colour it is drawn in. `radii` gives each corner its own radius (top-left, top-right,
 bottom-right, bottom-left): bars are round on top and square at the bottom.
 
-    curve_image(...) does the same for the area under a curve and its line (the queue dialog's shapes).
+    curve_image(...) does the same for the area under a curve and its line (the queue dialog's shapes), and
+    gradient_image(...) for a pill-shaped bar that runs through colours (Tier colours' H / S / V bars).
 Images are cached per window (the same shape in the same colours is drawn once).
 """
 import base64
@@ -751,6 +752,44 @@ def arrow_image(widget, w, h, fill, track, reveal=1.0, up=False):
             rows.append(paint_mask([runs], colour, None)[0])
         return _photo(widget, w, h, rows)
     return _cached(widget, key, make)
+
+
+# ---------------------------------------------------------------- a pill-shaped bar that runs through colours
+def gradient_image(canvas, w, h, columns, outline):
+    """A pill-shaped bar w x h whose fill runs through `columns` (one (r, g, b) per pixel column, left to right) with
+    a hairline `outline`, blended onto the canvas colour (a colour slider's track). Its image is 2 pixels bigger
+    each way than the bar: show it 1 pixel up and left of the bar's corner. The shape's mask is cached; the colours
+    change as a slider moves, so the image is not. Inside, a row is copied from one row of every column's colour,
+    and only the soft edge is blended pixel by pixel."""
+    pad = 1
+    radii = (h / 2.0,) * 4
+    mask = _cached(canvas, ("mask", "gradient", w, h), lambda: _stretched_mask(pad, pad, pad + w, pad + h, radii, 1,
+                                                                              pad))
+    width = sum(run[0] for run in mask[0])
+    bg, edge = canvas._canvas_rgb(), _rgb(outline)
+    cols = [bg] * pad + [tuple(c) for c in columns][:w]
+    cols += [bg] * (width - len(cols))
+    solid = b"".join(bytes((r, g, b, 255)) for r, g, b in cols)
+    clear = bytes(bg) + b"\xff"
+    rows, seen = [], {}
+    for runs in mask:
+        row = seen.get(id(runs))                     # (the middle rows are one list, repeated)
+        if row is None:
+            out, x = bytearray(), 0
+            for count, qa, qo in runs:
+                if qa == 255 and not qo:
+                    out += solid[4 * x:4 * (x + count)]
+                elif not qa and not qo:
+                    out += clear * count
+                else:
+                    for i in range(x, x + count):
+                        px = _pixel(cols[i], edge, qa / 255.0, qo / 255.0)
+                        a = px[3] / 255.0
+                        out += bytes([int(bg[k] + (px[k] - bg[k]) * a + 0.5) for k in range(3)] + [255])
+                x += count
+            row = seen[id(runs)] = bytes(out)
+        rows.append(row)
+    return _photo(canvas, width, len(mask), rows)
 
 
 # ---------------------------------------------------------------- the area under a curve

@@ -24,7 +24,7 @@ The module docstring has the details; this page is the map.
 
 - Two looks (UI-62): `LIGHT` (the default) and `DARK`, with the same roles; tier colours can be chosen (UI-61). `apply()` changes `PALETTE`, `TIER_COLORS`, `TIER_ROW` and `TIER_ROW_TEXT` in place before a window is built: read them when drawing, never copy one at import (a default argument, a module constant). Never write a hex colour in a widget.
 - The dark look is Dusk (UI-77): its own default tiers (`DUSK_TIERS`); a save that never chose tier colours follows the look (`default_tiers()`), so the light pastels never show in the dark by default.
-- Contrast (UI-76): text and muted text about 7:1 or better on the page and cards in both looks, the dark ink at least 4.5:1 on every tier colour and swatch (`contrast()`; `_selftest_looks` checks). A new colour role or swatch must pass too.
+- Contrast (UI-76): text and muted text about 7:1 or better on the page and cards in both looks, the dark ink at least 4.5:1 on every default tier colour (`contrast()`; `_selftest_looks` checks). A new colour role or default tier colour must pass too (a chosen one: Tier colours checks it, UI-80).
 - Text on a tier colour or another pastel is always the dark ink (`TIER_TEXT`, `ink_on`), in the dark look too.
 - Where letters or counts already carry the meaning, keep the pastels rather than colour-blind tuning (the user's choice).
 
