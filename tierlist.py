@@ -1897,6 +1897,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           with "tier" in its name was taken for an export. An export is now told by its first line
 #           (Store.is_export: a .csv's "word,tier" header, a listing's "S tier (N words)" heading), never its name:
 #           a renamed export is found, and Import refuses a file that is not one instead of bringing in nothing.
+# [x] F-45 Reported: on Windows, dragging the setup window to another screen made it wider. Windows was told the
+#           program scales per monitor, version 2, which also scales the title bar and borders on a monitor with
+#           another scaling; Tk 8.6 still takes a window's border width from the main monitor's scaling and only
+#           measures the height again, and a window that cannot be resized (the setup window, every dialog) is
+#           held at its width plus that stale border, so it gained the difference on each such monitor.
+#           set_dpi_awareness now asks for version 1 (borders the same on every monitor), which Tk 8.6 handles.
+#           Not yet tried on real Windows (worked out from Tk's tkWinWm.c; the calls are tested with stand-ins).
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data

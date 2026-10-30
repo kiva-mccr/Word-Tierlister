@@ -123,7 +123,8 @@ else:
 assert Z._windows_monitors() == [] or os.name == "nt"                          # (only answers on Windows)
 root.destroy()
 
-# ---- Windows display scaling: asked for once, newest way first, older ways as fallbacks
+# ---- Windows display scaling: asked for once, per monitor version 1 first, the whole system's dpi as a fallback;
+# never version 2 (F-45: Tk 8.6 sizes a fixed window from unscaled borders, so it grew on a monitor with another scaling)
 class Fn:
     def __init__(self, result, calls, name): self.result, self.calls, self.name = result, calls, name
     def __call__(self, *a): self.calls.append((self.name, a)); return self.result
@@ -136,11 +137,10 @@ def fake_windll(ctx, shcore, legacy):
     w.shcore = part(SetProcessDpiAwareness=shcore)
     return w, calls
 w, calls = fake_windll(1, 0, 1)
-assert Z.set_dpi_awareness(w) and calls == [("SetProcessDpiAwarenessContext", (-4,))]   # per monitor, v2
-w, calls = fake_windll(0, 0, 1)
-assert Z.set_dpi_awareness(w) and [c[0] for c in calls] == ["SetProcessDpiAwarenessContext", "SetProcessDpiAwareness"]
-w, calls = fake_windll(0, 5, 1)
-assert Z.set_dpi_awareness(w) and calls[-1][0] == "SetProcessDPIAware"
+assert Z.set_dpi_awareness(w) and calls == [("SetProcessDpiAwareness", (2,))]          # per monitor, version 1
+w, calls = fake_windll(1, 5, 1)
+assert Z.set_dpi_awareness(w) and [c[0] for c in calls] == ["SetProcessDpiAwareness", "SetProcessDPIAware"]
+assert not any(c[0] == "SetProcessDpiAwarenessContext" for c in calls)
 assert Z.set_dpi_awareness() is (os.name == "nt") or os.name == "nt"           # elsewhere: nothing to do
 # two monitors: a window uses the monitor it is on, and a dialog opens on its parent's, wherever the pointer is
 # (it used to be the pointer's monitor: a dialog was pushed onto the other one, the main window fitted to its size)

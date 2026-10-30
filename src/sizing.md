@@ -28,4 +28,5 @@ The module docstring has the details; this page is the map.
 
 - Every window size comes from here; tests pretend other screens by replacing `usable_area`.
 - Pop-ups stay on their monitor (`clamp_to_monitor`).
+- Windows: `set_dpi_awareness` asks for per monitor version 1, never version 2: with version 2 the borders scale per monitor while Tk 8.6 sizes a window from the main monitor's border width, and a fixed-size window (the setup window, dialogs) grew wider each time it was dragged to a monitor with another scaling (F-45).
 - `usable_area` / `monitor_box` use the monitor the window (or a dialog's parent) is on; only a window not shown yet goes by the pointer. Dialogs that grow stay on it (`keep_on_screen`).
