@@ -175,21 +175,19 @@ def set_dpi_awareness(windll=None):
     window opens. Without it, at 125% / 150% Windows draws the window small and stretches it like a
     picture, so text and every rounded button look soft and pixelated, and positions are scaled too (pop-ups
     land in the wrong place on a second monitor). Tk then reports the real dpi and the layout follows
-    (ui_factor). Returns True if it was set. Does nothing elsewhere; `windll` is for tests."""
+    (ui_factor). Returns True if it was set. Does nothing elsewhere; `windll` is for tests.
+
+    Per monitor version 1, never version 2: version 2 also scales the title bar and borders on a monitor with
+    another scaling, while Tk 8.6 works out a window's width from the borders at the main monitor's scaling
+    (AdjustWindowRectEx; only the height is measured again). A window that cannot be resized (the setup
+    window, every dialog) then gained the difference in width each time it was dragged to such a monitor
+    (F-45). Version 1 keeps the borders the same everywhere, which is all Tk 8.6 knows how to handle."""
     if windll is None:
         if os.name != "nt":
             return False
         import ctypes
         windll = ctypes.windll
-    try:                                   # Windows 10 1703+: per monitor, version 2
-        import ctypes
-        fn = windll.user32.SetProcessDpiAwarenessContext
-        fn.argtypes = [ctypes.c_ssize_t]
-        if fn(-4):                         # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
-            return True
-    except Exception:
-        pass
-    try:                                   # Windows 8.1+: per monitor
+    try:                                   # Windows 8.1+: per monitor (version 1)
         if windll.shcore.SetProcessDpiAwareness(2) == 0:
             return True
     except Exception:
