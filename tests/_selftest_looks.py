@@ -127,7 +127,15 @@ def init_and_mark(self, root, *a, **kw):
     root._app = self
     steps = getattr(A, "_steps", [])
     if steps:
-        root.after(300, steps.pop(0))
+        root.after(300, when_settled, self, steps.pop(0))
+
+
+def when_settled(app_, step):
+    """Run the next step once the window this one replaced has closed (a slow Mac got to it first)."""
+    if getattr(app_, "_old", None) is not None:
+        app_.root.after(50, when_settled, app_, step)
+    else:
+        step()
 A.App.__init__ = init_and_mark
 A.App._orig_shut = A.App._shut
 def traced_shut(self, close_store):
@@ -177,4 +185,22 @@ assert results["meta"] == ("0", PICK)
 # takes its place and size and its Browse window, and only then does the old one close
 assert results["old_up"] and results["first_gone"] and results["browse"], results
 assert results["geometry"] == "1020x720+37+41", results["geometry"]
+# seen on a Mac: a new look asked again while the new window was still opening (its quit came before its event loop,
+# which forgets it): the window is built again at once instead of the loop waiting for good
+s2 = T.Store(os.path.join(tempfile.mkdtemp(), "looks2.db"))
+s2.insert_words(w); s2.set_anchors(w[:6]); s2.set_meta("dealt_asked", "1")
+r5 = new_root(); tk._default_root = r5
+a5 = A.App(r5, s2, T.Definitions(s2)); a5.open_window(); pump(r5)
+real_open, opened = A.App.open_window, []
+def open_slowly(self):
+    real_open(self); opened.append(self)
+    if len(opened) == 1:
+        self.reopen(); pump(self.root)                                # (its quit runs here, before any event loop)
+    else:
+        self.root.after(300, self.on_close)
+A.App.open_window = open_slowly
+a5.reopen(); r5.mainloop()
+last = A.reopen_while_asked(a5, s2, a5.defs, new_root)
+A.App.open_window = real_open
+assert len(opened) == 2 and not last.reopening and last is opened[1]
 print("LOOKS OK")

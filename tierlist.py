@@ -2002,7 +2002,7 @@ try:
     import tkinter as tk
     from tkinter import filedialog  # noqa: F401
     from app import App, apply_look, reopen_while_asked
-    from fonts import init_fonts
+    from fonts import init_fonts, load_typefaces
     from errors import install_handlers, run_guarded
     from problems import SetupError, end_session, ensure_streams, open_log, start_session
     from startup import detach_console, ensure_packages, run_with_progress
@@ -2023,6 +2023,8 @@ def main():
             del os.environ[key]
         os.environ.update(clean)
     deps.use_system_certificates()            # (U-3: a built program trusts this computer's certificates)
+    if tk is not None:
+        load_typefaces()                      # (before the first Tk: a Mac's Tk may not see fonts added after it)
     ap = argparse.ArgumentParser(description="Tier-list every word in the English dictionary.")
     ap.add_argument("--db", default=None,
                     help="save file to use. By default your earlier save is found automatically "

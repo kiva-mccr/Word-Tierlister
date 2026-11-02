@@ -9,6 +9,8 @@ from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
 from widgets import ChoiceButton, EmptyCard, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
+from fonts import load_typefaces
+load_typefaces()                     # (before the first Tk, as main() does: a Mac's Tk may not see fonts added later)
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
 
@@ -711,7 +713,8 @@ _init(root)
 cv.delete("all")
 w3 = cv.create_text(20, 10, text="good", font=_font("word"), anchor="nw"); root.update()
 b3 = cv.bbox(w3)
-assert len(letter_holes(cv, _font("word"), "good")) == 5, (_font("word").actual(), letter_holes(cv, _font("word"), "good"))
+assert len(letter_holes(cv, _font("word"), "good")) == 5, (_font("word").actual(), letter_holes(cv, _font("word"), "good"),
+                                                           load_typefaces(), [f for f in tkfont.families(root) if "Young" in f])
 assert letter_holes(cv, ("Helvetica", 40), "good") == [], cv.tk.call("font", "actual", ("Helvetica", 40))
 fills = lambda: [i for i in cv.find_withtag("s") if cv.type(i) == "polygon"]
 smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
