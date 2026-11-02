@@ -3,7 +3,7 @@
 What went wrong, in plain words (ST-2), with no tkinter so any layer can raise or describe a problem; plus the small log helpers that keep messages when there is no console.
 
 - **Uses:** the standard library only
-- **Used by:** `errors`, `sources`, `startup`, `tierlist`, `wordsource`
+- **Used by:** `errors`, `sources`, `startup`, `syncdialog`, `tierlist`, `wordsource`
 - **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_health`, `_selftest_sources`
 
 The module docstring has the details; this page is the map.

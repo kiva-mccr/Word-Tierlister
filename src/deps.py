@@ -56,7 +56,7 @@ PIP_NAMES = {**PACKAGES, **BUILD_PACKAGES}      # import name -> what to hand to
 # disk space each one takes in MB, shown next to its tick box. Measured with pip for wordfreq 3.1 (57 MB to
 # download, 70 installed, mostly frequency data) and nltk 3.10 (3 MB download, 23 installed, plus 11 MB of
 # WordNet data on first use), Python 3.12; re-measure when the requirements change.
-SIZE = {"wordfreq": 70, "nltk": 35, "PyInstaller": 15}   # (PyInstaller 6.22: 2 MB to download, 15 installed)
+SIZE = {"wordfreq": 70, "nltk": 35, "PyInstaller": 15, "syncthing": 30}   # (PyInstaller 6.22: 2 MB to download, 15 installed)
 # what pip downloads for each, with the packages it pulls in (MB; measured with pip 24 for wordfreq 3.1 and
 # nltk 3.10): the installing window measures the download against this to show a percentage and a speed
 DOWNLOAD = {"wordfreq": 59, "nltk": 3, "PyInstaller": 3}
@@ -65,13 +65,16 @@ DOWNLOAD = {"wordfreq": 59, "nltk": 3, "PyInstaller": 3}
 PURPOSE = {"wordfreq": "word frequency data: needed to build and rank the word list",
            "nltk": "the WordNet dictionary, for offline definitions (the program works without it)",
            "tkinter": "the window toolkit (comes with Python, but some systems ship it separately)",
-           "PyInstaller": "the builder that turns the program into one file: needed to make the program"}
+           "PyInstaller": "the builder that turns the program into one file: needed to make the program",
+           "syncthing": "keeps your tier list the same on your other computers (File > Sync with other devices; "
+                        "the program works without it)"}
 
 # each one's own web page (UI-30): a link on its name in the install dialog, printed in the terminal
 HOMEPAGE = {"wordfreq": "https://pypi.org/project/wordfreq/",
             "nltk": "https://www.nltk.org/",
             "tkinter": "https://docs.python.org/3/library/tkinter.html",
-            "PyInstaller": "https://pyinstaller.org/"}
+            "PyInstaller": "https://pyinstaller.org/",
+            "syncthing": "https://syncthing.net/"}
 
 
 def missing(names):
@@ -207,25 +210,31 @@ def tk_available():
 # (asked for: anything missing is offered, not only told). None: nothing to install there (it comes with Python).
 SYSTEM_PACKAGES = {
     "apt-get": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": ["python3-venv"],
-                "python": ["python3", "python3-tk"]},
+                "python": ["python3", "python3-tk"], "syncthing": ["syncthing"]},
     "dnf": {"tkinter": ["python3-tkinter"], "pip": ["python3-pip"], "venv": None,
-            "python": ["python3", "python3-tkinter"]},
-    "pacman": {"tkinter": ["tk"], "pip": ["python-pip"], "venv": None, "python": ["python", "tk"]},
-    "zypper": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": None, "python": ["python3", "python3-tk"]},
+            "python": ["python3", "python3-tkinter"], "syncthing": ["syncthing"]},
+    "pacman": {"tkinter": ["tk"], "pip": ["python-pip"], "venv": None, "python": ["python", "tk"],
+               "syncthing": ["syncthing"]},
+    "zypper": {"tkinter": ["python3-tk"], "pip": ["python3-pip"], "venv": None, "python": ["python3", "python3-tk"],
+               "syncthing": ["syncthing"]},
 }
 _MANAGERS = {"apt-get": ["apt-get", "install", "-y"], "dnf": ["dnf", "install", "-y"],
              "pacman": ["pacman", "-S", "--noconfirm"], "zypper": ["zypper", "--non-interactive", "install"]}
 SYSTEM_NAMES = {"tkinter": "tkinter", "pip": "pip, Python's package installer", "venv": "Python's venv module",
-                "python": "Python"}
+                "python": "Python", "syncthing": "Syncthing"}
+# Optional programs from the system, offered with the optional packages (SY-1: asked for, a tick box in the same
+# window): what each is for, about how big, its page. Present: syncthing_api.find_syncthing.
+SYSTEM_OPTIONAL = ["syncthing"]
 
 
 def system_install_command(what, platform=None, which=None, window=False):
-    """The system command that installs `what` ("tkinter", "pip", "venv" or "python") for this computer, as a
+    """The system command that installs `what` ("tkinter", "pip", "venv", "python" or "syncthing") for this computer, as a
     list, or None if there is nothing we know to run.
 
     Linux: the distribution's package manager (only for the system Python, which is what those packages serve),
     as root: through sudo in a terminal, through pkexec (the desktop's own password prompt) from a `window`.
-    macOS: Homebrew (python-tk brings Python with it). Windows: winget for Python (for this user, no admin);
+    macOS: Homebrew (python-tk brings Python with it). Windows: winget for Python (for this user, no admin) and
+    Syncthing;
     tkinter is an option of the python.org installer, not something to install afterwards."""
     platform = platform or sys.platform
     which = which or shutil.which
@@ -246,9 +255,10 @@ def system_install_command(what, platform=None, which=None, window=False):
     elif platform == "darwin" and which("brew"):
         version = f"{sys.version_info[0]}.{sys.version_info[1]}"
         return {"tkinter": ["brew", "install", f"python-tk@{version}"], "python": ["brew", "install", "python-tk"],
-                "pip": None, "venv": None}.get(what)
-    elif platform.startswith("win") and what == "python" and which("winget"):
-        return ["winget", "install", "-e", "--id", "Python.Python.3.12", "--scope", "user",
+                "syncthing": ["brew", "install", "syncthing"], "pip": None, "venv": None}.get(what)
+    elif platform.startswith("win") and what in ("python", "syncthing") and which("winget"):
+        package = {"python": ["Python.Python.3.12", "--scope", "user"], "syncthing": ["Syncthing.Syncthing"]}[what]
+        return ["winget", "install", "-e", "--id", *package,
                 "--accept-package-agreements", "--accept-source-agreements"]
     return None
 

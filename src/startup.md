@@ -2,8 +2,8 @@
 
 Long jobs behind a progress window (ST-1): `run_with_progress` runs `work(log)` on a worker thread and turns its log lines into a stage, a detail line, a bar with an ETA and "Step i of n"; also the install dialog (ST-4) and Windows' console detach.
 
-- **Uses:** `constants`, `deps`, `errors`, `fonts`, `problems`, `sizing`, `theme`
-- **Used by:** `sources`, `tierlist`
+- **Uses:** `constants`, `deps`, `errors`, `fonts`, `problems`, `sizing`, `syncthing_api`, `theme`
+- **Used by:** `sources`, `syncdialog`, `tierlist`
 - **Tests:** `_selftest_sizing`, `_selftest_startup`
 
 The module docstring has the details; this page is the map.
@@ -28,3 +28,4 @@ The module docstring has the details; this page is the map.
 - Worker threads never touch tkinter; errors in the work are re-raised in the caller, closing the window raises `SystemExit(STOPPED_MESSAGE)`.
 - A bar with a real percentage always shows an ETA (`EtaTracker` / `format_eta`).
 - `offer_system_install` (ST-8) asks first, then runs the system's command behind the progress window; pip missing tries `deps.ensure_pip` before asking.
+- `ensure_packages(system_optional=...)` (SY-1): Syncthing is a tick box beside the optional packages, only while it is missing, not declined (meta declined_packages, shared with the packages) and there is a command for it; it installs with the system's installer behind its own progress window, and a failure only says so on stderr.

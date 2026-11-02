@@ -108,6 +108,8 @@ missed). Keep the README current in the same commit as the change (the user aske
 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
+- Ask questions and show mock-ups of a design or a fix before building it fully (asked for after SY-1 was built
+  before its look was agreed): agree the look and the open choices first, then build.
 - Finish a step with: tests passing, roadmap ticked, README updated, a short summary.
 - Every prompt, before finishing: tidy what was touched (dead code, stale comments and names, leftover
   debug lines, unused imports via pyflakes, scratch files out of the repo), then:

@@ -2185,7 +2185,7 @@ def main():
                         deps.restart(python, restart_argv)
                     ensure_packages(
                         root, list(deps.REQUIRED) + (["nltk"] if wordnet_build else []), optional=deps.OPTIONAL,
-                        declined=declined, restart=restart, home=script_dir,
+                        system_optional=deps.SYSTEM_OPTIONAL, declined=declined, restart=restart, home=script_dir,
                         on_decline=lambda names: store.set_meta("declined_packages", json.dumps(sorted(declined | set(names)))))
                 run_with_progress(root, set_up,
                                   initial_stage="Initializing download..." if builds_wiktionary else "Initializing...")
