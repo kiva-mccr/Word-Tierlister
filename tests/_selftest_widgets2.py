@@ -426,21 +426,27 @@ assert dr.steady
 tall = dr.winfo_height()
 dr.set_lines(4); update()
 seen_before = (dr.winfo_height(), dr.steady, dr._inner.winfo_reqheight())
-dr.ease_from(tall); update()
+real_clock, tick = anim.clock, [time.perf_counter()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (a frame every 10 ms however slow the machine is: the slower
+dr.ease_from(tall); update()                           # Intel Mac drew three frames of the whole ease)
 mid = dr.winfo_height()
 assert dr.easing and mid >= tall - 2, (tall, mid, seen_before, dr.easing)     # (from where it was: not jumped)
 seen = [mid]
 for _ in range(30):
-    root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+    tick[0] += 0.01; root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+anim.clock, anim._real = real_clock, True
 assert seen[-1] < tall and all(b <= a for a, b in zip(seen, seen[1:])) and len(set(seen)) > 3, seen
 assert not dr.easing and dr.steady
 dr.set_lines(9); update(); anim.finish_all(); update()
 # F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
 # height it has: taken as its whole height, the pane's top edge and its text dropped a little
 dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()
+real_clock, now = anim.clock, time.perf_counter()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() slid it open)
 dr.open(); update()
 was = dr.winfo_height()
 dr.give(30); update()
+anim.clock, anim._real = real_clock, True
 assert dr.winfo_height() == min(full, was + 30), (was, dr.winfo_height(), full)
 dr.give(5000); update(); assert dr.winfo_height() <= full                       # (never past its own height)
 anim.finish_all(); update()

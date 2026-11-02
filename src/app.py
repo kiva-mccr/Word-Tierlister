@@ -2329,7 +2329,10 @@ class App:
             try:
                 old._shut(close_store=False)
             except tk.TclError:
-                pass
+                try:                                 # (a window left over keeps the event loop running after
+                    old.root.destroy()               # the last one closes: the program never ends)
+                except tk.TclError:
+                    pass
 
     def take_over(self, old):
         """Become the window `old` was (reopening in a new look): its place and size, maximized or not, the word

@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import os, sys, tempfile, time, types
+import os, sys, tempfile, threading, time, types
 import tkinter as tk
 import tierlist as T
 
@@ -127,14 +127,16 @@ qd.buttons["Apply"].invoke(); pump(2)                                           
 assert qd.alive() and "No settings changed" in labels(qd)
 qd.seed_e.delete(0, "end"); qd.seed_e.insert(0, "424242"); pump(1)
 assert "No settings changed" not in labels(qd)                                  # an edit clears the note
-real_reshuffle, gate = s.reshuffle, []
-s.reshuffle = lambda **k: (gate.append(1), time.sleep(0.6), real_reshuffle(**k))
+real_reshuffle, gate, release = s.reshuffle, [], threading.Event()
+s.reshuffle = lambda **k: (gate.append(1), release.wait(30), real_reshuffle(**k))   # (held until checked: a fixed
+                                                                                   # wait was over on a slow Mac)
 v0 = s.version
 qd.buttons["Apply"].invoke(); pump(2, 0.05)
 assert qd.alive() and app.busy and "Shuffling" in labels(qd)                    # runs in the background ...
 assert not qd.buttons["Apply"].enabled and not qd.buttons["Cancel"].enabled
 assert qd.bar.winfo_manager() and str(qd.bar.cget("mode")) == "indeterminate"   # the back-and-forth bar
 qd.dlg.win.event_generate("<Escape>"); pump(1); assert qd.alive()                # ... and cannot be cancelled halfway
+release.set()
 t_end = time.time() + 30
 while qd.alive() and time.time() < t_end:
     pump(2, 0.05)
@@ -436,7 +438,11 @@ body1, word1 = _font("body").cget("size"), _font("word").cget("size")
 min0 = root.minsize()
 rw, rh = app._ref_size
 root.geometry(f"{int(rw * 1.42)}x{int(rh * 1.42)}"); pump(12, 0.03)
-assert app.grow == 1.4 and _font("body").cget("size") > body1 and _font("word").cget("size") > word1
+t_end = time.time() + 5                                                         # (a slow Mac resizes later)
+while app.grow != 1.4 and time.time() < t_end:
+    pump(2, 0.05)
+assert app.grow == 1.4, (app.grow, (rw, rh), root.geometry(), root.winfo_screenwidth(), root.winfo_screenheight())
+assert _font("body").cget("size") > body1 and _font("word").cget("size") > word1
 assert root.minsize() == min0                                                   # can still be made small again
 cw, ch = app._content_size(); assert cw <= root.winfo_width() and ch <= root.winfo_height()   # nothing clipped
 app.mode_var.set("refine"); app.on_mode_change(); pump(3)

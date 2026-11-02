@@ -101,6 +101,7 @@ dlg.var.set(PICK)
 
 def check_reopened():
     """In the reopened window: S is the colour picked; then turn on dark mode, which reopens again."""
+    trace("check_reopened")
     app2 = tk._default_root._app
     results["geometry"] = app2.root.geometry()
     results["browse"] = any(b.alive() for b in app2.browsers)
@@ -114,7 +115,12 @@ def check_reopened():
 
 
 A.App._orig_init = A.App.__init__
+def trace(what):                                     # (where it got to, should it hang: seen on both Macs)
+    print("looks:", what, flush=True)
+
+
 def init_and_mark(self, root, *a, **kw):
+    trace(f"a window is built ({len(getattr(A, '_steps', []))} steps to go)")
     if "old_up" not in results:                     # (the first reopen: the old window is still on screen)
         results["old_up"] = first_root.winfo_exists() and first_root.winfo_viewable()
     A.App._orig_init(self, root, *a, **kw)
@@ -123,10 +129,21 @@ def init_and_mark(self, root, *a, **kw):
     if steps:
         root.after(300, steps.pop(0))
 A.App.__init__ = init_and_mark
+A.App._orig_shut = A.App._shut
+def traced_shut(self, close_store):
+    trace(f"a window closes (save closed too: {close_store})")
+    try:
+        A.App._orig_shut(self, close_store)
+    except BaseException as e:
+        trace(f"... and failed: {e!r}")
+        raise
+    trace("... closed")
+A.App._shut = traced_shut
 results = {}
 
 
 def check_dark():
+    trace("check_dark")
     root3 = tk._default_root
     app3 = root3._app
     results["dark_bg"] = root3.cget("bg")
@@ -137,6 +154,7 @@ def check_dark():
 
 
 def check_light_again():
+    trace("check_light_again")
     root4 = tk._default_root
     results["light_bg"] = root4.cget("bg")
     results["meta"] = (s.get_meta("dark_mode"), json.loads(s.get_meta("tier_colors"))[0])

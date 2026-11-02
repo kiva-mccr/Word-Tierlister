@@ -14,7 +14,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
 - This container: `python3.12` is the one with tkinter (`PY=python3.12 sh tests/run_tests.sh`); packages for it
   need `pip install --break-system-packages`. Xvfb is available for screenshots.
-- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status). If the default
+- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
@@ -202,7 +202,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
 - T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
-  (Actions > Test on macOS) before trusting a macOS change.
+  (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
+  animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.
 - T-16's macOS job (macos-latest, ditto zip, icon.icns) never ran: the first release is its first build; Intel Macs
   get no program.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
