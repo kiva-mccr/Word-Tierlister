@@ -807,10 +807,14 @@ class App:
                 probe = fnt.copy()                 # measured at the full size without touching the shared font
                 probe.configure(size=base)
                 avail = (width - int(220 * f)) // 2 - int(80 * f)
-                need = max((probe.measure(t) for t in (self.left_btn.cget("text"), self.right_btn.cget("text"))
-                            if t), default=0)
+                texts = [t for t in (self.left_btn.cget("text"), self.right_btn.cget("text")) if t]
+                need = max((probe.measure(t) for t in texts), default=0)
+                # (a text with a space wraps below about a third; one long word cannot: it shrinks further, or it
+                # ran past the window, seen on a Mac with pneumonoultramicroscopicsilicovolcanoconiosis)
+                whole = max((probe.measure(t) for t in texts if " " not in t.strip()), default=0)
+                floor = int(base * 0.35) if whole <= avail else 0
                 if need > avail > 0:
-                    size = max(7, int(base * 0.35), int(base * avail / need))
+                    size = max(7, floor, int(base * avail / need))
             if fnt.cget("size") != size:
                 fnt.configure(size=size)
                 changed = True
