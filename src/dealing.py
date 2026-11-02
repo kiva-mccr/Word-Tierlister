@@ -8,7 +8,9 @@ Order is "Most common first" (strictly by frequency) or "Mostly common, a little
 (UI-41), spread, seed and compound strength. Which words: a tick box per kind (constants.KINDS) and one for
 obscene words (all of their meanings rude), with how many words each holds; ticking it opens a tick box per kind
 of rude meaning (OB-5: obscene.RUDE_KINDS, Clinical, Crude, Swear words and Insults ticked to start with). Unticked
-ones are left out of the queue, never deleted (Store.set_deal).
+ones are left out of the queue, never deleted (Store.set_deal). Beside each kind censoring can smear (obscene.CENSORED)
+is a small smear button (SmearToggle): smeared, that kind is censored; plain, it is shown even while censoring
+(Store.censor_kinds; asked for). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once.
 """
@@ -20,13 +22,15 @@ import tkinter as tk
 from tkinter import ttk
 
 from constants import CENSOR_CAVEAT_LINE, KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
-from obscene import RUDE_KINDS
+from obscene import CENSORED, RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
-from widgets import RoundButton, ShapeCard, StyledDialog, Tooltip
+from widgets import RoundButton, ShapeCard, SmearToggle, StyledDialog, Tooltip
 
 CENSOR_NOTE = "blurred, except on hover"
+SMEAR_ON = "{kind}: smeared while censoring. Click to show them plainly."
+SMEAR_OFF = "{kind}: shown plainly, even while censoring. Click to smear them."
 
 
 class DealDialog:
@@ -55,6 +59,9 @@ class DealDialog:
         self.obscene_v = tk.BooleanVar(value=deal["obscene"])
         self.rude_vs = {k: tk.BooleanVar(value=bool(deal["rude"] & KIND_BITS[k])) for k in RUDE_KINDS}
         self.censor_v = tk.BooleanVar(value=deal["censor"])
+        self.start_censor_kinds = self.store.censor_kinds()
+        self.censor_changed = False
+        self.smear_vs = {k: tk.BooleanVar(value=k in self.start_censor_kinds) for k in sorted(CENSORED)}
         if first:
             self.head_lbl = tk.Label(self.body, font=font("head"), bg=PALETTE["bg"], fg=PALETTE["text"],
                                      wraplength=dlg.wrap, justify="left")
@@ -64,7 +71,7 @@ class DealDialog:
         self.status = ttk.Label(self.body, text="", foreground=PALETTE["bad"][1], wraplength=dlg.wrap)
         self.bar = ttk.Progressbar(self.body, mode="indeterminate")
         for v in (self.seed_v, self.spread_v, self.comp_v, self.shape_v, self.order_v, self.obscene_v,
-                  *self.kind_vs.values(), *self.rude_vs.values()):
+                  *self.kind_vs.values(), *self.rude_vs.values(), *self.smear_vs.values()):
             v.trace_add("write", lambda *_: self.status.grid_remove())        # an edit clears the last note
         self.step = 0
         if first:
@@ -179,18 +186,25 @@ class DealDialog:
             self.kind_ticks[label] = tick
         # the kinds of rude meaning, under Obscene words: shown while it is ticked (OB-5)
         box = self.rude_box = tk.Frame(f, bg=PALETTE["bg"])
+        self.smear_btns = {}
         for i, k in enumerate(RUDE_KINDS):
-            r, c = (i, 0) if self.first else (i // 2, (i % 2) * 2)
+            r, c = (i, 0) if self.first else (i // 2, (i % 2) * 3)
             tick = ttk.Checkbutton(box, text=RUDE_LABELS[k], variable=self.rude_vs[k], takefocus=1)
             tick.grid(row=r, column=c, sticky="w", padx=(0, 18))
             count = ttk.Label(box, text=f"{counts[k]:,}", foreground=PALETTE["muted"])
-            count.grid(row=r, column=c + 1, sticky="e", padx=(0, 40 if self.first else 24))
+            count.grid(row=r, column=c + 1, sticky="e", padx=(0, 8))
+            if k in self.smear_vs:           # (a censor button beside each kind censoring can smear; asked for)
+                label = RUDE_LABELS[k]
+                self.smear_btns[k] = SmearToggle(box, self.smear_vs[k], note=lambda e, k=k, label=label: (
+                    SMEAR_ON if self.smear_vs[k].get() else SMEAR_OFF).format(kind=label))
+                self.smear_btns[k].grid(row=r, column=c + 2, sticky="w", padx=(0, 32 if self.first else 20))
             note = KIND_NOTES[k] + "\n" + KIND_NOTE_RUDE
             self.kind_tips[RUDE_LABELS[k]] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap)
                                               for w in (tick, count)]
             self.kind_ticks[RUDE_LABELS[k]] = tick
         self.box_row = box_row
         self.obscene_v.trace_add("write", lambda *_: self._show_rude())
+        self.censor_v.trace_add("write", lambda *_: self._show_rude())
         for v in self.rude_vs.values():
             v.trace_add("write", lambda *_: self._mark_obscene())
         self._show_rude(refit=False)
@@ -205,8 +219,9 @@ class DealDialog:
         return f
 
     def _show_rude(self, refit=True):
-        """The kinds of rude meaning open under Obscene words while it is ticked."""
-        if self.obscene_v.get():
+        """The kinds of rude meaning open under Obscene words while it (or Censor obscene words: their smear buttons)
+        is ticked."""
+        if self.obscene_v.get() or self.censor_v.get():
             self.rude_box.grid(row=self.box_row, column=0, columnspan=4, sticky="w", padx=(24, 0), pady=(2, 0))
         else:
             self.rude_box.grid_remove()
@@ -310,12 +325,16 @@ class DealDialog:
         reshuffle = not self.app.queue_unchanged(new)
         redeal = any(deal[k] != self.start_deal[k] for k in ("kinds", "obscene", "rude"))
         censor = self.censor_v.get()
+        smear = {k for k, v in self.smear_vs.items() if v.get()}
+        self.censor_changed = censor != self.start_deal["censor"] or smear != self.start_censor_kinds
         if censor != self.start_deal["censor"]:
             self.store.set_censor(censor)
+        if smear != self.start_censor_kinds:
+            self.store.set_censor_kinds(smear)
         if self.first:
             self.store.set_meta("dealt_asked", "1")
         if not (reshuffle or redeal):
-            if censor != self.start_deal["censor"] or self.first:
+            if self.censor_changed or self.first:
                 self._finish(None)
             else:
                 self.say("No settings changed.", PALETTE["muted"])
@@ -372,6 +391,8 @@ class DealDialog:
         self.dlg.close()
         app.cmp = None
         app.after_external_change()
+        if self.censor_changed:
+            app.censor_shown()                       # (the definitions and Browse smear the new kinds at once)
         if message and not self.first:
             app.flash(message, ms=2000)
         if self.on_done:

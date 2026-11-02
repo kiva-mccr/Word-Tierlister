@@ -1555,6 +1555,67 @@ class LinkButton(SmoothCanvas):
         self._draw()
 
 
+class SmearToggle(SmoothCanvas):
+    """A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space /
+    Return once it has focus) flips it: the censor button beside each kind of rude meaning in How words are dealt
+    (asked for: censoring each kind on its own). `note`: a hover note, called with the event.
+
+        SmearToggle(parent, tk.BooleanVar(value=True), note=lambda e: "Smeared while censoring")
+    """
+
+    TEXT = "abc"
+
+    def __init__(self, parent, variable, note=None, font_=None, bg=None):
+        super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
+                         bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
+                         highlightcolor=PALETTE["accent"])
+        self.variable, self._font, self._bg = variable, font_ or font("small"), bg
+        self._hover = False
+        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
+            self.bind(seq, lambda e: self.toggle())
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self._trace = variable.trace_add("write", lambda *_: self._draw())
+        self.bind("<Destroy>", lambda e: e.widget is self and self._untrace())
+        if note:
+            Tooltip(self, note)
+        self._draw()
+
+    def _untrace(self):
+        try:
+            self.variable.trace_remove("write", self._trace)
+        except tk.TclError:
+            pass
+
+    def toggle(self):
+        self.variable.set(not self.variable.get())
+
+    def _set_hover(self, on):
+        self._hover = on
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        f, on = self._font, bool(self.variable.get())
+        line = f.metrics("linespace")
+        h = line + 4
+        w = f.measure(self.TEXT) + line + 2
+        super().configure(width=w + 2, height=h + 2)
+        bg = self._bg or PALETTE["bg"]
+        fill = PALETTE["select_bg"] if on else bg
+        edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
+        self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
+        ink = PALETTE["text"] if on or self._hover else PALETTE["muted"]
+        item = self.create_text(1 + (w - f.measure(self.TEXT)) / 2, 1 + (h - line) / 2, text=self.TEXT, font=f,
+                                fill=ink, anchor="nw")              # (nw: smear_items reads a line's top left)
+        if on:
+            smear_items(self, item, ink, fill, 1.0, ("smear",))
+            self.itemconfigure(item, state="hidden")
+
+    def refresh(self):
+        self._draw()
+
+
 WIKTIONARY_NOTE = "Open on Wiktionary: where the word comes from, and more"
 
 

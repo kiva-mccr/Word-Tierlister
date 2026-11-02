@@ -430,7 +430,7 @@ class Browser:
     def _add_rows(self, rows):
         """Append rows to the table, colouring placed words by tier. The word itself is the row id; a censored one
         (ST-6) has a blank cell with the word smeared over it (TreeSmears)."""
-        hide = self.app.store.obscene_words() if self.app.store.deal_settings()["censor"] else ()
+        hide = self.app.store.censored_words() if self.app.store.deal_settings()["censor"] else ()
         for r in rows:
             tier = "-" if r["tier"] is None else TIERS[r["tier"]]
             tags = () if r["tier"] is None else (f"t{r['tier']}",)
@@ -575,7 +575,7 @@ class Browser:
         an unplaced one greyed, "not placed yet" (the tier buttons or keys place it for real); a placed one not
         loaded here in its tier's colours. Refreshing or closing Browse lets them go."""
         self._temp = []
-        hide = self.store.obscene_words() if self.store.deal_settings()["censor"] else ()
+        hide = self.store.censored_words() if self.store.deal_settings()["censor"] else ()
         for w in self.app.lookups:
             if self.tree.exists(w):
                 continue
