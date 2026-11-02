@@ -28,7 +28,7 @@ No Python needed. [All releases](https://github.com/kiva-mccr/Word-Tierlister/re
      file properties).
    - *macOS*: unzip it and open it. The first time, go to **System Settings > Privacy & Security** and click
      **Open Anyway**.
-3. **Answer three quick questions** about which words you want and in what order (you can change them any time).
+3. **Set how words are offered**: which kinds of words you want, and in what order (you can change this any time).
 
 The very first start downloads English Wiktionary (about 3 GB) to build the word list. It shows how far along it
 is and how long is left, and if the download is cut off it picks up where it stopped next time. After that it
