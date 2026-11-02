@@ -422,9 +422,10 @@ dr.set_lines(9); update(); anim.finish_all(); update()
 assert dr.steady
 tall = dr.winfo_height()
 dr.set_lines(4); update()
+seen_before = (dr.winfo_height(), dr.steady, dr._inner.winfo_reqheight())
 dr.ease_from(tall); update()
 mid = dr.winfo_height()
-assert dr.easing and mid >= tall - 2, (tall, mid)                             # (from where it was: not jumped)
+assert dr.easing and mid >= tall - 2, (tall, mid, seen_before, dr.easing)     # (from where it was: not jumped)
 seen = [mid]
 for _ in range(30):
     root.update(); time.sleep(0.01); seen.append(dr.winfo_height())

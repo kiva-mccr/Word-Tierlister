@@ -18,7 +18,7 @@ run() {  # run <label> <command...>: show the last line of output, abort if the 
     if perl -e 'alarm shift; exec @ARGV or die "cannot start $ARGV[0]\n"' "${TEST_TIMEOUT:-600}" "$@" >"$OUT" 2>&1; then
         echo "ok   $label: $(tail -1 "$OUT")"
     else
-        echo "FAIL $label"; tail -15 "$OUT"
+        echo "FAIL $label"; tail -40 "$OUT"
         if [ -n "$KEEP_GOING" ]; then FAILED="$FAILED $label"; else rm -f "$OUT"; exit 1; fi
     fi
 }
