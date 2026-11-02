@@ -252,10 +252,14 @@ class SyncDialog:
             yes = errors.ask_yes_no(TITLE, AUTOSTART_HEADLINE, AUTOSTART_TEXT, yes="Start at log-in",
                                     no="Not at log-in", parent=app.root, wrap_chars=56)
             self.store.set_meta("sync_autostart", "yes" if yes else "0")
-        self.dlg = dlg = StyledDialog(app.root, TITLE, TITLE, INTRO, animator=app.anim, wrap_chars=64)
-        self._good_to_know()
+        # (asked for: landscape. Left, what syncing is and what to know; right, this device and its links)
+        self.dlg = dlg = StyledDialog(app.root, TITLE, animator=app.anim, wrap_chars=48)
+        self.left = tk.Frame(dlg.body, bg=PALETTE["bg"])
+        self.left.pack(side="left", anchor="n", fill="y")
+        tk.Frame(dlg.body, bg=PALETTE["border"], width=1).pack(side="left", fill="y", padx=26)
         self.area = tk.Frame(dlg.body, bg=PALETTE["bg"])
-        self.area.pack(fill="x", anchor="w")
+        self.area.pack(side="left", anchor="n", fill="y")
+        self._good_to_know()
         dlg.button("Close", dlg.close, default=True)
         self._start(exe)
         if show:
@@ -263,11 +267,14 @@ class SyncDialog:
 
     def _good_to_know(self):
         """The limits, then the protections, a line each."""
-        self._heading("Good to know", parent=self.dlg.body, top=0)
+        left = self.left
+        tk.Label(left, text=TITLE, font=font("head"), bg=PALETTE["bg"], fg=PALETTE["text"]).pack(anchor="w")
+        self.dlg.text(INTRO, muted=True, parent=left, pady=(8, 0))
+        self._heading("Good to know", parent=left)
         for title, lines in (("What it needs", LIMITS), ("What keeps your list safe", PROTECTIONS)):
-            ttk.Label(self.dlg.body, text=title, font=font("body")).pack(anchor="w", pady=(6, 2))
+            ttk.Label(left, text=title, font=font("body")).pack(anchor="w", pady=(6, 2))
             for line in lines:
-                self.dlg.text("\u2022  " + line, muted=True, room=24, padx=(12, 0))
+                self.dlg.text("\u2022  " + line, muted=True, parent=left, room=24, padx=(12, 0))
 
     # ---- small helpers ----------------------------------------------------------------------------------------
     def _clear(self):
@@ -347,7 +354,7 @@ class SyncDialog:
     # ---- starting it ------------------------------------------------------------------------------------------
     def _start(self, exe):
         self._clear()
-        self.status = self.dlg.text("Starting Syncthing...", parent=self.area, pady=(14, 0))
+        self.status = self.dlg.text("Starting Syncthing...", parent=self.area)
         folder = self.store.get_meta("sync_folder") or default_folder()
         autostart = self.store.get_meta("sync_autostart") == "yes"      # (said yes, not done yet)
 
@@ -382,7 +389,7 @@ class SyncDialog:
     def _linked_page(self, autostart_problem=None):
         self._clear()
         dlg, area = self.dlg, self.area
-        self._heading("This device")
+        self._heading("This device", top=0)
         dlg.text("Its code, for the other device (File > Sync with other devices there):", parent=area)
         row = self._row()
         self.code = tk.StringVar(value=self.my_id)
