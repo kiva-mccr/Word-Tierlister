@@ -107,25 +107,46 @@ if sys.platform.startswith("linux"):
     assert build.check(fake, seconds=2, log=lambda *_: None)
     assert time.time() - began < 30
 
+def size_of(out):
+    """Bytes of a one-file program, or of a macOS app bundle's files."""
+    if not os.path.isdir(out):
+        return os.path.getsize(out)
+    return sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(out) for f in fs
+               if not os.path.islink(os.path.join(d, f)))
+
+
+def packed_files(out):
+    """{name inside the program: a function giving its bytes}: a one-file program's archive, or what a macOS app
+    bundle (--onedir) unpacks to: its Contents/Frameworks, where sys._MEIPASS points (data files are links into
+    Contents/Resources)."""
+    if os.path.isdir(out):
+        base = os.path.join(out, "Contents", "Frameworks")
+        return {os.path.relpath(os.path.join(d, f), base).replace(os.sep, "/"):
+                (lambda p=os.path.join(d, f): open(p, "rb").read())
+                for d, _, fs in os.walk(base, followlinks=True) for f in fs}
+    from PyInstaller.archive.readers import CArchiveReader
+    reader = CArchiveReader(out)
+    return {n: (lambda n=n: reader.extract(n)) for n in reader.toc}
+
+
 if importlib.util.find_spec("PyInstaller") is None:
     print("BUILD OK (PyInstaller is not installed: no real build; pip install pyinstaller to run one)")
 else:
     out = build.build(dist, log=lambda *_: None)
-    assert out and os.path.getsize(out) > 5e6, out
-    from PyInstaller.archive.readers import CArchiveReader         # the source and its manifest are inside it
-    inside = set(CArchiveReader(out).toc)
+    assert out and size_of(out) > 5e6, out
+    packed = packed_files(out)                                      # the source and its manifest are inside it
+    inside = set(packed)
     assert "source/manifest.json" in inside and "source/tierlist.py" in inside and "source/src/app.py" in inside
     assert {f"icons/icon-{n}.png" for n in (16, 32, 256)} <= inside      # (IC-1: the window icon, where ui_style looks)
     assert {"typefaces/YoungSerif-Regular.ttf", "typefaces/AtkinsonHyperlegible-Bold.ttf"} <= inside   # (UI-73)
     built = json.load(open(os.path.join(dist, S.SIDE_FILE)))
     assert built["files"] == S.manifest(_paths.ROOT)["files"]      # (what File > Source & Updates compares)
     # T-7: the source comes back out of the program whole, unpacks, and runs on its own
-    reader = CArchiveReader(out)
     carried = tempfile.mkdtemp(prefix="carried-")
-    for name in (n for n in reader.toc if n.startswith(S.SOURCE_DIR + "/")):
+    for name in (n for n in packed if n.startswith(S.SOURCE_DIR + "/")):
         dest = os.path.join(carried, name[len(S.SOURCE_DIR) + 1:])
         os.makedirs(os.path.dirname(dest), exist_ok=True)
-        open(dest, "wb").write(reader.extract(name))
+        open(dest, "wb").write(packed[name]())
     assert S.manifest(carried, list(built["files"]))["files"] == built["files"]     # every file, every byte
     unpacked = os.path.join(tempfile.mkdtemp(), "Word Tierlister source")
     S.unpack(carried, unpacked)
@@ -134,4 +155,4 @@ else:
                        timeout=600)
     assert r.returncode == 0 and "CORE OK" in r.stdout, r.stderr[-2000:]
     assert build.check(out, log=lambda *_: None)                   # opens, stays open, its save beside itself
-    print(f"BUILD OK (built and ran {os.path.basename(out)}, {os.path.getsize(out) / 1e6:.0f} MB)")
+    print(f"BUILD OK (built and ran {os.path.basename(out)}, {size_of(out) / 1e6:.0f} MB)")

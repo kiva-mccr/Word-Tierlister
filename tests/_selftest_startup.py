@@ -351,7 +351,8 @@ assert "dipshits" in old.obscene_words() and "glass" not in old.obscene_words()
 # ---- main() end to end in a subprocess: first run builds, then the main window opens
 words = os.path.join(tmp, "words.txt")
 open(words, "w").write("\n".join(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) + "\n")
-env = dict(os.environ, HOME=tmp)                                # keep the pointer file out of the real home
+env = dict(os.environ, HOME=tmp, PYTHONUNBUFFERED="1")          # keep the pointer file out of the real home
+# (unbuffered: a piped stdout is flushed only now and then, and terminate() below loses what was not)
 p = subprocess.Popen([sys.executable, os.path.join(_paths.ROOT, "tierlist.py"), "--db", os.path.join(tmp, "m.db"), "--wordlist", words, "--no-install"],
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
 def words_saved():

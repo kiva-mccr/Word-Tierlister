@@ -701,7 +701,8 @@ _init(root)
 cv.delete("all")
 w3 = cv.create_text(20, 10, text="good", font=_font("word"), anchor="nw"); root.update()
 b3 = cv.bbox(w3)
-assert len(letter_holes(cv, _font("word"), "good")) == 5 and letter_holes(cv, ("Helvetica", 40), "good") == []
+assert len(letter_holes(cv, _font("word"), "good")) == 5, (_font("word").actual(), letter_holes(cv, _font("word"), "good"))
+assert letter_holes(cv, ("Helvetica", 40), "good") == [], cv.tk.call("font", "actual", ("Helvetica", 40))
 fills = lambda: [i for i in cv.find_withtag("s") if cv.type(i) == "polygon"]
 smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
 assert len(fills()) == 5 and all(b3[0] <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] for i in fills())

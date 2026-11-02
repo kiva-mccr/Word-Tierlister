@@ -255,9 +255,9 @@ app._check_for_update(check); pump(root, 60)
 assert asks == [1] and "9.1.0 is out" in app.toast.cget("text") and app.store.get_meta("update_told") == "9.1.0"
 app._check_for_update(check); pump(root, 10)
 assert asks == [1]                                                          # (asked less than a day ago)
-app.store.set_meta("update_checked", 0); app.flash("something else")
+app.store.set_meta("update_checked", 0); app.flash("something else", ms=60000)   # (still up after a slow pump)
 app._check_for_update(check); pump(root, 60)
-assert asks == [1, 1] and app.toast.cget("text") == "something else"         # (this version was told already)
+assert asks == [1, 1] and app.toast.cget("text") == "something else", (asks, app.toast.cget("text"))   # (told already)
 app.on_close()
 S.fetch_program = real_fetch
 print("SELF-UPDATE OK")

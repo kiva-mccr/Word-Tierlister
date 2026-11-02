@@ -44,9 +44,17 @@ jobs:
         run: |
           sw_vers; uname -m
           python -c "import sys, tkinter; print(sys.version); r = tkinter.Tk(); print('Tk', tkinter.TkVersion, r.tk.call('tk', 'windowingsystem'), 'screen', r.winfo_screenwidth(), 'x', r.winfo_screenheight(), 'at', r.winfo_fpixels('1i'), 'dpi')"
+          python -c "import sys; sys.path.insert(0, 'src'); import tkinter, fonts; r = tkinter.Tk(); print('typefaces', fonts.load_typefaces(), fonts.init_fonts(r), fonts.font('word').actual(), sorted(f for f in tkinter.font.families(r) if 'Young' in f or 'Atkinson' in f))"
           system_profiler SPDisplaysDataType | grep -i -E "resolution|looks like" || true
-          (brew install -q jakehilborn/jakehilborn/displayplacer > /dev/null 2>&1 && displayplacer list | head -40) || true
           mkdir -p "$RUNNER_TEMP/shots/smoke" "$RUNNER_TEMP/shots/program"
+      - name: A screen like a desktop's (the runner starts at 1024 x 768; the window tests expect room)
+        run: |
+          brew install -q jakehilborn/jakehilborn/displayplacer > /dev/null
+          id=$(displayplacer list | sed -n 's/^Persistent screen id: //p' | head -1)
+          displayplacer list | grep -E "res:(1920x1080|1600x1200)" || true
+          displayplacer "id:$id res:1920x1080 hz:60 color_depth:7 scaling:off origin:(0,0) degree:0" || true
+          sleep 2
+          python -c "import tkinter; r = tkinter.Tk(); print('screen now', r.winfo_screenwidth(), 'x', r.winfo_screenheight())"
       - name: Self-tests
         run: KEEP_GOING=1 PY=python SMOKE_SHOTS="$RUNNER_TEMP/shots/smoke" sh tests/run_tests.sh
       - name: Build the program and start it once
