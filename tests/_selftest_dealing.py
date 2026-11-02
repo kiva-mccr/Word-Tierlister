@@ -94,7 +94,10 @@ assert card.smear.clear == 1 and card.itemcget("word", "state") != "hidden" and 
 card.event_generate("<Motion>", x=3, y=3); app.anim.finish_all(); pump(1)        # (the card's corner: off the word)
 assert card.smear.clear == 0 and card.find_withtag("smear") and card.itemcget("word", "state") == "hidden"
 # placing it: the next word is not censored; the outgoing one leaves as its smear, never as readable text
+real_clock, now = app.anim.clock, time.perf_counter()
+app.anim.clock, app.anim._real = (lambda: now), False   # (held at its start: a slow machine's pump moved it past)
 app.place_word(2); pump(1)
+app.anim.clock, app.anim._real = real_clock, True
 assert not card.censored and card.itemcget("word", "state") != "hidden" and not card.find_withtag("smear")
 assert card.find_withtag("oldsmear") and card.itemcget("oldword", "state") == "hidden"
 app.anim.finish_all(); pump(2)

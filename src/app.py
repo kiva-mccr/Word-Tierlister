@@ -93,7 +93,10 @@ def reopen_while_asked(app, store, defs, new_root):
         app.take_over(old)
         app.open_window()
         root.after(120, app._drop_old)           # (once the new one is drawn over it)
-        root.mainloop()
+        if app.reopening:                        # (asked again while it opened: Tk's event loop forgets a quit
+            root.after_cancel(app._quit_job)     # asked before it starts and would wait for good, seen on a Mac;
+        else:                                    # one still waiting would end the next window's loop at once)
+            root.mainloop()
     return app
 
 
@@ -575,7 +578,11 @@ class App:
             if z <= old and self.grow == 1:
                 self._refuse_zoom()
                 return "break"
-        self._apply_zoom(z)
+        self._fit_at_most = None if bigger else round(before, 2)    # (a zoom out never shows anything bigger, even
+        try:                                                        # where the fit from the new zoom finds room the
+            self._apply_zoom(z)                                     # pane's opening fit did not: seen on a Mac)
+        finally:
+            self._fit_at_most = None
         now = self.font_scale * self.zoom
         if bigger and now <= before + 1e-9:
             self._remember_cap(z)                     # remember (in the save, for this screen): never tried again
@@ -800,10 +807,14 @@ class App:
                 probe = fnt.copy()                 # measured at the full size without touching the shared font
                 probe.configure(size=base)
                 avail = (width - int(220 * f)) // 2 - int(80 * f)
-                need = max((probe.measure(t) for t in (self.left_btn.cget("text"), self.right_btn.cget("text"))
-                            if t), default=0)
+                texts = [t for t in (self.left_btn.cget("text"), self.right_btn.cget("text")) if t]
+                need = max((probe.measure(t) for t in texts), default=0)
+                # (a text with a space wraps below about a third; one long word cannot: it shrinks further, or it
+                # ran past the window, seen on a Mac with pneumonoultramicroscopicsilicovolcanoconiosis)
+                whole = max((probe.measure(t) for t in texts if " " not in t.strip()), default=0)
+                floor = int(base * 0.35) if whole <= avail else 0
                 if need > avail > 0:
-                    size = max(7, int(base * 0.35), int(base * avail / need))
+                    size = max(7, floor, int(base * avail / need))
             if fnt.cget("size") != size:
                 fnt.configure(size=size)
                 changed = True
@@ -917,6 +928,8 @@ class App:
         # different text sizes, and switching between them resized every button)
         key = (self.mode == "place", self.show_defs and self._def_want, self.zoom, tuple(area))
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
+        if self._fit_at_most is not None:
+            start = min(start, self._fit_at_most)
         if folded_drawer:                # (opening the drawer only ever needs smaller text: tried from the full zoom,
             start = min(start, round(self.font_scale * self.zoom, 2))     # each size tried showed, the page swelling
                                                                           # past the window and stepping back down)
@@ -2329,7 +2342,10 @@ class App:
             try:
                 old._shut(close_store=False)
             except tk.TclError:
-                pass
+                try:                                 # (a window left over keeps the event loop running after
+                    old.root.destroy()               # the last one closes: the program never ends)
+                except tk.TclError:
+                    pass
 
     def take_over(self, old):
         """Become the window `old` was (reopening in a new look): its place and size, maximized or not, the word
@@ -2368,8 +2384,9 @@ class App:
         for bw in self.browsers:                 # (a Browse window open now opens again in the new look)
             if bw.alive():
                 self._browse_was_open = True
-        self.root.after(0, self.root.quit)       # (main() builds the new window over this one, then closes it;
-                                                 # from the event loop: a quit asked before it runs is forgotten)
+        # (main() builds the new window over this one, then closes it; from the event loop: a quit asked before it
+        # runs is forgotten)
+        self._quit_job = self.root.after(0, self.root.quit)
 
     def on_close(self):
         """Close the save cleanly and quit. While a long job writes the save (a reshuffle: App.busy) it waits for
@@ -2380,6 +2397,7 @@ class App:
             return
         self._shut(close_store=True)
 
+    _fit_at_most = None                     # (set_zoom: a zoom out's fit starts no bigger than what showed)
     shut = False                            # (_shut: timers that slip through its cancelling see it and stop)
 
     def _shut(self, close_store):

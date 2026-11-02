@@ -4,6 +4,7 @@ never go online: no Wiktionary, no online definitions (OFFLINE_ENV; the ones abo
 temporary folder a test makes goes in one folder of its own, removed when the test ends (they once filled the
 disk: 30 GB of saves and builds)."""
 import atexit
+import faulthandler
 import os
 import shutil
 import sys
@@ -16,6 +17,8 @@ for p in (SRC, ROOT):
         sys.path.insert(0, p)
 os.environ["WORD_TIERLISTER_OFFLINE"] = "1"         # (constants.OFFLINE_ENV; also seen by the program the tests start)
 
-TMP = tempfile.mkdtemp(prefix="wtl-test-")
+TMP = os.path.realpath(tempfile.mkdtemp(prefix="wtl-test-"))   # (macOS: /var/folders is /private/var/folders)
 tempfile.tempdir = TMP                             # (every mkdtemp / NamedTemporaryFile from here on goes inside)
 atexit.register(shutil.rmtree, TMP, True)
+# a test stuck past its time (run_tests.sh stops it at TEST_TIMEOUT) first says where it is stuck
+faulthandler.dump_traceback_later(max(30, int(os.environ.get("TEST_TIMEOUT", "600")) - 20), exit=True)

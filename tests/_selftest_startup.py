@@ -1,5 +1,5 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-import gzip, json, os, subprocess, sys, tempfile, threading, time
+import gzip, json, os, sqlite3, subprocess, sys, tempfile, threading, time
 import tkinter as tk
 import startup as S
 import tierlist as T
@@ -351,10 +351,20 @@ assert "dipshits" in old.obscene_words() and "glass" not in old.obscene_words()
 # ---- main() end to end in a subprocess: first run builds, then the main window opens
 words = os.path.join(tmp, "words.txt")
 open(words, "w").write("\n".join(["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]) + "\n")
-env = dict(os.environ, HOME=tmp)                                # keep the pointer file out of the real home
+env = dict(os.environ, HOME=tmp, PYTHONUNBUFFERED="1")          # keep the pointer file out of the real home
+# (unbuffered: a piped stdout is flushed only now and then, and terminate() below loses what was not)
 p = subprocess.Popen([sys.executable, os.path.join(_paths.ROOT, "tierlist.py"), "--db", os.path.join(tmp, "m.db"), "--wordlist", words, "--no-install"],
                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-time.sleep(5)
+def words_saved():
+    try:
+        with sqlite3.connect(os.path.join(tmp, "m.db"), timeout=1) as db:
+            return db.execute("SELECT COUNT(*) FROM words").fetchone()[0]
+    except sqlite3.Error:
+        return 0
+end = time.time() + 60                                          # (a slow machine's first start compiles everything)
+while time.time() < end and p.poll() is None and words_saved() < 6:
+    time.sleep(0.5)
+time.sleep(5)                                                   # (then the main window opens)
 alive = p.poll() is None
 p.terminate()
 out, err = p.communicate(timeout=10)

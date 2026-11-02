@@ -368,6 +368,9 @@ beside = os.path.join(home, "Word Tierlister source")
 S.default_source_folder = lambda program=None: beside
 sources.is_frozen = lambda: True
 n = len(asked)
+for w in root.winfo_children():                                   # (the start's own question, anchor words, if it is up
+    if getattr(w, "styled_dialog", False):                        # by now: the offer waits for it)
+        w.destroy()
 app._offer_other_form(); pump(root, 4)
 assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py"))     # no question; unpacked
 assert "unpacked beside the program" in app.toast.cget("text") and app.store.get_meta("offered_source") == "1"

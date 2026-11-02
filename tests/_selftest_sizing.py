@@ -52,6 +52,8 @@ for sw, sh, sc in cases:
         store.place(wd, 2)
     A.usable_area = lambda r, sw=sw, sh=sh: (0, 0, int(sw * 0.96), int(sh * 0.90))
     app = A.App(root, store, T.Definitions(store)); root.update()
+    # (the longest word in every duel: a random pair hid it on Linux, a Mac drew it past the window)
+    app._pick_pair = lambda: {"left": words[6], "right": "word5", "ctx": "Refining tier B"}
     steps = [("place", False), ("refine", False), ("refine", True), ("place", True)]
     for mode, defs in steps:
         app.mode_var.set(mode); app.on_mode_change(); app.toggle_defs(defs); root.update(); root.update_idletasks()

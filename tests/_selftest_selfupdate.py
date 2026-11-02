@@ -6,7 +6,7 @@ the same save. A source folder is brought up to date: git pull in a git checkout
 git refuses instead), the release's source synced in otherwise. At start, at most once a day, a newer version is
 told once in a toast. The first start after an update says so. (GitHub's answers, downloads and git are stand-ins:
 the tests never go online.)"""
-import io, json, os, tempfile, time, zipfile
+import io, json, os, shutil, subprocess, tempfile, time, zipfile
 os.environ["HOME"] = tempfile.mkdtemp()
 import tkinter as tk
 import tierlist as T
@@ -65,12 +65,22 @@ try:
     raise AssertionError("should have failed")
 except OSError as exc:
     assert "no program for this computer" in str(exc)
-buf = io.BytesIO()
-with zipfile.ZipFile(buf, "w") as z:
-    info = zipfile.ZipInfo("Word Tierlister.app/Contents/MacOS/Word Tierlister"); info.external_attr = 0o755 << 16
-    z.writestr(info, "app")
-    z.writestr("Word Tierlister.app/Contents/Info.plist", "plist")
-mac = buf.getvalue()
+if shutil.which("ditto"):               # (on a Mac fetch_program unpacks with ditto: zip it the way the release does)
+    made = tempfile.mkdtemp()
+    os.makedirs(os.path.join(made, "Word Tierlister.app", "Contents", "MacOS"))
+    open(os.path.join(made, "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister"), "w").write("app")
+    os.chmod(os.path.join(made, "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister"), 0o755)
+    open(os.path.join(made, "Word Tierlister.app", "Contents", "Info.plist"), "w").write("plist")
+    subprocess.run(["ditto", "-c", "-k", "--keepParent", os.path.join(made, "Word Tierlister.app"),
+                    os.path.join(made, "app.zip")], check=True)
+    mac = open(os.path.join(made, "app.zip"), "rb").read()
+else:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        info = zipfile.ZipInfo("Word Tierlister.app/Contents/MacOS/Word Tierlister"); info.external_attr = 0o755 << 16
+        z.writestr(info, "app")
+        z.writestr("Word Tierlister.app/Contents/Info.plist", "plist")
+    mac = buf.getvalue()
 release_mac = dict(release, assets=dict(release["assets"], **{"word-tierlister-macos.zip": {"url": "u", "size": len(mac)}}))
 d = tempfile.mkdtemp()
 got = S.fetch_program(release_mac, d, log=lambda t: None, platform="darwin", download=downloader(mac))
@@ -245,9 +255,9 @@ app._check_for_update(check); pump(root, 60)
 assert asks == [1] and "9.1.0 is out" in app.toast.cget("text") and app.store.get_meta("update_told") == "9.1.0"
 app._check_for_update(check); pump(root, 10)
 assert asks == [1]                                                          # (asked less than a day ago)
-app.store.set_meta("update_checked", 0); app.flash("something else")
+app.store.set_meta("update_checked", 0); app.flash("something else", ms=60000)   # (still up after a slow pump)
 app._check_for_update(check); pump(root, 60)
-assert asks == [1, 1] and app.toast.cget("text") == "something else"         # (this version was told already)
+assert asks == [1, 1] and app.toast.cget("text") == "something else", (asks, app.toast.cget("text"))   # (told already)
 app.on_close()
 S.fetch_program = real_fetch
 print("SELF-UPDATE OK")

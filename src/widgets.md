@@ -62,6 +62,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- Aqua (macOS) leaves trailing spaces out of a text item's bbox: never take the end of the text before a word as where the word starts. `_canvas_word` measures up to the last letter before it and adds the spaces' width (a smeared pane's clickable word was underlined from the space before it, seen on GitHub's Macs, T-18).
 - `DefinitionDrawer.pin()` / `unpin()` (F-41): while App's fit measures other line counts, the pane and its box keep the height they show and the scroll bars stay as they are (`_pin_box`; `hold()` does the same); a pane stopped sliding open eases on from there at `unpin()`. `ease_from` starts from the pinned height, so unpin with `follow=False` before it.
 - `DuelCards.show(fade=True)` fades the cards into the page with `RoundButton.veil`, swaps the words, colours and widths while they are out of sight (`FADE_OUT`), and fades them back; `veil` stops the button's own fade so the two never fight.
 - The letters' holes are filled with their own shapes (fonts.letter_holes, from overhang.json), never rectangles: those left white crescents at a hole's curves (F-40). The fill and the band go in the first FILL_FADE of un-smearing; both only on one line.

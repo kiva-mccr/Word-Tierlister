@@ -14,7 +14,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
 - This container: `python3.12` is the one with tkinter (`PY=python3.12 sh tests/run_tests.sh`); packages for it
   need `pip install --break-system-packages`. Xvfb is available for screenshots.
-- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status). If the default
+- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
@@ -147,6 +147,7 @@ moved into Source & Updates, plus a tick when making the program; none on macOS)
 program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
+T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -156,8 +157,8 @@ commit 9b78889; swaps are still counted).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
-- UI-73's private font loading was only tried on Linux (fontconfig); the Windows (AddFontResourceEx, FR_PRIVATE)
-  and macOS (CoreText) loaders are written but never run; if they fail the old installed fonts stand in.
+- UI-73's private font loading works on Linux (fontconfig) and on the macOS runners (CoreText, T-18: it must run before
+  the first Tk); the Windows loader (AddFontResourceEx, FR_PRIVATE) never ran; if it fails the old installed fonts stand in.
 - The pane's dip (F-23, F-27) is fixed (the user confirmed). A window that must grow for the pane can still show
   GNOME's compositor resizing it a frame late, and the window's own resize is one step (F-28).
 - The Windows console hand-off (ST-9: pythonw.exe) works on real Windows (confirmed by the user); the FreeConsole
@@ -200,6 +201,9 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
+- T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
+  (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
+  animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.
 - T-16's macOS job (macos-latest, ditto zip, icon.icns) never ran: the first release is its first build; Intel Macs
   get no program.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs

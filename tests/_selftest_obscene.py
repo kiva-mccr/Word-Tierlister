@@ -38,7 +38,10 @@ assert [m["g"] for m in bitch] == ["A female dog.", "A malicious woman."] and bi
 found = find_rude(["bitch", "bitches", "penis", "bonk", "box", "shit"], kept, log=lambda *_: None)
 assert found["penis"] == (B["clean"], False, [], None), found["penis"]          # (only Clinical: an ordinary word)
 assert found["bonk"][0] == B["sexual"] and found["bonk"][1], found["bonk"]
-assert found["bitch"] == (B["clean"], False, [], None), found["bitch"]   # (only an insult here: an ordinary word)
+if rudeness.wordnet():                    # (WordNet knows "a malicious woman" for an insult: an ordinary word)
+    assert found["bitch"] == (B["clean"], False, [], None), found["bitch"]
+else:                                     # (without it the "vulgar" label outweighs "derogatory", which alone is only
+    assert found["bitch"] == (B["clean"], False, ["A malicious woman."], None), found["bitch"]   # a suspect)
 assert found["bitches"][1] == found["bitch"][1]                                      # a form is smeared as its word
 assert "shit" not in found and "box" not in found                                    # (no meanings kept: clean)
 # without kept meanings (a save that has not read them yet) the hand-picked list and the earlier flags stand in

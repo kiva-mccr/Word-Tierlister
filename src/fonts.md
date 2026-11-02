@@ -24,6 +24,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `load_typefaces` runs before the first Tk (main(), and tests that check the typefaces): a Mac's Tk may not list fonts registered after it started (seen on GitHub's Macs: the word font fell back to Helvetica Neue).
 - `letter_holes` reads overhang.json's "holes|..." tables (upright faces only); a font not bundled, or text under 14 px, has none (F-40). Keep them out of the overhang letters (`_overhangs`).
 - `text_overhang` reads src/typefaces/overhang.json (written by tools/make_typefaces.py): only a word's first and last letters count (inside a word the overhang lies over its neighbour); no Tk call unless such a letter is there (F-32).
 - Use `font(role)`; after resizing them (zoom, grow) call `widgets.refresh_widgets(window)`.

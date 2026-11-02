@@ -9,6 +9,8 @@ from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
 from widgets import ChoiceButton, EmptyCard, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
 
+from fonts import load_typefaces
+load_typefaces()                     # (before the first Tk, as main() does: a Mac's Tk may not see fonts added later)
 root = tk.Tk()
 fnt = tkfont.Font(root=root, family="TkDefaultFont", size=16, weight="bold")
 
@@ -50,7 +52,7 @@ assert [x.cget("bg") for x in row.buttons] == TIER_COLORS
 xs = [x.winfo_x() for x in row.buttons]
 assert xs == sorted(xs), "pills run S..F left to right"
 ys = row.buttons[2].coords("label")[1]
-row.buttons[2].flash(); update(1)
+row.buttons[2].flash()                                                        # (read at once: a slow Mac's update() outlasted the 110 ms dip)
 assert row.buttons[2].coords("label")[1] == ys + 2                             # the key's dip (UI-18 calls it)
 root.after(150, root.quit); root.mainloop()
 assert row.buttons[2].coords("label")[1] == ys                                 # ...and back up
@@ -279,9 +281,12 @@ other = tk.Label(page, text="stays put"); other.place(x=10, y=100); update()
 oy = other.winfo_y()
 toast = Toast(root, small, animator=anim)
 assert toast.cget("text") == "" and toast.cget("font") is small
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow Mac's update() could finish the fade)
 toast.show("apple  ->  S", tint=(TIER_COLORS[0], PALETTE["text"]), ms=200, in_=page); update()
 assert toast.cget("text") == "apple  ->  S" and toast.winfo_ismapped() and other.winfo_y() == oy   # floats
 assert toast.itemcget("pill", "fill") != TIER_COLORS[0]                         # fading in from the page colour
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); assert toast.itemcget("pill", "fill") == TIER_COLORS[0] and toast.itemcget("text", "fill") == PALETTE["text"]
 cx = toast.winfo_rootx() + toast.winfo_width() / 2; px = page.winfo_rootx() + page.winfo_width() / 2
 assert abs(cx - px) <= 2 and 0 < (page.winfo_rooty() + page.winfo_height()) - (toast.winfo_rooty() + toast.winfo_height()) <= 20   # centred, near the bottom
@@ -298,17 +303,33 @@ assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40            
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
 landed = []
+real_clock, now = anim.clock, time.perf_counter()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() moved it on)
 toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
-            hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
-update(); x0, y0 = toast_xy()
-assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
+            hold_ms=400, in_=page, on_arrive=lambda: landed.append(1))     # (a rest long enough to look at on a
+update(); x0, y0 = toast_xy()                                                 # slow Mac: 60 ms was over by then)
+anim.clock, anim._real = real_clock, True
+assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0], (x0, y0, toast.winfo_height())   # starts low, faint
 anim.finish_all(); update(); x1, y1 = toast_xy()
-assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                 # risen to its resting place
+assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2, (x1, y1, toast.winfo_height())   # risen to its resting place
 anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
 assert toast.cget("text") == "apple  ->  S" and not landed
-root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: flying
-xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
-xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
+flying, real_run = [], toast._anim_run               # (the clock stepped and the flight's start awaited: on a slow
+toast._anim_run = lambda key, ms, *a: (flying.append(ms == toast.FLY_MS), real_run(key, ms, *a))[1]   # Mac the
+tick = [time.perf_counter()]                         # rest's timer came late or the flight was over by the next look)
+anim.clock, anim._real = (lambda: tick[0]), False
+t0 = time.perf_counter()
+while not any(flying) and time.perf_counter() - t0 < 5:                        # the rest is over: flying
+    root.update(); time.sleep(0.005)
+assert any(flying)
+for _ in range(3):
+    tick[0] += 0.008; time.sleep(0.02); root.update()
+xs0 = toast_xy()
+for _ in range(8):
+    tick[0] += 0.008; time.sleep(0.02); root.update()
+xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1], (xs0, xs1)  # heading up and to the right
+anim.clock, anim._real = real_clock, True
+del toast._anim_run
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
 assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
@@ -317,12 +338,15 @@ assert int(toast.cget("width")) < 40                                            
 toast.fling("over", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=10, in_=page, clear=-70)
 anim.finish_all(); anim.finish_all()
-seen, t0 = [], time.perf_counter()
-while toast.cget("text") and time.perf_counter() - t0 < 2:
-    root.update(); time.sleep(0.004)
+real_clock, tick = anim.clock, [time.perf_counter()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (its frames 8 ms apart however slow the machine: the Intel
+seen, t0 = [], time.perf_counter()                     # Mac drew too few of the flight to see its path)
+while toast.cget("text") and time.perf_counter() - t0 < 20:
+    tick[0] += 0.008; root.update(); time.sleep(0.004)
     if toast.winfo_ismapped():
         x, y = toast_xy(); seen.append((x, y + toast.winfo_height()))
-assert len(seen) > 6
+anim.clock, anim._real = real_clock, True
+assert len(seen) > 6, seen
 assert all(bottom <= -70 for x, bottom in seen if 100 < x < 195), seen          # over the chart: above every bar
 assert abs(seen[-1][0] - 200) <= 2 and -40 < seen[-1][1] <= -31, seen[-1]       # ends resting on its bar
 toast.fling("old", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
@@ -350,9 +374,12 @@ t2.hurry()                                                                     #
 t2.destroy()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow Mac's update() moved it up past the card)
 toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(50, 0),
             hold_ms=10, in_=page, under=lambda x0, y0, x1, y1: PALETTE["surface"] if y0 > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 # under() is asked with the toast's whole rectangle (reported: a white box beside the card, over the buttons,
@@ -360,16 +387,23 @@ anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 rects = []
 def under_rect(x0, y0, x1, y1):
     rects.append((x0, y0, x1, y1)); return PALETTE["surface"] if x1 < 150 else PALETTE["bg"]
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held: a slow Mac's update() moved the rise on after under() was asked)
 toast.fling("a rather long message for a drop", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60,
             target=(200, 0), hold_ms=10, in_=page, under=under_rect)
 update(); x0r, y0r, x1r, y1r = rects[-1]
-assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1
+assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1, \
+    (rects[-1], toast.cget("width"), toast.cget("height"))
 assert toast.cget("bg") == PALETTE["bg"]                                    # beside the "card": cream, never white
 wide = int(toast.cget("width"))
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); anim.finish_all()                                        # risen and rested: now it flies
+tick = [time.perf_counter()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (frames 8 ms apart however slow the machine: see the flight)
 sizes, t0 = [], time.perf_counter()
-while toast.cget("text") and time.perf_counter() - t0 < 2:
-    root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+while toast.cget("text") and time.perf_counter() - t0 < 20:
+    tick[0] += 0.008; root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+anim.clock, anim._real = real_clock, True
 late = sizes[len(sizes) // 2:]                                              # the second half of the flight
 assert len(sizes) > 6 and all(w <= h + 4 < wide / 3 for w, h in late), sizes  # a drop, not a bar, over the chart
 # a new message cuts a fling short, and the old one's pending stages do nothing
@@ -422,21 +456,28 @@ dr.set_lines(9); update(); anim.finish_all(); update()
 assert dr.steady
 tall = dr.winfo_height()
 dr.set_lines(4); update()
-dr.ease_from(tall); update()
+seen_before = (dr.winfo_height(), dr.steady, dr._inner.winfo_reqheight())
+real_clock, tick = anim.clock, [time.perf_counter()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (a frame every 10 ms however slow the machine is: the slower
+dr.ease_from(tall); update()                           # Intel Mac drew three frames of the whole ease)
 mid = dr.winfo_height()
-assert dr.easing and mid >= tall - 2, (tall, mid)                             # (from where it was: not jumped)
+assert dr.easing and mid >= tall - 2, (tall, mid, seen_before, dr.easing)     # (from where it was: not jumped)
 seen = [mid]
 for _ in range(30):
-    root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+    tick[0] += 0.01; root.update(); time.sleep(0.01); seen.append(dr.winfo_height())
+anim.clock, anim._real = real_clock, True
 assert seen[-1] < tall and all(b <= a for a, b in zip(seen, seen[1:])) and len(set(seen)) > 3, seen
 assert not dr.easing and dr.steady
 dr.set_lines(9); update(); anim.finish_all(); update()
 # F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
 # height it has: taken as its whole height, the pane's top edge and its text dropped a little
 dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()
+real_clock, now = anim.clock, time.perf_counter()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() slid it open)
 dr.open(); update()
 was = dr.winfo_height()
 dr.give(30); update()
+anim.clock, anim._real = real_clock, True
 assert dr.winfo_height() == min(full, was + 30), (was, dr.winfo_height(), full)
 dr.give(5000); update(); assert dr.winfo_height() <= full                       # (never past its own height)
 anim.finish_all(); update()
@@ -477,12 +518,15 @@ wf = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
 card = WordCard(cwin, wf, small); card.pack(padx=20, pady=20)
 card.set("apple", "rank #1"); update()
 rest = card.coords("word")
+real_clock, tick = anim.clock, [anim.clock()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (the clock held, then stepped: a slow Mac's update() ran it out)
 card.set("pear", "rank #2"); card.transition_from("apple", "rank #1", dx=10, dy=12, animator=anim); update(1)
 assert card.itemcget("oldword", "text") == "apple" and card.itemcget("word", "text") == "pear"
 assert card.coords("word")[1] > rest[1]                                    # new word starts a little low...
 assert card.itemcget("word", "fill") != PALETTE["text"]                     # ...and faint
-root.after(90, root.quit); root.mainloop()
+tick[0] += 0.09; time.sleep(0.03); update(1)
 mid = card.coords("oldword"); assert mid[0] > rest[0] and mid[1] > rest[1]   # old word on its way (right, down)
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); update(1)                                                # a key press: straight to the end
 assert not card.find_withtag("old") and card.coords("word") == card.coords("word")
 assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
@@ -701,7 +745,9 @@ _init(root)
 cv.delete("all")
 w3 = cv.create_text(20, 10, text="good", font=_font("word"), anchor="nw"); root.update()
 b3 = cv.bbox(w3)
-assert len(letter_holes(cv, _font("word"), "good")) == 5 and letter_holes(cv, ("Helvetica", 40), "good") == []
+assert len(letter_holes(cv, _font("word"), "good")) == 5, (_font("word").actual(), letter_holes(cv, _font("word"), "good"),
+                                                           load_typefaces(), [f for f in tkfont.families(root) if "Young" in f])
+assert letter_holes(cv, ("Helvetica", 40), "good") == [], cv.tk.call("font", "actual", ("Helvetica", 40))
 fills = lambda: [i for i in cv.find_withtag("s") if cv.type(i) == "polygon"]
 smear_items(cv, w3, "#3D3A4B", "#ffffff", 1.0, ("s",))
 assert len(fills()) == 5 and all(b3[0] <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b3[2] for i in fills())
@@ -720,7 +766,9 @@ b4 = cv.bbox(w3)
 assert all(b4[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b4[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
-txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
+wrap_w = tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("three four") + 2     # (two words a line at any dpi:
+assert tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("one two three") > wrap_w  # 90 px held three on a Mac)
+txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=wrap_w)
 box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
 texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
 assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
@@ -754,7 +802,8 @@ labelled = abs(wc._fit.cget("size"))
 wc.set("bum-fuck", "frequency rank #7"); root.update()
 assert labelled < abs(wc._fit.cget("size")) and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
 wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
-assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace")
+assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace") - 1, (  # (a pixel of rounding:
+    wc._kind_font.actual(), wc._kind_font.metrics(), font("body").metrics())                 # small at 72 dpi)
 pt = abs(wc._fit.cget("size")) * float(wc.tk.call("tk", "scaling"))
 ink_top = wc._word_xy[1] + wc._fit.metrics("ascent") - 0.82 * pt
 assert wc.bbox("kind")[3] <= ink_top - 0.25 * font("body").metrics("linespace"), (wc.bbox("kind"), ink_top)
@@ -812,6 +861,8 @@ assert len(words) == 2 and link.itemcget(words[0], "text") == "GitHub"
 assert link.itemcget(words[0], "fill") == PALETTE["muted"]
 assert link.winfo_reqwidth() > lf.measure("GitHub") + link.size                # (room for both)
 link.event_generate("<Motion>", warp=True, x=4, y=4); update(6)      # (the real pointer, so no stray Leave follows)
+if link.itemcget(link.find_withtag("all")[0], "fill") != PALETTE["text"]:
+    link.event_generate("<Enter>", x=4, y=4); update(2)              # (a Mac moved the pointer but sent no Enter)
 assert link.itemcget(link.find_withtag("all")[0], "fill") == PALETTE["text"]
 link.event_generate("<ButtonRelease-1>"); update()
 assert went == [1]

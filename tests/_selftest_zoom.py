@@ -33,6 +33,8 @@ b0 = body()
 sizes, tried = [], []
 real_apply = app._apply_zoom
 app._apply_zoom = lambda z: (tried.append(z), real_apply(z))[1]
+started, real_run = [], app.anim.run                                # (a slow Mac's pump let a short shake end: count its start)
+app.anim.run = lambda key, *a, **k: (started.append(key), real_run(key, *a, **k))[1]
 for _ in range(8):
     before = (app.zoom, root.winfo_height(), body())
     app.zoom_step(1); pump(2)
@@ -45,7 +47,8 @@ from constants import VERSION
 saved = json.loads(s.get_meta(app.ZOOM_CAPS))                       # (kept in the save for this screen)
 assert saved["version"] == VERSION
 assert app._cap_key(app._layout_key()) in saved and A.App._saved_caps(app) == app._zoom_cap
-wiggled = app.anim.is_running(f"wiggle{id(app.toast)}")
+wiggled = f"wiggle{id(app.toast)}" in started
+app.anim.run = real_run
 assert wiggled or app.anim.reduce_motion                            # (the first refusal shakes too)
 app._apply_zoom = real_apply
 for _ in range(8):
@@ -76,10 +79,18 @@ assert body() == top and app.zoom == z_top, (body(), top)
 # zoom out is exactly one step, and never makes anything bigger, even while the definitions are open (what
 # shows is the zoom or the biggest size that fits, whichever is smaller)
 app.toggle_defs(True); pump(4); app.anim.finish_all(); pump(4)
+real_fl, fits = app._fit_lines, []
+def fit_lines(height):                                              # (what each fit measured, should this fail)
+    got = real_fl(height)
+    fits.append((round(app.font_scale * app.zoom, 2), height, got, app.def_frame.lines(), app._def_want))
+    return got
+app._fit_lines = fit_lines
 for _ in range(3):
     shown, z = body(), app.zoom
+    del fits[:]
     app.zoom_step(-1); pump(4)
-    assert body() <= shown and app.zoom == round(z - app.ZOOM_STEP, 2), (body(), shown, app.zoom)
+    assert body() <= shown and app.zoom == round(z - app.ZOOM_STEP, 2), (body(), shown, z, app.zoom, fits)
+app._fit_lines = real_fl
 app.toggle_defs(False); pump(4); app.anim.finish_all(); pump(4)
 assert abs(body() - round(12 * app.zoom)) <= 1                                  # closed: the zoom itself shows
 z_main = app.zoom

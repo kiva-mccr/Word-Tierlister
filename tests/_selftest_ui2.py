@@ -163,8 +163,11 @@ bw.reload(); pump(2)
 rows = lambda key: [bw.tree.set(i, key) for i in bw.tree.get_children()]
 arrow = lambda: bw.arrow[:2]
 assert arrow() == ("tier", "down") and bw.tree.heading("tier", "image")              # Tier: S..F, arrow down (asked for)
+real_clock, now = app.anim.clock, app.anim.clock()
+app.anim.clock, app.anim._real = (lambda: now), False   # (held: a slow Mac's update() filled the arrow already)
 bw.tree.tk.call(bw.tree.heading("games", "command"))                                # (what a click runs)
-root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image")         # rows in; the arrow fills from here
+root.update(); assert bw.arrow[2] < 1.0 and bw.tree.heading("games", "image"), bw.arrow  # rows in; the arrow fills from here
+app.anim.clock, app.anim._real = real_clock, True
 pump(8)                                                                             # ...and is full once loaded
 duels = [int(v) for v in rows("games")]
 assert bw.sort_var.get() == "Duels" and not bw.reverse and duels == sorted(duels, reverse=True) and duels[0] > 0
