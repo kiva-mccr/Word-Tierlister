@@ -179,6 +179,9 @@ missing or out of date, and also checks that each module imports only from the l
 `sh tests/run_tests.sh` runs everything (`tests/_selftest*.py`), from any folder. Window tests need
 tkinter and run headless under `xvfb-run` when there is no display. A single test runs on its own too:
 `python tests/_selftest_ui.py`. Before handing work over: `python tools/check_release.py --tests`.
+It stops at the first failure; `KEEP_GOING=1` runs them all and lists every failure. A test that runs past
+`TEST_TIMEOUT` seconds (600 by default) is stopped, and shortly before that it prints where each thread was.
+There is no Mac here: the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS).
 
 ## How words are dealt
 
