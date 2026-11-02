@@ -146,11 +146,11 @@ assert meaning_kinds(W["top"], got["top"], common=True) == ["clean", "clean"]
 assert meaning_kinds(W["box"], got["box"], common=True) == ["clean", "sexual"]
 saved = {w: json.dumps([compact(x, "noun") for x in v]) for w, v in W.items()}
 assert score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["top"][2] == []
-assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][2] == ["Fellatio; a blowjob."]   # (rare: counts)
+assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][2] == [["Fellatio; a blowjob.", "sexual"]]   # (rare: counts)
 # "Obscene words" holds only words smeared whole (asked for): one rude meaning of many ("box: the vagina") is smeared
 # in the definitions, and the word itself is an ordinary one
 box = score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["box"]
-assert box == (KIND_BITS_["clean"], False, ["The vagina."], None), box
+assert box == (KIND_BITS_["clean"], False, [["The vagina.", "sexual"]], None), box
 
 # borrowed ideas, measured on random lists judged by hand (OB-6): a rude label alone is a suspect, not an insult;
 # a euphemism is the polite word; a slang meaning that is a rude word, or a short slang name for a body part, is rude
@@ -222,7 +222,7 @@ cases = {"boys": entry("boys", ("plural of boy", ["form-of"], "boy"), ("The test
          "doo-wop": entry("doo-wop", ("A style of rhythm and blues.", [], None)),
          "goo": entry("goo", ("Any sticky substance, such as slime or semen.", ["informal"], None))}
 got = score_saved(cases, C, zipf=lambda w: 5.0 if w == "what the hell" else 3.0)
-assert not got["boys"][1] and got["boys"][2] == ["The testicles."]          # the word shown, its slang smeared
+assert not got["boys"][1] and got["boys"][2] == [["The testicles.", "sexual"]]          # the word shown, its slang smeared
 assert not got["mayo"][1] and got["fucks"][1] and got["fuck"][1]
 assert got["skull-fuck"][1] and len(got["skull-fuck"][2]) == 2             # the noun ("an instance of") smeared too
 assert not got["what the hell"][1]                                          # common, only mildly vulgar
