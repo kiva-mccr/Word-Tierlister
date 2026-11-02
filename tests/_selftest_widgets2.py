@@ -303,15 +303,15 @@ landed = []
 real_clock, now = anim.clock, time.perf_counter()
 anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() moved it on)
 toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
-            hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
-update(); x0, y0 = toast_xy()
+            hold_ms=400, in_=page, on_arrive=lambda: landed.append(1))     # (a rest long enough to look at on a
+update(); x0, y0 = toast_xy()                                                 # slow Mac: 60 ms was over by then)
 anim.clock, anim._real = real_clock, True
 assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0], (x0, y0, toast.winfo_height())   # starts low, faint
 anim.finish_all(); update(); x1, y1 = toast_xy()
 assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2, (x1, y1, toast.winfo_height())   # risen to its resting place
 anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
 assert toast.cget("text") == "apple  ->  S" and not landed
-root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: flying
+root.after(450, root.quit); root.mainloop(); update()                          # the rest is over: flying
 xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
 xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
 anim.finish_all(); update()
