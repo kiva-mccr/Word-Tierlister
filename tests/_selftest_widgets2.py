@@ -298,10 +298,13 @@ assert toast.winfo_reqwidth() < 400 and toast.winfo_reqheight() > 40            
 def toast_xy():
     return toast.winfo_rootx() + toast.winfo_width() / 2 - px, toast.winfo_rooty() - page.winfo_rooty()
 landed = []
+real_clock, now = anim.clock, time.perf_counter()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() moved it on)
 toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(200, -30),
             hold_ms=60, in_=page, on_arrive=lambda: landed.append(1))
 update(); x0, y0 = toast_xy()
-assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
+anim.clock, anim._real = real_clock, True
+assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0], (x0, y0, toast.winfo_height())   # starts low, faint
 anim.finish_all(); update(); x1, y1 = toast_xy()
 assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2, (x1, y1, toast.winfo_height())   # risen to its resting place
 anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
