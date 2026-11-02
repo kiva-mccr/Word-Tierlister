@@ -4,7 +4,7 @@ How this save's progress travels between devices (SY-1): one gzip JSON file per 
 
 - **Uses:** `store`
 - **Used by:** `syncdialog`
-- **Tests:** none of its own
+- **Tests:** `_selftest_sync`
 
 The module docstring has the details; this page is the map.
 

@@ -4,7 +4,7 @@ File > Sync with other devices (SY-1): install and start Syncthing, this device'
 
 - **Uses:** `deps`, `errors`, `fonts`, `problems`, `saves`, `startup`, `syncfiles`, `syncthing_api`, `theme`, `widgets`
 - **Used by:** `app`
-- **Tests:** none of its own
+- **Tests:** `_selftest_sync`
 
 The module docstring has the details; this page is the map.
 
@@ -12,9 +12,9 @@ The module docstring has the details; this page is the map.
 
 - `default_folder`: Where the sync files live unless the save says otherwise (meta sync_folder): the user data folder's sync/.
 - `AutoSync`: Keeps the save in step with the other devices' sync files while the program runs (see the module's note).
-  - methods: folder, machine, auto, device, sync, flush, last
+  - methods: folder, machine, auto, device, start_syncthing, sync, flush, last
 - `SyncDialog`: File > Sync with other devices (see the module's note).
-  - methods: install, copy, link_pasted, link, unlink, dismiss, refresh, toggle_auto, sync_now, show_last
+  - methods: offer_install, install, copy, link_pasted, link, unlink, dismiss, refresh, toggle_auto, sync_now, show_last
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 

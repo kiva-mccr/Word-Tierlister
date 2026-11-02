@@ -337,12 +337,12 @@ def _systemd_unit(run=subprocess.run):
 
 def start(exe, popen=subprocess.Popen, run=subprocess.run, platform=None):
     """Start Syncthing in the background, on its own (it keeps running when Word Tierlister closes). Linux with
-    systemd: its own user service, which also starts it at every log-in. Returns how ("service" or "process")."""
+    systemd: its own user service, started, not enabled (start_at_login does that, if you let it). Returns how
+    ("service" or "process")."""
     platform = platform or sys.platform
     if platform.startswith("linux") and _systemd_unit(run):
         try:
-            r = run(["systemctl", "--user", "enable", "--now", "syncthing.service"], capture_output=True,
-                    timeout=30)
+            r = run(["systemctl", "--user", "start", "syncthing.service"], capture_output=True, timeout=30)
             if r.returncode == 0:
                 return "service"
         except (OSError, subprocess.SubprocessError):

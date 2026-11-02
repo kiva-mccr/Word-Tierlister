@@ -357,7 +357,7 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
 
     Names are import names (see deps.PIP_NAMES). Does nothing unless something is missing. Then one
     dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
-    or optional (required ones marked with a red asterisk; all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
+    or optional (required ones marked with a red asterisk; the packages ticked to start with, the system programs unticked); "Install selected" runs `pip install` for the ticked ones behind
     the usual progress window and checks again, without a restart.
 
     * Optional packages already declined (`declined`) are not offered again; an optional one left unticked
@@ -397,8 +397,8 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
         kind = "required" if n in need else "optional"
         size = deps.SIZE.get(n)
         return f" ({kind}, about {size} MB)" if size else f" ({kind})"
-    choices = [(n, label(n), deps.PURPOSE.get(n, ""), True, n in need, (n, deps.HOMEPAGE.get(n)))
-               for n in gone]
+    choices = [(n, label(n), deps.PURPOSE.get(n, ""), n not in system, n in need, (n, deps.HOMEPAGE.get(n)))
+               for n in gone]                             # (Syncthing unticked to start with: asked for)
     how = "It uses pip, needs" if need + extra else "It needs"
     if system:
         how = (f"{how} an internet connection and takes a minute or so; "

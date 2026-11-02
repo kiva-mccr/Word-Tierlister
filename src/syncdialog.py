@@ -34,10 +34,18 @@ from widgets import StyledDialog
 TITLE = "Sync with other devices"
 INTRO = ("Keeps your tier list the same on your other computers. It uses Syncthing, a free program that copies a "
          "folder straight between your own devices: no account and no cloud.")
-GOOD_TO_KNOW = ("Good to know: changes only travel while both devices are switched on, with Syncthing running, at "
-                "the same time. Syncthing starts when you log in, so Word Tierlister itself need not be open. Devices "
-                "on the same network find each other; elsewhere they meet through Syncthing's free relays. If both "
-                "devices change the same word, the later change wins.")
+# what to know before relying on it (asked for: a list of what it cannot do, then what keeps the list safe)
+LIMITS = ["Both devices must be switched on, with Syncthing running, at the same time for changes to travel.",
+          "Syncthing starts when you log in (if you let it), so Word Tierlister itself need not be open.",
+          "On the same network devices find each other; elsewhere they meet through Syncthing's free relays.",
+          "If both devices change the same word, the later change wins."]
+PROTECTIONS = ["Your progress goes straight between your own devices, encrypted on the way; no account, and "
+               "nothing is kept in a cloud.",
+               "Only devices you link or accept can sync with this one.",
+               "Each device writes only its own sync file, so no device can overwrite another's."]
+AUTOSTART_HEADLINE = "Start Syncthing when you log in?"
+AUTOSTART_TEXT = ("Then your devices sync whenever both are switched on, even with Word Tierlister closed. Without "
+                  "it, Syncthing runs until you log out, and Word Tierlister starts it again whenever it opens.")
 DOWNLOAD_PAGE = "https://syncthing.net/downloads/"
 
 
@@ -92,10 +100,26 @@ class AutoSync:
     def device(self):
         return f"{self.machine}-{syncfiles.save_id(self.store)}"
 
+    started = False
+
+    def start_syncthing(self, connect=None):
+        """Once, when syncing is set up: start Syncthing if it is not running (it was not let start at log-in, or
+        was stopped), on a worker thread; nothing is said if it cannot be."""
+        self.started = True
+
+        def work():
+            try:
+                (connect or st.connect)()
+            except (st.SyncthingError, OSError):
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
     def _tick(self):
         if getattr(self.app, "shut", False) or self.store.closed:
             return
         try:
+            if self.folder and not self.started:
+                self.start_syncthing()
             if self.folder and self.auto:
                 self.sync()
         finally:
@@ -219,18 +243,31 @@ class SyncDialog:
         self.client = None
         self.my_id = ""
         self.shown = None          # what the lists show now, to redraw them only when it changes
+        self.dlg = None
+        exe = self.find()
+        if not exe:                                        # (asked for: ask to install it first, then open)
+            self.offer_install()
+            return
+        if self.store.get_meta("sync_autostart") is None:  # (asked for: asked once, at the start; no tick box)
+            yes = errors.ask_yes_no(TITLE, AUTOSTART_HEADLINE, AUTOSTART_TEXT, yes="Start at log-in",
+                                    no="Not at log-in", parent=app.root, wrap_chars=56)
+            self.store.set_meta("sync_autostart", "yes" if yes else "0")
         self.dlg = dlg = StyledDialog(app.root, TITLE, TITLE, INTRO, animator=app.anim, wrap_chars=64)
-        self.note = dlg.text(GOOD_TO_KNOW, muted=True)
+        self._good_to_know()
         self.area = tk.Frame(dlg.body, bg=PALETTE["bg"])
         self.area.pack(fill="x", anchor="w")
         dlg.button("Close", dlg.close, default=True)
-        exe = self.find()
-        if exe:
-            self._start(exe)
-        else:
-            self._not_installed()
+        self._start(exe)
         if show:
             dlg.show()
+
+    def _good_to_know(self):
+        """The limits, then the protections, a line each."""
+        self._heading("Good to know", parent=self.dlg.body, top=0)
+        for title, lines in (("What it needs", LIMITS), ("What keeps your list safe", PROTECTIONS)):
+            ttk.Label(self.dlg.body, text=title, font=font("body")).pack(anchor="w", pady=(6, 2))
+            for line in lines:
+                self.dlg.text("\u2022  " + line, muted=True, room=24, padx=(12, 0))
 
     # ---- small helpers ----------------------------------------------------------------------------------------
     def _clear(self):
@@ -271,27 +308,27 @@ class SyncDialog:
         poll()
 
     # ---- Syncthing missing ------------------------------------------------------------------------------------
-    def _not_installed(self):
-        self._clear()
+    def offer_install(self):
+        """Syncthing is not installed: ask to install it first (then this window opens), or, with nothing to install
+        it with here, offer its download page."""
         cmd = deps.system_install_command("syncthing", window=True)
-        self._heading("Syncthing is not installed yet")
         size = deps.SIZE.get("syncthing")
+        why = (f"Syncing uses Syncthing, a free program that copies a folder straight between your own devices "
+               f"(about {size} MB).")
         if cmd:
-            self.dlg.text(f"It is free and open source (about {size} MB). It can be installed with:\n    "
-                          f"{' '.join(cmd)}\nYour system may ask for your password.", parent=self.area)
-            row = self._row(top=10)
-            self.dlg.button("Install Syncthing", lambda: self.install(cmd), row=row)
-            self.dlg.make_default(self.dlg.buttons["Install Syncthing"])
-        else:
-            self.dlg.text(f"It is free and open source (about {size} MB). Get it from its page, then open this "
-                          "window again.", parent=self.area)
-            row = self._row(top=10)
-            self.dlg.button("Get Syncthing", lambda: errors.open_link(DOWNLOAD_PAGE), row=row)
+            if errors.ask_yes_no(TITLE, "Install Syncthing first?", f"{why} It can be installed with:\n    "
+                                 f"{' '.join(cmd)}\n\nYour system may ask for your password.", yes="Install it",
+                                 no="Not now", parent=self.app.root, wrap_chars=56):
+                return self.install(cmd)
+        elif errors.ask_yes_no(TITLE, "Get Syncthing first?", f"{why} Install it from its page, then open "
+                               "File > Sync with other devices again.", yes="Open its page", no="Not now",
+                               parent=self.app.root, wrap_chars=56):
+            errors.open_link(DOWNLOAD_PAGE)
+        return None
 
     def install(self, cmd, runner=None):
-        """"Install Syncthing": this window steps aside for the progress window, then opens again."""
+        """"Install it": behind the progress window; then the sync window opens."""
         app = self.app
-        self.dlg.close()
         try:
             ok = run_with_progress(app.root, lambda log: (runner or deps.run_system_install)(cmd, log),
                                    title="Installing Syncthing", initial_stage="Installing...",
@@ -302,7 +339,7 @@ class SyncDialog:
             ok = False
         if not ok or not self.find():
             errors.show_error(TITLE, "Syncthing could not be installed. You can get it from "
-                              f"{DOWNLOAD_PAGE} and then open this window again.", parent=app.root,
+                              f"{DOWNLOAD_PAGE} and then open File > Sync with other devices again.", parent=app.root,
                               headline="Not installed")
             return None
         return SyncDialog(app, self.find, self.connect, self.autostart)
@@ -312,7 +349,7 @@ class SyncDialog:
         self._clear()
         self.status = self.dlg.text("Starting Syncthing...", parent=self.area, pady=(14, 0))
         folder = self.store.get_meta("sync_folder") or default_folder()
-        autostart = self.store.get_meta("sync_autostart") != "1"
+        autostart = self.store.get_meta("sync_autostart") == "yes"      # (said yes, not done yet)
 
         def work():
             client = self.connect(exe)

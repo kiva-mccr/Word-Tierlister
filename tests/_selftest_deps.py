@@ -142,6 +142,7 @@ assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], system_optional=
 headline, message, choices = asked[-1][:3]
 assert headline == "Optional packages are available" and [c[0] for c in choices] == ["nltk", "syncthing"]
 assert choices[1][1] == " (optional, about 30 MB)" and choices[1][5] == ("syncthing", deps.HOMEPAGE["syncthing"])
+assert choices[0][3] and not choices[1][3]                        # (Syncthing unticked to start with: asked for)
 assert "Syncthing comes from your system's own installer" in message and "password" in message
 assert installs == [["nltk"]] and sys_runs == [["pkexec", "apt-get", "install", "-y", "syncthing"]] and remembered == []
 # only Syncthing missing (and no pip): still offered; left unticked it is remembered and not asked again

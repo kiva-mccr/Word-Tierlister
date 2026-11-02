@@ -288,7 +288,7 @@ for opener, why in ((refuse, "refused it (403: CSRF Error)"), (down, "could not 
 assert not st.Client("http://x:1", "KEY", opener=down).ping()
 
 # ---- AutoSync: two saves, one folder, both ways ----------------------------------------------------------------------
-from syncdialog import AutoSync, SyncDialog, GOOD_TO_KNOW
+from syncdialog import AutoSync, SyncDialog
 root = tk.Tk(); root.withdraw(); init_fonts(root); apply_ttk_style(root)
 
 
@@ -316,7 +316,14 @@ for s in (one, two):
 app1, app2 = FakeApp(one), FakeApp(two)
 s1 = AutoSync(app1, data_dir=os.path.join(TMP, "d1"), start=False)
 s2 = AutoSync(app2, data_dir=os.path.join(TMP, "d2"), start=False)
+s1.started = s2.started = True                                   # (never the real Syncthing in a test)
 assert s1.auto and s1.machine != s2.machine
+calls = []
+AutoSync(app1, data_dir=os.path.join(TMP, "d1"), start=False).start_syncthing(connect=lambda: calls.append(1))
+end = time.time() + 5
+while not calls and time.time() < end:
+    time.sleep(0.01)
+assert calls == [1]
 one.place("cat", 0); one.place("dog", 2)
 assert s1.sync(force=True); settle(s1)
 assert os.path.exists(os.path.join(share, s1.device() + ".wtsync")) and s1.written == one.version
@@ -377,21 +384,45 @@ def wait_for(cond, what):
         assert time.time() < end, what
 
 
-# not installed: says how it would be installed, with a button for it
+# not installed: asked to install it first (then the window opens); with nothing to install it with, its page
+asks = []
+def answer(reply):
+    def ask(title, headline, message, yes="OK", no="Cancel", parent=None, wrap_chars=44):
+        asks.append((headline, message, yes)); return reply
+    return ask
 syncdialog.deps.system_install_command = lambda what, window=False: ["pkexec", "apt-get", "install", "-y", what]
+syncdialog.errors.ask_yes_no = answer(False)
 d = SyncDialog(app1, find=lambda: None, show=False)
-assert "Install Syncthing" in d.dlg.buttons and "apt-get install -y syncthing" in texts(d.dlg.win)
-assert GOOD_TO_KNOW in texts(d.dlg.win) and "switched on" in GOOD_TO_KNOW and "same time" in GOOD_TO_KNOW
-d.dlg.close()
+assert d.dlg is None and asks[-1][0] == "Install Syncthing first?" and "apt-get install -y syncthing" in asks[-1][1]
+installed = []
+SyncDialog.install, real_install = (lambda self, cmd, runner=None: installed.append(cmd)), SyncDialog.install
+syncdialog.errors.ask_yes_no = answer(True)
+SyncDialog(app1, find=lambda: None, show=False); assert installed == [["pkexec", "apt-get", "install", "-y", "syncthing"]]
+SyncDialog.install = real_install
 syncdialog.deps.system_install_command = lambda what, window=False: None
-d = SyncDialog(app1, find=lambda: None, show=False)
-assert "Get Syncthing" in d.dlg.buttons; d.dlg.close()
+opened = []; syncdialog.errors.open_link = opened.append
+SyncDialog(app1, find=lambda: None, show=False)
+assert asks[-1][0] == "Get Syncthing first?" and opened == [syncdialog.DOWNLOAD_PAGE]
+# the first time: asked once whether Syncthing starts at log-in (no tick box); "no" is kept
+syncdialog.errors.ask_yes_no = answer(False)
+d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing", show=False,
+               connect=lambda exe: st.Client("http://127.0.0.1:8384", "KEY", opener=fake),
+               autostart=lambda exe: started.append(exe))
+assert asks[-1][0] == syncdialog.AUTOSTART_HEADLINE and one.get_meta("sync_autostart") == "0"
+wait_for(lambda: d.client is not None, "reached Syncthing"); assert started == []
+for line in syncdialog.LIMITS + syncdialog.PROTECTIONS:
+    assert line in texts(d.dlg.win)
+assert "switched on" in syncdialog.LIMITS[0] and "same time" in syncdialog.LIMITS[0]
+d.dlg.close(); n = len(asks)
+one.set_meta("sync_autostart", ""); one.db.execute("DELETE FROM meta WHERE key='sync_autostart'"); one.db.commit()
+syncdialog.errors.ask_yes_no = answer(True)
 # installed: started, the folder shared, set to start at log-in (once), this device's code shown
 d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing", show=False,
                connect=lambda exe: st.Client("http://127.0.0.1:8384", "KEY", opener=fake),
                autostart=lambda exe: started.append(exe))
 wait_for(lambda: d.client is not None and d.shown is not None, "the dialog reached Syncthing")
 assert d.code.get() == ID1 and started == ["/usr/bin/syncthing"] and one.get_meta("sync_autostart") == "1"
+assert len(asks) == n + 1                                         # (asked once: not again once answered)
 assert fake.folders[st.FOLDER_ID]["path"] == os.path.join(TMP, "dialog-sync") == one.get_meta("sync_folder")
 assert os.path.exists(os.path.join(TMP, "dialog-sync", ".stignore"))
 assert "None yet." in texts(d.devices) and d.auto_var.get()      # (auto-sync on to start with)

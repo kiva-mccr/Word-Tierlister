@@ -4,7 +4,7 @@ Syncthing (SY-1): finding it, starting it in the background and at every log-in,
 
 - **Uses:** `deps`
 - **Used by:** `startup`, `syncdialog`
-- **Tests:** none of its own
+- **Tests:** `_selftest_sync`
 
 The module docstring has the details; this page is the map.
 
