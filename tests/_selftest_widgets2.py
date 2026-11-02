@@ -52,7 +52,7 @@ assert [x.cget("bg") for x in row.buttons] == TIER_COLORS
 xs = [x.winfo_x() for x in row.buttons]
 assert xs == sorted(xs), "pills run S..F left to right"
 ys = row.buttons[2].coords("label")[1]
-row.buttons[2].flash(); update(1)
+row.buttons[2].flash()                                                        # (read at once: a slow Mac's update() outlasted the 110 ms dip)
 assert row.buttons[2].coords("label")[1] == ys + 2                             # the key's dip (UI-18 calls it)
 root.after(150, root.quit); root.mainloop()
 assert row.buttons[2].coords("label")[1] == ys                                 # ...and back up
