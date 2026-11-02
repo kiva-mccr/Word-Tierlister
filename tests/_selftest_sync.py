@@ -437,7 +437,7 @@ wait_for(lambda: ": connected" in texts(d.devices), "shown connected")
 # a request from another device: Accept links it
 ID3 = "AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH"
 fake.pending[ID3] = {"name": "desktop", "address": "192.168.1.5:22000"}
-d.refresh(); wait_for(lambda: "desktop (AAAAAAA) wants to sync" in texts(d.requests), "the request shown")
+d.refresh(); wait_for(lambda: "desktop" in texts(d.requests) and "code AAAAAAA" in texts(d.requests), "the request shown")
 d.dlg.buttons["Accept " + ID3].invoke()
 wait_for(lambda: ID3 in fake.devices and not fake.pending, "accepted")
 assert fake.devices[ID3]["name"] == "desktop"

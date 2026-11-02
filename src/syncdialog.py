@@ -387,31 +387,14 @@ class SyncDialog:
 
     # ---- linking ----------------------------------------------------------------------------------------------
     def _linked_page(self, autostart_problem=None):
+        """The right side (asked for): the devices wanting to sync first and large, then the linked devices and
+        syncing, and at the bottom, small, linking by code."""
         self._clear()
         dlg, area = self.dlg, self.area
-        self._heading("This device", top=0)
-        dlg.text("Its code, for the other device (File > Sync with other devices there):", parent=area)
-        row = self._row()
-        self.code = tk.StringVar(value=self.my_id)
-        entry = ttk.Entry(row, textvariable=self.code, state="readonly", width=len(self.my_id) + 1,
-                          font=font("small"))
-        entry.pack(side="left")
-        dlg.button("Copy", self.copy, row=row)
-        self.copied = ttk.Label(row, text="", foreground=PALETTE["muted"])
-        self.copied.pack(side="left", padx=(8, 0))
-
-        self._heading("Link a device")
-        dlg.text("Paste the other device's code and press Link; that device is then asked to accept.", parent=area,
-                 muted=True)
-        row = self._row()
-        self.paste = tk.StringVar()
-        self.paste_entry = ttk.Entry(row, textvariable=self.paste, width=len(self.my_id) + 1, font=font("small"))
-        self.paste_entry.pack(side="left")
-        self.paste_entry.bind("<Return>", lambda e: (self.link_pasted(), "break")[1])
-        dlg.button("Link", self.link_pasted, row=row)
-        self.link_msg = dlg.text("", parent=area, muted=True)
+        self._heading("Devices that want to sync", top=0)
         self.requests = tk.Frame(area, bg=PALETTE["bg"])
         self.requests.pack(anchor="w", fill="x")
+        self.link_msg = dlg.text("", parent=area, muted=True)
 
         self._heading("Linked devices")
         self.devices = tk.Frame(area, bg=PALETTE["bg"])
@@ -424,6 +407,7 @@ class SyncDialog:
                               justify="left")
         self.last.pack(side="left")
         dlg.button("Sync now", self.sync_now, row=row)
+        self._code_section()
         if autostart_problem:
             dlg.text(f"Syncthing could not be set to start at log-in ({autostart_problem}); it runs until you log "
                      "out.", parent=area, muted=True, pady=(8, 0))
@@ -433,6 +417,30 @@ class SyncDialog:
             self.dlg.win.bind("<Destroy>", lambda e: self._forget_listener(e, sync), add="+")
         self.show_last()
         dlg.refit()
+
+    def _code_section(self):
+        """Linking by hand, small: this device's code to copy, the other's to paste (when it is not found nearby)."""
+        dlg, area, small = self.dlg, self.area, font("small")
+        tk.Frame(area, bg=PALETTE["border"], height=1).pack(fill="x", pady=(18, 10))
+        ttk.Label(area, text="Link by code (when the other device is not listed above)", font=small,
+                  foreground=PALETTE["muted"]).pack(anchor="w")
+        self.code = tk.StringVar(value=self.my_id)
+        self.paste = tk.StringVar()
+        width = len(self.my_id) + 1
+        for label, var, button, command in (("This device", self.code, "Copy", self.copy),
+                                            ("Other device", self.paste, "Link", self.link_pasted)):
+            row = self._row(top=4)
+            ttk.Label(row, text=label, font=small, width=12).pack(side="left")
+            entry = ttk.Entry(row, textvariable=var, width=width, font=small,
+                              state="readonly" if var is self.code else "normal")
+            entry.pack(side="left")
+            dlg.button(button, command, row=row).config(font=small)
+            if var is self.paste:
+                self.paste_entry = entry
+                entry.bind("<Return>", lambda e: (self.link_pasted(), "break")[1])
+            else:
+                self.copied = ttk.Label(row, text="", font=small, foreground=PALETTE["muted"])
+                self.copied.pack(side="left", padx=(8, 0))
 
     def _forget_listener(self, event, sync):
         if event.widget is self.dlg.win and self.show_last in sync.listeners:
@@ -502,18 +510,29 @@ class SyncDialog:
                 w.destroy()
         for name in [n for n, b in dlg.buttons.items() if not b.winfo_exists()]:
             del dlg.buttons[name]
-        for d in pending:
-            row = self._row(self.requests, top=10)
-            dlg.text(f"{d['name']} ({st.short_id(d['id'])}) wants to sync with this device.", parent=row,
-                     side="left", room=220)
+        def asking(name, note, top):
+            row = self._row(self.requests, top=top)
+            words = tk.Frame(row, bg=PALETTE["bg"])
+            words.pack(side="left", anchor="w")
+            tk.Label(words, text=name, font=font("title"), bg=PALETTE["bg"], fg=PALETTE["text"]).pack(anchor="w")
+            ttk.Label(words, text=note, foreground=PALETTE["muted"]).pack(anchor="w")
+            buttons = tk.Frame(row, bg=PALETTE["bg"])
+            buttons.pack(side="right", padx=(24, 0))
+            return buttons
+        for i, d in enumerate(pending):
+            row = asking(d["name"], f"wants to sync with this device  ·  code {st.short_id(d['id'])}", 4 if i else 0)
             # (the dialog keeps its buttons by name: each device's own, shown with the plain word)
-            dlg.button(f"Accept {d['id']}", lambda d=d: self.link(d["id"], d["name"]), row=row).config(text="Accept")
             dlg.button(f"Not now {d['id']}", lambda d=d: self.dismiss(d), row=row).config(text="Not now")
-        for did in nearby:
-            row = self._row(self.requests, top=10)
-            dlg.text(f"A device on this network: {st.short_id(did)}. Link it if its code starts the same.",
-                     parent=row, side="left", room=120, muted=True)
-            dlg.button(f"Link {did}", lambda did=did: self.link(did), row=row).config(text="Link")
+            dlg.button(f"Accept {d['id']}", lambda d=d: self.link(d["id"], d["name"]), row=row).config(
+                text="Accept", bg=PALETTE["select_bg"])
+        for i, did in enumerate(nearby):
+            row = asking(f"Device {st.short_id(did)}", "on this network  ·  link it if its code starts the same",
+                         4 if i or pending else 0)
+            dlg.button(f"Link {did}", lambda did=did: self.link(did), row=row).config(text="Link",
+                                                                                      bg=PALETTE["select_bg"])
+        if not pending and not nearby:
+            dlg.text("None right now. Open File > Sync with other devices on the other device: it shows up here.",
+                     parent=self.requests, muted=True)
         if not linked:
             dlg.text("None yet.", parent=self.devices, muted=True)
         for d in linked:
