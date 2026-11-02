@@ -1825,6 +1825,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           an Intel run's log), 2 machines for Apple Silicon and 3 for Intel at once (5: a free account's macOS
 #           limit); the build test keeps its app (BUILD_DIST) instead of a second build; brew no longer updates
 #           itself first; a newer push to a pull request cancels its older run.
+# [x] T-20 Asked for: test Windows (and Linux) on pull requests too; until then Windows only had the release build's
+#           one start. .github/workflows/tests.yml runs every self-test on ubuntu-latest (xvfb, openbox, xdotool;
+#           2 parts) and windows-latest (Git Bash runs run_tests.sh; 3 parts), the build test included.
 # [x] U-1  Asked for (before the first release): update the .exe or the source from inside the program. File > Check
 #           for updates... (then sources.UpdateDialog; part of Source & Updates since U-4) asks GitHub for the newest release (its programs now read too:
 #           latest_release "assets"). In the program, Update downloads this computer's program (RELEASE_ASSETS) into a

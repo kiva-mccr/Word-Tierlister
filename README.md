@@ -97,6 +97,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `.github/workflows/build.yml` | Build programs (T-8, T-16): builds the Linux, Windows and macOS (Apple Silicon) programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
 | `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test (split over 2 machines for Apple Silicon and 3 for Intel, run at once: `SHARD=k/n`, `tests/_shard.py`), builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
+| `.github/workflows/tests.yml` | Test on Linux and Windows (T-20): every self-test on GitHub's Linux (under xvfb and openbox, 2 machines) and Windows (3 machines), run at once, with the build test making and starting the program. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
@@ -183,7 +184,8 @@ It stops at the first failure; `KEEP_GOING=1` runs them all and lists every fail
 `TEST_TIMEOUT` seconds (600 by default) is stopped, and shortly before that it prints where each thread was.
 `SHARD=k/n` runs only part k of n, the parts about equally long (`tests/_shard.py` weighs each test by its time on
 GitHub's Intel Mac); the macOS workflow runs the parts on separate machines at once.
-There is no Mac here: the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS).
+There is no Mac here: the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS), and
+Test on Linux and Windows runs them on GitHub's Linux and Windows machines.
 
 ## How words are dealt
 

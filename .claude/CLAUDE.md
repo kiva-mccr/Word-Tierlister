@@ -147,7 +147,7 @@ moved into Source & Updates, plus a tick when making the program; none on macOS)
 program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
-T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled).
+T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled). T-20 (.github/workflows/tests.yml: the self-tests on GitHub's Linux and Windows on every PR).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
