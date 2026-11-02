@@ -148,6 +148,13 @@ class AutoSync:
 
         def work():
             got = {"wrote": False, "files": [], "errors": [], "bad": {}}
+            try:
+                files(got)
+            except Exception as exc:                 # (anything else: said, and the round still ends)
+                got["errors"].append(f"Syncing stopped: {exc!r}")
+            out.put(got)
+
+        def files(got):
             if write:
                 try:
                     syncfiles.write_file(folder, device + syncfiles.SUFFIX, syncfiles.snapshot(path, device))
@@ -161,7 +168,6 @@ class AutoSync:
                 except ValueError as exc:            # (said once, not at every look: until the file changes)
                     got["errors"].append(f"{os.path.basename(p)}: {exc}")
                     got["bad"][p] = v
-            out.put(got)
         threading.Thread(target=work, daemon=True).start()
         self._collect(out, version, then)
         return True

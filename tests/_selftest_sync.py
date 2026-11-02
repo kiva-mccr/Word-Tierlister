@@ -314,8 +314,11 @@ class FakeApp:
 
 
 def settle(sync):
+    end = time.time() + 30
     while sync.working:
         root.update(); time.sleep(0.01)
+        assert time.time() < end, (f"the sync round never ended: {sync.last()}; threads "
+                                   f"{[t.name for t in __import__('threading').enumerate()]}")
 
 
 one, two = new_store("one.db"), new_store("two.db")
@@ -455,7 +458,8 @@ d.auto_var.set(False); d.toggle_auto()
 assert one.get_meta("sync_auto") == "0" and "only Sync now" in d.last.cget("text")
 d.auto_var.set(True); d.toggle_auto()
 d.sync_now(); settle(s1); root.update()
-assert d.last.cget("text").startswith(("Last synced", "Not synced"))
+assert d.last.cget("text").startswith(("Last synced", "Not synced")) and "stopped" not in d.last.cget("text"), \
+    d.last.cget("text")
 d.dlg.close(); root.update()
 assert d.show_last not in s1.listeners                            # (a closed dialog is not told any more)
 print("SYNC OK")
