@@ -281,9 +281,12 @@ other = tk.Label(page, text="stays put"); other.place(x=10, y=100); update()
 oy = other.winfo_y()
 toast = Toast(root, small, animator=anim)
 assert toast.cget("text") == "" and toast.cget("font") is small
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow Mac's update() could finish the fade)
 toast.show("apple  ->  S", tint=(TIER_COLORS[0], PALETTE["text"]), ms=200, in_=page); update()
 assert toast.cget("text") == "apple  ->  S" and toast.winfo_ismapped() and other.winfo_y() == oy   # floats
 assert toast.itemcget("pill", "fill") != TIER_COLORS[0]                         # fading in from the page colour
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); assert toast.itemcget("pill", "fill") == TIER_COLORS[0] and toast.itemcget("text", "fill") == PALETTE["text"]
 cx = toast.winfo_rootx() + toast.winfo_width() / 2; px = page.winfo_rootx() + page.winfo_width() / 2
 assert abs(cx - px) <= 2 and 0 < (page.winfo_rooty() + page.winfo_height()) - (toast.winfo_rooty() + toast.winfo_height()) <= 20   # centred, near the bottom
@@ -371,9 +374,12 @@ t2.hurry()                                                                     #
 t2.destroy()
 
 # under(): over the white card the toast borrows white as its backdrop, back on the page it is cream again
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow Mac's update() moved it up past the card)
 toast.fling("card", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(50, 0),
             hold_ms=10, in_=page, under=lambda x0, y0, x1, y1: PALETTE["surface"] if y0 > 100 else PALETTE["bg"])
 update(); assert toast.cget("bg") == PALETTE["surface"]
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); update(); assert toast.cget("bg") == PALETTE["bg"]
 anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 # under() is asked with the toast's whole rectangle (reported: a white box beside the card, over the buttons,
@@ -512,12 +518,15 @@ wf = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
 card = WordCard(cwin, wf, small); card.pack(padx=20, pady=20)
 card.set("apple", "rank #1"); update()
 rest = card.coords("word")
+real_clock, tick = anim.clock, [anim.clock()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (the clock held, then stepped: a slow Mac's update() ran it out)
 card.set("pear", "rank #2"); card.transition_from("apple", "rank #1", dx=10, dy=12, animator=anim); update(1)
 assert card.itemcget("oldword", "text") == "apple" and card.itemcget("word", "text") == "pear"
 assert card.coords("word")[1] > rest[1]                                    # new word starts a little low...
 assert card.itemcget("word", "fill") != PALETTE["text"]                     # ...and faint
-root.after(90, root.quit); root.mainloop()
+tick[0] += 0.09; time.sleep(0.03); update(1)
 mid = card.coords("oldword"); assert mid[0] > rest[0] and mid[1] > rest[1]   # old word on its way (right, down)
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); update(1)                                                # a key press: straight to the end
 assert not card.find_withtag("old") and card.coords("word") == card.coords("word")
 assert abs(card.coords("word")[1] - card._word_xy[1]) < 0.5 and card.itemcget("word", "fill") == PALETTE["text"]
