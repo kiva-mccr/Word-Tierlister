@@ -149,7 +149,7 @@ except SetupError as e: assert "-m venv" in str(e) and len(restarted) == 1
 # package manager; from the window the desktop's own password prompt, pkexec)
 def which_of(tools):
     return lambda name: f"/usr/bin/{name}" if name in tools else None
-real_euid = deps.os.geteuid
+real_euid = getattr(deps.os, "geteuid", None)      # (Windows has none: deps reads it only when present)
 deps.os.geteuid = lambda: 1000
 assert system_install_command("pip", "linux", which_of({"dnf", "pkexec"}), window=True) == \
     ["pkexec", "dnf", "install", "-y", "python3-pip"]
@@ -163,7 +163,10 @@ assert system_install_command("tkinter", "linux", which_of({"zypper"})) == ["sud
                                                                                  "install", "python3-tk"]
 deps.os.geteuid = lambda: 0
 assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True)[0] == "apt-get"     # (as root)
-deps.os.geteuid = real_euid
+if real_euid:
+    deps.os.geteuid = real_euid
+else:
+    del deps.os.geteuid
 assert deps.run_system_install([sys.executable, "-c", "print('done')"], log=installs.append) is True and "  done" in installs
 assert deps.run_system_install(["/nonexistent/tool"], log=installs.append) is False
 # no pip: ensurepip first, then the system's package (asked); a required package then installs as usual
