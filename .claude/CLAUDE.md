@@ -157,8 +157,8 @@ commit 9b78889; swaps are still counted).
 Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
 
 ## Known gaps
-- UI-73's private font loading was only tried on Linux (fontconfig); the Windows (AddFontResourceEx, FR_PRIVATE)
-  and macOS (CoreText) loaders are written but never run; if they fail the old installed fonts stand in.
+- UI-73's private font loading works on Linux (fontconfig) and on the macOS runners (CoreText, T-18: it must run before
+  the first Tk); the Windows loader (AddFontResourceEx, FR_PRIVATE) never ran; if it fails the old installed fonts stand in.
 - The pane's dip (F-23, F-27) is fixed (the user confirmed). A window that must grow for the pane can still show
   GNOME's compositor resizing it a frame late, and the window's own resize is one step (F-28).
 - The Windows console hand-off (ST-9: pythonw.exe) works on real Windows (confirmed by the user); the FreeConsole
