@@ -737,7 +737,9 @@ b4 = cv.bbox(w3)
 assert all(b4[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= b4[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # a wrapped text's every line keeps its ends inward
 cv.delete("all")
-txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=90)
+wrap_w = tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("three four") + 2     # (two words a line at any dpi:
+assert tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("one two three") > wrap_w  # 90 px held three on a Mac)
+txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=wrap_w)
 box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
 texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
 assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
