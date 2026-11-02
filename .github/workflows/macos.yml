@@ -36,12 +36,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Packages (and Pillow for the screenshots)
-        run: python -m pip install -r requirements.txt pillow pyinstaller
+      - name: Packages (and Pillow for the screenshots), and WordNet as on a desktop that has looked up a definition
+        run: |
+          python -m pip install -r requirements.txt pillow pyinstaller
+          python -m nltk.downloader -q wordnet
       - name: The machine
         run: |
           sw_vers; uname -m
-          python -c "import sys, tkinter; print(sys.version); print('Tk', tkinter.TkVersion, tkinter.Tk().tk.call('tk', 'windowingsystem'))"
+          python -c "import sys, tkinter; print(sys.version); r = tkinter.Tk(); print('Tk', tkinter.TkVersion, r.tk.call('tk', 'windowingsystem'), 'screen', r.winfo_screenwidth(), 'x', r.winfo_screenheight(), 'at', r.winfo_fpixels('1i'), 'dpi')"
+          system_profiler SPDisplaysDataType | grep -i -E "resolution|looks like" || true
+          (brew install -q jakehilborn/jakehilborn/displayplacer > /dev/null 2>&1 && displayplacer list | head -40) || true
           mkdir -p "$RUNNER_TEMP/shots/smoke" "$RUNNER_TEMP/shots/program"
       - name: Self-tests
         run: KEEP_GOING=1 PY=python SMOKE_SHOTS="$RUNNER_TEMP/shots/smoke" sh tests/run_tests.sh

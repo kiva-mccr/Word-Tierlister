@@ -6,6 +6,7 @@
 # Some Linux Pythons ship without tkinter: point TK_PYTHON at one that has it, e.g.
 #     TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh
 # KEEP_GOING=1 runs every test and lists all the failures at the end (the macOS workflow uses it).
+# A test that runs longer than TEST_TIMEOUT seconds (default 600) is stopped and counts as failed.
 cd "$(dirname "$0")" || exit 1
 PY=${PY:-python3}
 TK_PYTHON=${TK_PYTHON:-$PY}
@@ -14,7 +15,7 @@ FAILED=""
 
 run() {  # run <label> <command...>: show the last line of output, abort if the test failed
     label=$1; shift
-    if "$@" >"$OUT" 2>&1; then
+    if perl -e 'alarm shift; exec @ARGV or die "cannot start $ARGV[0]\n"' "${TEST_TIMEOUT:-600}" "$@" >"$OUT" 2>&1; then
         echo "ok   $label: $(tail -1 "$OUT")"
     else
         echo "FAIL $label"; tail -15 "$OUT"

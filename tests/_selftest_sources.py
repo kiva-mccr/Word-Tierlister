@@ -369,7 +369,8 @@ S.default_source_folder = lambda program=None: beside
 sources.is_frozen = lambda: True
 n = len(asked)
 app._offer_other_form(); pump(root, 4)
-assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py"))     # no question; unpacked
+assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py")), (asked[n:], os.listdir(home),
+                                                                                     app.toast.cget("text"))   # no question; unpacked
 assert "unpacked beside the program" in app.toast.cget("text") and app.store.get_meta("offered_source") == "1"
 shutil.rmtree(beside)
 app._offer_other_form(); pump(root, 4)

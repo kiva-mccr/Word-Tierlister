@@ -303,7 +303,7 @@ toast.fling("apple  ->  S", (TIER_COLORS[0], PALETTE["text"]), start_bottom=180,
 update(); x0, y0 = toast_xy()
 assert y0 > 100 and abs(x0) <= 2 and toast.itemcget("pill", "fill") != TIER_COLORS[0]    # starts low, faint
 anim.finish_all(); update(); x1, y1 = toast_xy()
-assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2                 # risen to its resting place
+assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2, (x1, y1, toast.winfo_height())   # risen to its resting place
 anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
 assert toast.cget("text") == "apple  ->  S" and not landed
 root.after(100, root.quit); root.mainloop(); update()                          # the rest is over: flying

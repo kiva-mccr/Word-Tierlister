@@ -78,7 +78,10 @@ os.remove(os.path.join(proj, "src", "b.py")); os.remove(os.path.join(proj, "READ
 assert not S.up_to_date(proj)                                   # one removed
 started = []
 S.start(S.program_path(proj), popen=lambda args, **kw: started.append((args, kw)))
-assert started[0][0] == [S.program_path(proj)] and started[0][1]["start_new_session"]   # (on its own)
+if sys.platform == "darwin" and S.program_path(proj).endswith(".app"):
+    assert started[0][0] == ["open", S.program_path(proj)]                                 # (macOS: an app opens)
+else:
+    assert started[0][0] == [S.program_path(proj)] and started[0][1]["start_new_session"]   # (on its own)
 hook = open(os.path.join(_paths.ROOT, "tools", "hooks", "hook-nltk.py")).read()
 assert "datas = []" in hook                                       # (PyInstaller's own packs ~/nltk_data)
 

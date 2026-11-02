@@ -15,7 +15,8 @@ WORDS = [f"w{i:05d}" for i in range(3000)]
 def make_save(path, n_placed, skipped=(), tier_shift=0, comps=0):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     s = T.Store(path)
-    s.insert_words(WORDS[:1000] if "old" in path else WORDS)
+    s.insert_words(WORDS[:1000] if os.path.basename(os.path.dirname(path)) == "old" else WORDS)   # (not just "old"
+    # anywhere in the path: macOS's temporary folders are under /var/folders)
     for i in range(n_placed):
         s.place(WORDS[i], (i + tier_shift) % 6)
     for w in skipped:

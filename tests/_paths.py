@@ -16,6 +16,6 @@ for p in (SRC, ROOT):
         sys.path.insert(0, p)
 os.environ["WORD_TIERLISTER_OFFLINE"] = "1"         # (constants.OFFLINE_ENV; also seen by the program the tests start)
 
-TMP = tempfile.mkdtemp(prefix="wtl-test-")
+TMP = os.path.realpath(tempfile.mkdtemp(prefix="wtl-test-"))   # (macOS: /var/folders is /private/var/folders)
 tempfile.tempdir = TMP                             # (every mkdtemp / NamedTemporaryFile from here on goes inside)
 atexit.register(shutil.rmtree, TMP, True)
