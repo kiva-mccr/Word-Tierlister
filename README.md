@@ -34,9 +34,8 @@ The very first start downloads English Wiktionary (about 3 GB) to build the word
 is and how long is left, and if the download is cut off it picks up where it stopped next time. After that it
 works offline; only the online definitions need the internet.
 
-> Would you rather run the Python source? `pip install -r requirements.txt`, then `python tierlist.py`. On the
-> first start it offers to install anything that is missing for you. The [developer guide](DEVELOPERS.md) has
-> the rest.
+> Would you rather run the Python source? Just run `python tierlist.py`: on the first start it offers to install
+> anything that is missing. The [developer guide](DEVELOPERS.md) has the rest.
 
 ## Placing words
 
