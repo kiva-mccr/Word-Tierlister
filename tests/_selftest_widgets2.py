@@ -835,6 +835,8 @@ assert len(words) == 2 and link.itemcget(words[0], "text") == "GitHub"
 assert link.itemcget(words[0], "fill") == PALETTE["muted"]
 assert link.winfo_reqwidth() > lf.measure("GitHub") + link.size                # (room for both)
 link.event_generate("<Motion>", warp=True, x=4, y=4); update(6)      # (the real pointer, so no stray Leave follows)
+if link.itemcget(link.find_withtag("all")[0], "fill") != PALETTE["text"]:
+    link.event_generate("<Enter>", x=4, y=4); update(2)              # (a Mac moved the pointer but sent no Enter)
 assert link.itemcget(link.find_withtag("all")[0], "fill") == PALETTE["text"]
 link.event_generate("<ButtonRelease-1>"); update()
 assert went == [1]
