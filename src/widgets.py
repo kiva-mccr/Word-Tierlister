@@ -1824,7 +1824,10 @@ def _canvas_word(c, item, text, font_, width, x, y):
         b = c.bbox(probe)
         c.delete(probe)
         return (b[2], b[3]) if b else (0, 0)
-    sx, sy = end_of(m.start()) if m.start() else (0, None)
+    k = len(text[:m.start()].rstrip())   # (measured up to the last letter before it, then the spaces added: Aqua's
+    sx, sy = end_of(k) if k else (0, None)   # bbox leaves a text's trailing spaces out, so the underline began there)
+    if k:
+        sx += int(c.tk.call("font", "measure", font_, text[k:m.start()]))
     ex, ey = end_of(m.end())
     if sy is not None and sy != ey:      # (the word starts the next line)
         sx = 0

@@ -119,7 +119,7 @@ assert card.cget("font").cget("size") == 40                                     
 card.config(wraplength=200); root.update()
 assert card.winfo_reqwidth() < size[0] and card.cget("wraplength") == 200          # less room: a narrower card
 wb = card.bbox("word"); assert wb[2] - wb[0] <= 205
-assert card.winfo_reqheight() == size[1] > 120
+assert card.winfo_reqheight() == size[1] > wf.metrics("linespace") + sf.metrics("linespace"), size   # (word, sub-line)
 assert card.cget("font") is wf
 h_before, p_before = card.winfo_reqheight(), card.padx
 wf.configure(size=20); refresh_widgets(root); root.update()                          # nested search finds cards too

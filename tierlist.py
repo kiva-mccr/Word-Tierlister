@@ -1816,6 +1816,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] T-17 The tag could not be pushed from here (a session pushes only its own branch), so the Run workflow button
 #           can publish too: "Publish as a release" (from main only) builds the three programs and publishes them as
 #           the release v<VERSION>, making the tag itself on that commit; an existing release is never overwritten.
+# [x] T-18 Asked for: test on macOS without a Mac. .github/workflows/macos.yml runs on GitHub's Macs, Apple Silicon
+#           (macos-latest) and Intel (macos-15-intel; macos-13 is retired): every self-test (run_tests.sh KEEP_GOING=1
+#           lists all failures), the smoke test's screenshots, the app built and started (build.py --check), a picture
+#           of its first window; screenshots and the app are the run's downloads. Its first run is its first test.
 # [x] U-1  Asked for (before the first release): update the .exe or the source from inside the program. File > Check
 #           for updates... (then sources.UpdateDialog; part of Source & Updates since U-4) asks GitHub for the newest release (its programs now read too:
 #           latest_release "assets"). In the program, Update downloads this computer's program (RELEASE_ASSETS) into a

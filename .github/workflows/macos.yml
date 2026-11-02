@@ -1,0 +1,86 @@
+# Test on macOS (T-18): no Mac at hand, so GitHub's Macs run the program for us, on Apple Silicon (macos-latest) and
+# on Intel (macos-15-intel; macos-13 was retired by GitHub in late 2025). Each one:
+#   - runs every self-test (tests/run_tests.sh with KEEP_GOING=1: all failures listed, not just the first); a Mac
+#     runner has a real screen, so the window tests run as they would on a desktop (no xvfb)
+#   - saves the smoke test's screenshot of each stage (SMOKE_SHOTS, Pillow's ImageGrab)
+#   - builds the program (tools/build.py --check: the app bundle, started once) and photographs its first window
+# The pictures and the built app are downloads of the run (Actions > Test on macOS > the run > Artifacts). Started by
+# hand (Run workflow), by a pull request that touches the code, and by a push to main.
+name: Test on macOS
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["**.py", "src/**", "tests/**", "requirements.txt", ".github/workflows/macos.yml"]
+  push:
+    branches: [main]
+    paths: ["**.py", "src/**", "tests/**", "requirements.txt", ".github/workflows/macos.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest        # (Apple Silicon: the release's program is built here)
+            name: apple-silicon
+          - os: macos-15-intel      # (Intel: no release program yet, but the source should run)
+            name: intel
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Packages (and Pillow for the screenshots), and WordNet as on a desktop that has looked up a definition
+        run: |
+          python -m pip install -r requirements.txt pillow pyinstaller
+          python -m nltk.downloader -q wordnet
+      - name: The machine
+        run: |
+          sw_vers; uname -m
+          python -c "import sys, tkinter; print(sys.version); r = tkinter.Tk(); print('Tk', tkinter.TkVersion, r.tk.call('tk', 'windowingsystem'), 'screen', r.winfo_screenwidth(), 'x', r.winfo_screenheight(), 'at', r.winfo_fpixels('1i'), 'dpi')"
+          system_profiler SPDisplaysDataType | grep -i -E "resolution|looks like" || true
+          (brew install -q jakehilborn/jakehilborn/displayplacer > /dev/null 2>&1 && displayplacer list | head -40) || true
+          mkdir -p "$RUNNER_TEMP/shots/smoke" "$RUNNER_TEMP/shots/program"
+      - name: Self-tests
+        run: KEEP_GOING=1 PY=python SMOKE_SHOTS="$RUNNER_TEMP/shots/smoke" sh tests/run_tests.sh
+      - name: Build the program and start it once
+        if: ${{ !cancelled() }}
+        run: python tools/build.py --check
+      - name: Photograph the built program's first window
+        if: ${{ !cancelled() && hashFiles('dist/Word Tierlister.app/Contents/Info.plist') != '' }}
+        continue-on-error: true
+        run: |
+          home=$(mktemp -d)
+          mkdir -p "$home/Programs"
+          cp -R "dist/Word Tierlister.app" "$home/Programs/"
+          printf 'alpha\nbeta\ngamma\ndelta\nepsilon\nzeta\n' > "$home/words.txt"
+          HOME="$home" WORD_TIERLISTER_OFFLINE=1 \
+            "$home/Programs/Word Tierlister.app/Contents/MacOS/Word Tierlister" \
+            --wordlist "$home/words.txt" --no-install --console > "$home/out.txt" 2>&1 &
+          pid=$!
+          sleep 20
+          screencapture -x "$RUNNER_TEMP/shots/program/first-window.png"
+          kill $pid 2>/dev/null || true
+          cat "$home/out.txt"
+      - name: Zip the built app
+        if: ${{ !cancelled() && hashFiles('dist/Word Tierlister.app/Contents/Info.plist') != '' }}
+        run: ditto -c -k --keepParent "dist/Word Tierlister.app" "$RUNNER_TEMP/word-tierlister-macos-${{ matrix.name }}.zip"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: screenshots-${{ matrix.name }}
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: word-tierlister-macos-${{ matrix.name }}
+          path: ${{ runner.temp }}/word-tierlister-macos-${{ matrix.name }}.zip
+          if-no-files-found: ignore
+          retention-days: 7
