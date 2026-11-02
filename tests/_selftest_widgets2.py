@@ -311,9 +311,22 @@ anim.finish_all(); update(); x1, y1 = toast_xy()
 assert abs(y1 + toast.winfo_height() - 60) <= 1 and abs(x1) <= 2, (x1, y1, toast.winfo_height())   # risen to its resting place
 anim.finish_all(); assert toast.itemcget("pill", "fill") not in (TIER_COLORS[0], PALETTE["bg"])   # paled a bit
 assert toast.cget("text") == "apple  ->  S" and not landed
-root.after(450, root.quit); root.mainloop(); update()                          # the rest is over: flying
-xs0 = toast_xy(); root.after(60, root.quit); root.mainloop(); update()
-xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1]               # heading up and to the right
+flying, real_run = [], toast._anim_run               # (the clock stepped and the flight's start awaited: on a slow
+toast._anim_run = lambda key, ms, *a: (flying.append(ms == toast.FLY_MS), real_run(key, ms, *a))[1]   # Mac the
+tick = [time.perf_counter()]                         # rest's timer came late or the flight was over by the next look)
+anim.clock, anim._real = (lambda: tick[0]), False
+t0 = time.perf_counter()
+while not any(flying) and time.perf_counter() - t0 < 5:                        # the rest is over: flying
+    root.update(); time.sleep(0.005)
+assert any(flying)
+for _ in range(3):
+    tick[0] += 0.008; time.sleep(0.02); root.update()
+xs0 = toast_xy()
+for _ in range(8):
+    tick[0] += 0.008; time.sleep(0.02); root.update()
+xs1 = toast_xy(); assert xs1[0] > xs0[0] + 10 and xs1[1] < xs0[1], (xs0, xs1)  # heading up and to the right
+anim.clock, anim._real = real_clock, True
+del toast._anim_run
 anim.finish_all(); update()
 assert landed == [1] and toast.cget("text") == "" and not toast.winfo_ismapped()  # landed, fully faded
 assert int(toast.cget("width")) < 40                                            # it shrank into a small drop
