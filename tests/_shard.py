@@ -1,5 +1,5 @@
 """Split the self-tests into SHARD=k/n parts of about equal length, for running them on several machines at once
-(the macOS workflow). Usage: python _shard.py k/n test...   prints the tests of part k (1..n), one per line.
+(the macOS workflow). Usage: python _shard.py k/n test...   prints the tests of part k (1..n), on one line.
 
 Each test is weighed by how long it took on GitHub's Intel Mac (seconds; a new test counts as 15) and given, longest
 first, to the part that is shortest so far, so the parts end at about the same time. Re-measure from a run's log
@@ -33,4 +33,4 @@ def split(tests, n):
 
 if __name__ == "__main__":
     k, n = (int(x) for x in sys.argv[1].split("/"))
-    print("\n".join(split(sys.argv[2:], n)[k - 1]))
+    sys.stdout.write(" ".join(split(sys.argv[2:], n)[k - 1]))     # (no newline: Windows would print \r\n)
