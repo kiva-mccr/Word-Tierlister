@@ -14,6 +14,7 @@ Nothing here touches tkinter; snapshot() and read_file() run on worker threads (
 connection of its own), Store.apply_sync on the window's thread.
 """
 import gzip
+import hashlib
 import json
 import os
 import socket
@@ -115,10 +116,32 @@ def read_file(path):
             "anchors_changed": float(data.get("anchors_changed") or 0)}
 
 
-def apply(store, data):
-    """Fold a read sync file into the save (the window's thread). Returns Store.apply_sync's counts."""
-    return store.apply_sync(data["device"] or "?", data["words"], data["anchors"], data["anchors_changed"],
-                            data["comparisons"])
+CHUNK = 1000            # words folded in per step (35-60 ms on a million-word save, measured): the window stays responsive
+
+
+def trim(data, marks):
+    """Leave out what was folded in from this device before (on a worker thread): its words changed no later than
+    the newest one taken from it last time (they were weighed then, and this save only gets newer), and its duels
+    when they are the same as last time. `marks`: {device: {"words": time, "duels": digest}} as kept in the save
+    (meta sync_marks). Returns (the trimmed data, this device's new marks). A device passes on another's change
+    with that one's older time, but every device's own file is in the folder, so nothing is missed that way."""
+    mark = marks.get(data["device"], {})
+    seen = mark.get("words", -1.0)
+    newest = max((r[5] or 0 for r in data["words"]), default=seen)
+    digest = hashlib.sha1(json.dumps(sorted(map(tuple, data["comparisons"]))).encode()).hexdigest()
+    out = dict(data, words=[r for r in data["words"] if (r[5] or 0) > seen],
+               comparisons=None if digest == mark.get("duels") else data["comparisons"])
+    return out, {"words": max(newest, seen), "duels": digest}
+
+
+def apply(store, data, chunk=None):
+    """Fold a read (and trimmed) sync file into the save, on the window's thread, a step at a time: yields each
+    step's Store.apply_sync counts (the words in steps of `chunk`, then the anchors and duels)."""
+    words, chunk = data["words"], chunk or CHUNK
+    origin = data["device"] or "?"
+    for i in range(0, len(words), chunk):
+        yield store.apply_sync(origin, words[i:i + chunk])
+    yield store.apply_sync(origin, [], data["anchors"], data["anchors_changed"], data["comparisons"])
 
 
 def other_files(folder, machine):

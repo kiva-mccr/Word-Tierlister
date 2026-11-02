@@ -1915,6 +1915,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           under their old names (1.0.2 and older look for those to update), and the old data folder, pointer file,
 #           records, launcher and Start menu shortcut are still found (the last two replaced by the new ones).
 #           tierlist.py, tierlist.db and tierlist.log keep their names (saves are found by them). VERSION 1.0.3.
+# [x] SY-1 Asked for: sync between devices, free and good on Linux: Syncthing (the user picked it over Google Drive
+#           and a cloud folder). Each device writes one file of its own (syncfiles.py: <computer>-<save>.wtsync, gzip
+#           JSON) into a folder Syncthing shares; reading the others' folds them in word by word, the later change
+#           winning (the user's rule): words.changed is stamped by TEMP triggers, Store.apply_sync keeps the other
+#           device's time so nothing echoes back; a device's own duels are mirrored (comparisons.origin), the anchors
+#           follow when newer. syncthing_api.py: finds, installs (deps.SYSTEM_PACKAGES: apt-get, dnf, pacman, zypper,
+#           brew, winget), starts it (STNODEFAULTFOLDER), asks once whether it starts at log-in (no tick box), and
+#           links devices through its local API (tried here between two real Syncthing 1.27s). File > Sync with
+#           other devices (syncdialog.py), agreed from screenshots: landscape, what it is and "Good to know" (what it
+#           needs, what keeps the list safe) on the left; devices wanting to sync and ones on this network large at
+#           the top right (Accept / Link), linked devices, Sync automatically (on), Sync now, Link by code small at
+#           the bottom. Missing Syncthing: asked to install it first. The install window offers it unticked.
+#           AutoSync looks every 10 s, writes at most every minute (and at closing), never while App.busy.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

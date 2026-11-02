@@ -140,6 +140,10 @@ class AutoSync:
             return False
         self.working = True
         version, device, path = store.version, self.device(), store.path
+        try:
+            marks = json.loads(store.get_meta("sync_marks", "") or "{}")
+        except ValueError:
+            marks = {}
         out = queue.Queue()
 
         def work():
@@ -152,7 +156,8 @@ class AutoSync:
                     got["errors"].append(f"This device's sync file could not be written ({exc})")
             for p, v in theirs.items():
                 try:
-                    got["files"].append((p, v, syncfiles.read_file(p)))
+                    data, mark = syncfiles.trim(syncfiles.read_file(p), marks)
+                    got["files"].append((p, v, data, mark))
                 except ValueError as exc:            # (said once, not at every look: until the file changes)
                     got["errors"].append(f"{os.path.basename(p)}: {exc}")
                     got["bad"][p] = v
@@ -169,29 +174,51 @@ class AutoSync:
             return
         if getattr(self.app, "shut", False) or self.store.closed:
             return
-        if self.app.busy:                                  # (a long job writes the save: fold them in afterwards)
-            self.app.root.after(500, lambda: (out.put(got), self._collect(out, version, then)))
-            return
-        self.working = False
         if got["wrote"]:
             self.written, self.wrote_at = version, time.time()
-        words, names = 0, []
-        for p, v, data in got["files"]:
-            if data["device"].startswith(self.machine + "-"):
-                self.seen[p] = v
-                continue
+        self.seen.update(got["bad"])
+        files = [f for f in got["files"] if not f[2]["device"].startswith(self.machine + "-")]
+        self.seen.update((p, v) for p, v, data, _ in got["files"] if data["device"].startswith(self.machine + "-"))
+        self._fold(files, got, {"words": 0, "names": []}, None, then)
+
+    def _fold(self, files, got, total, steps, then):
+        """Fold the files in a step at a time (syncfiles.apply), letting the window run between steps (the first
+        sync of a big save is hundreds of thousands of words); then say what came."""
+        if getattr(self.app, "shut", False) or self.store.closed:
+            return
+        if self.app.busy:                                  # (a long job writes the save: carry on afterwards)
+            self.app.root.after(500, lambda: self._fold(files, got, total, steps, then))
+            return
+        while files:
+            p, v, data, mark = files[0]
+            steps = steps or syncfiles.apply(self.store, data)
             try:
-                res = syncfiles.apply(self.store, data)
+                res = next(steps)
+            except StopIteration:                          # (that file done: remember how far it was taken)
+                try:
+                    marks = json.loads(self.store.get_meta("sync_marks", "") or "{}")
+                except ValueError:
+                    marks = {}
+                marks[data["device"]] = mark
+                self.store.set_meta("sync_marks", json.dumps(marks))
+                self.seen[p] = v
+                files.pop(0)
+                steps = None
+                continue
             except sqlite3.Error as exc:
                 got["errors"].append(f"{data['name']}: could not be folded in ({exc})")
+                files.pop(0)
+                steps = None
                 continue
-            self.seen[p] = v
             if res["words"] or res["anchors"]:
-                words += res["words"]
-                names.append(data["name"])
-        self.seen.update(got["bad"])
+                total["words"] += res["words"]
+                total["names"].append(data["name"])
+            self.app.root.after(1, lambda s=steps: self._fold(files, got, total, s, then))
+            return
+        self.working = False
+        words, names = total["words"], total["names"]
         if got["files"] or got["wrote"] or got["errors"]:
-            self.store.set_meta("sync_last", json.dumps({"when": time.time(), "from": names,
+            self.store.set_meta("sync_last", json.dumps({"when": time.time(), "from": sorted(set(names)),
                                                          "errors": got["errors"][-3:]}))
         if words or names:
             self.app.after_external_change()
@@ -205,7 +232,7 @@ class AutoSync:
     def flush(self):
         """Closing: write this device's file one last time if anything changed since (on this thread: quick, and
         the save is about to close)."""
-        if not self.folder or self.written == self.store.version or self.store.closed:
+        if self.store.closed or not self.folder or self.written == self.store.version:
             return
         try:
             device = self.device()
@@ -436,7 +463,6 @@ class SyncDialog:
             entry.pack(side="left")
             dlg.button(button, command, row=row).config(font=small)
             if var is self.paste:
-                self.paste_entry = entry
                 entry.bind("<Return>", lambda e: (self.link_pasted(), "break")[1])
             else:
                 self.copied = ttk.Label(row, text="", font=small, foreground=PALETTE["muted"])

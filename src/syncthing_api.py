@@ -241,11 +241,6 @@ class Client:
     def folder(self):
         return self.get(f"/rest/config/folders/{FOLDER_ID}")
 
-    def folder_state(self):
-        """The sync folder's state in words-to-be: "idle", "syncing", "scanning", ... or "" if unknown."""
-        got = self.get("/rest/db/status", folder=FOLDER_ID) or {}
-        return got.get("state", "")
-
     # ---- changes ------------------------------------------------------------------------------------------------
     def _defaults(self, kind):
         return dict(self.get(f"/rest/config/defaults/{kind}") or {})

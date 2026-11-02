@@ -109,7 +109,18 @@ path = syncfiles.write_file(folder, "m1-s1" + syncfiles.SUFFIX, data)
 assert os.path.basename(path) == "m1-s1.wtsync" and not [n for n in os.listdir(folder) if n.endswith(".tmp")]
 got = syncfiles.read_file(path)
 assert got["name"] == "laptop" and got["words"] == data["words"] and got["anchors"] == data["anchors"]
-assert syncfiles.apply(b, got)["words"] == 0                      # (b has all of it already)
+assert sum(r["words"] for r in syncfiles.apply(b, got)) == 0       # (b has all of it already)
+# folded in a step at a time (the window runs between steps); a second time only what changed since is read
+big = new_store("big.db")
+steps = list(syncfiles.apply(big, dict(got, device="m1-s1"), chunk=1))
+assert len(steps) == len(got["words"]) + 1 and sum(r["words"] for r in steps) == len(got["words"])
+trimmed, mark = syncfiles.trim(got, {})
+assert trimmed["words"] == got["words"] and trimmed["comparisons"] == got["comparisons"]
+assert mark["words"] == max(r[5] for r in got["words"])
+again, mark2 = syncfiles.trim(got, {got["device"]: mark})
+assert again["words"] == [] and again["comparisons"] is None and mark2 == mark      # (nothing new: nothing read)
+newer = dict(got, words=got["words"] + [["hen", 1, 1600.0, 0, 0, mark["words"] + 5]])
+assert [r[0] for r in syncfiles.trim(newer, {got["device"]: mark})[0]["words"]] == ["hen"]
 for bad, why in ((b"not gzip", "readable"), (gzip.compress(b'{"program": "Other"}'), "not a Word Tierlister"),
                  (gzip.compress(json.dumps({"program": "Word Tierlister", "format": 99}).encode()), "newer version"),
                  (gzip.compress(json.dumps({"program": "Word Tierlister", "words": [["x", 1]]}).encode()), "damaged")):
@@ -243,8 +254,6 @@ class FakeSyncthing:
             return self.discovered
         if path == "/rest/db/scan":
             return {}
-        if path == "/rest/db/status":
-            return {"state": "idle"}
         return None
 
 

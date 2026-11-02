@@ -1340,12 +1340,13 @@ class Store:
             "SELECT winner, loser, tie, kind, ts FROM comparisons WHERE origin IS NULL")]
         return rows, anchors, when, comps
 
-    def apply_sync(self, origin, rows, anchors=None, anchors_changed=0.0, comps=()):
+    def apply_sync(self, origin, rows, anchors=None, anchors_changed=0.0, comps=None):
         """Fold another device's progress in (its sync file, read by syncfiles.read_file): for each word the newer
         change wins; a word never touched here takes theirs even when both are from before syncing (time 0), so a
         new device fills up the way Import does; a word this list lacks is added at the back. The anchors follow
         when theirs changed later. The duels made on `origin` are mirrored: new ones added, ones it took back (undo)
-        removed. Changes from here are never overwritten by an older one. Returns {"words", "added", "anchors",
+        removed (`comps` None: leave its duels as they are). Changes from here are never overwritten by an older one.
+        Returns {"words", "added", "anchors",
         "comparisons"}: how many of each changed."""
         res = {"words": 0, "added": 0, "anchors": False, "comparisons": 0}
         db = self.db
@@ -1390,15 +1391,16 @@ class Store:
                 db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('anchors_changed', ?)",
                            (str(anchors_changed),))
                 res["anchors"] = True
-            have = {(w, l, ts): cid for cid, w, l, ts in db.execute(
-                "SELECT id, winner, loser, ts FROM comparisons WHERE origin=?", (origin,))}
-            theirs = {(c[0], c[1], c[4]): c for c in comps}
-            gone = [cid for key, cid in have.items() if key not in theirs]
-            db.executemany("DELETE FROM comparisons WHERE id=?", ((cid,) for cid in gone))
-            add = [c for key, c in theirs.items() if key not in have]
-            db.executemany("INSERT INTO comparisons(winner, loser, tie, kind, ts, origin) VALUES(?,?,?,?,?,?)",
-                           ((w, l, tie, kind, ts, origin) for w, l, tie, kind, ts in add))
-            res["comparisons"] = len(gone) + len(add)
+            if comps is not None:                         # (None: the same duels as last time, left alone)
+                have = {(w, l, ts): cid for cid, w, l, ts in db.execute(
+                    "SELECT id, winner, loser, ts FROM comparisons WHERE origin=?", (origin,))}
+                theirs = {(c[0], c[1], c[4]): c for c in comps}
+                gone = [cid for key, cid in have.items() if key not in theirs]
+                db.executemany("DELETE FROM comparisons WHERE id=?", ((cid,) for cid in gone))
+                add = [c for key, c in theirs.items() if key not in have]
+                db.executemany("INSERT INTO comparisons(winner, loser, tie, kind, ts, origin) VALUES(?,?,?,?,?,?)",
+                               ((w, l, tie, kind, ts, origin) for w, l, tie, kind, ts in add))
+                res["comparisons"] = len(gone) + len(add)
             if new:
                 self._forget_shelf_totals()
             db.execute("DELETE FROM sync_in")
