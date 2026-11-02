@@ -1,6 +1,7 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
-DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75)."""
+DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75), SmearToggle (the
+censor button beside each kind of rude meaning)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import time, types
 import tkinter as tk
@@ -870,5 +871,18 @@ w0 = link.winfo_reqwidth()
 lf.configure(size=20); link.refresh(); update()
 assert link.winfo_reqwidth() > w0
 holder.destroy()
+
+# ---- SmearToggle: "ab" smeared while its variable is True, plain while False; a click or Space flips it
+from widgets import SmearToggle
+holder = tk.Toplevel(root); var = tk.BooleanVar(value=True)
+st = SmearToggle(holder, var, note=lambda e: "note"); st.pack(); update()
+assert st.find_withtag("smear") and st.winfo_reqwidth() > st.winfo_reqheight() > 0
+st.event_generate("<ButtonRelease-1>", x=3, y=3); update()
+assert var.get() is False and not st.find_withtag("smear")
+st.focus_force(); update(); st.event_generate("<Return>"); update()
+assert var.get() is True and st.find_withtag("smear")
+var.set(False); update(); assert not st.find_withtag("smear")                 # (follows its variable)
+holder.destroy(); update()
+var.set(True); update()                                                        # (no trace left behind)
 root.destroy()
 print("WIDGETS2 OK")

@@ -33,7 +33,7 @@ A second pass (score_words, second_pass) adds what other words say:
 
 In the program: the Wiktionary build keeps each meaning compactly (compact / expand, only for words with
 has_signal), and score_saved scores them all, giving results(): the meanings' kinds as KIND_BITS (words.rude), the
-whole word smeared or not, and the first GLOSS_KEY characters of the meanings smeared in the definitions. Bump
+whole word smeared or not, and the first GLOSS_KEY characters (and kind) of the meanings smeared in the definitions. Bump
 RUDENESS_VERSION when the rules change: every save scores its words again. No tkinter, no internet.
 """
 import json
@@ -613,7 +613,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "12"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "13"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [], "swear")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -717,8 +717,8 @@ def meaning_kinds(senses, scored, common=False):
 def results(word, senses, scored, censored, common=False):
     """What a word's scores lead to: (words.rude: the bits of its meanings' kinds (KIND_BITS, meaning_kinds; none
     but clean unless one of them is `censored`), the
-    whole word smeared while censoring, [the first GLOSS_KEY characters of each meaning of a `censored` kind]:
-    smeared in the definitions). `senses`: the kaikki.org-shaped senses that were scored; `common`: the word is
+    whole word smeared while censoring, [[the first GLOSS_KEY characters, its kind] of each meaning of a `censored`
+    kind]: smeared in the definitions while its kind is censored, Store.smeared_meanings). `senses`: the kaikki.org-shaped senses that were scored; `common`: the word is
     at least COMMON_ZIPF common."""
     kinds = meaning_kinds(senses, scored, common)
     if not set(kinds) & set(censored):        # (the user's rule: a word goes into the rude kinds only when one of its
@@ -734,7 +734,7 @@ def results(word, senses, scored, censored, common=False):
     if whole:                                 # a meaning that only refers back to the word ("skull-fuck: an instance
         main = next((k for k in kinds if k in censored), None)       # of skull-fucking") is as rude as the word
         kinds = [main if k == "clean" and _refers_to(gloss_of(s), word) else k for s, k in zip(senses, kinds)]
-    smeared = [gloss_of(s)[:GLOSS_KEY] for s, k in zip(senses, kinds) if k in censored]
+    smeared = [[gloss_of(s)[:GLOSS_KEY], k] for s, k in zip(senses, kinds) if k in censored]
     return bits, whole, smeared, main_kind(scored, censored)
 
 
