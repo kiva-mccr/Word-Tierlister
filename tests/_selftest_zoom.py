@@ -33,6 +33,8 @@ b0 = body()
 sizes, tried = [], []
 real_apply = app._apply_zoom
 app._apply_zoom = lambda z: (tried.append(z), real_apply(z))[1]
+started, real_run = [], app.anim.run                                # (a slow Mac's pump let a short shake end: count its start)
+app.anim.run = lambda key, *a, **k: (started.append(key), real_run(key, *a, **k))[1]
 for _ in range(8):
     before = (app.zoom, root.winfo_height(), body())
     app.zoom_step(1); pump(2)
@@ -45,7 +47,8 @@ from constants import VERSION
 saved = json.loads(s.get_meta(app.ZOOM_CAPS))                       # (kept in the save for this screen)
 assert saved["version"] == VERSION
 assert app._cap_key(app._layout_key()) in saved and A.App._saved_caps(app) == app._zoom_cap
-wiggled = app.anim.is_running(f"wiggle{id(app.toast)}")
+wiggled = f"wiggle{id(app.toast)}" in started
+app.anim.run = real_run
 assert wiggled or app.anim.reduce_motion                            # (the first refusal shakes too)
 app._apply_zoom = real_apply
 for _ in range(8):
