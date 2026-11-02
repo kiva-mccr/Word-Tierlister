@@ -368,14 +368,18 @@ anim.finish_all(); root.after(40, root.quit); root.mainloop(); anim.finish_all()
 rects = []
 def under_rect(x0, y0, x1, y1):
     rects.append((x0, y0, x1, y1)); return PALETTE["surface"] if x1 < 150 else PALETTE["bg"]
+real_clock, now = anim.clock, anim.clock()
+anim.clock, anim._real = (lambda: now), False          # (held: a slow Mac's update() moved the rise on after under() was asked)
 toast.fling("a rather long message for a drop", (TIER_COLORS[3], PALETTE["text"]), start_bottom=180, rest_bottom=60,
             target=(200, 0), hold_ms=10, in_=page, under=under_rect)
 update(); x0r, y0r, x1r, y1r = rects[-1]
-assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1
+assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - int(toast.cget("height"))) <= 1, \
+    (rects[-1], toast.cget("width"), toast.cget("height"))
 assert toast.cget("bg") == PALETTE["bg"]                                    # beside the "card": cream, never white
 wide = int(toast.cget("width"))
+anim.clock, anim._real = real_clock, True
 anim.finish_all(); anim.finish_all()                                        # risen and rested: now it flies
-real_clock, tick = anim.clock, [time.perf_counter()]
+tick = [time.perf_counter()]
 anim.clock, anim._real = (lambda: tick[0]), False      # (frames 8 ms apart however slow the machine: see the flight)
 sizes, t0 = [], time.perf_counter()
 while toast.cget("text") and time.perf_counter() - t0 < 20:
