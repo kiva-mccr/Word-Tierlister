@@ -80,10 +80,13 @@ key("Escape")
 # the card shakes for "no" (with motion on), and ends where it started
 app.anim.reduce_motion = False
 before = card.coords("card")
-app.start_lookup(); type_word("w0150"); key("Return")
+real_clock, tick = app.anim.clock, [time.perf_counter()]
+app.anim.clock, app.anim._real = (lambda: tick[0]), False   # (15 ms a frame however slow the machine: the Intel Mac
+app.start_lookup(); type_word("w0150"); key("Return")        # drew none of the shake)
 moved = set()
 for _ in range(10):
-    root.update(); time.sleep(0.015); moved.add(card.coords("card")[0])
+    tick[0] += 0.015; root.update(); time.sleep(0.015); moved.add(card.coords("card")[0])
+app.anim.clock, app.anim._real = real_clock, True
 app.anim.finish_all(); pump(2)
 assert len(moved) > 1 and card.coords("card") == before, moved               # it moved, and came back
 key("Escape")

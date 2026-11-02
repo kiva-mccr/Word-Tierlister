@@ -375,9 +375,12 @@ assert abs((x1r - x0r) - int(toast.cget("width"))) <= 1 and abs((y1r - y0r) - in
 assert toast.cget("bg") == PALETTE["bg"]                                    # beside the "card": cream, never white
 wide = int(toast.cget("width"))
 anim.finish_all(); anim.finish_all()                                        # risen and rested: now it flies
+real_clock, tick = anim.clock, [time.perf_counter()]
+anim.clock, anim._real = (lambda: tick[0]), False      # (frames 8 ms apart however slow the machine: see the flight)
 sizes, t0 = [], time.perf_counter()
-while toast.cget("text") and time.perf_counter() - t0 < 2:
-    root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+while toast.cget("text") and time.perf_counter() - t0 < 20:
+    tick[0] += 0.008; root.update(); time.sleep(0.004); sizes.append((int(toast.cget("width")), int(toast.cget("height"))))
+anim.clock, anim._real = real_clock, True
 late = sizes[len(sizes) // 2:]                                              # the second half of the flight
 assert len(sizes) > 6 and all(w <= h + 4 < wide / 3 for w, h in late), sizes  # a drop, not a bar, over the chart
 # a new message cuts a fling short, and the old one's pending stages do nothing
@@ -773,7 +776,8 @@ labelled = abs(wc._fit.cget("size"))
 wc.set("bum-fuck", "frequency rank #7"); root.update()
 assert labelled < abs(wc._fit.cget("size")) and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
 wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
-assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace")
+assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace") - 1, (  # (a pixel of rounding:
+    wc._kind_font.actual(), wc._kind_font.metrics(), font("body").metrics())                 # small at 72 dpi)
 pt = abs(wc._fit.cget("size")) * float(wc.tk.call("tk", "scaling"))
 ink_top = wc._word_xy[1] + wc._fit.metrics("ascent") - 0.82 * pt
 assert wc.bbox("kind")[3] <= ink_top - 0.25 * font("body").metrics("linespace"), (wc.bbox("kind"), ink_top)
