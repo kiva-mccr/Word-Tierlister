@@ -3,15 +3,15 @@
 The save file: every read and write of the SQLite database goes through `Store` (words, tiers, ratings, duels, conflicts, anchors, cached definitions, settings, the undo history, the rude meanings).
 
 - **Uses:** `constants`, `obscene`, `rudeness`
-- **Used by:** `browser`, `filepicker`, `speed_check`, `tierlist`
-- **Tests:** `_selftest_queue`, `_selftest_tabswitch`
+- **Used by:** `browser`, `filepicker`, `speed_check`, `syncfiles`, `tierlist`
+- **Tests:** `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
 
 The module docstring has the details; this page is the map.
 
 ## Public API
 
 - `Store`: All persistence and ranking logic.
-  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, add_word, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, censor_kinds, set_censor_kinds, set_kinds, save_rude_senses, rude_senses, set_rude, rude_kind, smeared_meanings, obscene_words, censored_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, is_export, parse_export, merge
+  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, add_word, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, censor_kinds, set_censor_kinds, set_kinds, save_rude_senses, rude_senses, set_rude, rude_kind, smeared_meanings, obscene_words, censored_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, is_export, parse_export, sync_rows, apply_sync, merge
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -24,6 +24,7 @@ The module docstring has the details; this page is the map.
 - Per-duel and per-refresh work is index-only: `stats()` (the skipped count by `idx_words_skipped`), `_least_dueled` (no `ORDER BY ... RANDOM()` over a whole run), `settled_shares` (counts the smaller side). Test on a 1M save, dense and sparse.
 - A write of more than `BULK_ROWS` rows goes through `bulk_write` (the indexes are built once at the end); a new index goes in `WORD_INDEXES`, never its own `CREATE INDEX`, or bulk writes and a mended save miss it. A query that names its index uses `_hint` (a reshuffle on its worker may have it away).
 - `merge` refuses a file that is neither a save nor an export (`is_export`, its first line); keep `is_export` in step with `saves.write_export` (F-44).
+- Syncing (SY-1): `words.changed` is stamped by TEMP triggers (`SYNC_TRIGGERS`, made at every open, never kept in the file) whenever tier, rating, games or skips change, and the anchors' time in meta `anchors_changed`. `apply_sync` sets `changed` back to the other device's time after writing (the trigger stamped it now), or the change would echo back as a newer one. Duels synced in carry `comparisons.origin`; only `origin IS NULL` ones are written out, and a device's own are mirrored (its undone ones removed).
 - The shelf's totals live in meta `shelf_totals`: anything that adds words or changes ranks or frequencies calls `_forget_shelf_totals` (insert_words, add_word, set_frequencies, merge).
 - Which obscene words are smeared is `censored_words()` (the words smeared whole whose kinds meet `censor_kinds`), cached: `set_rude`, `add_word` and `set_censor_kinds` forget it. Browse and `censored` read it, never `obscene_words()` (that is every word smeared whole, for the rules). A smeared meaning is stored as [key, kind]; a bare key (scored before RUDENESS_VERSION 13) is always smeared.
 

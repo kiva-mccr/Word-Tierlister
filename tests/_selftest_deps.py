@@ -11,8 +11,10 @@ from fonts import init_fonts
 from ui_style import apply_ttk_style
 
 # ---- detection and the package table (every package has a purpose and a size for the install dialog)
-assert set(deps.SIZE) == set(deps.PIP_NAMES) == set(deps.DOWNLOAD) == set(deps.PURPOSE) - {"tkinter"} \
-    == set(deps.HOMEPAGE) - {"tkinter"}
+assert set(deps.SIZE) - set(deps.SYSTEM_OPTIONAL) == set(deps.PIP_NAMES) == set(deps.DOWNLOAD) \
+    == set(deps.PURPOSE) - {"tkinter", *deps.SYSTEM_OPTIONAL} == set(deps.HOMEPAGE) - {"tkinter", *deps.SYSTEM_OPTIONAL}
+for n in deps.SYSTEM_OPTIONAL:                     # (SY-1: optional programs from the system, offered the same way)
+    assert n in deps.SIZE and n in deps.PURPOSE and n in deps.HOMEPAGE and n in deps.SYSTEM_NAMES
 assert not set(deps.BUILD_PACKAGES) & set(deps.PACKAGES)               # (the builder is not in requirements.txt)
 assert deps.missing(["os", "sys"]) == []
 assert deps.missing(["os", "surely_not_installed_pkg_xyz"]) == ["surely_not_installed_pkg_xyz"]
@@ -127,6 +129,34 @@ with contextlib.redirect_stderr(io.StringIO()) as err:
 assert "optional" in err.getvalue()
 state.update(missing=["nltk"], pip=False)
 assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"]) is True            # no pip + only optional missing: silent
+state.update(pip=True)
+
+# ---- Syncthing (SY-1, asked for): a tick box beside the optional packages, installed by the system's installer
+S.deps.system_install_command = lambda what, window=False: ["pkexec", "apt-get", "install", "-y", what]
+sys_runs = []
+def sys_installer(cmd, log):
+    sys_runs.append(cmd); return True
+state.update(missing=["nltk"], answer=["nltk", "syncthing"]); asked.clear(); installs.clear(); remembered = []
+assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], system_optional=["syncthing"], present=lambda n: False,
+                         installer=installer(True), system_installer=sys_installer, on_decline=remembered.append) is True
+headline, message, choices = asked[-1][:3]
+assert headline == "Optional packages are available" and [c[0] for c in choices] == ["nltk", "syncthing"]
+assert choices[1][1] == " (optional, about 30 MB)" and choices[1][5] == ("syncthing", deps.HOMEPAGE["syncthing"])
+assert choices[0][3] and not choices[1][3]                        # (Syncthing unticked to start with: asked for)
+assert "Syncthing comes from your system's own installer" in message and "password" in message
+assert installs == [["nltk"]] and sys_runs == [["pkexec", "apt-get", "install", "-y", "syncthing"]] and remembered == []
+# only Syncthing missing (and no pip): still offered; left unticked it is remembered and not asked again
+state.update(missing=[], pip=False, answer=[]); asked.clear(); sys_runs.clear()
+assert S.ensure_packages(root, ["wordfreq"], optional=["nltk"], system_optional=["syncthing"], present=lambda n: False,
+                         system_installer=sys_installer, on_decline=remembered.append) is True
+assert asked[-1][0] == "An optional package is available" and "It needs an internet connection" in asked[-1][1]
+assert remembered == [["syncthing"]] and sys_runs == []
+n = len(asked)
+for kw in ({"declined": {"syncthing"}, "present": lambda n: False}, {"present": lambda n: True}):
+    assert S.ensure_packages(root, ["wordfreq"], system_optional=["syncthing"], **kw) is True and len(asked) == n
+S.deps.system_install_command = lambda what, window=False: None          # (nothing to install it with: not offered)
+assert S.ensure_packages(root, ["wordfreq"], system_optional=["syncthing"], present=lambda n: False) is True
+assert len(asked) == n
 state.update(pip=True)
 
 # ---- pip refused (externally-managed): offers a private environment and restarts in it

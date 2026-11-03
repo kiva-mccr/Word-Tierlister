@@ -88,8 +88,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `.github/workflows/build.yml` | Build programs (T-8, T-16): builds the Linux, Windows and macOS (Apple Silicon) programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
-| `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test (split over 2 machines for Apple Silicon and 3 for Intel, run at once: `SHARD=k/n`, `tests/_shard.py`), builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
-| `.github/workflows/tests.yml` | Test on Linux and Windows (T-20): every self-test on GitHub's Linux (under xvfb and openbox, 2 machines) and Windows (3 machines), run at once, with the build test making and starting the program. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
+| `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test, builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pull requests that touch the code, pushes to main, and the Run workflow button. |
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
@@ -121,6 +120,9 @@ either way the save you used last is found again, so switching between the two l
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
 | `src/sources.py` | File > Source & Updates... (one panel since U-4). Updates (U-1): asks GitHub for the newest release and says why when it cannot (a private repository answers "Not Found"); "Update" replaces the program with the newest release's, or updates the source with git pull or a sync; both start again on the same save. From source (T-6): make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, the Updates section's "Update" updates this folder without making the program (T-13). |
+| `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
+| `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
+| `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -174,10 +176,7 @@ tkinter and run headless under `xvfb-run` when there is no display. A single tes
 `python tests/_selftest_ui.py`. Before handing work over: `python tools/check_release.py --tests`.
 It stops at the first failure; `KEEP_GOING=1` runs them all and lists every failure. A test that runs past
 `TEST_TIMEOUT` seconds (600 by default) is stopped, and shortly before that it prints where each thread was.
-`SHARD=k/n` runs only part k of n, the parts about equally long (`tests/_shard.py` weighs each test by its time on
-GitHub's Intel Mac); the macOS workflow runs the parts on separate machines at once.
-There is no Mac here: the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS), and
-Test on Linux and Windows runs them on GitHub's Linux and Windows machines.
+There is no Mac here: the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS).
 
 ## How words are dealt
 
@@ -355,6 +354,19 @@ and the program removes the source's files as it starts, leaving itself, your sa
 the source's own files are removed: anything you added there stays, and so does a git checkout's history (`.git`).
 (A source unpacked from a program that sits beside its folder replaces that program instead, and your save moves
 next to it.) The program carries its source inside it, so it can always be unpacked again.
+
+## Syncing between devices
+
+File > Sync with other devices keeps your tier list the same on your other computers, through
+[Syncthing](https://syncthing.net/) (free, no account, no cloud: it copies a folder straight between your own
+devices). If Syncthing is missing it offers to install it first (your system's own installer); it is also an
+unticked option in the install window. The first time, it asks whether Syncthing may start when you log in.
+
+Devices that want to sync, and devices found on your network, are listed at the top: Accept or Link. Elsewhere,
+copy this device's code into the other one (Link by code, at the bottom). Syncing is automatic while the program
+runs (a tick turns it off; Sync now does it at once). Both devices must be on, with Syncthing running, at the same
+time; if both change the same word, the later change wins. Each device writes only its own file, so none can
+overwrite another's.
 
 ## Missing packages
 Installing happens in two stages.

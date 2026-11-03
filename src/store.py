@@ -26,6 +26,11 @@ Data model (see SCHEMA below)
                  ones: deal_kinds, deal_obscene, deal_rude (rudeness.KIND_BITS), censor.
     history      one JSON row per action, so Undo works and survives restarts.
 
+Syncing between devices (SY-1, syncfiles.py): words.changed is when this word's tier, rating, duels or skips last
+changed (NULL: before syncing existed), stamped by a TEMP trigger on every such change; comparisons.origin is the
+device a duel was synced from (NULL: made here); meta anchors_changed is when the anchors last changed. apply_sync
+folds another device's progress in: the newer change of each word wins.
+
 Conventions
     * Every public method that changes data commits before returning (a crash loses nothing).
     * Store.version goes up on every change; open windows compare it to know when to refresh.
@@ -87,8 +92,27 @@ WORD_INDEXES = (
     ("idx_placed_kinds", "words(kinds, rude) WHERE tier IS NOT NULL"),
     # the header's "N skipped": counting them among a million unplaced words took 60 ms on every refresh
     ("idx_words_skipped", "words(word) WHERE tier IS NULL AND skips > 0"),
+    # the words whose progress changed since syncing came (SY-1): what a sync file lists besides placed / skipped ones
+    ("idx_words_changed", "words(word) WHERE changed IS NOT NULL"),
 )
 BULK_ROWS = 100000      # a write of more rows than this goes through bulk_write
+
+# SY-1: every change to a word's progress, and to the anchors, is stamped with its time, for syncing between devices
+# (the newer change wins). TEMP triggers, made at every open: the save file itself keeps none, and nothing that
+# writes through the Store can forget to stamp. Only these columns: a reshuffle's queue keys never stamp.
+SYNC_TRIGGERS = """
+CREATE TEMP TRIGGER IF NOT EXISTS sync_word_changed AFTER UPDATE OF tier, rating, games, skips ON main.words
+WHEN NEW.tier IS NOT OLD.tier OR NEW.rating IS NOT OLD.rating OR NEW.games IS NOT OLD.games
+     OR NEW.skips IS NOT OLD.skips
+BEGIN UPDATE words SET changed = sync_now() WHERE word = NEW.word; END;
+CREATE TEMP TRIGGER IF NOT EXISTS sync_word_added AFTER INSERT ON main.words
+WHEN NEW.tier IS NOT NULL OR NEW.skips > 0
+BEGIN UPDATE words SET changed = sync_now() WHERE word = NEW.word; END;
+CREATE TEMP TRIGGER IF NOT EXISTS sync_anchor_added AFTER INSERT ON main.anchors
+BEGIN INSERT OR REPLACE INTO meta(key, value) VALUES('anchors_changed', sync_now()); END;
+CREATE TEMP TRIGGER IF NOT EXISTS sync_anchor_gone AFTER DELETE ON main.anchors
+BEGIN INSERT OR REPLACE INTO meta(key, value) VALUES('anchors_changed', sync_now()); END;
+"""
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS words(
@@ -166,12 +190,18 @@ class Store:
             self.db.execute("UPDATE words SET rude=? WHERE obscene=1", (KIND_BITS["swear"],))   # (until scored)
         if "rude_main" not in cols:              # what a word smeared whole mostly is (rudeness.main_kind), a bit
             self.db.execute("ALTER TABLE words ADD COLUMN rude_main INTEGER")
+        if "changed" not in cols:                # SY-1: when its progress last changed (sync: the newer one wins)
+            self.db.execute("ALTER TABLE words ADD COLUMN changed REAL")
+        if "origin" not in {r[1] for r in self.db.execute("PRAGMA table_info(comparisons)")}:
+            self.db.execute("ALTER TABLE comparisons ADD COLUMN origin TEXT")     # SY-1: the device it came from
         self.db.execute("DROP INDEX IF EXISTS idx_words_queue")
         self.db.execute("DROP INDEX IF EXISTS idx_words_q2")
         self.db.execute("DROP INDEX IF EXISTS idx_placed_rank")      # (now idx_placed_shelf, which also counts the shelf)
         for name, spec in WORD_INDEXES:
             self.db.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {spec}")
         self.db.commit()
+        self.db.create_function("sync_now", 0, time.time)
+        self.db.executescript(SYNC_TRIGGERS)     # (TEMP: never kept in the file, so an older version opens it as ever)
         self.version = 0  # bumps on every change; lets open windows know when to refresh
         self._total = None
         self._prog = None    # the shelf's tallies (shelf()), counted once, then kept up to date by each change
@@ -1314,6 +1344,104 @@ class Store:
                 and cur["tier"] is None and cur["skips"] == 0:
             self.db.execute("UPDATE words SET skips=? WHERE word=?", (int(r["skips"]), word))
             res["skipped"] += 1
+
+    # ---- syncing between devices (SY-1; the files themselves: syncfiles.py) ------------------------------------
+    SYNC_COLUMNS = "word, tier, rating, games, skips, COALESCE(changed, 0)"
+    SYNC_WHERE = "tier IS NOT NULL OR skips > 0 OR changed IS NOT NULL"
+
+    @classmethod
+    def sync_rows(cls, db):
+        """This save's progress for a sync file, read from `db` (a connection of its own, on a worker thread):
+        ([word, tier, rating, games, skips, changed], anchors, when the anchors changed, the duels made here
+        [winner, loser, tie, kind, ts]). A word changed before syncing existed counts as changed at time 0."""
+        rows = [list(r) for r in db.execute(f"SELECT {cls.SYNC_COLUMNS} FROM words WHERE {cls.SYNC_WHERE}")]
+        anchors = [None] * len(TIERS)
+        for t, w in db.execute("SELECT tier, word FROM anchors"):
+            if 0 <= t < len(TIERS):
+                anchors[t] = w
+        got = db.execute("SELECT value FROM meta WHERE key='anchors_changed'").fetchone()
+        try:
+            when = float(got[0]) if got else 0.0
+        except ValueError:
+            when = 0.0
+        comps = [list(r) for r in db.execute(
+            "SELECT winner, loser, tie, kind, ts FROM comparisons WHERE origin IS NULL")]
+        return rows, anchors, when, comps
+
+    def apply_sync(self, origin, rows, anchors=None, anchors_changed=0.0, comps=None):
+        """Fold another device's progress in (its sync file, read by syncfiles.read_file): for each word the newer
+        change wins; a word never touched here takes theirs even when both are from before syncing (time 0), so a
+        new device fills up the way Import does; a word this list lacks is added at the back. The anchors follow
+        when theirs changed later. The duels made on `origin` are mirrored: new ones added, ones it took back (undo)
+        removed (`comps` None: leave its duels as they are). Changes from here are never overwritten by an older one.
+        Returns {"words", "added", "anchors",
+        "comparisons"}: how many of each changed."""
+        res = {"words": 0, "added": 0, "anchors": False, "comparisons": 0}
+        db = self.db
+        try:
+            db.execute("CREATE TEMP TABLE IF NOT EXISTS sync_in(word TEXT PRIMARY KEY, tier INTEGER, rating REAL,"
+                       " games INTEGER, skips INTEGER, changed REAL)")
+            db.execute("DELETE FROM sync_in")
+            db.executemany("INSERT OR REPLACE INTO sync_in VALUES(?,?,?,?,?,?)",
+                           (r for r in rows if r[1] is None or 0 <= r[1] < len(TIERS)))
+            todo = db.execute(
+                "SELECT i.word, i.tier, i.rating, i.games, i.skips, i.changed, w.word IS NULL AS new"
+                " FROM sync_in i LEFT JOIN words w ON w.word = i.word"
+                " WHERE w.word IS NULL AND (i.tier IS NOT NULL OR i.skips > 0)"
+                "    OR w.word IS NOT NULL"
+                "   AND (i.tier IS NOT w.tier OR i.rating IS NOT w.rating OR i.games IS NOT w.games"
+                "        OR i.skips IS NOT w.skips)"
+                "   AND (i.changed > COALESCE(w.changed, 0)"
+                "        OR w.changed IS NULL AND w.tier IS NULL AND w.skips = 0)").fetchall()
+            new = [r for r in todo if r["new"]]
+            old = [r for r in todo if not r["new"]]
+            base = max(10_000_000, db.execute("SELECT COALESCE(MAX(rank), 0) + 1 FROM words").fetchone()[0])
+            with self.bulk_write() if len(todo) > BULK_ROWS else contextlib.nullcontext():
+                db.executemany(          # (words this list lacks, from a bigger or older list: rarest, back of the queue)
+                    "INSERT INTO words(word, rank, tier, rating, games, skips, qkey) VALUES(?, ?, ?, ?, ?, ?, 1e18)",
+                    ((r["word"], base + i, r["tier"], r["rating"], r["games"], r["skips"]) for i, r in enumerate(new)))
+                db.executemany(
+                    "UPDATE words SET tier=?, rating=?, games=?, skips=? WHERE word=?",
+                    ((r["tier"], r["rating"], r["games"], r["skips"], r["word"]) for r in old))
+                # (the trigger stamped them now: they keep the time they changed there, or they would echo back)
+                db.executemany("UPDATE words SET changed=? WHERE word=?", ((r["changed"], r["word"]) for r in todo))
+            res["words"], res["added"] = len(todo), len(new)
+            mine = db.execute("SELECT value FROM meta WHERE key='anchors_changed'").fetchone()
+            try:
+                mine = float(mine[0]) if mine else 0.0
+            except ValueError:
+                mine = 0.0
+            if anchors and anchors_changed > mine and list(anchors) != self.get_anchors():
+                db.execute("DELETE FROM anchors")
+                for t, w in enumerate(anchors[:len(TIERS)]):
+                    if w is not None and self.has_word(w):
+                        db.execute("INSERT INTO anchors(tier, word) VALUES(?, ?)", (t, w))
+                db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES('anchors_changed', ?)",
+                           (str(anchors_changed),))
+                res["anchors"] = True
+            if comps is not None:                         # (None: the same duels as last time, left alone)
+                have = {(w, l, ts): cid for cid, w, l, ts in db.execute(
+                    "SELECT id, winner, loser, ts FROM comparisons WHERE origin=?", (origin,))}
+                theirs = {(c[0], c[1], c[4]): c for c in comps}
+                gone = [cid for key, cid in have.items() if key not in theirs]
+                db.executemany("DELETE FROM comparisons WHERE id=?", ((cid,) for cid in gone))
+                add = [c for key, c in theirs.items() if key not in have]
+                db.executemany("INSERT INTO comparisons(winner, loser, tie, kind, ts, origin) VALUES(?,?,?,?,?,?)",
+                               ((w, l, tie, kind, ts, origin) for w, l, tie, kind, ts in add))
+                res["comparisons"] = len(gone) + len(add)
+            if new:
+                self._forget_shelf_totals()
+            db.execute("DELETE FROM sync_in")
+            db.commit()
+        except Exception:
+            db.rollback()
+            self._forget_tallies()
+            raise
+        if res["words"] or res["anchors"] or res["comparisons"]:
+            self._total = None if res["added"] else self._total
+            self._forget_tallies()
+            self.version += 1
+        return res
 
     def merge(self, path, backup=True):
         """Bring progress from another save file, or from an Export, into this list.

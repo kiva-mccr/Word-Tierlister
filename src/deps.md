@@ -3,7 +3,7 @@
 The third-party packages and installing them (ST-1..ST-5): the terminal step for tkinter before any window, pip installs measured for the install dialog, the private environment fallback, detaching from the terminal, and the Linux applications-menu launcher.
 
 - **Uses:** `constants`
-- **Used by:** `app`, `sources`, `standalone`, `startup`, `tierlist`
+- **Used by:** `app`, `sources`, `standalone`, `startup`, `syncdialog`, `syncthing_api`, `tierlist`
 - **Tests:** `_selftest_deps`, `_selftest_icon`, `_selftest_install`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
@@ -15,7 +15,7 @@ The module docstring has the details; this page is the map.
 - `pip_available`: True if `python -m pip` works for this interpreter.
 - `install`: pip-install the packages for the import names `names`, streaming pip's output through `log`.
 - `tk_available`: True if tkinter (and the _tkinter extension under it) can be imported.
-- `system_install_command`: The system command that installs `what` ("tkinter", "pip", "venv" or "python") for this computer, as a list, or None if there is nothing we know to run.
+- `system_install_command`: The system command that installs `what` ("tkinter", "pip", "venv", "python" or "syncthing") for this computer, as a list, or None if there is nothing we know to run.
 - `tk_install_command`: The system command that installs tkinter for this Python in a terminal (see system_install_command).
 - `run_system_install`: Run a system install command (system_install_command), its output through `log`; True if it worked.
 - `ensure_pip`: Python's own way to put pip back (ensurepip: no password, nothing from the system); True if pip works then.
@@ -49,6 +49,7 @@ The module docstring has the details; this page is the map.
 - Keep `PACKAGES` in step with `requirements.txt` (a test checks); a new package also needs `SIZE`, `PURPOSE`, `HOMEPAGE`.
 - The Windows Start menu shortcut (ST-10) is written by PowerShell's WScript.Shell with every value passed through the environment (`SHORTCUT_PS` reads `$env:WTL_*`): never put a path inside the script's text (quotes and spaces in folder names). From source its target is pythonw.exe, never python.exe (a console window, ST-9).
 - Re-measure `SIZE` / `DOWNLOAD` with pip if requirements change.
+- `SYSTEM_OPTIONAL` (SY-1: Syncthing) are programs from the system offered with the optional packages: each needs `SIZE`, `PURPOSE`, `HOMEPAGE`, `SYSTEM_NAMES` and a `SYSTEM_PACKAGES` entry per package manager (plus brew / winget in `system_install_command`), but no pip name.
 - Restarts never loop: `REEXEC_ENV` / `DETACHED_ENV` mark the copy that was started.
 
 ## Changing it

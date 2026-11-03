@@ -116,10 +116,10 @@ def check_docs(problems):
 
 # The layers of src/ (.claude/CLAUDE.md), lowest first: a module imports only from modules before it; the ones in
 # one inner list are equals (none imports another). Only UI modules (from "theme" on) import tkinter.
-LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["keymap"], ["bundle"], ["standalone"],
-          ["store"], ["wordsource", "saves", "definitions"], ["theme"], ["fonts"], ["sizing"], ["ui_style"],
-          ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart"], ["browser"], ["filepicker"],
-          ["shortcuts", "tiercolours"], ["dealing"], ["sources"], ["app"]]
+LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["syncthing_api"], ["keymap"], ["bundle"],
+          ["standalone"], ["store"], ["wordsource", "saves", "definitions"], ["syncfiles"], ["theme"], ["fonts"],
+          ["sizing"], ["ui_style"], ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart"],
+          ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog"], ["dealing"], ["sources"], ["app"]]
 
 
 def _module_imports(path):

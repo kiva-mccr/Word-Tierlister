@@ -39,6 +39,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import deps
+import syncthing_api
 from constants import parse_plan
 from errors import ask_choices, ask_yes_no
 from fonts import font
@@ -351,12 +352,12 @@ _VENV_ADVICE = ("Your system's Python does not allow installing packages into it
 
 
 def ensure_packages(root, required, optional=(), declined=(), on_decline=None, installer=None,
-                    restart=None, home=None, system_installer=None):
+                    restart=None, home=None, system_installer=None, system_optional=(), present=None):
     """Make sure the packages in `required` (and, if wanted, `optional`) can be imported (ST-4, stage 2).
 
     Names are import names (see deps.PIP_NAMES). Does nothing unless something is missing. Then one
     dialog lists each missing package as its own tick box, saying what it is for and whether it is needed
-    or optional (required ones marked with a red asterisk; all ticked to start with); "Install selected" runs `pip install` for the ticked ones behind
+    or optional (required ones marked with a red asterisk; the packages ticked to start with, the system programs unticked); "Install selected" runs `pip install` for the ticked ones behind
     the usual progress window and checks again, without a restart.
 
     * Optional packages already declined (`declined`) are not offered again; an optional one left unticked
@@ -368,36 +369,52 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
       `restart` / `home` it raises SetupError with the manual steps instead.
     * A failed install of a required package raises SetupError with what to do instead; a failed install of
       only optional ones is reported on stderr and the program carries on.
+    * `system_optional`: optional programs from the system's own installer (deps.SYSTEM_OPTIONAL: Syncthing, SY-1,
+      asked for as a tick box here), offered beside the packages while missing (`present(name)`), not declined,
+      and there is a command to install them with; each installs behind its own progress window.
     Packaged builds skip all of this.
     """
+    present = present or (lambda n: bool(syncthing_api.find_syncthing()) if n == "syncthing" else True)
     need = deps.missing(required)
     extra = [n for n in deps.missing(optional) if n not in declined and n not in need]
-    gone = need + extra
-    if not gone or getattr(sys, "frozen", False):
+    system = [n for n in system_optional if n not in declined and not present(n)
+              and deps.system_install_command(n, window=True)]
+    if not need + extra + system or getattr(sys, "frozen", False):
         return not need
-    cmd = "pip install " + " ".join(deps.PIP_NAMES.get(n, n) for n in gone)
-    if not deps.pip_available():
+    if (need or extra) and not deps.pip_available():
+        cmd = "pip install " + " ".join(deps.PIP_NAMES.get(n, n) for n in need + extra)
         if not need:
-            return True                                   # only optional things missing: not worth an error
-        if not _get_pip(root, need, system_installer):
+            extra = []                                    # only optional things missing: not worth an error
+        elif not _get_pip(root, need, system_installer):
             raise SetupError(f"A required package is missing ({', '.join(need)}) and pip is not available "
                              f"to install it.\n\nInstall pip, then run:\n    {cmd}")
+    gone = need + extra + system
+    if not gone:
+        return True
     headline = ("Some packages are needed" if len(gone) > 1 else "A package is needed") if need \
-        else ("Optional packages are available" if len(extra) > 1 else "An optional package is available")
+        else ("Optional packages are available" if len(gone) > 1 else "An optional package is available")
     def label(n):                                         # the name itself is the link to its page (UI-30)
         kind = "required" if n in need else "optional"
         size = deps.SIZE.get(n)
         return f" ({kind}, about {size} MB)" if size else f" ({kind})"
-    choices = [(n, label(n), deps.PURPOSE.get(n, ""), True, n in need, (n, deps.HOMEPAGE.get(n)))
-               for n in gone]
-    chosen = ask_choices(
-        "Word Tierlister", headline,
-        "Tick what to install. It uses pip, needs an internet connection and takes a minute or so.",
-        choices, yes="Install selected", no="Not now", parent=root)
+    choices = [(n, label(n), deps.PURPOSE.get(n, ""), n not in system, n in need, (n, deps.HOMEPAGE.get(n)))
+               for n in gone]                             # (Syncthing unticked to start with: asked for)
+    how = "It uses pip, needs" if need + extra else "It needs"
+    if system:
+        how = (f"{how} an internet connection and takes a minute or so; "
+               f"{' and '.join(deps.SYSTEM_NAMES[n] for n in system)} comes from your system's own installer, "
+               "which may ask for your password.")
+    else:
+        how += " an internet connection and takes a minute or so."
+    chosen = ask_choices("Word Tierlister", headline, f"Tick what to install. {how}",
+                         choices, yes="Install selected", no="Not now", parent=root)
     chosen = [n for n in gone if chosen and n in chosen]
-    left_out = [n for n in extra if n not in chosen]
+    left_out = [n for n in extra + system if n not in chosen]
     if left_out and on_decline:
         on_decline(left_out)
+    for n in [n for n in system if n in chosen]:
+        _install_system(root, n, system_installer)
+    chosen = [n for n in chosen if n not in system]
     if not chosen:
         return not need
     what = ", ".join(chosen)
@@ -416,6 +433,22 @@ def ensure_packages(root, required, optional=(), declined=(), on_decline=None, i
         if still and sys.stderr is not None:
             print(f"Could not install {', '.join(still)} (optional); carrying on without it.", file=sys.stderr)
     return not deps.missing(need)
+
+
+def _install_system(root, what, installer=None):
+    """Install an optional program from the system (ticked in ensure_packages) behind the progress window. A
+    failure is reported on stderr and the program carries on (it is optional)."""
+    cmd = deps.system_install_command(what, window=True)
+    name = deps.SYSTEM_NAMES[what]
+    try:
+        ok = run_with_progress(root, lambda log: (installer or deps.run_system_install)(cmd, log),
+                               title=f"Installing {name}", initial_stage="Installing...",
+                               intro="Your system may ask for your password.")
+    except SystemExit:                                    # (the progress window was closed: stopped)
+        ok = False
+    if not ok and sys.stderr is not None:
+        print(f"Could not install {name} (optional); carrying on without it.", file=sys.stderr)
+    return bool(ok)
 
 
 def offer_system_install(root, what, why, installer=None):

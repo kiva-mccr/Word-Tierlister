@@ -36,6 +36,7 @@ from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
+from syncdialog import AutoSync, SyncDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, ui_factor, usable_area
 import theme
@@ -169,6 +170,7 @@ class App:
         self._ref_size = None     # the window size at which grow is 1 (set by _fit_window)
         self._grow_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
+        self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
         self._measure_pane = False    # while _fit_window measures: count the definitions pane at its lines' height
         self._fit_cache = {}      # (place or duel, pane lines, zoom, screen) -> the font step that fitted last time (_fit_window)
@@ -373,6 +375,7 @@ class App:
             ("File", [("command", "Import earlier progress...", self.import_progress, None),
                       ("command", "Export tier list...", self.export, None),
                       ("command", "Where is my save file?", self.show_save_location, None),
+                      ("command", "Sync with other devices...", self.sync_devices, None),
                       ("command", "Source & Updates...", self.source_updates, None),
                       ("separator",),
                       ("command", "Quit", self.on_close, None)]),
@@ -2201,6 +2204,10 @@ class App:
                        else f"Word Tierlister updated in your {menu}", kind="info", ms=2600)
         return path
 
+    def sync_devices(self):
+        """File > Sync with other devices... (SY-1): link devices through Syncthing; auto-sync on to start with."""
+        return SyncDialog(self)
+
     def source_updates(self):
         """File > Source & Updates... (T-6, T-7, U-1; one panel since U-4): check for updates and update the form
         you are running; from source, make a standalone program for this computer; in the program, unpack the
@@ -2407,6 +2414,7 @@ class App:
         if self.busy:
             self.root.after(200, self.on_close)
             return
+        self.autosync.flush()                    # (SY-1: the other devices get the last changes)
         self._shut(close_store=True)
 
     _fit_at_most = None                     # (set_zoom: a zoom out's fit starts no bigger than what showed)

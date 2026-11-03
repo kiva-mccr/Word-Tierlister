@@ -28,8 +28,8 @@ the file. Its facts (uses, used by, tests, public API) come from `python tools/n
 pitfalls" are written by hand: add the rule or the bug there when you fix one. check_release fails on a stale note.
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
-constants, obscene, rudeness, problems, deps, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, tiercolours, dealing, sources -> app -> tierlist.
+constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> syncfiles -> theme, fonts, sizing, ui_style,
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, tiercolours, syncdialog, dealing, sources -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -109,7 +109,8 @@ missed). Keep README.md and DEVELOPERS.md current in the same commit as the chan
 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
-- Ask questions and show mock-ups (or an outline) for a design or a problem before building it in full (asked for).
+- Ask questions and show mock-ups of a design or a fix before building it fully (asked for after SY-1 was built
+  before its look was agreed): agree the look and the open choices first, then build.
 - Finish a step with: tests passing, roadmap ticked, README updated, a short summary.
 - Every prompt, before finishing: tidy what was touched (dead code, stale comments and names, leftover
   debug lines, unused imports via pyflakes, scratch files out of the repo), then:
@@ -149,7 +150,10 @@ moved into Source & Updates, plus a tick when making the program; none on macOS)
 program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
-T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled). T-20 (.github/workflows/tests.yml: the self-tests on GitHub's Linux and Windows on every PR).
+SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
+OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
+D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
+options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -217,5 +221,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - A read-only save file's dialog could not be verified (the test machine ran as root).
 - Holding a key in Refine once crashed the user's PC; after the two fixes (Boundary's pair list, held repeats wait
   after a slow action) the user no longer sees it.
+- SY-1 was tried against two real Syncthing 1.27 instances on one Linux machine; never between two real computers,
+  over relays, nor on Windows / macOS (the Startup shortcut, the LaunchAgent, brew services). The later change wins by
+  each device's clock. Tests never start the real Syncthing (AutoSync.started, fakes).
 - "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
   undercounts.
