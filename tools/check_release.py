@@ -36,7 +36,7 @@ def _files_in(d):
     full = os.path.join(HERE, d)
     if not os.path.isdir(full):
         return []
-    return sorted(os.path.join(d, f) if d else f for f in os.listdir(full) if os.path.isfile(os.path.join(full, f)))
+    return sorted(f"{d}/{f}" if d else f for f in os.listdir(full) if os.path.isfile(os.path.join(full, f)))
 
 
 def py_files():

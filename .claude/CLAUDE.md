@@ -15,7 +15,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
 - This container: `python3.12` is the one with tkinter (`PY=python3.12 sh tests/run_tests.sh`); packages for it
   need `pip install --break-system-packages`. Xvfb is available for screenshots.
-- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
+- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `SHARD=k/n` runs one part (tests/_shard.py weights; re-measure if parts drift), `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
@@ -208,6 +208,9 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
+- T-20's workflow runs every self-test on GitHub's Windows (and Linux): Windows lessons so far: paths with backslashes, home from
+  USERPROFILE, no os.geteuid, a hidden window gets no <Configure>, <Configure> on the main window when nothing moved, Segoe UI
+  wraps and measures differently (check a smear's runs from its layout, not fixed strings).
 - T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
   (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
   animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.

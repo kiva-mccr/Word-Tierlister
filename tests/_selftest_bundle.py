@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.join(_paths.ROOT, "tools"))
 import bundle
 
 pairs = bundle.datas()
-names = {os.path.join(dest, os.path.basename(src)) for src, dest in pairs}
+names = {os.path.join(dest, os.path.basename(src)).replace(os.sep, "/") for src, dest in pairs}
 assert {"wordfreq/data/large_en.msgpack.gz", "wordfreq/data/small_en.msgpack.gz",
         "langcodes/data/language-subtag-registry.txt"} <= names, names
 assert not any("_fr." in n or "jieba" in n for n in names)            # only English: not the other 39 languages

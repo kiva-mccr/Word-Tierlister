@@ -132,7 +132,10 @@ s.reshuffle = lambda **k: (gate.append(1), release.wait(30), real_reshuffle(**k)
                                                                                    # wait was over on a slow Mac)
 v0 = s.version
 qd.buttons["Apply"].invoke(); pump(2, 0.05)
-assert qd.alive() and app.busy and "Shuffling" in labels(qd)                    # runs in the background ...
+t_end = time.time() + 10                                                        # (an Intel Mac took longer to say so)
+while not ("Shuffling" in labels(qd) and app.busy) and time.time() < t_end:
+    pump(1)
+assert qd.alive() and app.busy and "Shuffling" in labels(qd), (app.busy, labels(qd))   # runs in the background ...
 assert not qd.buttons["Apply"].enabled and not qd.buttons["Cancel"].enabled
 assert qd.bar.winfo_manager() and str(qd.bar.cget("mode")) == "indeterminate"   # the back-and-forth bar
 qd.dlg.win.event_generate("<Escape>"); pump(1); assert qd.alive()                # ... and cannot be cancelled halfway

@@ -97,7 +97,7 @@ deps._make_venv, deps.install = real_make, real_install
 # ---- the system command for tkinter, per platform
 which = lambda tools: (lambda t: "/usr/bin/" + t if t in tools else None)
 cmd = deps.tk_install_command("linux", which({"apt-get"}))
-assert cmd[-3:] == ["install", "-y", "python3-tk"] and (cmd[0] == "sudo") == (os.geteuid() != 0)
+assert cmd[-3:] == ["install", "-y", "python3-tk"] and (cmd[0] == "sudo") == (getattr(os, "geteuid", lambda: 1)() != 0)
 assert deps.tk_install_command("linux", which({"dnf"}))[-1] == "python3-tkinter"
 assert deps.tk_install_command("linux", which(set())) is None
 assert deps.tk_install_command("darwin", which({"brew"}))[:2] == ["brew", "install"]

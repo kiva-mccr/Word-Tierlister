@@ -5,6 +5,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile, time
 tmp = tempfile.mkdtemp()
 os.environ["HOME"] = os.path.join(tmp, "home"); os.makedirs(os.environ["HOME"])
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import app as A, browser as B
@@ -210,7 +211,9 @@ area = usable_area(dlg.win)
 assert dlg.win.winfo_height() <= area[3] and dlg.win.winfo_width() <= area[2]     # still on the screen
 cx = dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2
 edge = dlg.win.winfo_rootx() + dlg.win.winfo_width() >= area[0] + area[2] - 1 or dlg.win.winfo_rootx() <= area[0] + 1
-assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 or edge     # centred over the window (or kept on
+frame = dlg.win.winfo_rootx() - dlg.win.winfo_x()                   # (Windows: placed by its frame, ~8 px border)
+assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame or edge, \
+    (cx, root.winfo_rootx(), root.winfo_width(), dlg.win.winfo_rootx(), dlg.win.winfo_width(), area)  # centred (or kept on
 #                                                                                   the screen it overhangs)
 maximize(False, "1000x700"); pump(4)
 assert not fits() and dlg.win.winfo_height() != grew and abs(dlg.win.winfo_height() - small) <= 2

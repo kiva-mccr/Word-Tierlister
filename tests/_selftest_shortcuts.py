@@ -3,6 +3,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 every key, hint and menu follows at once; saved in the save."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import keymap as K

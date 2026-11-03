@@ -179,7 +179,7 @@ except SetupError as e: assert "-m venv" in str(e) and len(restarted) == 1
 # package manager; from the window the desktop's own password prompt, pkexec)
 def which_of(tools):
     return lambda name: f"/usr/bin/{name}" if name in tools else None
-real_euid = deps.os.geteuid
+real_euid = getattr(deps.os, "geteuid", None)      # (Windows has none: deps reads it only when present)
 deps.os.geteuid = lambda: 1000
 assert system_install_command("pip", "linux", which_of({"dnf", "pkexec"}), window=True) == \
     ["pkexec", "dnf", "install", "-y", "python3-pip"]
@@ -193,7 +193,10 @@ assert system_install_command("tkinter", "linux", which_of({"zypper"})) == ["sud
                                                                                  "install", "python3-tk"]
 deps.os.geteuid = lambda: 0
 assert system_install_command("pip", "linux", which_of({"apt-get"}), window=True)[0] == "apt-get"     # (as root)
-deps.os.geteuid = real_euid
+if real_euid:
+    deps.os.geteuid = real_euid
+else:
+    del deps.os.geteuid
 assert deps.run_system_install([sys.executable, "-c", "print('done')"], log=installs.append) is True and "  done" in installs
 assert deps.run_system_install(["/nonexistent/tool"], log=installs.append) is False
 # no pip: ensurepip first, then the system's package (asked); a required package then installs as usual
@@ -305,10 +308,10 @@ class Tty:
     def __init__(self, tty=True): self.tty = tty
     def isatty(self): return self.tty
 term, desk = (Tty(), Tty()), {"DISPLAY": ":0"}
-assert deps.should_detach(env=desk, streams=term, posix=True)
-assert not deps.should_detach(console=True, env=desk, streams=term, posix=True)              # --console keeps it
-assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True)            # output redirected
-assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True)   # never twice
+assert deps.should_detach(env=desk, streams=term, posix=True, windows=False)
+assert not deps.should_detach(console=True, env=desk, streams=term, posix=True, windows=False)              # --console keeps it
+assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True, windows=False)            # output redirected
+assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True, windows=False)   # never twice
 assert not deps.should_detach(env=desk, streams=term, posix=False, windows=False)            # (neither: stays)
 # Windows (reported: the console window stayed open behind it): again with pythonw.exe, which has no console
 assert deps.should_detach(env={}, streams=term, windows=True, pythonw="C:/Python312/pythonw.exe")
@@ -321,8 +324,8 @@ assert deps.windowless_python("C:/Python312/python.exe", exists=lambda p: True).
 assert deps.windowless_python("C:/Python312/pythonw.exe", exists=lambda p: False) == "C:/Python312/pythonw.exe"
 assert deps.windowless_python("C:/odd/python.exe", exists=lambda p: False) is None
 if sys.platform != "darwin":
-    assert not deps.should_detach(env={}, streams=term, posix=True)                         # no desktop: stay put
-    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True)
+    assert not deps.should_detach(env={}, streams=term, posix=True, windows=False)          # no desktop: stay put
+    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True, windows=False)
 said, started = [], []
 
 
@@ -345,12 +348,12 @@ tick = lambda: clock[0]
 step = lambda dt: clock.__setitem__(0, clock[0] + 0.05)
 # it gets going: the terminal is told it can close, and gets its prompt back (exit 0)
 assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
-                         clock=tick, sleep=step) == 0
+                         clock=tick, sleep=step, windows=False) == 0
 assert started[-1] == ([sys.executable, "tierlist.py", "--db", "x.db"], True, "1") and "close this terminal" in said[-1]
 # it fails straight away (no window could open): what it said is shown here, with its exit code
 clock[0] = 0.0
 assert deps.detach_terminal(["tierlist.py"], out=said.append, popen=popen_of(Child(1, 2, b"TclError: no display")),
-                         clock=tick, sleep=step) == 1
+                         clock=tick, sleep=step, windows=False) == 1
 assert said[-1] == "TclError: no display"
 # Windows: pythonw.exe, detached from the console (which then closes with this copy), the same arguments and save
 clock[0] = 0.0

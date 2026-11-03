@@ -4,6 +4,7 @@ Dark mode, not the default). Both are kept in the save and shown by reopening th
 (App.reopen, app.reopen_while_asked): everything reads the palette when it is drawn."""
 import json, os, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import theme

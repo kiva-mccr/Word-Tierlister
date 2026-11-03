@@ -3,9 +3,12 @@
 #   - runs every self-test (tests/run_tests.sh with KEEP_GOING=1: all failures listed, not just the first); a Mac
 #     runner has a real screen, so the window tests run as they would on a desktop (no xvfb)
 #   - saves the smoke test's screenshot of each stage (SMOKE_SHOTS, Pillow's ImageGrab)
-#   - builds the program (tools/build.py --check: the app bundle, started once) and photographs its first window
-# The pictures and the built app are downloads of the run (Actions > Test on macOS > the run > Artifacts). Started by
-# hand (Run workflow), by a pull request that touches the code, and by a push to main.
+#   - builds the program (in _selftest_build: the app bundle, started once) and photographs its first window
+# The tests are split over several machines per Mac, run at the same time (SHARD=k/n, tests/_shard.py): 2 for Apple
+# Silicon, 3 for the slower Intel Mac, 5 in all (a free account runs at most 5 macOS jobs at once). The pictures and
+# the built app are downloads of the run (Actions > Test on macOS > the run > Artifacts). Started by hand (Run
+# workflow), by a pull request that touches the code, and by a push to main; a newer push to a pull request cancels
+# its older run.
 name: Test on macOS
 
 on:
@@ -19,18 +22,27 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   macos:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-latest        # (Apple Silicon: the release's program is built here)
-            name: apple-silicon
-          - os: macos-15-intel      # (Intel: no release program yet, but the source should run)
-            name: intel
+        include:                    # (Apple Silicon: the release's program is built there; Intel: no release
+          - {os: macos-latest, name: apple-silicon, shard: 1/2}          #  program yet, but the source should run)
+          - {os: macos-latest, name: apple-silicon, shard: 2/2}
+          - {os: macos-15-intel, name: intel, shard: 1/3}
+          - {os: macos-15-intel, name: intel, shard: 2/3}
+          - {os: macos-15-intel, name: intel, shard: 3/3}
+    name: macos (${{ matrix.name }}, part ${{ matrix.shard }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    timeout-minutes: 30
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1    # (brew would update itself before installing displayplacer)
+      HOMEBREW_NO_INSTALL_CLEANUP: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -47,6 +59,7 @@ jobs:
           python -c "import sys; sys.path.insert(0, 'src'); import tkinter, fonts; r = tkinter.Tk(); print('typefaces', fonts.load_typefaces(), fonts.init_fonts(r), fonts.font('word').actual(), sorted(f for f in tkinter.font.families(r) if 'Young' in f or 'Atkinson' in f))"
           system_profiler SPDisplaysDataType | grep -i -E "resolution|looks like" || true
           mkdir -p "$RUNNER_TEMP/shots/smoke" "$RUNNER_TEMP/shots/program"
+          echo "part=$(echo '${{ matrix.shard }}' | tr / -)" >> "$GITHUB_ENV"
       - name: A screen like the tests' own (1600 x 1200 or else 1920 x 1080; the runner starts at 1024 x 768)
         run: |
           brew install -q jakehilborn/jakehilborn/displayplacer > /dev/null
@@ -56,11 +69,10 @@ jobs:
           displayplacer "id:$id res:$res hz:60 color_depth:7 scaling:off origin:(0,0) degree:0" || true
           sleep 2
           python -c "import tkinter; r = tkinter.Tk(); print('screen now', r.winfo_screenwidth(), 'x', r.winfo_screenheight())"
-      - name: Self-tests
-        run: KEEP_GOING=1 TEST_TIMEOUT=300 PY=python SMOKE_SHOTS="$RUNNER_TEMP/shots/smoke" sh tests/run_tests.sh
-      - name: Build the program and start it once
-        if: ${{ !cancelled() }}
-        run: python tools/build.py --check
+      - name: Self-tests (this part; the build test keeps its program in dist/)
+        run: |
+          SHARD=${{ matrix.shard }} KEEP_GOING=1 TEST_TIMEOUT=300 PY=python SMOKE_SHOTS="$RUNNER_TEMP/shots/smoke" \
+            BUILD_DIST="$GITHUB_WORKSPACE/dist" sh tests/run_tests.sh
       - name: Photograph the built program's first window
         if: ${{ !cancelled() && hashFiles('dist/Word Tierlister.app/Contents/Info.plist') != '' }}
         continue-on-error: true
@@ -83,9 +95,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: screenshots-${{ matrix.name }}
+          name: screenshots-${{ matrix.name }}-${{ env.part }}
           path: ${{ runner.temp }}/shots
-          if-no-files-found: warn
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
