@@ -4,13 +4,15 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 bundle on macOS; only src/bundle.py's data; no CJK tokenizers; our own nltk hook, so the build machine's WordNet
 stays out; the source carried inside); the source list, its manifest and whether a program is up to date. With
 PyInstaller installed (it is never installed by the tests): a real build, its source inside it (taken back out,
-unpacked and its core self-test run from there: T-7), then the new program run from a folder of its own."""
+unpacked and its core self-test run from there: T-7), then the new program run from a folder of its own.
+BUILD_DIST=<folder> keeps the built program there (the macOS workflow photographs and zips it instead of building
+it a second time)."""
 import importlib.util, json, os, sys, tempfile
 sys.path.insert(0, os.path.join(_paths.ROOT, "tools"))
 import build
 import standalone as S
 
-dist = os.path.join(tempfile.mkdtemp(), "dist")
+dist = os.environ.get("BUILD_DIST") or os.path.join(tempfile.mkdtemp(), "dist")
 for plat, out, onefile in (("linux", "word-tierlister", True), ("win32", "word-tierlister.exe", True),
                            ("darwin", "Word Tierlister.app", False)):
     args = S.pyinstaller_args(dist, "/tmp/work", platform=plat, source="/tmp/work/source")

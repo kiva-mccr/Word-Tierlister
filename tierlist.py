@@ -1836,6 +1836,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (macos-latest) and Intel (macos-15-intel; macos-13 is retired): every self-test (run_tests.sh KEEP_GOING=1
 #           lists all failures), the smoke test's screenshots, the app built and started (build.py --check), a picture
 #           of its first window; screenshots and the app are the run's downloads. Its first run is its first test.
+# [x] T-19 Asked for: faster runs (a PR waited 16 min on the Intel Mac, 14 of them self-tests run one after another).
+#           The tests split into parts of about equal length (run_tests.sh SHARD=k/n, tests/_shard.py: weights from
+#           an Intel run's log), 2 machines for Apple Silicon and 3 for Intel at once (5: a free account's macOS
+#           limit); the build test keeps its app (BUILD_DIST) instead of a second build; brew no longer updates
+#           itself first; a newer push to a pull request cancels its older run.
 # [x] U-1  Asked for (before the first release): update the .exe or the source from inside the program. File > Check
 #           for updates... (then sources.UpdateDialog; part of Source & Updates since U-4) asks GitHub for the newest release (its programs now read too:
 #           latest_release "assets"). In the program, Update downloads this computer's program (RELEASE_ASSETS) into a

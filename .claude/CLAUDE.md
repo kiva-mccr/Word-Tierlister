@@ -15,7 +15,7 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 - Run: `python tierlist.py` (`--db test.db` for a throwaway save, `--crash-test` shows the error dialog).
 - This container: `python3.12` is the one with tkinter (`PY=python3.12 sh tests/run_tests.sh`); packages for it
   need `pip install --break-system-packages`. Xvfb is available for screenshots.
-- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
+- Tests: `sh tests/run_tests.sh` (stops at the first failure and checks every exit status; `KEEP_GOING=1` lists every failure, `SHARD=k/n` runs one part (tests/_shard.py weights; re-measure if parts drift), `TEST_TIMEOUT` stops a stuck test and dumps its stacks first). If the default
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
@@ -149,10 +149,7 @@ moved into Source & Updates, plus a tick when making the program; none on macOS)
 program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
-T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
-OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
-D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
-options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
+T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
