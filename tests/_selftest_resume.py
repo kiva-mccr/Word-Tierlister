@@ -153,6 +153,11 @@ assert cur.stats()["placed"] == 50 + 352
 print("merge from save OK")
 
 # ------------------------------------------------------------------ 4. export -> import round trips
+# a CSV cell never starts a spreadsheet formula (S-7), and every word comes back as it was
+from constants import csv_cell, csv_word
+for w, cell in (("-ness", "'-ness"), ("=1+1", "'=1+1"), ("@home", "'@home"), ("+1", "'+1"), ("'tis", "'tis"),
+                ("'-x", "''-x"), ("cat", "cat"), ("", "")):
+    assert csv_cell(w) == cell and csv_word(cell) == w, (w, csv_cell(w))
 cur.skip("w02000"); cur.skip("w02001")
 for ext in (".txt", ".md", ".csv"):
     out = os.path.join(tmp, "export" + ext)

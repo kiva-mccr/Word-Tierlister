@@ -49,12 +49,21 @@ with zipfile.ZipFile(buf, "w") as z:
     z.writestr("kiva-Word-Tierlister-abc123/tierlist.py", "print('v9')\n")
     z.writestr("kiva-Word-Tierlister-abc123/src/constants.py", 'VERSION = "9.1.0"\n')
     z.writestr("kiva-Word-Tierlister-abc123/../evil.py", "x")
+    for bad in ("..\\..\\evil.py", "C:/evil.py", "src/..\\..\\evil.py", "./x.py"):   # (S-4: ways out on Windows)
+        z.writestr("kiva-Word-Tierlister-abc123/" + bad, "x")
 zipped = buf.getvalue()
 folder = os.path.join(tempfile.mkdtemp(), "release")
 got = S.fetch_source(r, folder, log=lambda t: None, fetch=lambda url, timeout=60: zipped)
 m = S.read_manifest(got)
 assert sorted(m["files"]) == ["src/constants.py", "tierlist.py"] and m["version"] == "9.1.0", m
 assert not os.path.exists(os.path.join(os.path.dirname(folder), "evil.py"))
+top = os.path.join(tempfile.mkdtemp(), "top")
+assert S.inside(top, ["src", "a.py"]) == os.path.join(top, "src", "a.py")
+for bad in (["..", "x"], ["..\\x"], ["C:", "x"], ["/x"], ["", "x"], ["src", ""], []):
+    assert S.inside(top, bad) is None, bad
+if hasattr(os, "symlink") and os.name != "nt":                     # (a link inside that points out: refused too)
+    os.makedirs(top); os.symlink(tempfile.gettempdir(), os.path.join(top, "out"))
+    assert S.inside(top, ["out", "x"]) is None
 plan = S.plan_unpack(got, os.path.join(tempfile.mkdtemp(), "here"))  # (ready to unpack, as the program's own)
 assert plan["add"] == ["src/constants.py", "tierlist.py"]
 try:

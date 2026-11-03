@@ -1932,6 +1932,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           held at its width plus that stale border, so it gained the difference on each such monitor.
 #           set_dpi_awareness now asks for version 1 (borders the same on every monitor), which Tk 8.6 handles.
 #           Not yet tried on real Windows (worked out from Tk's tkWinWm.c; the calls are tested with stand-ins).
+# [x] S-2  Security review (asked for; the findings in a doc, fixed in its suggested order): the build workflow's
+#           token may write to the repository only in its release job (the build job installs packages from PyPI).
+# [x] S-3  Sync: a linked device is no longer let make other Syncthing folders here unasked (autoAcceptFolders was
+#           on; both devices share FOLDER_ID themselves, tried with two real Syncthing 1.27s). Devices linked by
+#           1.0.3 and older are turned off when the sync window opens (only those sharing the sync folder).
+# [x] S-4  Updating the source: a zip entry that would land outside its folder ("..\\x", "C:/x", a link out) is
+#           skipped (standalone.inside); GitHub's zips never hold one, so it only matters for a tampered download.
+# [x] S-7  CSV export: a word a spreadsheet would take for a formula (-ness, =x, +x, @x) gets a ' in front
+#           (constants.csv_cell); Import takes it off again (csv_word), so every word comes back as it was.
+# [ ] S-1  Updates checked against something beyond GitHub (checksums, attestations or a signature): to decide.
 # [x] F-46 Found checking the merges of #25..#30: a word this list lacked that came in by sync or Import (one
 #           added by hand on another device) arrived with no rude kind, so it showed uncensored. Such words now go
 #           through Store._mark_added, the hand-picked list check a looked-up word gets (the user chose it over

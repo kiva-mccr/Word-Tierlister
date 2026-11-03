@@ -332,6 +332,13 @@ flowchart LR
 The download links in the README must keep naming the current assets (`standalone.RELEASE_ASSETS`);
 `tests/_selftest_updates.py` checks them against the workflow.
 
+Security rules to keep (from the security review, S-2..S-7): only the workflow's release job may write to the
+repository (`contents: write` there alone); a downloaded source zip is written entry by entry through
+`standalone.inside`, never straight out; a linked Syncthing device never gets `autoAcceptFolders`; a CSV export's
+words go through `constants.csv_cell` (no spreadsheet formulas) and come back through `csv_word`. An update is
+trusted because it comes from this repository's releases over checked HTTPS: keep two-factor sign-in on the
+GitHub account that publishes them.
+
 ## Find your way
 
 | You want to change... | Start in |

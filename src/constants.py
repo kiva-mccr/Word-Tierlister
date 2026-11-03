@@ -123,6 +123,21 @@ def typed_word(text):
     return " ".join(shown.split())
 
 
+FORMULA_STARTS = "=+-@\t\r"     # what a spreadsheet takes as the start of a formula in a CSV cell (S-7)
+
+
+def csv_cell(word):
+    """`word` as a CSV export writes it: a ' in front when a spreadsheet would read it as a formula ("-ness",
+    "=1+1"), or when it already starts with ' and then one of those (so csv_word gives back every word as it was)."""
+    w = word[1:] if word[:1] == "'" else word
+    return "'" + word if w[:1] and w[0] in FORMULA_STARTS else word
+
+
+def csv_word(cell):
+    """The word in a CSV export's cell: csv_cell undone."""
+    return cell[1:] if cell[:1] == "'" and csv_cell(cell[1:]) == cell else cell
+
+
 def mask_word(word):
     """A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d. Everywhere a
     widget can draw (cards, definitions, Browse's list) the word is smeared instead (widgets.smear_items)."""

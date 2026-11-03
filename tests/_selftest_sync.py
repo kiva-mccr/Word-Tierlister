@@ -273,7 +273,12 @@ assert client.pending_devices() == [{"id": ID2, "name": "laptop", "address": "19
 fake.discovered = {ID2: {"addresses": ["tcp://192.168.1.9:22000"]}, "X": {"addresses": ["tcp://8.8.8.8:22000"]}}
 assert client.nearby_devices() == [ID2]                           # (only ones on this network)
 assert client.link(ID2.lower(), "laptop") == ID2
-assert fake.devices[ID2]["autoAcceptFolders"] and fake.devices[ID2]["name"] == "laptop"
+assert fake.devices[ID2]["autoAcceptFolders"] is False and fake.devices[ID2]["name"] == "laptop"   # (S-3)
+fake.devices[ID2]["autoAcceptFolders"] = True                     # (as 1.0.3 and older linked it: turned off again)
+fake.devices["X" * 56] = {"deviceID": "X" * 56, "autoAcceptFolders": True}   # (not sharing ours: left alone)
+client.ensure_folder("/moved/sync")
+assert fake.devices[ID2]["autoAcceptFolders"] is False and fake.devices["X" * 56]["autoAcceptFolders"]
+del fake.devices["X" * 56]
 assert fake.devices[ID2]["compression"] == "metadata"             # (a new device starts from the defaults)
 assert {"deviceID": ID2} in fake.folders[st.FOLDER_ID]["devices"] and not fake.pending
 assert client.nearby_devices() == []                              # (linked now)

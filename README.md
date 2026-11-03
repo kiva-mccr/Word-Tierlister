@@ -170,7 +170,8 @@ All of these can be changed under Settings > Keyboard shortcuts.
 - Replace the program with a newer one, or move between the program and the Python source, and it finds your
   save again by itself.
 - **File > Export tier list** writes your list as a spreadsheet (`.csv`), text or Markdown. **File > Import earlier
-  progress** merges another save or an exported list back in.
+  progress** merges another save or an exported list back in. In the spreadsheet a word that starts like a formula
+  (`-ness`, `=...`) has a `'` in front, so the spreadsheet shows it as text.
 
 ## Syncing between devices
 

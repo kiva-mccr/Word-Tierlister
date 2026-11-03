@@ -28,6 +28,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - It uses the computer's usual Syncthing (its config.xml, found with `syncthing --paths`), never a private copy: the user's own Syncthing and ours would fight over the same ports.
+- Never set `autoAcceptFolders` on a linked device (S-3): it lets that device make any folder on this computer unasked. Both devices share `FOLDER_ID` themselves, which is all syncing needs (tried with two real Syncthings); `ensure_folder` turns it off on devices linked by 1.0.3 and older.
 - Starting it sets `STNODEFAULTFOLDER=1`, or its first start makes a ~/Sync folder nobody asked for.
 - Before Syncthing 1.19 there is no `serve` and the options have one dash (`serve_args`); Ubuntu 22.04 ships 1.18.
 - Changes go through `GET` then `PUT` of the whole object (folder, device), starting from `/rest/config/defaults/...` for a new one: a partial object would reset the rest.

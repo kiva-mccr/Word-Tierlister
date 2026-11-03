@@ -52,6 +52,7 @@ The module docstring has the details; this page is the map.
 - `describe_fetch_error`: Why asking GitHub failed, in a line.
 - `latest_release`: The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when offline, GitHub cannot be reached or there is none yet.
 - `newer`: True if `release` (latest_release) is a newer version than `version`.
+- `inside`: The path in `folder` for a zip entry's `parts` (its name split at "/"), or None when it is a folder entry or would land anywhere but inside `folder` (S-4): "..", a...
 - `fetch_source`: Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest, ready to unpack (plan_unpack) or build from; returns `folder`.
 - `running_program`: The program now running (the .exe or the Linux file; on macOS its .app), or None when running from source.
 - `program_download`: {"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it).
@@ -67,6 +68,7 @@ The module docstring has the details; this page is the map.
 - The build checks PyInstaller by importing what the build uses (`PYINSTALLER_CHECK`), repairs an incomplete one, and runs pip and PyInstaller from a neutral folder (reported: "No module named PyInstaller.utils").
 - The rename (Word Tier List -> Word Tierlister, after 1.0.2): every release also carries each program under its old name (`OLD_RELEASE_ASSETS`, copied by the workflow), which 1.0.2 and older look for to update; records under their old names (`OLD_RECORDS`) are still read; a build removes the old-named program beside it (`remove_renamed_program`). Keep the old asset names in every release.
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
+- Every zip entry goes through `inside` before it is written (S-4): on Windows `..\x`, `C:` and a link pointing out are ways out of the folder that a plain `".." in parts` check misses.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.
 - No tkinter: the dialog is `sources.py`.
 - Everything started from here (the other form, Python, PyInstaller, pip, the file manager) gets `clean_env()`: a built program's Tcl / Tk paths and library path point into its temporary folder, which is gone once it closes (reported: PyInstaller's "Tk data/library directory ... could not be collected!").

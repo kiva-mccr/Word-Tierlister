@@ -50,7 +50,7 @@ import time
 
 from obscene import CENSORED, RUDE_KINDS, TICKED, on_list
 from rudeness import KIND_BITS, LISTED
-from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
+from constants import (ALL_KINDS, csv_word, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
 _RUDE_BITS = sum(KIND_BITS[k] for k in RUDE_KINDS)
@@ -1295,7 +1295,7 @@ class Store:
 
             with open(path, newline="", encoding="utf-8-sig") as f:
                 for r in csv.DictReader(f):
-                    word, t = (r.get("word") or "").strip().lower(), (r.get("tier") or "").strip().upper()
+                    word, t = csv_word((r.get("word") or "").strip()).lower(), (r.get("tier") or "").strip().upper()
                     if not word:
                         continue
                     if t == "?":
