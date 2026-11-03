@@ -733,6 +733,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           deal_rude); a word with a meaning of a ticked kind is dealt, one with only rude meanings is otherwise
 #           left out, any other word goes by its kind of word (Store._out_sql). Censoring smears only Crude,
 #           Swear, Sexual and Slur (obscene.CENSORED; the user: never Clinical or Insult).
+# [x] OB-7  A censor button per kind of rude meaning (asked for: "a lil toggleable censor symbol to each category";
+#           picked from two mock-ups: beside each kind, not a row of pills). Beside Crude, Swear words, Sexual and
+#           Slurs in How words are dealt a small pill (widgets.SmearToggle) shows "abc" smeared while that kind is
+#           censored and plain while it is let through; a click, Space or Return flips it, Apply saves it (meta
+#           censor_kinds; Store.censor_kinds, all four to start with). Clinical and Insults get none (never
+#           censored). Censor obscene words stays the switch over them all. A word smeared whole stays smeared while
+#           any of its kinds is censored (Store.censored_words); each smeared meaning keeps its kind (rudeness.results:
+#           [key, kind]; RUDENESS_VERSION 13) so the definitions smear only censored kinds (Store.smeared_meanings).
+#           The kinds now open under "Obscene words" while it or Censor obscene words is ticked (their buttons).
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the

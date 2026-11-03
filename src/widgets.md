@@ -35,6 +35,8 @@ The module docstring has the details; this page is the map.
 - `definition_tags`: The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of speech and examples in italics, senses indented.
 - `LinkButton`: A small icon (smooth.ICONS) that does something when clicked, muted until hovered, with a hover note: the Wiktionary link at the top right of a definition (asked for).
   - methods: refresh
+- `SmearToggle`: A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space / Return once it has focus) flips it: the censor button...
+  - methods: toggle, refresh
 - `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
 - `word_at`: (start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning, an example or a form's line (LINK_TAGS), or None (a heading, a...
 - `smeared_label`: A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places that are not our own canvases (the definition panes,...
@@ -85,6 +87,7 @@ The module docstring has the details; this page is the map.
 - No `ttk.Combobox` / `tk.Menu` pop-ups (they grab input on Linux): use `ChoiceButton` / `DropMenu`. Dialogs build on `StyledDialog` (`StyledDialog.text` for wrapped lines).
 - Our dialogs mark their window (`styled_dialog`), so `dialog_open(root)` can tell when a question is on screen (nothing else may ask then).
 - `StyledDialog.refit` keeps the dialog on its monitor (`sizing.keep_on_screen`).
+- `smear_items` reads a text item's top left: draw the text with `anchor="nw"` (centred text smeared below and beside itself, `SmearToggle`). `round_rect`'s corners are soft splines: a pill needs `r` about the full height, not half.
 
 ## Changing it
 
