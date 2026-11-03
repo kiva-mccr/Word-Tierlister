@@ -151,6 +151,7 @@ program and only until it is in the menu; the build's tick only while it is not)
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
+F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
@@ -214,6 +215,7 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
   (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
   animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.
+  README.md and .github/release-notes.md say macOS is not tested on a real Mac yet (asked for): drop that once it is.
 - T-16's macOS job (macos-latest, ditto zip, icon.icns) never ran: the first release is its first build; Intel Macs
   get no program.
 - T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs

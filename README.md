@@ -19,6 +19,9 @@ like: it carries on exactly where you left off, even after an update.
 | **Linux** | [word-tierlister-linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-linux) |
 | **macOS** (Apple Silicon) | [word-tierlister-macos.zip](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-macos.zip) |
 
+> **macOS is not tested yet.** The Mac version has only been run by automated tests on GitHub's Mac machines,
+> never on a real Mac. It may have rough edges; please [report anything that goes wrong](https://github.com/kiva-mccr/Word-Tierlister/issues).
+
 No Python needed. [All releases](https://github.com/kiva-mccr/Word-Tierlister/releases) are on GitHub.
 
 1. **Put it in a folder of its own.** It keeps your save file right beside itself.

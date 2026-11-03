@@ -102,6 +102,7 @@ old = make_save(os.path.join(tmp, "m", "old", "x.db"), 400, skipped=["w00400", "
 oldstore = T.Store(old)
 oldstore.insert_words(WORDS[:1000] + ["oldonly"])
 oldstore.place("oldonly", 4)
+oldstore.add_word("shitbag"); oldstore.place("shitbag", 5)               # (a rude word added by hand there)
 oldstore.db.execute("INSERT INTO comparisons(winner, loser, tie, kind, ts) VALUES('oldonly','w00001',0,'within',0)")
 oldstore.db.commit()
 old_ratings = {w: oldstore.get_word(w)["rating"] for w in WORDS[:400]}
@@ -114,21 +115,22 @@ cur = T.Store(cur_path)
 before = {w: cur.get_word(w)["tier"] for w in WORDS[:50]}
 res = cur.merge(old)
 print(res)
-assert res["added"] == 1 and res["skipped"] == 2
-assert res["placed"] == 350 + 1 and res["same"] + res["differs"] == 50 and res["differs"] == 50 and res["same"] == 0
+assert res["added"] == 2 and res["skipped"] == 2
+cur.set_censor(True); assert "shitbag" in cur.censored_words()                # checked here as a looked-up word is
+assert res["placed"] == 350 + 2 and res["same"] + res["differs"] == 50 and res["differs"] == 50 and res["same"] == 0
 assert res["comparisons"] == 31 and res["backup"] and os.path.exists(res["backup"])
 assert {w: cur.get_word(w)["tier"] for w in WORDS[:50]} == before            # nothing already decided is overwritten
 assert cur.get_word("w00100")["tier"] == 100 % 6 and abs(cur.get_word("w00100")["rating"] - old_ratings["w00100"]) < 1e-9
 assert cur.get_word("oldonly")["tier"] == 4                                   # a word the new list lacks is kept
 assert cur.get_word("w00400")["skips"] == 1 and cur.get_word("w00401")["skips"] == 1
-assert cur.stats()["placed"] == 50 + 351
+assert cur.stats()["placed"] == 50 + 352
 # merged words leave the queue; skipped ones go to the back; nothing placed ever comes up
 q = [r[0] for r in cur.db.execute("SELECT word FROM words WHERE tier IS NULL ORDER BY skips, qkey LIMIT 3000")]
 assert not set(q) & {w for w in WORDS[:400]} and q[-1] in ("w00400", "w00401") and len(q) == 3000 - 400 + 0
 bk = sqlite3.connect(res["backup"]); assert bk.execute("SELECT COUNT(*) FROM words WHERE tier IS NOT NULL").fetchone()[0] == 50; bk.close()
 assert not res["backup"].endswith(".db")                                        # never mistaken for a save file
 assert T.save_progress(res["backup"]) is not None                               # (it is a valid database, just not named like one)
-src = T.Store(old); assert src.stats()["placed"] == 401; src.close()           # the source is untouched
+src = T.Store(old); assert src.stats()["placed"] == 402; src.close()           # the source is untouched
 res2 = cur.merge(old, backup=False)                                             # merging twice changes nothing
 assert (res2["placed"], res2["added"], res2["skipped"], res2["comparisons"]) == (0, 0, 0, 0), res2
 try:
@@ -147,7 +149,7 @@ try:
     assert r["placed"] == 0
 except ValueError:
     pass                                                                          # UnicodeDecodeError is a ValueError
-assert cur.stats()["placed"] == 50 + 351
+assert cur.stats()["placed"] == 50 + 352
 print("merge from save OK")
 
 # ------------------------------------------------------------------ 4. export -> import round trips
@@ -156,13 +158,14 @@ for ext in (".txt", ".md", ".csv"):
     out = os.path.join(tmp, "export" + ext)
     T.write_export(out, cur.export_rows(), cur.skipped_words())
     fresh = T.Store(os.path.join(tmp, f"fresh{ext}.db"))
-    fresh.insert_words(WORDS)                       # 'oldonly' is not in this list: it must be added, not lost
+    fresh.insert_words(WORDS)                       # 'oldonly', 'shitbag' are not in this list: added, not lost
     r = fresh.merge(out, backup=False)
     want = {x["word"]: x["tier"] for x in cur.export_rows()}
     got = {x["word"]: x["tier"] for x in fresh.export_rows()}
     assert got == want, (ext, len(got), len(want))
     assert set(fresh.skipped_words()) == set(cur.skipped_words()), ext
-    assert r["added"] == 1 and r["placed"] == len(want)
+    assert r["added"] == 2 and r["placed"] == len(want)
+    fresh.set_censor(True); assert "shitbag" in fresh.censored_words(), ext     # (an Import checks it too)
     # ordering inside each tier survives the trip
     for t in range(6):
         a = [x["word"] for x in cur.export_rows() if x["tier"] == t]

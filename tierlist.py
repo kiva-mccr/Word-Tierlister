@@ -1932,6 +1932,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           held at its width plus that stale border, so it gained the difference on each such monitor.
 #           set_dpi_awareness now asks for version 1 (borders the same on every monitor), which Tk 8.6 handles.
 #           Not yet tried on real Windows (worked out from Tk's tkWinWm.c; the calls are tested with stand-ins).
+# [x] F-46 Found checking the merges of #25..#30: a word this list lacked that came in by sync or Import (one
+#           added by hand on another device) arrived with no rude kind, so it showed uncensored. Such words now go
+#           through Store._mark_added, the hand-picked list check a looked-up word gets (the user chose it over
+#           carrying the other device's kinds in the sync file).
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data
