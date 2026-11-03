@@ -1,6 +1,7 @@
 """Shared constants: tier names, modes, ranking defaults. Only the standard library, so anything can use it.
 """
 import math
+import os
 import unicodedata
 
 
@@ -162,3 +163,14 @@ def plan_line(steps):
 def parse_plan(line):
     """The steps in a plan line, or None if `line` is not one."""
     return line[len(PLAN_MARK):].split("\x1f") if line.startswith(PLAN_MARK) else None
+
+
+# The review of rude meanings by hand (OB-9: python tierlist.py --review-rude; tools/measure_rudeness.py sample /
+# answers): the words to review, and the answers beside them. The answers only test the rules: never read by them.
+REVIEW_FILE = "rude_review.jsonl"
+
+
+def review_answers_path(review):
+    """The answers file beside a review file: rude_review.jsonl -> rude_review_answers.jsonl."""
+    base, ext = os.path.splitext(review)
+    return base + "_answers" + (ext or ".jsonl")

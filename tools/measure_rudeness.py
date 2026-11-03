@@ -4,6 +4,14 @@
                                                                               (~3 GB, not kept) and keep every
                                                                               lower-case English entry, compactly
     python tools/measure_rudeness.py measure [--policy B] [--show 40] [--no-links] [--no-wordnet] [--no-families]
+    python tools/measure_rudeness.py sample [--size 1500] [--out rude_review.jsonl]     words for a review by hand
+    python tools/measure_rudeness.py answers [--review rude_review.jsonl] [--show 40]  the rules against its answers
+
+OB-9: `sample` picks words for `python tierlist.py --review-rude` (a weighted sample: each main kind the rules
+find, words with a clean main meaning and a rude later one, and words found clean with a weak sign of rudeness,
+the likely misses), each with the meanings worth asking about and the rules' guesses; `answers` scores the rules
+against what the review answered (rude_review_answers.jsonl beside it), meaning by meaning. The answers only test
+and tune the rules: the program never reads them.
 
 The compact entries (rudeness_entries.jsonl next to the sorting, about 300 MB) keep each meaning as the program does
 (rudeness.compact_entry: the last gloss, the labels, topics and categories the rules read, synonyms, the word it is
@@ -20,6 +28,7 @@ import collections
 import hashlib
 import json
 import os
+import re
 import sys
 import urllib.request
 
@@ -27,6 +36,7 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 sys.path.insert(0, os.path.join(ROOT, "src"))
 import obscene  # noqa: E402
+from constants import REVIEW_FILE, review_answers_path  # noqa: E402
 from wordfreq import zipf_frequency  # noqa: E402
 import rudeness  # noqa: E402
 from wordsource import WIKT_URL  # noqa: E402
@@ -209,10 +219,155 @@ def measure(sorting, entries, policy="B", show=0, log=print, wn=None, links=True
     return agree / len(base)
 
 
+# ---- a review by hand (OB-9) ---------------------------------------------------------------------------------
+SHOWN_MAX = 8                 # meanings asked about per word: the main one and up to seven with a sign of rudeness
+WEAK = ("slang", "informal", "colloquial", "euphemistic", "childish", "vulgar", "derogatory", "offensive")
+
+
+def _signal(sense, points):
+    """True if a meaning is worth asking about: it has points of any kind, or a sign the rules read."""
+    return any(v > 0 for v in points.values()) or rudeness.has_signal(rudeness.compact(sense))
+
+
+def shown_meanings(senses, scored):
+    """The indexes of the meanings a review asks about: the main (first real) one, then those with a sign of
+    rudeness, at most SHOWN_MAX; meanings that only name another word are left out."""
+    real = [i for i, s in enumerate(senses) if not rudeness.is_form(s)]
+    if not real:
+        return []
+    main = real[0]
+    return [main] + [i for i in real[1:] if _signal(senses[i], scored[i])][:SHOWN_MAX - 1]
+
+
+def review_item(word, senses, scored, why, pos=(), censored=obscene.CENSORED):
+    """One word of a review file: its meanings to ask about, each with the rules' guess (rudeness.sense_kind),
+    and whether the rules smear it whole. `pos`: each meaning's part of speech."""
+    common = zipf(word) >= rudeness.COMMON_ZIPF
+    _bits, whole, _smeared, _main = rudeness.results(word, senses, scored, censored, common)
+    rows = []
+    for i in shown_meanings(senses, scored):
+        s = senses[i]
+        rows.append({"key": rudeness.gloss_of(s)[:rudeness.GLOSS_KEY], "pos": pos[i] if i < len(pos) else "",
+                     "labels": [rudeness._label(x) for x in s.get("tags", []) + s.get("raw_tags", [])],
+                     "gloss": rudeness.gloss_of(s), "guess": rudeness.sense_kind(scored[i])})
+    return {"w": word, "why": why, "whole": bool(whole), "senses": rows}
+
+
+def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
+    """{word: why it was picked}: about size / 10 words of each main kind the rules find, a fifth with a clean main
+    meaning and a rude later one, and a fifth found clean with a weak sign (`weak_words`: the likely misses). Half of
+    each group comes from its commonest words, half from the rest."""
+    import random
+    rng = random.Random(seed)
+    groups = collections.defaultdict(list)
+    for w, sc in scored.items():
+        kinds = [rudeness.sense_kind(p) for p in sc]
+        idx = shown_meanings(words[w], sc)
+        if not idx:
+            continue
+        main = kinds[idx[0]]
+        if main != "clean":
+            groups[f"the rules say {main}"].append(w)
+        elif any(k != "clean" for k in kinds):
+            groups["a clean main meaning, a rude later one"].append(w)
+    groups["found clean, with a weak sign"] = [w for w in weak_words if w in scored
+                                                and all(rudeness.sense_kind(p) == "clean" for p in scored[w])]
+    share = {g: (size // 10 if g.startswith("the rules say") else size // 5) for g in groups}
+    picked = {}
+    for g in sorted(groups):
+        pool = sorted(set(groups[g]) - set(picked), key=lambda w: (-zipf(w), w))
+        n = min(share[g], len(pool))
+        top = pool[:n * 3]
+        got = rng.sample(top, min(n // 2, len(top)))
+        rest = [w for w in pool if w not in set(got)]
+        got += rng.sample(rest, min(n - len(got), len(rest)))
+        picked.update((w, g) for w in got)
+    return picked
+
+
+def weak_signs(words, limit_zipf=2.5):
+    """Words with a weak sign of rudeness among their first three meanings (a slang or rude label, a body or
+    insult word), common enough to matter: the ones to check for misses."""
+    sign = re.compile(r"\b(buttocks|genital|urin|sex|excrement|idiot|stupid|fool)", re.I)
+    out = []
+    for w, senses in words.items():
+        if zipf(w) < limit_zipf or not re.fullmatch(r"[a-z][a-z'-]*", w):
+            continue
+        for s in senses[:3]:
+            if set(s.get("tags", [])) & set(WEAK) or sign.search(rudeness.gloss_of(s)):
+                out.append(w)
+                break
+    return out
+
+
+def make_sample(entries, out, size=1500, wn=None, log=print):
+    """Write a review file (JSON lines, commonest first) for `python tierlist.py --review-rude`."""
+    words, poses, family = load(entries)
+    scored = rudeness.score_words(words, poses, wn, family)
+    picked = pick_sample(words, scored, size, weak_words=weak_signs(words))
+    with open(out, "w", encoding="utf-8") as f:
+        for w in sorted(picked, key=lambda w: (-zipf(w), w)):
+            f.write(json.dumps(review_item(w, words[w], scored[w], picked[w], poses[w]), ensure_ascii=False) + "\n")
+    log(f"Wrote {len(picked):,} words to {out}: " + ", ".join(
+        f"{g} {n}" for g, n in sorted(collections.Counter(picked.values()).items())))
+
+
+def read_answers(path):
+    """{word: {"kinds": {meaning key: kind}, "whole": bool}} from a review's answers file (the last answer for a
+    word wins)."""
+    out = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                a = json.loads(line)
+                out[a["w"]] = {"kinds": dict(zip(a["keys"], a["kinds"])), "whole": bool(a["whole"])}
+    return out
+
+
+def score_answers(answers, words, scored, censored=obscene.CENSORED, show=0, log=print):
+    """How often the rules agree with the answers: meaning by meaning, per kind (precision / recall), and on
+    smearing the whole word. Returns the share of meanings that agree."""
+    agree = total = whole_agree = 0
+    tp, fp, fn = collections.Counter(), collections.Counter(), collections.Counter()
+    diffs = []
+    for w, a in answers.items():
+        if w not in words:
+            continue
+        senses, sc = words[w], scored[w]
+        keys = [rudeness.gloss_of(s)[:rudeness.GLOSS_KEY] for s in senses]
+        for key, want in a["kinds"].items():
+            if key not in keys:
+                continue
+            got = rudeness.sense_kind(sc[keys.index(key)])
+            total += 1
+            agree += got == want
+            for k in obscene.RUDE_KINDS:
+                tp[k] += got == k == want
+                fp[k] += got == k != want
+                fn[k] += want == k != got
+            if got != want:
+                diffs.append((-zipf(w), w, key, want, got))
+        common = zipf(w) >= rudeness.COMMON_ZIPF
+        whole_agree += bool(rudeness.results(w, senses, sc, censored, common)[1]) == a["whole"]
+    log(f"{len(answers):,} words answered, {total:,} meanings: the rules agree on {agree / max(1, total):.1%} of "
+        f"the meanings, and on smearing the whole word for {whole_agree / max(1, len(answers)):.1%} of the words.")
+    log("Each kind: precision / recall (meanings)")
+    for k in obscene.RUDE_KINDS:
+        log(f"  {k:9} {tp[k] / max(1, tp[k] + fp[k]):6.1%} / {tp[k] / max(1, tp[k] + fn[k]):6.1%}"
+            f"   ({tp[k] + fn[k]:,} meanings answered {k})")
+    for _z, w, key, want, got in sorted(diffs)[:show]:
+        log(f"  {w}: \"{key}\" answered {want}, rules {got}")
+    return agree / max(1, total)
+
+
 def main(argv=None):
-    """The command line: fetch, or measure."""
+    """The command line: fetch, measure, sample or answers."""
     ap = argparse.ArgumentParser(description="Measure the rudeness rules against Claude's sorting.")
-    ap.add_argument("command", choices=("fetch", "measure"))
+    ap.add_argument("command", choices=("fetch", "measure", "sample", "answers"))
+    ap.add_argument("--size", type=int, default=1500, help="sample: how many words")
+    ap.add_argument("--out", default=os.path.join(ROOT, REVIEW_FILE), help="sample: the review file")
+    ap.add_argument("--review", default=os.path.join(ROOT, REVIEW_FILE),
+                    help="answers: the review file (its answers are rude_review_answers.jsonl beside it)")
     ap.add_argument("--sorting", default=os.path.join(ROOT, "word_categories.tsv"))
     ap.add_argument("--policy", choices=sorted(POLICIES), default="B")
     ap.add_argument("--show", type=int, default=0, help="list this many words where the two differ (commonest)")
@@ -223,8 +378,16 @@ def main(argv=None):
                     help="how common a word must be (Zipf) for only strongly labelled meanings to count; 99: never")
     args = ap.parse_args(argv)
     entries = os.path.join(os.path.dirname(os.path.abspath(args.sorting)), "rudeness_entries.jsonl")
+    wn = None if args.no_wordnet else rudeness.wordnet()
     if args.command == "fetch":
         fetch(entries)
+    elif args.command == "sample":
+        make_sample(entries, args.out, args.size, wn=wn)
+    elif args.command == "answers":
+        answers = read_answers(review_answers_path(args.review))
+        words, poses, family = load(entries)
+        scored = score(words, poses, scope(set(answers), words, family), not args.no_links, wn, family)
+        score_answers(answers, words, scored, show=args.show)
     else:
         measure(args.sorting, entries, args.policy, args.show, wn=None if args.no_wordnet else rudeness.wordnet(),
                 links=not args.no_links, families=not args.no_families, common_zipf=args.common)

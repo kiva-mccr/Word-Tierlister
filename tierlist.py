@@ -98,6 +98,7 @@ before editing the file); DEVELOPERS.md has the same map with more detail)
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
+    review.py       the review of rude meanings by hand (OB-9, --review-rude; a developer option).
     tiercolours.py  Settings > Tier colours... (UI-61).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     sources.py      File > Source & Updates...: updates; make a standalone program; in the program, unpack its source.
@@ -748,6 +749,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           kind), and words.smear_extra keeps a word's kinds when that reading smears it whole (partial index
 #           idx_words_extra); Store.censored_words adds those while Clinical or Insult is censored. "Obscene words"
 #           and dealing still come from the four kinds alone ("penis", "idiot" stay ordinary nouns). RUDENESS_VERSION 14.
+# [x] OB-9  Review rude meanings by hand, to test the rules against (asked for: "give me a list of candidates and
+#           for me to review every single one ... something to train the rules on"; a dev option, the old review tab
+#           back; rules only stays: the answers are never read by the program). tools/measure_rudeness.py sample
+#           writes rude_review.jsonl (1,500 words: 150 of each kind the rules find, 300 with a clean main meaning and
+#           a rude later one, 300 found clean with a weak sign); python tierlist.py --review-rude opens src/review.py's
+#           window: the main meaning and those with a sign of rudeness, the rules' guess filled in, one kind each
+#           (picked from a mock-up: per meaning, Enter accepts), and whether to smear the whole word; the keymap's
+#           "review" group (shown in Keyboard shortcuts only then); answers in rude_review_answers.jsonl beside it
+#           after every word; measure_rudeness answers scores the rules against them. _selftest_review.py.
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
@@ -2070,7 +2080,7 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, REVIEW_FILE, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
@@ -2132,6 +2142,10 @@ def main():
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt), "
                          "nor to make a program / unpack the source on the first start")
+    ap.add_argument("--review-rude", nargs="?", const="", default=None, metavar="FILE",
+                    help="(developer) review the rude words' meanings by hand: FILE, or rude_review.jsonl next to "
+                         "the save (from tools/measure_rudeness.py sample); the answers go beside it and only "
+                         "test the rules")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--remove-source", help=argparse.SUPPRESS)  # T-12: the unpacked source this was made from
     ap.add_argument("--seed", type=int,
@@ -2284,6 +2298,12 @@ def main():
                       ask_dealing=store.get_meta("dealt_asked") != "1",   # (ST-6: once a save)
                       offer_form=not args.no_install)                     # (T-9: the other form, once)
             app.open_window()
+            if args.review_rude is not None:      # (OB-9: a developer option)
+                review = args.review_rude or os.path.join(os.path.dirname(os.path.abspath(store.path)), REVIEW_FILE)
+                if os.path.exists(review):
+                    app.open_review(review)
+                else:
+                    print(f"No review file at {review}: make one with tools/measure_rudeness.py sample.")
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

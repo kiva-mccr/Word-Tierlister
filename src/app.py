@@ -37,6 +37,7 @@ from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
+from review import RudeReview
 from syncdialog import AutoSync, SyncDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_factor, usable_area
@@ -157,6 +158,8 @@ class App:
         self.def_lookup = None    # a word clicked in the definitions (W-1): the pane shows it until "Back" or the next word
         self.lookups = []         # words looked up so (W-1), shown in Browse for the moment, at the bottom
         self.browsers = []
+        self.review = None                # the review of rude meanings (--review-rude, OB-9), when open
+        self.review_path = None
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
         self._was_online = False
@@ -1400,6 +1403,8 @@ class App:
         for name, items in self._menu_items():
             self.header.menus[name] = items
             self.header.drops[name].items = items
+        if self.review is not None and self.review.alive():
+            self.review.apply_keys()
         self._hint()
 
     def _show_frame(self, frame):
@@ -2153,6 +2158,15 @@ class App:
                 return
         Browser(self)
 
+    def open_review(self, path):
+        """Open the review of rude meanings (--review-rude, OB-9) over this window, or raise it if it is open."""
+        if self.review is not None and self.review.alive():
+            self.review.win.lift()
+            return self.review
+        self.review_path = path
+        self.review = RudeReview(self, path)
+        return self.review
+
     def edit_anchors(self):
         """Dialog to choose the six anchor words (UI-28): a pill per tier, and any problem (empty, used twice,
         not in the word list) shown as a note under its own field."""
@@ -2442,6 +2456,9 @@ class App:
         self.refresh()
         if old._browse_was_open:
             self.root.after(150, self.open_browser)
+        if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
+            old.review.close()
+            self.root.after(150, lambda: self.open_review(old.review_path))
 
     def reopen(self):
         """Close this window but keep the save open: main() builds it again at once, so a new look (dark mode, the

@@ -1,10 +1,10 @@
 # `tools/measure_rudeness.py`
 
-Measuring the rudeness rules against an earlier sorting by Claude (a yardstick only, never shipped): agreement, per-kind precision and recall, false alarms on a control sample.
+Measuring the rudeness rules against an earlier sorting by Claude (a yardstick only, never shipped): agreement, per-kind precision and recall, false alarms on a control sample. OB-9: `sample` writes a review file for `tierlist.py --review-rude`, and `answers` scores the rules against what the review answered, meaning by meaning.
 
-- **Uses:** `obscene`, `rudeness`, `wordsource`
+- **Uses:** `constants`, `obscene`, `rudeness`, `wordsource`
 - **Used by:** nothing (run directly)
-- **Tests:** none of its own
+- **Tests:** `_selftest_review`
 
 The module docstring has the details; this page is the map.
 
@@ -22,7 +22,14 @@ The module docstring has the details; this page is the map.
 - `claude_outcome`: What Claude's answers lead to under the same rules: dealt if any meaning is clean or ticked; the whole word smeared when its first meaning, or every one, is of a...
 - `score`: {word: [{kind: points}]} for the words in `need`: both passes, or the first alone (no links).
 - `measure`: Score the sorting's words and the control words, and report how often the rules lead where Claude's answers do (returns that share).
-- `main`: The command line: fetch, or measure.
+- `shown_meanings`: The indexes of the meanings a review asks about: the main (first real) one, then those with a sign of rudeness, at most SHOWN_MAX; meanings that only name another...
+- `review_item`: One word of a review file: its meanings to ask about, each with the rules' guess (rudeness.sense_kind), and whether the rules smear it whole.
+- `pick_sample`: {word: why it was picked}: about size / 10 words of each main kind the rules find, a fifth with a clean main meaning and a rude later one, and a fifth found clean...
+- `weak_signs`: Words with a weak sign of rudeness among their first three meanings (a slang or rude label, a body or insult word), common enough to matter: the ones to check for misses.
+- `make_sample`: Write a review file (JSON lines, commonest first) for `python tierlist.py --review-rude`.
+- `read_answers`: {word: {"kinds": {meaning key: kind}, "whole": bool}} from a review's answers file (the last answer for a word wins).
+- `score_answers`: How often the rules agree with the answers: meaning by meaning, per kind (precision / recall), and on smearing the whole word.
+- `main`: The command line: fetch, measure, sample or answers.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
