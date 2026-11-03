@@ -477,17 +477,13 @@ anim.clock, anim._real = real_clock, True
 assert seen[-1] < tall and all(b <= a for a, b in zip(seen, seen[1:])) and len(set(seen)) > 3, seen
 assert not dr.easing and dr.steady
 dr.set_lines(9); update(); anim.finish_all(); update()
-# F-23: a window that grows for it only after the slide began (a slow window manager) adds the room on top of the
-# height it has: taken as its whole height, the pane's top edge and its text dropped a little
+# Z-1: its height at other line counts is worked out from one measurement
 dr.pack_forget(); dr.collapse(); dr.pack(side="bottom", fill="x"); update()
-real_clock, now = anim.clock, time.perf_counter()
-anim.clock, anim._real = (lambda: now), False          # (held at its start: a slow machine's update() slid it open)
-dr.open(); update()
-was = dr.winfo_height()
-dr.give(30); update()
-anim.clock, anim._real = real_clock, True
-assert dr.winfo_height() == min(full, was + 30), (was, dr.winfo_height(), full)
-dr.give(5000); update(); assert dr.winfo_height() <= full                       # (never past its own height)
+dr.open(); anim.finish_all(); update()
+lines, full = dr.lines(), dr.natural_height()
+assert dr.height_for(lines) == full and dr.height_for(lines + 2) == full + 2 * dr.line_height()
+dr.set_lines(lines + 2); update(); assert dr.natural_height() == full + 2 * dr.line_height()
+dr.set_lines(lines); update()
 anim.finish_all(); update()
 closed = []
 dr.close(on_closed=lambda: (closed.append(1), dr.pack_forget())); update()

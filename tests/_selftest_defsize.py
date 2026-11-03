@@ -1,10 +1,13 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
-"""The definition pane opens tall enough to show every sense when the screen has room (UI-56), stays within the
-screen when it has not, grows but never shrinks from word to word, and is back to its usual height when reopened."""
+"""The definitions pane fills the room the page leaves (Z-1, asked for: always as much pane as fits; nothing on the
+page resizes the window or its text): a long or short definition, opening and closing it, comparing to anchors and
+switching tabs never change the window's size or the text size; the pane eases to the room left and scrolls the rest,
+and nothing it holds covers the page."""
 import os, tempfile
 import tkinter as tk
 import app as A
 import tierlist as T
+from fonts import font
 
 LONG = "\n".join(f"{i}. (noun) sense number {i} of a word with very many meanings indeed" for i in range(1, 17))
 SHORT = "1. (noun) a short one"
@@ -25,93 +28,111 @@ def make(screen_h):
     return root, ap
 
 
+def settle(root, app, n=6):
+    for _ in range(n):
+        root.update(); app.anim.finish_all()
+    root.update_idletasks()
+
+
 def shows_all(app):
-    t = app.def_text
-    return t.yview() == (0.0, 1.0)
+    return app.def_text.yview() == (0.0, 1.0)
 
 
-# a tall screen: a long definition opens the pane in full, a short one after it keeps the height
+def state(root, app):
+    """What must never change from the page's own doings: the window's size and the text size."""
+    return root.winfo_width(), root.winfo_height(), font("word").cget("size"), font("body").cget("size")
+
+
+def page_clear(app):
+    """The view on screen is not covered by the pane (the room for a message kept under it)."""
+    inner = app.place_inner if app.mode == "place" else app.pair_inner
+    room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()
+    return inner.winfo_reqheight() <= room, (inner.winfo_reqheight(), room)
+
+
+# a tall screen: the pane fills the room; long and short definitions change nothing but what it shows
 root, app = make(1150)
-base_h = root.winfo_height()
-assert int(app.def_text.cget("height")) == app.DEF_LINES
-app._render_defs(["word7"]); root.update()
-assert int(app.def_text.cget("height")) == app.DEF_LINES      # short: the usual height
+settle(root, app)
+before, lines = state(root, app), app.def_frame.lines()
+assert lines == app._pane_lines() and lines > app.DEF_LINES_MIN, (lines, app._pane_lines())
+assert app.def_frame.winfo_rooty() + app.def_frame.winfo_height() <= app.center.winfo_rooty() + root.winfo_height()
 app.mem_defs["word8"] = LONG
-app._render_defs(["word8"]); root.update()
-tall = int(app.def_text.cget("height"))
-assert tall > app.DEF_LINES and shows_all(app), (tall, app.def_text.yview())
-assert root.winfo_height() > base_h and root.winfo_height() <= 1150, root.winfo_height()
-assert root.winfo_y() + root.winfo_height() <= 1150, "grown past the bottom of the screen"
-app._render_defs(["word7"]); root.update()
-assert int(app.def_text.cget("height")) == tall               # never shrinks word to word (no jumping page)
-app.toggle_defs(False); root.update(); app.toggle_defs(True); root.update()
-assert int(app.def_text.cget("height")) == app.DEF_LINES      # reopened for a short word: the usual height
-# F-2: opened for a long definition, the pane opens in full straight away (the folded pane keeps its text's width,
-# so the text can say how tall it needs to be)
-app.toggle_defs(False); root.update()
-app.mem_defs["word9"] = LONG
-app.def_words = ["word9"]
-app.toggle_defs(True); root.update()
-assert int(app.def_text.cget("height")) > app.DEF_LINES and shows_all(app), app.def_text.cget("height")
-# reported after F-2: in a window made bigger (the contents grown, UI-25) the pane slid open at its full height over
-# the word card and the tier buttons; it is shortened instead, and the centre keeps all its room
+app._render_defs(["word8"]); settle(root, app)
+assert state(root, app) == before and app.def_frame.lines() == lines
+app._render_defs(["word7"]); settle(root, app)
+assert state(root, app) == before and app.def_frame.lines() == lines and shows_all(app)
+ok, why = page_clear(app); assert ok, why
+# opening and closing it never resizes the window or the text (its room counts while it is shut)
+app.toggle_defs(False); settle(root, app)
+assert state(root, app) == before and not app.def_frame.winfo_manager()
+app.toggle_defs(True); settle(root, app)
+assert state(root, app) == before and app.def_frame.lines() == lines
+# comparing to anchors: the pane eases shorter for the taller view, and back as tall when it ends; nothing else moves
+app.start_compare(); settle(root, app)
+assert app.cmp and state(root, app) == before
+cmp_lines = app.def_frame.lines()
+assert app.DEF_LINES_MIN <= cmp_lines < lines, (cmp_lines, lines)
+ok, why = page_clear(app); assert ok, why
+app.cmp = None; app._render_place_state(); settle(root, app)
+assert state(root, app) == before and app.def_frame.lines() == lines
+# every tab: the same window and text size, the pane filling what each leaves
+for mode in ("refine", "conflict", "place"):
+    app.mode_var.set(mode); app.on_mode_change(); settle(root, app)
+    assert state(root, app) == before, (mode, state(root, app), before)
+    assert app.def_frame.lines() == app._pane_lines(), mode
+    ok, why = page_clear(app); assert ok, (mode, why)
 root.destroy()
+
+# the pane eases there (a comparison): several heights shown on the way, never a jump
+root, app = make(1150)
+settle(root, app)
+app.anim.reduce_motion = False
+heights = []
+app.start_compare()
+for _ in range(40):
+    root.update(); heights.append(app.def_frame.winfo_height()); root.after(8, root.quit); root.mainloop()
+assert len(set(heights)) > 3 and all(b <= a for a, b in zip(heights, heights[1:])), heights
+app.anim.finish_all()
+root.destroy()
+
+# a window made bigger (the contents grown, UI-25): the pane opens into the room kept for it, over nothing
 root, app = make(1150)
 app.toggle_defs(False); root.update()
 root.geometry("1750x1140+0+0")
 for _ in range(10):
     root.update(); root.after(30, root.quit); root.mainloop()
 assert app.grow > 1, app.grow
+grown = state(root, app)
 app.mem_defs["word10"] = "\n".join(f"{i}. (noun) sense {i}" for i in range(1, 41))
 app.def_words = ["word10"]
-app.toggle_defs(True); root.update(); app.anim.finish_all(); root.update()
-room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()        # (the centre above the pane)
-assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheight(), room)
-assert app.grow > 1 and root.winfo_height() <= 1150
+app.toggle_defs(True); settle(root, app)
+ok, why = page_clear(app); assert ok, why
+assert state(root, app) == grown and app.grow > 1
+app.start_compare(); settle(root, app)
+ok, why = page_clear(app); assert ok, why
+assert state(root, app) == grown                               # (the comparison fits the grown window too)
 root.destroy()
 
-# a definition arriving while the pane slides open (an online lookup, WordNet): fitted against the half-open pane it
-# ended taller than fits, over the word card (seen as a flaky _selftest_sizing); the slide settles first now
+# a definition arriving while the pane slides open (an online lookup, WordNet) changes nothing over the page
 root, app = make(560)
 app.toggle_defs(False); root.update()
 app.anim.reduce_motion = False
 app.toggle_defs(True); root.update()                            # (sliding)
 app.mem_defs[app.cur_word] = LONG
-app._render_defs(); app.anim.finish_all(); root.update(); root.update_idletasks()
-room = app.def_frame.winfo_rooty() - app.center.winfo_rooty()
-assert app.place_inner.winfo_reqheight() <= room, (app.place_inner.winfo_reqheight(), room)
+app._render_defs(); settle(root, app)
+ok, why = page_clear(app); assert ok, why
 root.destroy()
 
-# F-29 (asked for): comparing to anchors re-fits only when its question would cover something (the pane then eases
-# shorter, App._fit_window), and once it ends, only if the pane was shortened for it
-root, app = make(1150)
-root.geometry("1700x1120")                                      # (room enough for either view)
-for _ in range(10):                                             # (its definitions in and fitted first)
-    root.update(); app.anim.finish_all()
-fits = []
-real_fit = app._fit_window
-app._fit_window = lambda *a, **k: (fits.append(1), real_fit(*a, **k))[1]
-app._toast_room = lambda: 0
-app.start_compare(); root.update()
-assert app.cmp and not fits                                     # (room enough: nothing moves)
-app.cmp = None; app._render_place_state(); root.update()
-assert not fits
-app._toast_room = lambda: 2000                                  # (as if the question did not fit)
-app.start_compare(); root.update()
-assert len(fits) == 1
-app._toast_room = lambda: 0
-app._lines_before_cmp = app.def_frame.lines() + 2               # (the comparison shortened the pane)
-app.cmp = None; app._render_place_state(); root.update()
-assert len(fits) == 2                                           # (over: it may be as tall as before again)
-root.destroy()
-
-# a short screen: the pane takes what fits, the window stays on the screen and nothing else is clipped
+# a short screen: the pane keeps at least its shortest, scrolls the rest, the window stays on the screen
 root, app = make(560)
 app.mem_defs["word8"] = LONG
-app._render_defs(["word8"]); root.update()
-h = int(app.def_text.cget("height"))
-assert 3 <= h < 16 and root.winfo_height() <= 700, (h, root.winfo_height())
+app._render_defs(["word8"]); settle(root, app)
+h = app.def_frame.lines()
+assert app.DEF_LINES_MIN <= h < 16 and root.winfo_height() <= 560, (h, root.winfo_height())
 assert not shows_all(app)                                     # (it scrolls for the rest)
-assert app.place_inner.winfo_reqheight() <= app.center.winfo_height(), "centre clipped"
+ok, why = page_clear(app); assert ok, why
+app.start_compare(); settle(root, app)
+assert app.def_frame.lines() >= app.DEF_LINES_MIN and root.winfo_height() <= 560
+ok, why = page_clear(app); assert ok, why
 root.destroy()
 print("definition pane height OK")

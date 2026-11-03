@@ -358,7 +358,7 @@ by this repository's workflow.
 | How a widget looks or animates | `src/widgets.py` (and its test, `tests/_selftest_widgets2.py`) |
 | Colours | `src/theme.py` (`PALETTE`, `TIER_COLORS`, the dark look `DARK`, `contrast()`) |
 | Fonts and text sizes | `src/fonts.py` (`font(role)`) |
-| Window sizes, zoom, fitting the screen | `src/sizing.py`, `App._fit_window`, `App.set_zoom` |
+| Window sizes, zoom, fitting the screen | `src/sizing.py`, `App._worst_size`, `App._fit_window`, `App._fill_pane`, `App.set_zoom` |
 | Rounded shapes and icons | `src/smooth.py` (`SmoothCanvas.round_rect`, `icon_image`) |
 | The tier chart and the progress shelf | `src/ui_chart.py` |
 | The word list: download, parsing, frequencies | `src/wordsource.py` |
@@ -441,7 +441,7 @@ either way the save you used last is found again, so switching between the two l
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows); text whose letters reach past their boxes (Young Serif's j and f) is repainted whole (F-32). |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it opens tall enough to show every sense when the screen has room, and eases taller for a longer definition; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
+| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (every spine one width, UI-79; a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5, and beside each kind a small smear button to censor it or not, OB-7, OB-8) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
@@ -490,13 +490,17 @@ missing or out of date, and also checks that each module imports only from the l
 - The menus (File / Edit / View / Settings): `App._menu_items` in `app.py`; the GitHub link at the top right of their row: `App._build_header` (`LinkButton` with words, UI-75).
 - The order words come in, which kinds, censoring: Settings > How words are dealt (`dealing.py`; the data in
   `Store.deal_settings` / `set_deal`, `Store.reshuffle`).
-- Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved;
-  what fits the screen: `App._fit_window`). The maximized window keeps a zoom of its own: maximizing or restoring
-  the window brings back the zoom you last used in that state (`App._follow_maximize`, UI-57). A zoom in past what
+- Zoom: View > Zoom in / out / Actual size, or Ctrl + / Ctrl - / Ctrl 0 (`App.set_zoom` / `zoom_step`, saved for
+  each monitor: `App._zoom_meta`, meta `monitor_zooms`; the window that stops on another monitor shows its zoom,
+  `App._check_monitor`). What fits the screen is measured once for the worst case, every view at once with the
+  definitions pane at its shortest (`App._worst_size`, `App._fit_window`, Z-1): a tab, the pane or a comparison never
+  resizes the window or its text; the pane fills the room the view leaves (`App._fill_pane`). The maximized window
+  keeps a zoom of its own: maximizing or restoring the window brings back the zoom you last used in that state
+  (`App._follow_maximize`, UI-57). A zoom in past what
   fits is refused with a "no" shake of its message, never tried on screen: the limits are found while the window is
   still hidden as it opens and kept for each screen (`App._precheck_zoom`, F-30). The page keeps room under its
   contents for a message, so one never covers the word card or the definitions pane (UI-72); comparing to anchors
-  re-fits if it would not fit, the pane easing shorter (F-29). Browse has its own zoom (`Browser.zoom_by`).
+  eases the pane shorter (F-29, Z-1). Browse has its own zoom (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
 - Definitions while comparing two words (UI-60): side by side, each under its own card (`DefinitionDrawer`'s two
   columns; one word is one column).

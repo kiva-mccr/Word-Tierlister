@@ -1,5 +1,5 @@
-"""Zoom (UI-45, fixed after a report): on a screen too small for the zoomed contents, switching tabs or opening
-and closing the definitions never loses the zoom; zoom out always makes things smaller; zoom in that cannot fit
+"""Zoom (UI-45, fixed after a report): on a screen too small for the zoomed contents, switching tabs, comparing or
+opening and closing the definitions never changes the text or the window (Z-1); zoom out always makes things smaller; zoom in that cannot fit
 says so; the main window's and Browse's zooms are separate and both survive a restart."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile, time
@@ -18,8 +18,8 @@ s.insert_words(words + ["serendipity", "luminous", "table", "bureaucracy", "gris
 s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"])
 for i, w in enumerate(words[:50]):
     s.place(w, i % 6)
-A.usable_area = B.usable_area = lambda r: (0, 0, 1385, 760)        # a laptop a little bigger than 1366 x 768
-# (UI-73: the typefaces left that one no room above 100%)
+A.usable_area = B.usable_area = lambda r: (0, 0, 1500, 960)        # a screen with room for a zoom step or two
+# (Z-1: a 1366 x 768 laptop, every view and the pane counted, has no room for 100% now; UI-73 had left it no more)
 
 root = tk.Tk(); app = A.App(root, s, T.Definitions(s))
 def pump(n=6, d=0.03):
@@ -47,7 +47,7 @@ import json
 from constants import VERSION
 saved = json.loads(s.get_meta(app.ZOOM_CAPS))                       # (kept in the save for this screen)
 assert saved["version"] == VERSION
-assert app._cap_key(app._layout_key()) in saved and A.App._saved_caps(app) == app._zoom_cap
+assert "%dx%d" % app._layout_key() in saved and A.App._saved_caps(app) == app._zoom_cap
 wiggled = f"wiggle{id(app.toast)}" in started
 app.anim.run = real_run
 assert wiggled or app.anim.reduce_motion                            # (the first refusal shakes too)
@@ -64,34 +64,23 @@ for m in ("refine", "boundary", "place"):
     app.mode_var.set(m); app.on_mode_change(); pump(3)
     if m == "place":
         assert body() == top, (body(), top)
-# opening the definitions when there is no room: the drawer stays folded while the window is fitted (it used to
-# flash open at full height for each size tried)
-seen = []
-real_cs = app._content_size
-app._content_size = lambda: (seen.append(app.def_frame.winfo_height() if app.def_frame.winfo_ismapped() else 0), real_cs())[1]
-app.toggle_defs(True); app._content_size = real_cs
-assert seen and max(seen) <= 1, seen
-app.anim.finish_all(); pump(4); app.toggle_defs(False); app.anim.finish_all(); pump(6)
-# the definitions: they may shrink things to fit while open; closing brings the zoom back
+# Z-1: opening the definitions never changes the text or the window (the room for its shortest is kept) and
+# closing them neither; nor does a comparison to anchors
+size = (root.winfo_width(), root.winfo_height())
 app.toggle_defs(True); pump(4); app.anim.finish_all(); pump(4)
-assert body() <= top
+assert body() == top and (root.winfo_width(), root.winfo_height()) == size
+app.start_compare(); pump(4); app.anim.finish_all(); pump(4)
+assert body() == top and (root.winfo_width(), root.winfo_height()) == size and app.cmp
+app.cmp = None; app._render_place_state(); pump(4)
 app.toggle_defs(False); pump(4); app.anim.finish_all(); pump(6)
-assert body() == top and app.zoom == z_top, (body(), top)
+assert body() == top and app.zoom == z_top and (root.winfo_width(), root.winfo_height()) == size
 # zoom out is exactly one step, and never makes anything bigger, even while the definitions are open (what
 # shows is the zoom or the biggest size that fits, whichever is smaller)
 app.toggle_defs(True); pump(4); app.anim.finish_all(); pump(4)
-real_fl, fits = app._fit_lines, []
-def fit_lines(height):                                              # (what each fit measured, should this fail)
-    got = real_fl(height)
-    fits.append((round(app.font_scale * app.zoom, 2), height, got, app.def_frame.lines(), app._def_want))
-    return got
-app._fit_lines = fit_lines
 for _ in range(3):
     shown, z = body(), app.zoom
-    del fits[:]
     app.zoom_step(-1); pump(4)
-    assert body() <= shown and app.zoom == round(z - app.ZOOM_STEP, 2), (body(), shown, z, app.zoom, fits)
-app._fit_lines = real_fl
+    assert body() <= shown and app.zoom == round(z - app.ZOOM_STEP, 2), (body(), shown, z, app.zoom)
 app.toggle_defs(False); pump(4); app.anim.finish_all(); pump(4)
 assert abs(body() - round(12 * app.zoom)) <= 1                                  # closed: the zoom itself shows
 z_main = app.zoom
@@ -151,7 +140,8 @@ app.browsers[0].close(); app.on_close()
 # down from what shows, not "as big as fits" (reported while testing it). (A real maximize under a window manager:
 # checked by hand under openbox; here the state is faked.)
 A.usable_area = lambda r: (0, 0, 1900, 1040)
-s = T.Store(db); s.set_meta("zoom", "1.0"); s.db.execute("DELETE FROM meta WHERE key='zoom_max'"); s.db.commit()
+s = T.Store(db); s.set_meta("zoom", "1.0"); s.db.execute("DELETE FROM meta WHERE key IN ('zoom_max', 'monitor_zooms')")
+s.db.commit()
 root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
 state = {"max": False}
 A.is_maximized = lambda w: state["max"]
@@ -166,7 +156,7 @@ z_max = app.zoom
 assert s.get_meta("zoom_max") == str(z_max) and s.get_meta("zoom") == "1.0"      # kept for the maximized window
 maximize(False, "1000x700")
 assert app.zoom == 1.0                                                # restored: its own zoom again
-app.zoom_step(1); pump(3)
+app.zoom_step(-1); pump(3)                                           # (below the maximized one: kept apart)
 z_normal = app.zoom
 assert s.get_meta("zoom") == str(z_normal) and s.get_meta("zoom_max") == str(z_max)
 maximize(True, "1880x1020")
@@ -235,10 +225,43 @@ root.geometry("1880x1000"); pump(4); app._apply_grow(); pump(4)
 assert not A.is_maximized(root) and shown() <= s.meta_number("zoom_max", 1.0) + 1e-9, (shown(), s.get_meta("zoom_max"))
 app.on_close()
 # a save whose usual zoom is above the maximized one (as left by earlier versions): it opens at the maximized one
-s = T.Store(db); s.set_meta("zoom", "1.5"); s.set_meta("zoom_max", "1.0")
+s = T.Store(db); s.set_meta("zoom", "1.5"); s.set_meta("zoom_max", "1.0"); s.set_meta("monitor_zooms", "{}")
 root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
 assert app.zoom == 1.0 and s.get_meta("zoom") == "1.0" and shown() <= 1.0
 maximize(True, "1880x1020")
 assert app.zoom == 1.0 and shown() >= 1.0 - 1e-9                              # maximizing never shrinks it
+app.on_close()
+
+# Z-1 (asked for): each monitor keeps its own zooms; the window that stops on another monitor shows that one's at once
+# (a monitor never zoomed starts from the last zoom chosen), and is resized only if it is bigger than that monitor
+screens = {"left": (0, 0, 1920, 1080), "right": (1920, 0, 1280, 800)}
+where = {"m": "left"}
+A.monitor_box = lambda r: screens[where["m"]]
+A.usable_area = lambda r: (screens[where["m"]][0], 0, screens[where["m"]][2], screens[where["m"]][3] - 40)
+state["max"] = False
+s = T.Store(db); s.set_meta("monitor_zooms", "{}"); s.set_meta("zoom", "1.0"); s.set_meta("zoom_max", "1.2")
+root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
+app.set_zoom(1.2); pump(3)
+assert app.zoom == 1.2
+size_left = (root.winfo_width(), root.winfo_height())
+where["m"] = "right"; app._check_monitor(); pump(4)                  # (as when the window stops moving there)
+assert app.zoom == 1.2 and root.winfo_height() <= 760               # never zoomed there: the last zoom, fitted
+app.set_zoom(0.8); pump(3)
+assert app.zoom == 0.8
+where["m"] = "left"; app._check_monitor(); pump(4)
+assert app.zoom == 1.2 and app._monitor == "0,0,1920x1080"          # back: the left one's own zoom
+app._check_monitor(); pump(2); assert app.zoom == 1.2                # (the same monitor: nothing changes)
+assert (root.winfo_width(), root.winfo_height()) == size_left       # (it fitted there: never resized)
+where["m"] = "right"; app._check_monitor(); pump(4)
+assert app.zoom == 0.8
+kept = json.loads(s.get_meta("monitor_zooms"))
+assert kept["0,0,1920x1080"]["zoom"] == 1.2 and kept["1920,0,1280x800"]["zoom"] == 0.8, kept
+app.on_close()
+s = T.Store(db); root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(6)
+assert app.zoom == 0.8                                               # (after a restart: the monitor it opens on)
+app.on_close()
+where["m"] = "left"
+s = T.Store(db); root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(6)
+assert app.zoom == 1.2
 app.on_close()
 print("ZOOM OK")

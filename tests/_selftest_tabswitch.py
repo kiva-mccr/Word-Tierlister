@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """Switching tabs with the definitions pane open (reported: a vertical stutter, and from Refine within tier to
-Boundary check the duel buttons seemed to flash): the window's fit never shows the line counts it tries, the duel
-tabs share one text size, the duel cards fade over to the new pair, and the pane sliding open when a tab is switched
+Boundary check the duel buttons seemed to flash): the pane's height is worked out, never tried on screen, every tab
+shares one text size (Z-1), the duel cards fade over to the new pair, and the pane sliding open when a tab is switched
 to ends at the height that fits."""
 import os, tempfile, types
 import tkinter as tk
@@ -39,22 +39,17 @@ def settle(app):
     app.root.update()
 
 
-# 1. the fit works out the pane's lines from one measurement: what it predicts is what the window then measures
+# 1. the pane's lines are worked out from one measurement: what it predicts fills the window, less than a line spare
 root, app = make("refine")
 d = app.def_frame
 for lines in (4, 9, 15):
-    d.set_lines(lines)
-    app._measure_pane = True
-    cw, ch, fit = app._fit_lines(10 ** 6)                  # room for every line it wants
-    assert fit == app._def_want, (fit, app._def_want)
-    d.set_lines(fit)
-    app._measure_pane = True
-    assert app._content_size()[1] == ch, (lines, app._content_size(), ch)
-    app._measure_pane = False
-cw, ch, fit = app._fit_lines(root.winfo_height())
-assert fit >= app.DEF_LINES_MIN and (fit == app.DEF_LINES_MIN or ch <= root.winfo_height())
-app._fit_window()
-for mode in ("boundary", "refine"):                    # (each tab's words once: the pane grows to fit the longest)
+    d.set_lines(lines); settle(app)
+    fit = app._pane_lines()
+    d.set_lines(fit); settle(app)
+    spare = root.winfo_height() - sum(w.winfo_reqheight() for w in root.pack_slaves() if w is not app.center) - \
+        app.pair_inner.winfo_reqheight() - app._room_below()
+    assert 0 <= spare < d.line_height(), (lines, fit, spare)
+for mode in ("boundary", "refine"):
     app._on_mode_switch(mode)
     settle(app)
 
@@ -80,15 +75,16 @@ for mode in ("boundary", "refine", "boundary"):
     settle(app)
 root.update_idletasks = orig
 
-# 3. the duel tabs fit at one text size (each had its own: Refine and Boundary check showed different sizes)
-sizes = {}
+# 3. every tab fits at one text size and one window size (Z-1; the duel tabs each had their own once, and the Place
+# tab another)
+sizes = set()
 for mode in ("refine", "boundary", "conflict", "refine", "place", "boundary"):
     app._on_mode_switch(mode)
     settle(app)
-    sizes.setdefault(mode == "place", set()).add(app._applied_scale)
+    sizes.add((app._applied_scale, root.winfo_width(), root.winfo_height()))
     assert d.winfo_height() == d.natural_height(), (mode, d.winfo_height(), d.natural_height())
     assert root.winfo_height() <= 800
-assert len(sizes[False]) == 1, sizes
+assert len(sizes) == 1, sizes
 app.on_close()
 
 # 4. a pane sliding open when a tab is switched to (a longer definition) ends at the height that fits: measured
@@ -101,9 +97,7 @@ for _ in range(3):
     root.update()
 settle(app)
 assert d.winfo_height() == d.natural_height(), (d.winfo_height(), d.natural_height())
-app._measure_pane = True
-assert app._content_size()[1] <= 700 or d.lines() == app.DEF_LINES_MIN, (app._content_size(), d.lines())
-app._measure_pane = False
+assert app.pair_inner.winfo_reqheight() <= d.winfo_rooty() - app.center.winfo_rooty()
 assert d.winfo_rooty() + d.winfo_height() <= root.winfo_rooty() + root.winfo_height()
 
 # 5. from one duel tab to another the cards fade into the page and the new pair fades in; a key press finishes it
@@ -151,4 +145,4 @@ assert duel.left.cget("text") == "fig" and duel.left._look[0] == PALETTE["bg"]  
 f(1.0)
 assert duel.left._look == duel.left._target() and duel.left.cget("bg") == "#FFD6A5"
 r.destroy()
-print("tab switch: no stutter, one size for the duel tabs, cards fade over: OK")
+print("tab switch: no stutter, one size for every tab, cards fade over: OK")

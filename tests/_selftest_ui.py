@@ -451,7 +451,7 @@ while app.grow != big and time.time() < t_end:
 assert app.grow == big, (app.grow, big, (rw, rh), root.geometry(), root.winfo_screenwidth(), root.winfo_screenheight())
 assert _font("body").cget("size") > body1 and _font("word").cget("size") > word1
 assert root.minsize() == min0                                                   # can still be made small again
-cw, ch = app._content_size(); assert cw <= root.winfo_width() and ch <= root.winfo_height()   # nothing clipped
+cw, ch = app._worst_size(); assert cw <= root.winfo_width() and ch <= root.winfo_height()   # nothing clipped, in any view
 app.mode_var.set("refine"); app.on_mode_change(); pump(3)
 assert app.grow == big                                                          # switching tabs keeps the size
 app.mode_var.set("place"); app.on_mode_change(); pump(3)
