@@ -56,6 +56,8 @@ print(saves.app_dir()); print(path)
 """
 out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
 assert out.returncode == 0, out.stderr
-where, save = out.stdout.split()
-assert where == os.path.dirname(prog) and save == os.path.join(os.path.dirname(prog), "tierlist.db"), out.stdout
+where, save = out.stdout.splitlines()
+want = os.path.join(home, "Library", "Application Support", "Word Tierlister") if sys.platform == "darwin" else \
+    os.path.dirname(prog)                                                     # (macOS: Application Support, F-47)
+assert where == want and save == os.path.join(want, "tierlist.db"), out.stdout
 print("APPDIR OK")
