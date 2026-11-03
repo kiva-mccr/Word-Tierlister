@@ -27,3 +27,4 @@ The module docstring has the details; this page is the map.
 
 - `LAYERS` mirrors `.claude/CLAUDE.md`'s layer list; change both together.
 - Build the zip only with `--zip` (never by hand: that is how files went missing).
+- Paths in messages use `/` on every system (`_files_in`): Windows's `\\` broke the checks' own tests (T-20).

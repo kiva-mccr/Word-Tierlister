@@ -6,6 +6,7 @@ unpacking its source into a folder, and syncing a folder unpacked before (only t
 kept as .bak), shown before it happens; then the folder opens and tierlist.py can start from it."""
 import json, os, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import sources
@@ -129,8 +130,11 @@ _sys.frozen, _sys._MEIPASS = True, meipass
 assert S.bundled_source() == os.path.join(meipass, S.SOURCE_DIR)
 del _sys.frozen, _sys._MEIPASS
 assert S.bundled_source() is None                                # (from source: nothing carried)
-assert S.default_source_folder("/home/me/Programs/word-tierlister") == "/home/me/Programs/Word Tierlister source"
-assert S.default_source_folder("/Apps/Word Tierlister.app/Contents/MacOS/Word Tierlister") == "/Apps/Word Tierlister source"
+J = os.path.join                                                 # (this system's separators, as the program has them)
+assert S.default_source_folder(J("/home", "me", "Programs", "word-tierlister")) == J("/home", "me", "Programs",
+                                                                                       "Word Tierlister source")
+assert S.default_source_folder(J("/Apps", "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister")) == \
+    J("/Apps", "Word Tierlister source")
 
 # the dialog in the built program: where, what it will do, then unpack, open the folder, offer to start tierlist.py
 root, app = window()

@@ -20,7 +20,7 @@ for plat, out, onefile in (("linux", "word-tierlister", True), ("win32", "word-t
     assert S.program_path(_paths.ROOT, plat) == os.path.join(_paths.ROOT, out)     # (next to tierlist.py: T-6)
     assert ("--onefile" in args) == onefile and ("--onedir" in args) != onefile and "--windowed" in args
     sep = ";" if plat == "win32" else ":"
-    added = [args[i + 1] for i, a in enumerate(args) if a == "--add-data"]
+    added = [args[i + 1].replace(os.sep, "/") for i, a in enumerate(args) if a == "--add-data"]   # (/ on any system)
     assert any(a.endswith(f"large_en.msgpack.gz{sep}wordfreq/data") for a in added), added
     assert not any("_fr." in a for a in added) and "jieba" in args and "MeCab" in args
     assert f"/tmp/work/source{sep}source" in added                 # the source inside it (T-7 gives it back)

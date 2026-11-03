@@ -278,10 +278,10 @@ class Tty:
     def __init__(self, tty=True): self.tty = tty
     def isatty(self): return self.tty
 term, desk = (Tty(), Tty()), {"DISPLAY": ":0"}
-assert deps.should_detach(env=desk, streams=term, posix=True)
-assert not deps.should_detach(console=True, env=desk, streams=term, posix=True)              # --console keeps it
-assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True)            # output redirected
-assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True)   # never twice
+assert deps.should_detach(env=desk, streams=term, posix=True, windows=False)
+assert not deps.should_detach(console=True, env=desk, streams=term, posix=True, windows=False)              # --console keeps it
+assert not deps.should_detach(env=desk, streams=(Tty(), Tty(False)), posix=True, windows=False)            # output redirected
+assert not deps.should_detach(env=dict(desk, **{deps.DETACHED_ENV: "1"}), streams=term, posix=True, windows=False)   # never twice
 assert not deps.should_detach(env=desk, streams=term, posix=False, windows=False)            # (neither: stays)
 # Windows (reported: the console window stayed open behind it): again with pythonw.exe, which has no console
 assert deps.should_detach(env={}, streams=term, windows=True, pythonw="C:/Python312/pythonw.exe")
@@ -294,8 +294,8 @@ assert deps.windowless_python("C:/Python312/python.exe", exists=lambda p: True).
 assert deps.windowless_python("C:/Python312/pythonw.exe", exists=lambda p: False) == "C:/Python312/pythonw.exe"
 assert deps.windowless_python("C:/odd/python.exe", exists=lambda p: False) is None
 if sys.platform != "darwin":
-    assert not deps.should_detach(env={}, streams=term, posix=True)                         # no desktop: stay put
-    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True)
+    assert not deps.should_detach(env={}, streams=term, posix=True, windows=False)          # no desktop: stay put
+    assert deps.should_detach(env={"WAYLAND_DISPLAY": "wayland-0"}, streams=term, posix=True, windows=False)
 said, started = [], []
 
 

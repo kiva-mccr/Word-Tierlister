@@ -3,6 +3,7 @@ import os, sys, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 

@@ -8,6 +8,7 @@ told once in a toast. The first start after an update says so. (GitHub's answers
 the tests never go online.)"""
 import io, json, os, shutil, subprocess, tempfile, time, zipfile
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import sources
@@ -43,8 +44,9 @@ open(os.path.join(folder, "word-tierlist"), "w").close()
 S.remove_renamed_program(folder, platform="linux")
 assert sorted(os.listdir(folder)) == [".word-tierlist-source.json"]
 assert S.running_program(frozen=False) is None                                     # (from source: no program)
-assert S.running_program("linux", "/opt/w/word-tierlister", True) == "/opt/w/word-tierlister"
-assert S.running_program("darwin", "/A/Word Tierlister.app/Contents/MacOS/Word Tierlister", True) == "/A/Word Tierlister.app"
+A = os.path.abspath                                                                 # (Windows puts a drive in front)
+assert S.running_program("linux", "/opt/w/word-tierlister", True) == A("/opt/w/word-tierlister")
+assert S.running_program("darwin", "/A/Word Tierlister.app/Contents/MacOS/Word Tierlister", True) == A("/A/Word Tierlister.app")
 
 # downloading it: the Linux / Windows file made runnable; a short download refused; macOS: the .app out of its zip
 def downloader(data):

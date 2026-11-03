@@ -5,6 +5,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile, time
 tmp = tempfile.mkdtemp()
 os.environ["HOME"] = os.path.join(tmp, "home"); os.makedirs(os.environ["HOME"])
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import app as A, browser as B

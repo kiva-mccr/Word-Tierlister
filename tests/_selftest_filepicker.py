@@ -3,6 +3,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, tempfile, time
 HOME = tempfile.mkdtemp()
 os.environ["HOME"] = HOME                                  # (before anything asks where home is)
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import filepicker as FP

@@ -5,6 +5,7 @@ on the word card and the duel cards (un-smearing under the pointer), the masked 
 page and the first start's three steps."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 from rudeness import KIND_BITS as B
@@ -197,7 +198,8 @@ app.def_text._on_word = clicked.append
 hit = smears[0].word_at(3, 3)
 assert hit and hit[0] == "something", hit
 x_end = hit[1][1]
-nxt = smears[0].word_at(int(smears[0].cget("width")) - 10, 3)                      # (the last word: "rude")
+nxt = next(filter(None, (smears[0].word_at(x, 3) for x in range(int(smears[0].cget("width")), x_end, -1))), None)
+# (the last word, "rude": found from the right end in, as fonts leave different room after it)
 assert nxt and nxt[0] == "rude" and nxt[1][0] > x_end, (hit, nxt, smears[0].cget("width"))
 smears[0].event_generate("<Motion>", x=3, y=3); pump(1)
 assert smears[0].find_withtag("link") and str(smears[0].cget("cursor")) == "hand2"
