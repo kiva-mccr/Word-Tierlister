@@ -497,64 +497,91 @@ The details behind the README's features, for whoever changes them.
 
 ### How words are dealt
 
-The first start asks three short questions (any time later: Settings > How words are dealt...):
+Settings > How words are dealt (`src/dealing.py`; the first start shows the same in three steps) decides which
+words leave the queue and how censoring smears them. The data lives in `Store.deal_settings` / `set_deal` and
+the `out` column; `Store.reshuffle` sets the order.
 
-- **Order:** "Most common first" (strictly by how common a word is) or "Mostly common, a little shuffled"
-  (the default: its shape, spread and seed decide how much).
-- **Which words:** nouns, verbs, adjectives, adverbs, obscene words, other, each a tick box with how many
-  words it holds (point at one to see what it covers). Every kind starts ticked except "Obscene words".
-  The word card names a word's kinds faintly above it ("noun · verb"; "other" is left out), and "compound word"
-  for one made of words.
-  Ticking it opens a tick box per kind of rude meaning: Clinical, Crude, Swear words and Insults start ticked,
-  Sexual and Slurs do not ("Obscene words" shows a minus while only some are). "Obscene words" holds only the
-  words censored as a whole (the ones smeared on the card); a word with one rude meaning among ordinary ones
-  ("can", "come", "box") is an ordinary word, dealt with its kind of word, and only that meaning is smeared in
-  its definitions. An obscene word comes up if one of its meanings is of a ticked rude kind, or it has a clean
-  meaning and its kind of word is ticked; one whose meanings are all rude of unticked kinds is left out.
-  Unticked ones are left out of the queue, never deleted; untick every kind of word but "Obscene words" to
-  sort only those.
-- **Censor obscene words** ("blurred, except on hover"; also View > Censor obscene words, a click away): a word is
-  smeared sideways on the cards and in Browse's list until the pointer is over it, and reads b•••••d in messages,
-  when its first (most common) meaning is rude enough; the word card writes what kind it mostly is (sexual, crude,
-  swear word, slur) faintly above it, after its parts of speech ("noun · sexual"), censoring or not;
-  inside the definitions (the drawer and Browse's pane) each rude meaning is smeared, un-smearing under the
-  pointer (when the word itself is smeared, the pointer anywhere over the pane shows it and all its meanings), and
-  once it shows its words can be clicked like any other. Only Crude, Swear word, Sexual and Slur meanings are
-  smeared, never Clinical or Insult, and each of those four can be let through on its own: the small "abc" pill
-  beside it under "Obscene words" is smeared while that kind is censored and plain while it is not (click it; the
-  kinds open there while "Obscene words" or Censor obscene words is ticked). A word with several kinds stays smeared
-  while any of them is censored. The words are picked out by rules, not by a person, so it can miss a rude word
-  or smear an ordinary one: turning it on says so in the window it was turned on in (the whole note the first time
-  in a save, under the tick box in How words are dealt or as a message in the main window; a short message after
-  that), and so does a line under the tick box. Exports keep the real words.
+```mermaid
+flowchart TB
+    W["a word"] --> O{"smeared whole?<br/>(words.obscene)"}
+    O -- "no: an ordinary word" --> K{"is its kind of word ticked?<br/>Nouns, Verbs, Adjectives, Adverbs, Other"}
+    O -- "yes: an obscene word" --> R{"is one of its rude kinds ticked?<br/>(under Obscene words)"}
+    R -- yes --> IN["dealt"]
+    R -- no --> CL{"has it a clean meaning<br/>of a ticked kind of word?"}
+    CL -- yes --> IN
+    CL -- no --> OUT["left out (out = 1)<br/>never deleted"]
+    K -- yes --> IN
+    K -- no --> OUT
+    IN --> C{"Censor obscene words on?"}
+    C -- no --> SHOW["shown as it is"]
+    C -- yes --> P{"is a kind it has censored?<br/>its abc pill smeared (OB-7)"}
+    P -- yes --> SM["smeared on the card and in Browse,<br/>b•••••d in messages,<br/>un-smears under the pointer"]
+    P -- no --> SHOW
+```
 
-What is rude is decided by rules, not a list (`src/rudeness.py`, OB-6): every meaning earns points towards the
-six kinds from Wiktionary's labels, its topics and categories, the wording of the definition, WordNet when it is
-installed, the links between words (Wiktionary's synonym lists) and word families ("bullshit" is built from
-"shit"); its kind is the one with
-the most points, if it has enough. A word's points come mostly from its first meaning: enough of them and the whole
-word is smeared, otherwise only its rude meanings are. A plural, a clipping or another form counts as its word's
-first meaning ("did" is "do", not its slang meaning; "boys" and "mayo" are ordinary words, their slang meanings
-smeared in the definitions; "fucks" is not), and a Clinical meaning only counts when the word is about it ("penis",
-not "take"). A slur or other rude meaning that is not a word's usual one smears that meaning only ("fairy"). A very common word (about the 3,000 commonest, by wordfreq) is rarely meant rudely: only meanings
-Wiktionary labels plainly rude count for it ("box: (vulgar) the vagina", not "top: (slang) fellatio"), and a
-hedged label never smears it whole ("what the hell" is only mildly vulgar). A hyphenated word with a rude word
-among its parts makes its slang meanings as rude ("piss-taker"; "doo-wop" and "tit-for-tat" have no slang
-meaning, so they stay as they are). Words a definition only gives as examples ("such as slime or semen") do not
-count; in a word smeared whole, a meaning that names the word itself is smeared too ("an instance of
-skull-fucking"). A
-"derogatory" label alone is not an insult unless the definition describes a person badly; a euphemism is the
-polite word ("pass water"); a slang meaning that is itself a rude word ("dam: Damn.") is rude like it.
-A word goes into the rude kinds only when it is censored as a whole ("idiot" and "penis" are ordinary words, and
-so is "can", whose rude meaning is smeared in its definitions only). A group's own name is never a slur ("jews", "trans", "gay", "queer"), even where some uses are labelled
-offensive; a meaning is a slur when it is marked as one (a slur, ethnic or vulgar label: "kike", "dyke").
-The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, in the save's `rude`
-table) and scores them once at the end of setting up (about a minute; again only when the rules change).
-A save from before this, or one made from a word list, reads them from the Wiktionary download in the background
-while you sort (once, resumable; until then its earlier flags and a short list chosen by hand in
-`src/obscene.py` stand in). `tools/measure_rudeness.py` measures the rules against an earlier sorting by Claude
-(79% the same outcome, 81% for the commonest words). That earlier way, Claude sorting the words and a review tab
-to check them, is archived (see the roadmap's OB-3 / OB-4).
+- **Order**: "Most common first" (by frequency rank) or "Mostly common, a little shuffled" (the default; its
+  shape, spread and seed set how far it reaches). Compound words come later (`pen`).
+- **Which words**: a tick box per kind of word, with counts; all start ticked but "Obscene words". Its kinds of
+  rude meaning: Clinical, Crude, Swear words and Insults start ticked, Sexual and Slurs do not.
+- **Censoring** smears only Crude, Swear word, Sexual and Slur meanings, never Clinical or Insult. Each of those
+  four has a small "abc" pill beside it, smeared while it is censored; a word with several kinds stays smeared
+  while any of them is censored. In a word that is not smeared whole, only its rude meanings are smeared, in the
+  definitions, and only meanings of a censored kind (`rudeness.results` keeps each one's kind). The pills are saved
+  in meta `censor_kinds` (`Store.censor_kinds`; `Store.censored_words` lists the words they smear). The card names
+  a word's kinds faintly above it ("noun · sexual") either way. Turning censoring on says it may not be fully
+  accurate (in full once a save, then a short message). Exports keep the real words.
+
+#### What counts as rude
+
+Decided by rules, not a list (`src/rudeness.py`, OB-6). Bump `rudeness.RUDENESS_VERSION` when a rule changes, and
+measure with `tools/measure_rudeness.py` (79% the same outcome as an earlier sorting by Claude, 81% for the
+commonest words).
+
+```mermaid
+flowchart TB
+    M["each meaning of a word<br/>(kept from Wiktionary at the build: the rude table)"] --> P
+    subgraph P["points towards each of the six kinds: Clinical, Crude, Swear word, Insult, Sexual, Slur"]
+        direction LR
+        p1["Wiktionary's labels<br/>(vulgar), (slang), (offensive)"] ~~~ p2["its topics<br/>and categories"] ~~~ p3["the definition's<br/>wording"] ~~~ p4["WordNet<br/>(when installed)"] ~~~ p5["synonym lists:<br/>which kind a slang<br/>meaning is"] ~~~ p6["word families:<br/>bullshit is built<br/>from shit"]
+    end
+    P --> X{"special cases"}
+    X -- "a form: plural, clipping" --> X1["counts as its word's first meaning<br/>did = do; boys stays ordinary"]
+    X -- "one of the ~3,000 commonest words" --> X2["only plainly labelled rude meanings count<br/>box yes, top no"]
+    X -- "a group's own name" --> X3["never a slur<br/>jews, gay, queer"]
+    X -- "anything else" --> K
+    X1 --> K
+    X2 --> K
+    X3 --> K
+    K{"which kind has the most points,<br/>and is it enough?"}
+    K -- "not enough" --> C["a clean meaning"]
+    K -- "enough" --> R["a rude meaning of that kind"]
+    C --> W
+    R --> W
+    W{"the word: its points,<br/>mostly from its first meaning"}
+    W -- "enough" --> WS["smeared whole (words.obscene)<br/>listed under Obscene words<br/>e.g. shit, bastard"]
+    W -- "not enough" --> WO["an ordinary word, dealt with its kind of word<br/>only its rude meanings smeared in definitions<br/>e.g. can, come, fairy"]
+    WS --> CEN["censoring smears only the censored kinds:<br/>Crude, Swear word, Sexual, Slur, each with its own pill"]
+    WO --> CEN
+```
+
+The smaller rules, each with the example that made it:
+
+| Rule | Example |
+|---|---|
+| Clinical counts only when the word is about it | "penis", not "take" |
+| A hedged label never smears a word whole | "what the hell" is only mildly vulgar |
+| A hyphenated word with a rude part makes its slang meanings as rude | "piss-taker"; "doo-wop" has no slang meaning |
+| Words a definition only gives as examples do not count | "such as slime or semen" |
+| In a word smeared whole, a meaning naming the word itself is smeared too | "an instance of skull-fucking" |
+| "Derogatory" alone is not an insult unless the definition describes a person badly | |
+| A euphemism is the polite word | "pass water" |
+| A slang meaning that is itself a rude word is rude like it | "dam: Damn." |
+| A slur or rude meaning that is not the word's usual one smears that meaning only | "fairy" |
+
+The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, the `rude` table) and
+scores them once at the end of setting up. An older save, or one made from a word list, reads them from the
+Wiktionary download in the background while you sort (`App._start_rude_read`); until then `src/obscene.py`'s short
+hand-picked list stands in.
 
 ### Building a program
 
@@ -604,95 +631,58 @@ seconds after start it raises a fake bug. The dialog appears and the program kee
   (`~/.local/share/applications/word-tierlister.desktop`, out of the menu until you add it), which is how desktops
   such as GNOME know a window's icon.
 
-### Updating
+### Updating, making a program, getting the source back
 
-File > Source & Updates... is one panel for updates, making the program and getting the source back. Its
-**Updates** section, at the top, says which version you have and which form you are running, and asks GitHub for
-the newest release. If a newer one is out, **Update** there updates the form you are running, then starts it again
-with the same save:
+File > Source & Updates (`src/sources.py`; the work is in `src/standalone.py`) is one panel. What it offers
+depends on which form is running:
 
-- **The program** (Windows `.exe`, Linux, macOS `.app`) downloads the new program for this computer beside itself,
-  puts it in its place and starts it. The old one is kept as `.old` until the new one has started, which then
-  removes it. If the program sits somewhere it cannot write (such as Program Files), it says so; the release page
-  has the download. A source folder the program unpacked beside itself is brought up to date too.
-- **The source** (`tierlist.py`): a git checkout is updated with `git pull` (git refuses rather than touch your own
-  changes, and the dialog shows what it said); any other folder downloads the new source and shows what it would
-  change before doing it (only the program's own files; a file you edited is kept as `.bak` first).
+```mermaid
+flowchart TB
+    P["File > Source & Updates"] --> U["Updates: ask GitHub for the newest release<br/>(standalone.latest_release; quietly at start once a day too)"]
+    U -- "newer, and you run the program" --> UP["download the new program beside itself, swap it in,<br/>keep the old one as .old until the new one starts"]
+    U -- "newer, and you run the source" --> US{"a git checkout?"}
+    US -- yes --> GP["git pull (git refuses rather than touch your changes)"]
+    US -- no --> SY["download the source zip and sync this folder<br/>(the changes shown first; your edits kept as .bak)"]
+    U -- "the check fails" --> WHY["the panel says why<br/>(404 Not Found: the repository is private)"]
+    P --> F{"which form?"}
+    F -- "the source, tierlist.py" --> MK["Make a standalone program:<br/>missing builder or packages offered first,<br/>PyInstaller builds it next to tierlist.py, then it starts"]
+    MK --> CL{"Clean up behind?"}
+    CL -- "Keep the source (default)" --> K1["source stays"]
+    CL -- "Zip it / Remove it" --> K2["the new program removes the source's own files<br/>as it starts (Zip it packs them first)"]
+    F -- "the program" --> UN["Unpack the source code into a folder<br/>(an earlier folder is synced: changed, added, removed)"]
+    F -- "the program, Linux / Windows" --> MENU["Add to applications menu / Start menu"]
+    UP --> RS["starts again on the same save"]
+    GP --> RS
+    SY --> RS
+```
 
-At start, at most once a day, it checks quietly too: a newer version is mentioned once, in a short note.
-
-If the check fails, the panel says why. "GitHub said Not Found (404)" almost always means the repository on GitHub
-is private: GitHub hides a private repository's releases from anyone not signed in, and the program never signs in.
-Updating from inside the program only works while the repository is public.
-
-### Making it a program
-
-Below the Updates section, File > Source & Updates... (when running `tierlist.py`) makes Word Tierlister into one program for this computer:
-`word-tierlister` on Linux, `word-tierlister.exe` on Windows, `Word Tierlister.app` on macOS, next to `tierlist.py`,
-so it keeps using the same save and no longer needs Python. It takes a minute or two, then starts the new program
-and closes this window. First it checks that what the build needs is installed: the builder (PyInstaller, about
-15 MB), wordfreq, and nltk if you want offline definitions in the program. Anything missing is offered in one
-dialog, a tick box each, as on the first start (untick the optional ones to install only what is needed). Packages
-the program never uses (matplotlib, Pillow, numpy and the like) are always left out of the build, even when they
-are on your computer, so a broken one cannot stop it. The program carries its
-complete source inside it. If nothing has changed since the last build, it offers to start that program instead.
-
-The first time each form starts, it offers the other once, when nothing else is being asked: `tierlist.py` asks
-"Make this a standalone program?" (yes builds it and reopens as it). The program does not ask: its first start
-unpacks its source into "Word Tierlister source" beside it and says so, unless a copy of the source is there
-already (it sits next to `tierlist.py`, or a folder beside it holds one, whatever its name). Both are remembered in
-the save and stay in File > Source & Updates. Not done when a program already sits next to `tierlist.py`, nor
-with `--no-install`.
-
-Either way that section has a tick box, ticked to start with: **Update to the newest version first** (greyed out
-until the Updates section finds a newer version). Ticked and newer than yours, making the program builds
-it from that version's source (your files are not changed), and unpacking downloads it and shows what it would
-change before doing it, so unpacking is also how you update. Offline, or already the newest: it says so and uses
-the version you have. Your save is never touched.
-
-Running from source, the Updates section's **Update** downloads the newer version and brings this folder up to
-date with it, without making the program (what it will change is shown first; only the
-program's own files change, a file you edited is kept as `.bak` first), then Word Tierlister starts again from the
-new source with the same save. In a git checkout it runs `git pull` instead.
-
-In the program, the same panel gives the source back: **Unpack the source code** writes it into a folder
-(beside the program, "Word Tierlister source", or one you pick), laid out like this repository. Unpacking into a
-folder you unpacked into before brings it up to date: changed files are updated, new ones added and ones the program
-no longer has removed. Only the program's own files are touched (your save, its log or a .venv never are), and a
-file you edited there is kept as `name.bak` first. What it will do is shown before it does it. Then the folder opens
-and it offers to start `tierlist.py` from there (that needs Python on the computer; it uses the same save). Starting
-the other form, from either side, closes the one you started it from, so only one of them uses the save at a time,
-and the one started never inherits the built program's own settings (its Tcl / Tk folders, which vanish when it
-closes), so the unpacked source can build the program again. Making the program from source always asks first
-**Clean up behind?**, however the source came to you (a download, a clone, or unpacked from the program):
-**Keep the source** (the default) puts the program next to `tierlist.py` as usual; **Zip it** and **Remove it**
-put it there too, in the folder where the source is, pack the source into a zip in that folder first (for Zip it),
-and the program removes the source's files as it starts, leaving itself, your save and the zip in the folder. Only
-the source's own files are removed: anything you added there stays, and so does a git checkout's history (`.git`).
-(A source unpacked from a program that sits beside its folder replaces that program instead, and your save moves
-next to it.) The program carries its source inside it, so it can always be unpacked again.
+- The update tick (**Update to the newest version first**, on by default) makes the program from, or unpacks,
+  the newest release's source instead of this one; offline or already the newest, it uses what you have.
+- Each form offers the other once on its first start (`tierlist.py`: "Make this a standalone program?"; the
+  program unpacks its source beside itself unless a copy is there). Not with `--no-install`.
+- Only the program's own files are ever touched (never a save, its log or a `.venv`). Starting one form closes the
+  other, so only one uses the save at a time, with a clean environment (`standalone.clean_env`: never the built
+  program's Tcl / Tk folders).
+- Packages the program never uses (matplotlib, Pillow, numpy and the like) are always left out of the build.
+- Updating needs the repository to stay public: GitHub answers a private one's releases with 404.
 
 ### Missing packages
-Installing happens in two stages.
 
-1. **In the terminal, before any window.** Only `tkinter` (the window toolkit), since without it there
-   is no window to ask in. It asks `Install it now? [Y/n]` (Enter = yes), installs it with your
-   system's package manager (apt-get, dnf, pacman, zypper, or Homebrew on macOS; sudo may ask for your
-   password) and restarts the program.
-2. **In the window.** Every Python package in one dialog, each with its own tick box and its size:
-   `wordfreq` (required, marked with a red *, about 70 MB: it ranks the words) and `nltk` (optional,
-   about 35 MB with its dictionary data: offline definitions, and the WordNet word list).
-   An optional package you leave unticked is not offered again. If your system Python refuses pip
-   installs (Debian, Ubuntu, Homebrew), it offers to make a private `.venv` next to the program,
-   installs there, and from then on starts with it automatically.
+```mermaid
+flowchart TB
+    S["start"] --> T{"tkinter there?"}
+    T -- "no, in a terminal" --> T1["ask Install it now? [Y/n]: apt-get, dnf, pacman,<br/>zypper or Homebrew (sudo may ask), then restart"]
+    T -- "no, no terminal" --> T2["say how to install it"]
+    T -- yes --> W["the window: one dialog, a tick box per missing package,<br/>its size and purpose (deps.PACKAGES, SIZE, PURPOSE)"]
+    W --> PIP{"can pip install here?"}
+    PIP -- yes --> I["pip install, measuring the download<br/>for a real speed and time left"]
+    PIP -- "no: externally managed<br/>(Debian, Ubuntu, Homebrew)" --> V["offer a private .venv next to the program;<br/>later starts use it by themselves"]
+    W -. "pip, venv or Python itself missing" .-> SYS["offered the same way: ensurepip, then the<br/>system's prompt (pkexec); on Windows winget"]
+```
 
-What comes from the system rather than from pip is offered the same way: pip itself (Python's own `ensurepip`
-first), Python's `venv` module when the private environment needs it (Debian / Ubuntu keep it apart), and Python
-itself when a built program unpacks its source and nothing can run it. From the window your system asks for your
-password with its own prompt (`pkexec`); on Windows, Python comes from `winget`. Git is never needed.
-
-It only asks when something is missing. Started without a terminal (pythonw, a shortcut), only the
-window stage runs. `--no-install` turns all of it off.
+`wordfreq` is required (about 70 MB: it ranks the words); `nltk` is optional (about 35 MB with its data:
+offline definitions and the WordNet list). An optional package left unticked is not offered again. Git is never
+needed. `--no-install` turns all of it off.
 
 ### The log
 

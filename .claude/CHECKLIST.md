@@ -4,7 +4,7 @@ Run through this before handing a round over (and again before a zip is sent). I
 done by `python tools/check_release.py`; the rest need a person or Claude to look.
 
 ## 1. Code
-- [ ] New code lives in the right layer (README, "Layers") and folder (modules in src/, tests in tests/,
+- [ ] New code lives in the right layer (DEVELOPERS.md, "Import layers") and folder (modules in src/, tests in tests/,
       tierlist.py stays at the top); only UI files import tkinter (auto: check_release.LAYERS).
 - [ ] Each code file touched: its note (`name.md`) still true. `python tools/notes.py` refreshes the generated
       parts (auto: --check); a rule changed or a bug fixed goes in its "Rules and pitfalls" by hand.
@@ -13,7 +13,7 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
 - [ ] Every new third-party import is in `requirements.txt` AND `deps.PACKAGES` (auto). Optional ones are
       listed in requirements.txt too (commented), and the code works without them. Packages only tests or
       tools import (pillow, fonttools, pyinstaller) go in requirements.txt commented, never in deps.PACKAGES.
-- [ ] Every new module is in the README file map and the code map in `tierlist.py` (auto for the README).
+- [ ] Every new module is in the file map in DEVELOPERS.md and the code map in `tierlist.py` (auto for DEVELOPERS.md).
 - [ ] Anything that can fail for a user raises `SetupError` or uses `errors.show_exception`, with a
       plain-language message (no bare `sys.exit("...")`, no raw tracebacks).
 - [ ] Any bar with a real percentage shows an ETA; animations respect Reduce motion and never block input.
@@ -41,7 +41,8 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
 ## 5. Docs and hand-over
 - [ ] Roadmap (comment block in `tierlist.py`): step ticked `[x]` with what was actually built, notes for
       later steps updated, no stale names (renamed functions, test files).
-- [ ] README: file map, layers, any new command-line option or behaviour.
+- [ ] DEVELOPERS.md: file map, layers, graphs, any new command-line option. README.md: any new feature a user
+      sees, in plain words (a new screen: a screenshot in docs/images).
 - [ ] `.claude/CLAUDE.md`: Status line (done / next) and Known gaps are current.
 - [ ] Zip built with `python tools/check_release.py --zip word-tierlister.zip` (not copied by hand), then the
       file list looked at: every module, `requirements.txt`, `CLAUDE.md`, `CHECKLIST.md`, the tests,

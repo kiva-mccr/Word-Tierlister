@@ -2,7 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """T-8: the newest release on GitHub (asked for nothing online here: GitHub's answers are stand-ins), downloading a
 release's source ready to unpack or build from, `tools/build.py --all` (the Build programs workflow on GitHub,
 through gh; stand-ins again) and the workflow itself (the names the README's download links and the program use)."""
-import io, json, os, re, sys, tempfile, urllib.error, zipfile
+import io, json, os, re, sys, tempfile, types, urllib.error, zipfile
 import standalone as S
 from constants import REPO, VERSION
 import importlib.util
@@ -179,6 +179,21 @@ S.start("/x/word-tierlister", popen=lambda args, **kw: seen.append(kw.get("env")
 S.open_folder(tempfile.gettempdir(), popen=lambda args, **kw: seen.append(kw.get("env"))) if not sys.platform.startswith("win") else None
 S.start_source("/x/src", "/usr/bin/python3", popen=lambda args, **kw: seen.append(kw.get("env")))
 assert seen and all(e is not None and not any(k.startswith("_PYI_") for k in e) for e in seen)
+# File > Where is my save file? > Show in folder: the save selected in the system's own file manager (asked for)
+save = os.path.join(tempfile.gettempdir(), "my saves", "tierlist.db")
+calls = []
+pop = lambda args, **kw: calls.append(list(args))                                    # noqa: E731
+assert S.reveal_file(save, platform="win32", popen=pop) == "selected" and calls[-1] == ["explorer", "/select,", save]
+assert S.reveal_file(save, platform="darwin", popen=pop) == "selected" and calls[-1] == ["open", "-R", save]
+ok = lambda args, **kw: (calls.append(list(args)), types.SimpleNamespace(returncode=0))[1]   # noqa: E731
+n = len(calls)
+assert S.reveal_file(save, platform="linux", popen=pop, run=ok, which=lambda name: "/usr/bin/" + name) == "selected"
+assert len(calls) == n + 1 and "org.freedesktop.FileManager1.ShowItems" in calls[-1]
+assert any(a.startswith("array:string:file://") and a.endswith("tierlist.db") and "%20" in a for a in calls[-1])
+no = lambda args, **kw: types.SimpleNamespace(returncode=1)                           # noqa: E731
+assert S.reveal_file(save, platform="linux", popen=pop, run=no, which=lambda name: "/usr/bin/" + name) == "folder"
+assert calls[-1] == ["xdg-open", os.path.dirname(save)]                    # (nothing answered: the folder opens)
+assert S.reveal_file(save, platform="linux", popen=pop, run=ok, which=lambda name: None) == "folder"   # (no dbus)
 # U-3: a built program trusts this computer's certificates (reported: on another Linux than the build machine's, or a
 # Mac, every https request failed, and Check for updates said GitHub could not be reached); the reason is kept
 import deps

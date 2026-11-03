@@ -114,7 +114,8 @@ and Ctrl+Z brings it back.
   swear words, insults, sexual, slurs, clinical).
 - **Censor obscene words** smears a rude word sideways until you point at it, on the card, in Browse and in the
   definitions. A word that is only rude in one of its meanings (like "can") keeps its word, and only that meaning
-  is smeared. Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
+  is smeared. A small smeared "abc" button beside crude, swear words, sexual and slurs lets you censor each kind
+  or let it through on its own. Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
   or an innocent word gets smeared. Exports always keep the real words.
 
 ## Make it yours
@@ -161,7 +162,8 @@ All of these can be changed under Settings > Keyboard shortcuts.
 
 - Everything is saved the moment you do it. Close the window, lose power, it doesn't matter.
 - The save is one file, `tierlist.db`, next to the program (or next to `tierlist.py`). If that folder is
-  read-only, it goes in your user data folder instead. **File > Where is my save file?** tells you where it is.
+  read-only, it goes in your user data folder instead. **File > Where is my save file?** tells you where it is, and
+  **Show in folder** opens that folder in Explorer, Finder or your file manager with the file picked out.
 - Replace the program with a newer one, or move between the program and the Python source, and it finds your
   save again by itself.
 - **File > Export tier list** writes your list as a spreadsheet (`.csv`), text or Markdown. **File > Import earlier
