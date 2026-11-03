@@ -705,10 +705,6 @@ def reveal_file(path, platform=None, popen=subprocess.Popen, run=subprocess.run,
 RELEASES = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASE_ASSETS = {"linux": "word-tierlister-linux", "win32": "word-tierlister-windows.exe",   # (the workflow's names;
                   "darwin": "word-tierlister-macos.zip"}                                      # macOS: the zipped .app)
-# a release also carries each program under its name from before the rename, which 1.0.2 and older look for (the
-# workflow copies them); this program looks for those too, should a release have only them
-OLD_RELEASE_ASSETS = {"linux": "word-tierlist-linux", "win32": "word-tierlist-windows.exe",
-                      "darwin": "word-tierlist-macos.zip"}
 
 
 def version_tuple(text):
@@ -833,7 +829,7 @@ def running_program(platform=None, exe=None, frozen=None):
 def program_download(release, platform=None):
     """{"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it)."""
     assets, key = (release or {}).get("assets") or {}, _platform_key(platform)
-    return assets.get(RELEASE_ASSETS.get(key)) or assets.get(OLD_RELEASE_ASSETS.get(key))
+    return assets.get(RELEASE_ASSETS.get(key))
 
 
 def _download_to(url, dest, log=print, timeout=60):

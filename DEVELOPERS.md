@@ -322,7 +322,7 @@ flowchart LR
     src["the source<br/>(tierlist.py + src/)"] -- "tools/build.py<br/>(PyInstaller; standalone.py)" --> prog["a program for this computer<br/>(word-tierlister, .exe, .app),<br/>its source packed inside"]
     src -- "push to main" --> gh["GitHub"]
     gh -- "Actions > Build programs > Run workflow,<br/>or a pushed tag v&lt;VERSION&gt;" --> wf[".github/workflows/build.yml<br/>Linux, Windows, macOS builds,<br/>each started once to check it"]
-    wf --> rel["a GitHub Release<br/>word-tierlister-linux, -windows.exe, -macos.zip<br/>(+ the old word-tierlist-* names)"]
+    wf --> rel["a GitHub Release<br/>word-tierlister-linux, -windows.exe, -macos.zip"]
     rel -- "README download links" --> users["people"]
     rel -- "File > Source & Updates > Update<br/>(sources.py, standalone.latest_release)" --> prog2["the program replaces itself<br/>(kept as .old until the new one starts)"]
     gh -- "git pull, or a sync of the source zip" --> src2["a source folder brought up to date"]

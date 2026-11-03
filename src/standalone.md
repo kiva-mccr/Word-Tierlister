@@ -66,7 +66,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - The build checks PyInstaller by importing what the build uses (`PYINSTALLER_CHECK`), repairs an incomplete one, and runs pip and PyInstaller from a neutral folder (reported: "No module named PyInstaller.utils").
-- The rename (Word Tier List -> Word Tierlister, after 1.0.2): every release also carries each program under its old name (`OLD_RELEASE_ASSETS`, copied by the workflow), which 1.0.2 and older look for to update; records under their old names (`OLD_RECORDS`) are still read; a build removes the old-named program beside it (`remove_renamed_program`). Keep the old asset names in every release.
+- The rename (Word Tier List -> Word Tierlister, after 1.0.2): releases no longer carry the programs under their old names (they did until 1.0.4, for 1.0.2 and older; the user dropped them: nobody runs those), so 1.0.2 and older cannot update themselves; records under their old names (`OLD_RECORDS`) are still read; a build removes the old-named program beside it (`remove_renamed_program`).
 - Unpacking only ever touches the program's own files (its manifest and the last unpack's record); a file you edited is kept as `.bak` first; saves, logs and `.venv` are never looked at.
 - Every zip entry goes through `inside` before it is written (S-4): on Windows `..\x`, `C:` and a link pointing out are ways out of the folder that a plain `".." in parts` check misses.
 - `source_files` is the one list of what ships: the zip, the program and the manifest all use it.

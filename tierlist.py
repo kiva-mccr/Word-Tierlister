@@ -1953,10 +1953,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data
-#           folder and records. Nothing already out there is left behind: every release also carries the programs
-#           under their old names (1.0.2 and older look for those to update), and the old data folder, pointer file,
+#           folder and records. Nothing already out there is left behind: the old data folder, pointer file,
 #           records, launcher and Start menu shortcut are still found (the last two replaced by the new ones).
-#           tierlist.py, tierlist.db and tierlist.log keep their names (saves are found by them). VERSION 1.0.3.
+#           tierlist.py, tierlist.db and tierlist.log keep their names (saves are found by them). VERSION 1.0.3. Releases up
+#           to 1.0.4 also carried the programs under their old names for 1.0.2 and older to update; the user dropped
+#           those copies after 1.0.4 (nobody runs the old versions).
 # [x] SY-1 Asked for: sync between devices, free and good on Linux: Syncthing (the user picked it over Google Drive
 #           and a cloud folder). Each device writes one file of its own (syncfiles.py: <computer>-<save>.wtsync, gzip
 #           JSON) into a folder Syncthing shares; reading the others' folds them in word by word, the later change
