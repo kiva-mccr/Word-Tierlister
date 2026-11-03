@@ -1055,9 +1055,7 @@ class App:
         min_w = min(max(cw, int(self.MIN_SIZE[0] * f * fs)), area[2])
         min_h = min(max(ch, int(self.MIN_SIZE[1] * f * fs)), area[3])
         r.minsize(min_w, min_h)
-        # (preferred: room for the pane to show a few lines more than its shortest, even while comparing)
-        pref = (int(self.BASE_SIZE[0] * f * fs),
-                max(int(self.BASE_SIZE[1] * f * fs), ch + self.DEF_LINES_ROOM * self.def_frame.line_height()))
+        pref = (int(self.BASE_SIZE[0] * f * fs), int(self.BASE_SIZE[1] * f * fs))
         need = (max(pref[0], cw), max(pref[1], ch))
         # The size at which nothing grows (UI-25) is set when the window opens and by a zoom (rebase, below);
         # a later fit may only raise it (re-measured smaller, the contents grew past the zoom).
@@ -1065,7 +1063,8 @@ class App:
             self._ref_size = need
         else:
             self._ref_size = (max(self._ref_size[0], need[0]), max(self._ref_size[1], need[1]))
-        if initial:
+        if initial:                              # (opening: room for the pane to show a few lines more than its
+            pref = (pref[0], max(pref[1], ch + self.DEF_LINES_ROOM * self.def_frame.line_height()))   # shortest)
             w, h = fit_size((min_w, min_h), pref, (area[2], area[3]))
             r.geometry(center_geometry(w, h, area))
             return h

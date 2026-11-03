@@ -85,14 +85,19 @@ root.destroy()
 
 # the pane eases there (a comparison): several heights shown on the way, never a jump
 root, app = make(1150)
+root.geometry("1500x1000+0+0")                                  # (room for more than its shortest: a Mac's screen
+for _ in range(10):                                             # held the window it opened with at its minimum;
+    root.update(); root.after(40, root.quit); root.mainloop()   # the contents re-grow 80 ms after a resize)
 settle(root, app)
+lines = app.def_frame.lines()
 app.anim.reduce_motion = False
 heights = []
 app.start_compare()
 for _ in range(40):
     root.update(); heights.append(app.def_frame.winfo_height()); root.after(8, root.quit); root.mainloop()
+app.anim.finish_all(); root.update()
+assert app.def_frame.lines() < lines, (lines, app.def_frame.lines(), root.winfo_height())
 assert len(set(heights)) > 3 and all(b <= a for a, b in zip(heights, heights[1:])), heights
-app.anim.finish_all()
 root.destroy()
 
 # a window made bigger (the contents grown, UI-25): the pane opens into the room kept for it, over nothing

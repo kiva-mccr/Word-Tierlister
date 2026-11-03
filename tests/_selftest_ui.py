@@ -376,12 +376,12 @@ from fonts import font as _font
 body0, word0 = _font("body").cget("size"), _font("word").cget("size")
 import widgets as _W
 assert {"Zoom in", "Zoom out", "Actual size"} <= set(_W.DropMenu.labels(app.header.menus["View"]))
-app.set_zoom(1.3); pump(3)
-assert app.zoom == 1.3 and s.get_meta("zoom") == "1.3"
-assert app.toast.cget("text") == "Zoom 130%" and app.toast._tint[0] == T.PALETTE["info"][0] == "#FFFFFF"   # a white card
+app.set_zoom(1.2); pump(3)                 # (Z-1: every view and the pane must fit; 130% does not on a 1080 px screen)
+assert app.zoom == 1.2 and s.get_meta("zoom") == "1.2"
+assert app.toast.cget("text") == "Zoom 120%" and app.toast._tint[0] == T.PALETTE["info"][0] == "#FFFFFF"   # a white card
 assert _font("body").cget("size") > body0 and _font("word").cget("size") > word0
 assert root.winfo_width() <= app.root.winfo_screenwidth()                          # never past the screen
-root.event_generate("<Control-minus>"); root.event_generate("<KeyRelease-minus>"); pump(3); assert app.zoom == 1.2
+root.event_generate("<Control-minus>"); root.event_generate("<KeyRelease-minus>"); pump(3); assert app.zoom == 1.1
 z_before = app.zoom
 app.set_zoom(9); assert z_before < app.zoom <= app.ZOOM_MAX            # as big as fits, at most the maximum
 app.set_zoom(0); assert app.zoom == app.ZOOM_MIN                         # limits
@@ -437,8 +437,9 @@ app.anim.finish_all(); app.set_zoom(1.0); pump(2)
 assert app._grow_for(*app._ref_size) == 1.0 and app._grow_for(app._ref_size[0] * 9, app._ref_size[1] * 9) == app.GROW_MAX
 assert app._grow_for(app._ref_size[0] * 1.32, app._ref_size[1] * 2) == 1.3                  # the smaller ratio, in steps
 assert app._grow_for(app._ref_size[0] / 2, app._ref_size[1]) == 1.0                         # never below normal
-root.geometry("%dx%d" % root.minsize()); pump(6); app._apply_zoom(1.0); pump(4)   # ("normal" = as small as it goes:
-body1, word1 = _font("body").cget("size"), _font("word").cget("size")                  # room to grow on a 1600 px screen)
+app.set_zoom(0.8); pump(4)                         # (Z-1: at 100% the worst case leaves a 1080 px screen too little room)
+root.geometry("%dx%d" % root.minsize()); pump(6); app._apply_zoom(0.8); pump(4)   # ("normal" = as small as it goes:
+body1, word1 = _font("body").cget("size"), _font("word").cget("size")                  # room to grow on the screen)
 min0 = root.minsize()
 rw, rh = app._ref_size
 room = min((root.winfo_screenwidth() - 40) / rw, (root.winfo_screenheight() - 100) / rh)   # (title bar, menu bar)
@@ -458,6 +459,7 @@ app.mode_var.set("place"); app.on_mode_change(); pump(3)
 root.geometry(f"{int(rw * 1.12)}x{int(rh * 1.12)}"); pump(12, 0.03); assert app.grow == 1.1   # one step down
 root.geometry(f"{rw}x{rh}"); pump(12, 0.03)
 assert app.grow == 1.0 and _font("body").cget("size") == body1 and _font("word").cget("size") == word1
+app.set_zoom(1.0); pump(4)
 
 # ---- a held key repeats like a keyboard: 500 ms before the first repeat, then at most every 250 ms;
 #      faster auto-repeats are dropped (holding a tier key used to queue placements that went on after release)
