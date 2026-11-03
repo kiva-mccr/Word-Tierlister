@@ -384,7 +384,7 @@ unpacked, real_unpack = [], S.unpack                              # (watched, no
 S.unpack = lambda *a, **k: (unpacked.append(a), real_unpack(*a, **k))[1]   # show a folder a while after removing it)
 app._offer_other_form(); pump(root, 4)
 S.unpack = real_unpack
-assert not unpacked                                               # once only
+assert not [a for a in unpacked if beside in map(str, a)], unpacked   # once only (another job may unpack elsewhere)
 app.store.set_meta("offered_source", "0")
 os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "tierlist.py"), "w").write("")
 app._offer_other_form(); pump(root, 4)
