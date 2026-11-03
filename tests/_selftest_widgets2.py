@@ -220,8 +220,8 @@ eb.event_generate("<ButtonPress-1>", x=5, y=5); eb.event_generate("<ButtonReleas
 assert hm.open_name is None                                                    # its own button closes it
 hm.open_menu("File"); update(); root.event_generate("<Configure>"); update()
 assert hm.open_name == "File"                                    # (a <Configure> with nothing changed: still open)
-x, y = root.winfo_x(), root.winfo_y(); root.geometry(f"+{x + 40}+{y + 30}"); update()
-assert hm.open_name is None                                      # the window moved: the menu would be left behind
+hm._top_geo = (-1, -1, 1, 1); root.event_generate("<Configure>"); update()   # (as if it had moved: a real move is
+assert hm.open_name is None                                      # late on macOS) the menu would be left behind
 hm.open_menu("File"); update()
 seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      # a click elsewhere closes it
 assert hm.open_name is None and not hm.drops["File"].is_open()
