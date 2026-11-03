@@ -387,6 +387,7 @@ All optional; `python tierlist.py --help` explains each.
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
 | `--no-install` | Never offer to install missing packages, nor (on the first start) to make a program or unpack the source. |
+| `--review-rude [FILE]` | (Developers) Review the rude words' meanings by hand: FILE, or `rude_review.jsonl` next to the save (see [What counts as rude](#what-counts-as-rude)). |
 
 ## Folders
 
@@ -446,6 +447,7 @@ found again, so switching between the two loses nothing.
 | `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (every spine one width, UI-79; a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5, and beside each kind a small smear button to censor it or not, OB-7, OB-8) and Censor obscene words; on the first start the same in three steps. |
+| `src/review.py` | The review of rude meanings by hand (OB-9, `--review-rude`, developers): word by word, the rules' guess filled in for each meaning; the answers go beside the review file and only test the rules (`tools/measure_rudeness.py answers`). |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
 | `src/tiercolours.py` | Settings > Tier colours... (UI-61, UI-80): click a tier's pill, then set its colour with the H / S / V bars or a hex code (each follows the other); a colour too dark for the tier's letter is said so and Apply waits; Reset to defaults; Apply saves them and shows them (the window is rebuilt in place). |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
@@ -463,7 +465,7 @@ found again, so switching between the two loses nothing.
 | `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
 | `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
 | `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
-| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
+| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`); `sample` writes a review file for `--review-rude` and `answers` scores the rules against its answers (OB-9). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
@@ -573,6 +575,19 @@ flowchart TB
 Decided by rules, not a list (`src/rudeness.py`, OB-6). Bump `rudeness.RUDENESS_VERSION` when a rule changes, and
 measure with `tools/measure_rudeness.py` (79% the same outcome as an earlier sorting by Claude, 81% for the
 commonest words).
+
+To check the rules against your own judgement (OB-9), review a sample by hand. `python tools/measure_rudeness.py
+fetch` keeps the Wiktionary download compactly (about 3 GB to read, once). `python tools/measure_rudeness.py sample`
+then writes `rude_review.jsonl`: 1,500 words, weighted so every kind is covered, plus words with a clean main meaning
+and a rude later one, and likely misses (found clean but with a slang label or a body word). Put it next to your save
+and start `python tierlist.py --review-rude`. A window goes through the words one by one, showing the main meaning
+and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 7 set the selected meaning's
+kind (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur), S says whether the whole word should be smeared,
+Enter goes to the next word and Backspace goes back. These keys can be changed in Keyboard shortcuts, which shows
+them only while the review is open. The answers are saved after every word, to `rude_review_answers.jsonl` beside
+the review file. Starting again carries on where you stopped. `python tools/measure_rudeness.py answers --show 40`
+scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never
+reads them.
 
 ```mermaid
 flowchart TB

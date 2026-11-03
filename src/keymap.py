@@ -15,7 +15,9 @@ F1...), and the other five follow (place_keys()).
 import json
 
 GROUPS = (("all", "Everywhere"), ("place", "Place new words"), ("compare", "While comparing"),
-          ("duel", "Duels (Refine, Boundary, Conflicts)"), ("browse", "Browse / edit"))
+          ("duel", "Duels (Refine, Boundary, Conflicts)"), ("browse", "Browse / edit"),
+          ("review", "Review rude meanings (--review-rude)"))
+DEV_GROUPS = ("review",)         # shown in Keyboard shortcuts only while the program was started for them
 GROUP_NAMES = dict(GROUPS)
 
 # id, group, label, default keys (at most MAX_KEYS)
@@ -41,6 +43,18 @@ ACTIONS = (
     ("tie", "duel", "Tie", ["Down", "t"]),
     ("skip", "duel", "Skip pair", ["s"]),
     ("unplace", "browse", "Unplace the selected word", ["Delete"]),
+    ("review_clean", "review", "Clean", ["1"]),
+    ("review_clinical", "review", "Clinical", ["2"]),
+    ("review_crude", "review", "Crude", ["3"]),
+    ("review_swear", "review", "Swear word", ["4"]),
+    ("review_insult", "review", "Insult", ["5"]),
+    ("review_sexual", "review", "Sexual", ["6"]),
+    ("review_slur", "review", "Slur", ["7"]),
+    ("review_up", "review", "Previous meaning", ["Up"]),
+    ("review_down", "review", "Next meaning", ["Down"]),
+    ("review_whole", "review", "Smear the whole word", ["s"]),
+    ("review_next", "review", "Next word", ["Return"]),
+    ("review_back", "review", "Back one word", ["BackSpace"]),
 )
 MAX_KEYS = 3
 GROUP_OF = {a: g for a, g, _l, _k in ACTIONS}
