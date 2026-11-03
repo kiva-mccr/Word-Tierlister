@@ -241,6 +241,21 @@ class Client:
     def folder(self):
         return self.get(f"/rest/config/folders/{FOLDER_ID}")
 
+    def up_to_date(self):
+        """The names of the linked devices, connected now, that have everything in the sync folder this one has
+        (Syncthing's completion for them: 100%, nothing needed), once this device has finished looking at the
+        folder (idle: a file just written has been seen). [] if none, or still busy."""
+        state = (self.get("/rest/db/status", folder=FOLDER_ID) or {}).get("state")
+        if state != "idle":
+            return []
+        out = []
+        for d in self.devices():
+            if d["connected"] and d["shares"]:
+                got = self.get("/rest/db/completion", folder=FOLDER_ID, device=d["id"]) or {}
+                if got.get("completion") == 100 and not got.get("needItems") and not got.get("needDeletes"):
+                    out.append(d["name"])
+        return out
+
     # ---- changes ------------------------------------------------------------------------------------------------
     def _defaults(self, kind):
         return dict(self.get(f"/rest/config/defaults/{kind}") or {})

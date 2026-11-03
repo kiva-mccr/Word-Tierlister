@@ -29,7 +29,7 @@ from problems import STOPPED_MESSAGE
 from saves import user_data_dir
 from startup import run_with_progress
 from theme import PALETTE
-from widgets import StyledDialog
+from widgets import LinkButton, StyledDialog, Tooltip
 
 TITLE = "Sync with other devices"
 INTRO = ("Keeps your tier list the same on your other computers. It uses Syncthing, a free program that copies a "
@@ -65,6 +65,10 @@ def _ago(when, now=None):
     return time.strftime("%d %b %Y, %H:%M", time.localtime(when))
 
 
+HIDDEN_CHAR = "\u2022"            # (the device code, hidden: Copy still copies the real one)
+NEVER_SYNCED = "Never synced yet. Your changes are ready; they go across once another device connects."
+
+
 class AutoSync:
     """Keeps the save in step with the other devices' sync files while the program runs (see the module's note)."""
     FIRST_MS = 4000               # the first look, once the window is up
@@ -78,6 +82,9 @@ class AutoSync:
         self.written = None       # store.version when this device's file was last written
         self.wrote_at = 0.0
         self.working = False
+        self.sent = None          # when this device's file was last written and no other device has confirmed it yet
+        self.asking = False       # asking Syncthing whether another device has it (on a worker thread)
+        self.connect = st.connect # (how Syncthing is reached; tests pass a fake)
         self.listeners = []       # called after each round (the open dialog shows when it last synced)
         if start:
             app.root.after(self.FIRST_MS, self._tick)
@@ -122,6 +129,8 @@ class AutoSync:
                 self.start_syncthing()
             if self.folder and self.auto:
                 self.sync()
+            if self.folder and self.sent is not None:
+                self.confirm()
         finally:
             self.app.root.after(self.CHECK_MS, self._tick)
 
@@ -183,7 +192,10 @@ class AutoSync:
         if got["wrote"]:
             self.written, self.wrote_at = version, time.time()
         self.seen.update(got["bad"])
+        if got["wrote"]:
+            self.sent = time.time()
         files = [f for f in got["files"] if not f[2]["device"].startswith(self.machine + "-")]
+        got["answered"] = sorted({f[2]["name"] for f in files})
         self.seen.update((p, v) for p, v, data, _ in got["files"] if data["device"].startswith(self.machine + "-"))
         self._fold(files, got, {"words": 0, "names": []}, None, then)
 
@@ -224,8 +236,7 @@ class AutoSync:
         self.working = False
         words, names = total["words"], total["names"]
         if got["files"] or got["wrote"] or got["errors"]:
-            self.store.set_meta("sync_last", json.dumps({"when": time.time(), "from": sorted(set(names)),
-                                                         "errors": got["errors"][-3:]}))
+            self._record(got["answered"], got["errors"][-3:])
         if words or names:
             self.app.after_external_change()
             what = f"{words:,} word{'s' if words != 1 else ''}" if words else "the anchors"
@@ -234,6 +245,51 @@ class AutoSync:
             f()
         if then:
             then()
+
+    def _record(self, answered, errors=None):
+        """Note a round in the save (meta sync_last). Only an answer from another device counts as synced (asked
+        for: writing this device's own file is not): its file read here, or Syncthing saying it has this one's
+        (`confirm`). `errors`: this round's problems (None: keep the ones noted)."""
+        try:
+            last = json.loads(self.store.get_meta("sync_last", "") or "{}")
+        except ValueError:
+            last = {}
+        if not last.get("with"):          # (made before an answer was needed: never synced)
+            last = {"errors": last.get("errors") or []}
+        if answered:
+            last.update(when=time.time(), **{"with": sorted(answered)})
+            self.sent = None
+        if errors is not None:
+            last["errors"] = errors
+        self.store.set_meta("sync_last", json.dumps(last))
+
+    def confirm(self):
+        """After this device wrote its file: ask Syncthing (on a worker thread) whether a linked device has it all
+        now; if one has, that is a sync with it, even when nothing came back."""
+        if self.asking or self.store.closed:
+            return
+        self.asking = True
+        out = queue.Queue()
+
+        def work():
+            try:
+                out.put(self.connect(start_it=False).up_to_date())
+            except Exception:                    # (Syncthing not running or busy: asked again at the next look)
+                out.put([])
+
+        def collect():
+            try:
+                names = out.get_nowait()
+            except queue.Empty:
+                self.app.root.after(200, collect)
+                return
+            self.asking = False
+            if names and not self.store.closed and self.sent is not None:
+                self._record(names)
+                for f in list(self.listeners):
+                    f()
+        threading.Thread(target=work, daemon=True).start()
+        collect()
 
     def flush(self):
         """Closing: write this device's file one last time if anything changed since (on this thread: quick, and
@@ -248,18 +304,18 @@ class AutoSync:
             pass
 
     def last(self):
-        """What the dialog says about the last round: "Last synced 3 min ago (from laptop)" or None."""
+        """What the dialog says about syncing: "Last synced 3 min ago with laptop." once another device has answered,
+        NEVER_SYNCED until then; the last round's problem under it."""
         try:
             got = json.loads(self.store.get_meta("sync_last", "") or "{}")
         except ValueError:
-            return None
-        if not got.get("when"):
-            return None
-        text = f"Last synced {_ago(got['when'])}"
-        if got.get("from"):
-            text += f", with changes from {', '.join(sorted(set(got['from'])))}"
+            got = {}
+        if got.get("when") and got.get("with"):
+            text = f"Last synced {_ago(got['when'])} with {', '.join(got['with'])}."
+        else:
+            text = NEVER_SYNCED
         if got.get("errors"):
-            text += ".\n" + got["errors"][-1]
+            text += "\n" + got["errors"][-1]
         return text
 
 
@@ -464,9 +520,18 @@ class SyncDialog:
                                             ("Other device", self.paste, "Link", self.link_pasted)):
             row = self._row(top=4)
             ttk.Label(row, text=label, font=small, width=12).pack(side="left")
-            entry = ttk.Entry(row, textvariable=var, width=width, font=small,
-                              state="readonly" if var is self.code else "normal")
+            entry = ttk.Entry(row, textvariable=var, width=width, font=small, style="Code.TEntry",
+                              state="readonly" if var is self.code else "normal")    # (the style: room for the eye;
+            #  both boxes, so they line up)
             entry.pack(side="left")
+            if var is self.code:                   # (asked for: hidden until the eye inside the box is clicked)
+                self.code_entry = entry
+                entry.configure(show=HIDDEN_CHAR)
+                self.eye = LinkButton(entry, "eye", self.toggle_code, size=max(12, small.metrics("linespace")),
+                                      bg=PALETTE["surface"])
+                self.eye.place(relx=1.0, rely=0.5, x=-4, anchor="e")
+                self.eye_note = "Show the code"
+                Tooltip(self.eye, lambda e: self.eye_note)
             dlg.button(button, command, row=row).config(font=small)
             if var is self.paste:
                 entry.bind("<Return>", lambda e: (self.link_pasted(), "break")[1])
@@ -477,6 +542,14 @@ class SyncDialog:
     def _forget_listener(self, event, sync):
         if event.widget is self.dlg.win and self.show_last in sync.listeners:
             sync.listeners.remove(self.show_last)
+
+    def toggle_code(self):
+        """The eye: show this device's code, or hide it again (an open eye shows it, a closed one hides it)."""
+        hidden = self.code_entry.cget("show") != ""
+        self.code_entry.configure(show="" if hidden else HIDDEN_CHAR)
+        self.eye.icon = "eye_shut" if hidden else "eye"
+        self.eye_note = "Hide the code" if hidden else "Show the code"
+        self.eye.refresh()
 
     def copy(self):
         self.dlg.win.clipboard_clear()
@@ -593,7 +666,7 @@ class SyncDialog:
         if not self.dlg.alive() or not hasattr(self, "last"):
             return
         sync = getattr(self.app, "autosync", None)
-        text = (sync.last() if sync else None) or "Not synced yet."
+        text = (sync.last() if sync else None) or NEVER_SYNCED
         if not self.auto_var.get():
             text += "\nAutomatic syncing is off: only Sync now exchanges changes."
         self.last.config(text=text)

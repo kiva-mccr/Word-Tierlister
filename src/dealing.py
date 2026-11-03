@@ -21,7 +21,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 
-from constants import CENSOR_CAVEAT_LINE, KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
+from constants import CENSOR_CAVEAT_LINE, KIND_NOTE_EXTRA, KIND_NOTES, KINDS, RUDE_LABELS
 from obscene import CENSORABLE, RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
@@ -29,8 +29,6 @@ from theme import PALETTE, TIER_COLORS
 from widgets import RoundButton, ShapeCard, SmearToggle, StyledDialog, Tooltip
 
 CENSOR_NOTE = "blurred, except on hover"
-SMEAR_ON = "{kind}: smeared while censoring. Click to show them plainly."
-SMEAR_OFF = "{kind}: shown plainly, even while censoring. Click to smear them."
 
 
 class DealDialog:
@@ -194,11 +192,9 @@ class DealDialog:
             count = ttk.Label(box, text=f"{counts[k]:,}", foreground=PALETTE["muted"])
             count.grid(row=r, column=c + 1, sticky="e", padx=(0, 8))
             if k in self.smear_vs:           # (a censor button beside each kind; asked for: OB-7, OB-8)
-                label = RUDE_LABELS[k]
-                self.smear_btns[k] = SmearToggle(box, self.smear_vs[k], note=lambda e, k=k, label=label: (
-                    SMEAR_ON if self.smear_vs[k].get() else SMEAR_OFF).format(kind=label))
+                self.smear_btns[k] = SmearToggle(box, self.smear_vs[k])      # (no hover note: asked for)
                 self.smear_btns[k].grid(row=r, column=c + 2, sticky="w", padx=(0, 32 if self.first else 20))
-            note = KIND_NOTES[k] + "\n" + KIND_NOTE_RUDE
+            note = KIND_NOTES[k]             # (only what the kind holds: asked for)
             self.kind_tips[RUDE_LABELS[k]] = [Tooltip(w, lambda e, t=note: t, font=font("body"), wrap=wrap)
                                               for w in (tick, count)]
             self.kind_ticks[RUDE_LABELS[k]] = tick

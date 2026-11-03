@@ -83,6 +83,8 @@ def apply_ttk_style(root):
                         selectforeground=P["text"])
         style.map(kind, bordercolor=[("focus", P["accent"])],
                   lightcolor=[("focus", P["accent"])], darkcolor=[("focus", P["accent"])])
+    # a box with a small icon inside its right end (the sync window's hidden device code and its eye, SY-2)
+    style.configure("Code.TEntry", padding=(5, 5, 28, 5))
 
     style.configure("Treeview", background=P["surface"], fieldbackground=P["surface"],
                     foreground=P["text"], borderwidth=0, relief="flat", rowheight=28)

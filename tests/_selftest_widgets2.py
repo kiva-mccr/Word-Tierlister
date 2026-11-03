@@ -887,7 +887,7 @@ holder.destroy()
 # ---- SmearToggle: "ab" smeared while its variable is True, plain while False; a click or Space flips it
 from widgets import SmearToggle
 holder = tk.Toplevel(root); var = tk.BooleanVar(value=True)
-st = SmearToggle(holder, var, note=lambda e: "note"); st.pack(); update()
+st = SmearToggle(holder, var); st.pack(); update()
 assert st.find_withtag("smear") and st.winfo_reqwidth() > st.winfo_reqheight() > 0
 st.event_generate("<ButtonRelease-1>", x=3, y=3); update()
 assert var.get() is False and not st.find_withtag("smear")
