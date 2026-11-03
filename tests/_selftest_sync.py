@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """Syncing between devices (SY-1): the Store's stamps and apply_sync, the sync files (syncfiles.py), Syncthing's side
 (syncthing_api.py, against a pretend Syncthing), AutoSync between two saves, and File > Sync with other devices."""
-import _tkinter, gzip, io, json, os, sqlite3, sys, tempfile, threading, time, urllib.error
+import _tkinter, gzip, io, json, os, sqlite3, sys, tempfile, threading, time, urllib.error, urllib.parse
 import tkinter as tk
 
 import syncfiles, syncthing_api as st
@@ -213,6 +213,7 @@ class FakeSyncthing:
     def __init__(self, me):
         self.me, self.folders, self.devices = me, {}, {me: {"deviceID": me, "name": "this"}}
         self.pending, self.connected, self.discovered, self.log = {}, set(), {}, []
+        self.state, self.completion = "idle", {}          # (the folder's scan state; each device's completion)
 
     def __call__(self, req, timeout):
         method, url = req.get_method(), req.full_url
@@ -258,6 +259,10 @@ class FakeSyncthing:
             return self.discovered
         if path == "/rest/db/scan":
             return {}
+        if path == "/rest/db/status":
+            return {"state": self.state}
+        if path == "/rest/db/completion":
+            return self.completion.get(urllib.parse.parse_qs(query)["device"][0], {"completion": 0, "needItems": 3})
         return None
 
 
@@ -306,6 +311,7 @@ for opener, why in ((refuse, "refused it (403: CSRF Error)"), (down, "could not 
 assert not st.Client("http://x:1", "KEY", opener=down).ping()
 
 # ---- AutoSync: two saves, one folder, both ways ----------------------------------------------------------------------
+import syncdialog
 from syncdialog import AutoSync, SyncDialog
 root = tk.Tk(); root.withdraw(); init_fonts(root); apply_ttk_style(root)
 
@@ -395,11 +401,33 @@ assert calls == [1]
 one.place("cat", 0); one.place("dog", 2)
 assert s1.sync(force=True); settle(s1)
 assert os.path.exists(os.path.join(share, s1.device() + ".wtsync")) and s1.written == one.version
+# writing its own file is not a sync (asked for): never synced until another device answers
+assert s1.last() == syncdialog.NEVER_SYNCED and s1.sent is not None
 assert not s1.sync(force=True)                                    # (nothing changed: nothing to do)
 assert s2.sync(); settle(s2)
 assert two.get_word("cat")["tier"] == 0 and two.get_word("dog")["tier"] == 2
 assert app2.refreshed == 1 and app2.flashes[-1] == f"Synced 2 words from {syncfiles.device_name()}"
-assert "Last synced just now" in s2.last()
+assert s2.last() == f"Last synced just now with {syncfiles.device_name()}." and s2.sent is None
+assert s1.last() == syncdialog.NEVER_SYNCED                       # (s1 has heard nothing back yet)
+# ... or Syncthing says a linked device has everything this one wrote
+cfake = FakeSyncthing(ID1)
+cfake.devices[ID2] = {"deviceID": ID2, "name": "laptop"}
+cfake.folders[st.FOLDER_ID] = {"id": st.FOLDER_ID, "devices": [{"deviceID": ID1}, {"deviceID": ID2}]}
+s1.connect = lambda start_it=True: st.Client("http://127.0.0.1:8384", "KEY", opener=cfake)
+def confirmed(sync):
+    sync.confirm(); end = time.time() + 10
+    while sync.asking:
+        pump("asking Syncthing"); time.sleep(0.01)
+        assert time.time() < end, "Syncthing was never answered"
+confirmed(s1); assert s1.last() == syncdialog.NEVER_SYNCED       # (laptop not connected)
+cfake.connected.add(ID2); confirmed(s1); assert s1.last() == syncdialog.NEVER_SYNCED   # (it still needs files)
+cfake.completion[ID2] = {"completion": 100, "needItems": 0}; cfake.state = "scanning"
+confirmed(s1); assert s1.last() == syncdialog.NEVER_SYNCED       # (a file just written may not be seen yet)
+cfake.state = "idle"; confirmed(s1)
+assert s1.last() == "Last synced just now with laptop." and s1.sent is None
+# an old save's note from before an answer was needed reads as never synced
+two.set_meta("sync_last", json.dumps({"when": time.time(), "from": [], "errors": []}))
+assert s2.last() == syncdialog.NEVER_SYNCED
 time.sleep(0.01); two.place("cat", 4)
 assert s2.sync(force=True); settle(s2)                            # (writes its own; the other's is seen already)
 assert s1.sync(); settle(s1)
@@ -494,6 +522,11 @@ assert len(asks) == n + 1                                         # (asked once:
 assert fake.folders[st.FOLDER_ID]["path"] == os.path.join(TMP, "dialog-sync") == one.get_meta("sync_folder")
 assert os.path.exists(os.path.join(TMP, "dialog-sync", ".stignore"))
 assert "None yet." in texts(d.devices) and d.auto_var.get()      # (auto-sync on to start with)
+# the code is hidden (asked for): the eye inside the box shows it and the closed eye hides it; Copy copies it hidden
+assert d.code_entry.cget("show") == syncdialog.HIDDEN_CHAR and d.eye.icon == "eye" and d.eye_note == "Show the code"
+assert d.eye.winfo_manager() == "place" and d.eye.master is d.code_entry
+d.toggle_code(); assert d.code_entry.cget("show") == "" and d.eye.icon == "eye_shut" and d.eye_note == "Hide the code"
+d.toggle_code(); assert d.code_entry.cget("show") == syncdialog.HIDDEN_CHAR and d.eye.icon == "eye"
 d.copy(); assert root.clipboard_get() == ID1
 # pasting a wrong code says so; a right one links
 d.paste.set("hello"); d.link_pasted(); assert "not a device code" in d.link_msg.cget("text")
@@ -514,7 +547,7 @@ d.auto_var.set(False); d.toggle_auto()
 assert one.get_meta("sync_auto") == "0" and "only Sync now" in d.last.cget("text")
 d.auto_var.set(True); d.toggle_auto()
 d.sync_now(); settle(s1); root.update()
-assert d.last.cget("text").startswith(("Last synced", "Not synced")) and "stopped" not in d.last.cget("text"), \
+assert d.last.cget("text").startswith(("Last synced", "Never synced")) and "stopped" not in d.last.cget("text"), \
     d.last.cget("text")
 d.dlg.close(); root.update()
 assert d.show_last not in s1.listeners                            # (a closed dialog is not told any more)

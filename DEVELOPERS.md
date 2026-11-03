@@ -727,6 +727,9 @@ File > Sync with other devices (`src/syncdialog.py`) keeps the list the same on 
   changing, and once more on closing. Files are read on a worker thread and folded in 1,000 words a step, so a
   first sync of a million words never freezes the window; later rounds read only what changed since (`sync_marks`).
   Nothing syncs while `App.busy` (a reshuffle).
+- Only an answer from another device counts as synced (SY-2): its file read here, or Syncthing reporting that a
+  connected linked device has everything this one wrote (`Client.up_to_date`: `/rest/db/completion` at 100% once
+  the folder is idle; `AutoSync.confirm`). Until then the window says "Never synced yet."
 - `src/syncthing_api.py` finds Syncthing, starts it (and at log-in once the user agrees: systemd, an autostart
   file, a Startup shortcut or a LaunchAgent), and uses its local REST API to share the folder and link devices.
   Syncthing is an unticked option in the install window, and the sync window offers to install it first when it is

@@ -703,6 +703,18 @@ def _ring(cx, cy, outer, inner, n=24):
                   for k in range(n, -1, -1)]
 
 
+def _arc(x0, x1, cy, half, up=True, n=16):
+    """One arc of an almond from x0 to x1 at height cy, bulging `half` up (or down)."""
+    return [(x0 + (x1 - x0) * k / n, cy - half * math.sin(math.pi * k / n) * (1 if up else -1)) for k in range(n + 1)]
+
+
+def _disc(cx, cy, r, n=20):
+    return [(cx + r * math.cos(2 * math.pi * k / n), cy + r * math.sin(2 * math.pi * k / n)) for k in range(n)]
+
+
+_EYE_OUT = _arc(0.8, 15.2, 8, 6.2) + _arc(15.2, 0.8, 8, 6.2, up=False)[1:]
+_EYE_IN = _arc(2.6, 13.4, 8, 4.4) + _arc(13.4, 2.6, 8, 4.4, up=False)[1:]
+
 # little filled icons on a 16 x 16 grid, one style (UI-42's file picker, M-8); each is a list of polygons that
 # do not overlap
 ICONS = {
@@ -724,6 +736,13 @@ ICONS = {
     "external": [[(1.5, 3.5), (7.0, 3.5), (7.0, 5.2), (3.2, 5.2), (3.2, 12.8), (10.8, 12.8), (10.8, 9.0), (12.5, 9.0),
                   (12.5, 14.5), (1.5, 14.5)],
                  [(9.0, 1.5), (14.5, 1.5), (14.5, 7.0), (12.6, 5.1), (7.6, 10.1), (5.9, 8.4), (10.9, 3.4)]],
+    # an open eye (show the hidden device code, SY-2): an almond ring, its hole traced back, and the pupil in it
+    "eye": [_EYE_OUT + [_EYE_OUT[0]] + _EYE_IN[::-1] + [_EYE_IN[-1]], _disc(8, 8, 2.6)],
+    # a closed eye (hide it again; picked over a slashed eye as cuter): the lower lid as a band, three lashes
+    "eye_shut": [_arc(0.8, 15.2, 6.0, 5.4, up=False) + _arc(13.6, 2.4, 6.0, 3.6, up=False),
+                 [(7.2, 11.6), (8.8, 11.6), (8.8, 14.6), (7.2, 14.6)],
+                 [(3.2, 9.6), (4.6, 10.4), (3.0, 13.4), (1.6, 12.6)],
+                 [(12.8, 9.6), (11.4, 10.4), (13.0, 13.4), (14.4, 12.6)]],
 }
 
 

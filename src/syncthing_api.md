@@ -19,7 +19,7 @@ The module docstring has the details; this page is the map.
 - `clean_id`: A device ID as typed or pasted: capitals, dashes in place, spaces and line breaks gone.
 - `short_id`: The first group of a device ID: what Syncthing itself shows to tell devices apart.
 - `Client`: Syncthing's local API (REST): every call sends the key; an https API's own certificate is accepted, since the address is this computer's.
-  - methods: call, get, ping, my_id, devices, pending_devices, nearby_devices, folder, ensure_folder, link, unlink, dismiss, rescan
+  - methods: call, get, ping, my_id, devices, pending_devices, nearby_devices, folder, up_to_date, ensure_folder, link, unlink, dismiss, rescan
 - `start`: Start Syncthing in the background, on its own (it keeps running when Word Tierlister closes).
 - `connect`: A Client for this computer's Syncthing, started first if it is not running (`start_it`).
 - `autostart_path`: Where the start-at-log-in entry goes when there is no service to enable: Linux's autostart folder, the Windows Startup folder, macOS's LaunchAgents.
