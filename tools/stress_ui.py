@@ -89,8 +89,21 @@ def browse(app, rnd):
         bw.close()
 
 
+def steady(root, app, pump):
+    """The window's size and the text size once everything has settled (Z-1: a tab, the definitions pane or a
+    comparison never changes them)."""
+    app.anim.finish_all()
+    end = time.time() + 0.2                    # (a resize's re-grow waits 80 ms, a move's monitor check 300 ms)
+    while time.time() < end:
+        pump(1)
+    app.anim.finish_all()
+    pump(2)
+    from fonts import font
+    return root.winfo_width(), root.winfo_height(), font("body").cget("size"), font("word").cget("size")
+
+
 def act(root, app, store, rnd, pump):
-    """One random action."""
+    """One random action; for one that must change no size, the sizes before it."""
     r = rnd.random()
     if r < 0.45:
         ks, state = rnd.choice(KEYS)
@@ -99,8 +112,10 @@ def act(root, app, store, rnd, pump):
         app.on_key(e)
         app.on_key_release(e)
     elif r < 0.52:
+        before = steady(root, app, pump)
         app.mode_var.set(rnd.choice(sorted(app.mode_switch.visible)))
         app.on_mode_change()
+        return before
     elif r < 0.57:
         root.geometry(f"{rnd.randrange(700, AREA[2])}x{rnd.randrange(500, AREA[3])}")
     elif r < 0.60:
@@ -114,7 +129,9 @@ def act(root, app, store, rnd, pump):
             if getattr(w, "styled_dialog", False):
                 w.event_generate("<Escape>")
     elif r < 0.74:
-        app.toggle_defs()
+        before = steady(root, app, pump)
+        rnd.choice([app.toggle_defs, app.start_compare])()
+        return before
     elif r < 0.77:
         app.undo()
     elif r < 0.80:
@@ -143,11 +160,16 @@ def main(argv=None):
             time.sleep(0.005)
     step = 0
     for step in range(args.steps):
+        before = None
         try:
-            act(root, app, store, rnd, pump)
+            before = act(root, app, store, rnd, pump)
         except Exception:
             errors.append(f"step {step}: " + traceback.format_exc()[-1500:])
         pump(rnd.randrange(1, 4))
+        if before is not None:
+            after = steady(root, app, pump)
+            if after != before:
+                bad.append(f"step {step}: a tab, the pane or a comparison changed the sizes: {before} -> {after}")
         w, h = root.winfo_width(), root.winfo_height()
         if w > AREA[2] + 2 or h > AREA[3] + 2:
             bad.append(f"step {step}: the window is {w}x{h}, bigger than the screen ({AREA[2]}x{AREA[3]})")

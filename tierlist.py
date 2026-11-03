@@ -748,6 +748,19 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           kind), and words.smear_extra keeps a word's kinds when that reading smears it whole (partial index
 #           idx_words_extra); Store.censored_words adds those while Clinical or Insult is censored. "Obscene words"
 #           and dealing still come from the four kinds alone ("penis", "idiot" stay ordinary nouns). RUDENESS_VERSION 14.
+# [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
+#           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
+#           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
+#           anchors): the text stepped down, the window grew, or the contents shrank and stayed so (comparing raised
+#           the size counted as normal). Now App._worst_size measures the tallest view (comparing, or a duel with its
+#           drop-down, a two-line context and two of the longest words at 7 pt), room for a message and the pane at
+#           3 lines, open or not; that sets the text size and the minimum size, per screen and zoom. Only a zoom,
+#           maximizing, another monitor or a resize by hand re-fits. The pane fills the room the view leaves
+#           (App._fill_pane, eased) and scrolls the rest (UI-56's growing pane and F-28's easing taller are gone: the
+#           window never grows for it). Each monitor keeps its own zooms (meta monitor_zooms; a new one starts from the
+#           last chosen) and the window that stops on another monitor shows that one's (App._check_monitor, 300 ms
+#           after it stops moving), resized only if it is bigger than that monitor. The window opens with room for
+#           4 lines more. Cost: a 1366 x 768 laptop shows 90% at most (100% before, with the pane shut).
 # [x] D-1   Two READMEs (asked for: a friendly one with pictures for people, a coder one with graphs "legit
 #           useful"; outline, graphs and the rudeness map shown first). README.md: what it does, downloads,
 #           each feature with a screenshot (docs/images, from the real window over a pretend save), keys.
@@ -1263,7 +1276,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Built: Bookshelf.mark(spines) draws a small soft lilac triangle over each (a band above the shelf
 #           holds them; a mark rises with its spine on hover); Store.spine_of(word) finds the spine from the
 #           word's rank. Cleared in Place new words and when a tab has no duel.
-# [x] UI-56 The definitions pane fits its senses (asked for: "tries to open so all the definitions are visible; if
+# [x] UI-56 (Replaced by Z-1: the pane fills its room.) The definitions pane fits its senses (asked for: "tries to open so all the definitions are visible; if
 #           it can't due to space limitations it shouldn't"). DefinitionDrawer.lines_needed() counts the text's
 #           pixels at its width; App._fit_defs raises the pane's lines to that (9 usual, at most 40) and refits:
 #           the window grows if the screen has room, else _fit_window gives the pane the lines that fit (before
@@ -1785,7 +1798,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           code). Also tried here: waiting, folded, for a slow window manager to grow the window first; under mutter
 #           Tk always learned the new size at once, so it changed nothing and was left out. A window that must grow
 #           for the pane may still show GNOME's compositor resizing it a frame late (seen once in seven).
-# [x] F-28 Asked for: a longer definition made the open pane jump to its new height; it now eases there like opening
+# [x] F-28 (Replaced by Z-1.) Asked for: a longer definition made the open pane jump to its new height; it now eases there like opening
 #           (the same strategy as F-22 / F-27, which the user confirmed worked): App._fit_defs holds the pane at its
 #           height (DefinitionDrawer.hold), fits the window counting it at its new one, gives it what the window grew
 #           by, then opens it the rest of the way. Recorded frame by frame under openbox and mutter: in a tall or

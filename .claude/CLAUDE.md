@@ -63,9 +63,12 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
   line spacing is tightened by tools/make_typefaces.py (the layout is measured in lines). Text contrast about 7:1,
   the ink on any tier colour at least 4.5:1 (UI-76, `theme.contrast`). The dark look is Dusk (UI-77).
 - Window sizes come from `sizing.py` (screen- and content-aware). Measure text instead of assuming dpi.
-  Main window: what shows = min(zoom, biggest size that fits the screen, in 0.1 steps) x grow (window
-  bigger than normal, UI-25); re-fit from the zoom on every layout change, never ratchet down. Measure
-  minimum sizes at grow 1. Main and Browse zooms are separate and saved; the main window keeps another for when
+  Main window: what shows = min(zoom, biggest size at which the worst case fits the screen, in 0.1 steps) x grow
+  (window bigger than normal, UI-25). Z-1 (asked for): the fit measures every view at once (`App._worst_size`:
+  comparing, a duel with its drop-down, the pane at 3 lines open or not) and runs only on a zoom, maximize, another
+  monitor or a resize by hand; a tab, the pane, a comparison or a definition only refill the pane
+  (`App._fill_pane`). Never re-fit for a layout change. Measure minimum sizes at grow 1. Main and Browse zooms are
+  separate and saved; each monitor keeps its own (meta `monitor_zooms`); the main window keeps another for when
   it is maximized (UI-57: `zoom_max`, brought back on maximize / restore), never below the usual one (UI-69).
 - Test speed on a big save (300k-1M words) for anything run per duel or per refresh (`tools/speed_check.py`
   under xvfb-run: a 1M save, dense and sparse; under ~40 ms an action, ~200 ms a Browse sort): a query that sorts a
@@ -154,7 +157,9 @@ F-46 (words new to this list from a sync or an Import get the hand-picked list's
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
-D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
+Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes the window or its text; the
+definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
+now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
@@ -167,6 +172,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 ## Known gaps
 - UI-73's private font loading works on Linux (fontconfig) and on the macOS runners (CoreText, T-18: it must run before
   the first Tk); the Windows loader (AddFontResourceEx, FR_PRIVATE) never ran; if it fails the old installed fonts stand in.
+- Z-1's monitor check (300 ms after the window stops moving) was only faked here (one Xvfb screen): confirm with
+  two real monitors, and on Windows that a monitor with another scaling is noticed.
 - The pane's dip (F-23, F-27) is fixed (the user confirmed). A window that must grow for the pane can still show
   GNOME's compositor resizing it a frame late, and the window's own resize is one step (F-28).
 - The Windows console hand-off (ST-9: pythonw.exe) works on real Windows (confirmed by the user); the FreeConsole

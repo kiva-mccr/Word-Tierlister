@@ -2048,7 +2048,6 @@ class DefinitionDrawer(tk.Frame):
         self._columns = 1
         self._shown = False
         self._opening = None              # (from, to) pixels while it eases open (give)
-        self._floor, self._last_q, self._frame, self._shown_h = (0, 0.0), 0.0, None, 0
 
     COLUMN_CHARS = 80                     # the one column's width in characters; two share it (the window's size
                                           # never changes for them)
@@ -2103,7 +2102,7 @@ class DefinitionDrawer(tk.Frame):
         return int(self.text.cget("height"))
 
     def line_height(self):
-        """Pixels a line adds to its height (App._fit_lines works out other line counts with it)."""
+        """Pixels a line adds to its height (App._pane_lines works out the lines that fit with it)."""
         return max(1, self._body.metrics("linespace"))
 
     def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None, link=None):
@@ -2155,46 +2154,20 @@ class DefinitionDrawer(tk.Frame):
         self._folded = True
         super().configure(height=1, width=self._inner.winfo_reqwidth())
 
-    def lines_needed(self):
-        """How many lines tall the text must be to show all of it at its present width (0 before it is laid
-        out). Headings and smeared senses are taller than a body line; this counts their pixels."""
-        self.update_idletasks()
-        need = 0
-        for t in self.texts[:self._columns]:        # (two columns: the taller one)
-            if t.winfo_width() <= 1:
-                return 0
-            pixels = t.count("1.0", "end", "update", "ypixels")
-            pixels = pixels[0] if isinstance(pixels, tuple) else pixels
-            need = max(need, -(-int(pixels or 0) // max(1, self._body.metrics("linespace"))))
-        return need
-
     def natural_height(self):
         """The height the contents want (whether or not it is folded right now)."""
         self.update_idletasks()
         self._follow()
         return self._inner.winfo_reqheight() + self._gap
 
-    def give(self, pixels):
-        """The window just grew by `pixels` to make room for it (opening): it takes them on top of the height it has
-        now, in the very layout of the window's new size, and the rest of the slide carries on from there; folded,
-        open() starts there. Taken on top, the page around it never moves (taken as its whole height, its top edge,
-        and the text in it, dropped a little when the window grew after the slide had begun, F-23; given to the
-        page first, the page dropped and slid back up; held before the window had grown, the page jumped up)."""
-        if pixels <= 0:
-            return
-        try:
-            if self._opening:
-                now = max(self._shown_h, self.winfo_height())
-                self._floor = (min(now + pixels, self._opening[1]), self._last_q)
-                self._frame(self._last_q)
-            elif self._folded or self._held:
-                super().configure(height=self.winfo_reqheight() + pixels)
-        except tk.TclError:
-            pass
+    def height_for(self, lines):
+        """Its height with `lines` lines of text (App works out the room it has from one measurement, Z-1)."""
+        self.update_idletasks()
+        return self._inner.winfo_reqheight() + self._gap + (lines - self.lines()) * self.line_height()
 
     @property
     def steady(self):
-        """Open and still: not sliding, held or folded (App._fit_window eases it from here to a new height)."""
+        """Open and still: not sliding, pinned or folded (App._fill_pane eases it from here to a new height)."""
         return self._shown and not (self._sliding or self._folded or self._held)
 
     def ease_from(self, height):
@@ -2218,18 +2191,10 @@ class DefinitionDrawer(tk.Frame):
 
     easing = False                        # (ease_from running: a fit measuring now would count it half-way)
 
-    def hold(self):
-        """Open, about to need more room (a longer definition): keep the height it has while the window is fitted
-        for its new one (what the window grows by goes to it: give); open() then eases it the rest of the way
-        (asked for: it jumped to its new height)."""
-        self.settle()
-        self._held = True
-        self._pin_box(True)
-
     def pin(self):
-        """About to be measured at other heights (App._fit_window tries a line count at a time): keep showing the
-        height it has, so the page never shows the tries (it stuttered switching tabs). Sliding open, it stops where
-        it is and carries on to its new height at unpin() (it slid on to the old one, then jumped)."""
+        """About to change its lines (App._fill_pane, App._fit_window): keep showing the height it has, so the page
+        never shows the change before it eases (it stuttered switching tabs). Sliding open, it stops where it is and
+        carries on to its new height at unpin() (it slid on to the old one, then jumped)."""
         if self._opening is not None and self._anim is not None:
             self._anim.stop(f"drawer{id(self)}")
             self._opening, self._sliding, self._reopen = None, False, True
@@ -2251,7 +2216,7 @@ class DefinitionDrawer(tk.Frame):
 
     def _pin_box(self, on):
         """Keep the box inside at the height it shows, and its scroll bars as they are, while other line counts are
-        tried (pin, hold): left to follow, the box shrank and grew a line at a time and the bars blinked."""
+        set (pin): left to follow, the box shrank and grew a line at a time and the bars blinked."""
         if on == self._pinned:
             return
         self._pinned = on
@@ -2264,17 +2229,17 @@ class DefinitionDrawer(tk.Frame):
 
     @property
     def opening(self):
-        """Sliding open (App._fit_window pins it for the fit, then it eases on to its new height)."""
+        """Sliding open (App._fill_pane pins it to change its lines, then it eases on to its new height)."""
         return self._opening is not None
 
     def open(self):
-        """Ease open from nothing (or the room it was given, give; or, held, the height it has) to the height the
-        contents want (the caller has packed it already)."""
+        """Ease open from nothing (or, pinned, the height it has) to the height the contents want (the caller has
+        packed it already)."""
         self._shown = True
         end = self.natural_height()
         held = self.winfo_reqheight() if self._folded or self._held else 0
         start = min(max(1, held), end)
-        self._opening, self._floor, self._last_q = (start, end), (0, 0.0), 0.0
+        self._opening = (start, end)
         self._folded = self._held = False
         self._pin_box(False)
 
@@ -2300,15 +2265,10 @@ class DefinitionDrawer(tk.Frame):
         self._sliding = True
 
         def frame(p):
-            self._last_q = p
-            floor, q0 = self._floor if self._opening else (0, 0.0)
-            h = a + (b - a) * p if floor <= 0 else floor + (b - floor) * (p - q0) / max(1e-6, 1.0 - q0)
-            self._shown_h = max(1, int(h))
             try:
-                super(DefinitionDrawer, self).configure(height=self._shown_h)
+                super(DefinitionDrawer, self).configure(height=max(1, int(a + (b - a) * p)))
             except tk.TclError:
                 pass
-        self._frame = frame
         if self._anim is None:
             frame(1.0)
             if done:

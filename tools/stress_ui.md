@@ -2,7 +2,7 @@
 
 Random actions on the real main window (keys, tabs, resizes, Browse, dialogs, the definitions pane, undo, censoring) on a throwaway save and a pretend 1366 x 768 screen (F-9). It fails on any error and on a window bigger than the screen. Run it after UI changes that touch layout, fitting or several windows at once.
 
-- **Uses:** `app`, `browser`, `errors`, `sizing`, `sources`, `tierlist`
+- **Uses:** `app`, `browser`, `errors`, `fonts`, `sizing`, `sources`, `tierlist`
 - **Used by:** nothing (run directly)
 - **Tests:** none of its own
 
@@ -12,7 +12,8 @@ The module docstring has the details; this page is the map.
 
 - `setup`: The window on a small pretend screen, over a save with a few placed and a few obscene words (censored).
 - `browse`: (no docstring)
-- `act`: One random action.
+- `steady`: The window's size and the text size once everything has settled (Z-1: a tab, the definitions pane or a comparison never changes them).
+- `act`: One random action; for one that must change no size, the sizes before it.
 - `main`: (no docstring)
 
 ## Rules and pitfalls (fixed before: keep them fixed)
