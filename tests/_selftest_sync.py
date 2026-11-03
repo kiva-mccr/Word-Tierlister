@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """Syncing between devices (SY-1): the Store's stamps and apply_sync, the sync files (syncfiles.py), Syncthing's side
 (syncthing_api.py, against a pretend Syncthing), AutoSync between two saves, and File > Sync with other devices."""
-import gzip, io, json, os, sqlite3, tempfile, time, urllib.error
+import _tkinter, gzip, io, json, os, sqlite3, sys, tempfile, threading, time, urllib.error
 import tkinter as tk
 
 import syncfiles, syncthing_api as st
@@ -313,10 +313,54 @@ class FakeApp:
         self.refreshed += 1
 
 
+# What keeps resizing (on GitHub's Macs root.update() once never returned with the sync window open): every
+# <Configure> is counted with the sizes it brought, and pump() runs the events one at a time, so a loop inside Tk is
+# reported by name instead of hanging the test (a watchdog thread prints the counts if one event never returns).
+RESIZED, PUMPING = {}, [0.0, ""]
+
+
+def _resized(e):
+    count, sizes = RESIZED.get(str(e.widget), (0, set()))
+    sizes.add((e.width, e.height))
+    RESIZED[str(e.widget)] = (count + 1, sizes)
+
+
+def _report():
+    top = sorted(RESIZED.items(), key=lambda kv: -kv[1][0])[:10]
+    return "; ".join(f"{w} x{c} {sorted(sz)[:4]}" for w, (c, sz) in top)
+
+
+def _watchdog():
+    while True:
+        time.sleep(5)
+        if PUMPING[0] and time.time() - PUMPING[0] > 20:
+            sys.stderr.write(f"\nstuck in one Tk event for 20 s ({PUMPING[1]}); resized most: {_report()}\n")
+            sys.stderr.flush()
+            PUMPING[0] = 0.0
+
+
+def pump(what):
+    """root.update(), an event at a time (see RESIZED above)."""
+    start, n = time.time(), 0
+    RESIZED.clear()
+    PUMPING[:] = [time.time(), what]
+    try:
+        while root.tk.dooneevent(_tkinter.ALL_EVENTS | _tkinter.DONT_WAIT):
+            n += 1
+            PUMPING[0] = time.time()
+            assert time.time() - start < 5, f"{what}: Tk kept busy for 5 s ({n} events); resized most: {_report()}"
+    finally:
+        PUMPING[0] = 0.0
+
+
+root.bind_all("<Configure>", _resized, add="+")
+threading.Thread(target=_watchdog, daemon=True).start()
+
+
 def settle(sync):
     end = time.time() + 30
     while sync.working:
-        root.update(); time.sleep(0.01)
+        pump("a sync round"); time.sleep(0.01)
         assert time.time() < end, (f"the sync round never ended: {sync.last()}; threads "
                                    f"{[t.name for t in __import__('threading').enumerate()]}")
 
@@ -392,7 +436,7 @@ def texts(widget):
 def wait_for(cond, what):
     end = time.time() + 10
     while not cond():
-        root.update(); time.sleep(0.01)
+        pump(what); time.sleep(0.01)
         assert time.time() < end, what
 
 
