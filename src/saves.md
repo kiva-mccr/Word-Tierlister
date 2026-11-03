@@ -25,6 +25,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- A Mac app keeps its save, log and downloads in ~/Library/Application Support/Word Tierlister, never beside the .app (F-47: what Mac users expect; /Applications is writable for admins, so the save and a "Word Tierlister source" folder landed there). `find_saves` also looks beside the program, where older versions kept it.
+
 - A Markdown export never overwrites a code file's note (`is_code_note`: tierlist.md beside tierlist.py is tierlist.py's note); App.export saves it as tierlist-export.md instead (F-31).
 - The program was called "Word Tier List" until 1.0.2: `user_data_dir` keeps a data folder under the old name while it is the only one, and the old pointer file (~/.word_tierlist_path) is read until the new one is written. Never drop these, or an old save goes missing.
 - A built program keeps its save beside itself (never in PyInstaller's temporary folder); a read-only folder falls back to the user data folder.

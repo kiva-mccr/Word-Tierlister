@@ -4,7 +4,7 @@ Turning the source into a program and back (T-3, T-6..T-8): the list of source f
 
 - **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
+- **Tests:** `_selftest_build`, `_selftest_folders`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
@@ -26,6 +26,7 @@ The module docstring has the details; this page is the map.
 - `build`: Build the program into `dist` (installing PyInstaller first if needed): its path, or None if it failed.
 - `biggest_parts`: [(package or file, MB before compression)] of the n biggest things PyInstaller packed, from the tables it leaves in its work `folder` (PKG-00.toc: files and...
 - `make_program`: File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next to tierlist.py (replacing an older one), with its manifest...
+- `install_program`: Put the program `out` (just built, maybe on another disk) at `target` without ever leaving none or half of one there (F-47): it is copied in beside the old one first...
 - `give_icon`: Linux: show the program's icon on its file in the file manager (reported: none on Fedora).
 - `clean_env`: A copy of the environment fit for starting the other form, Python or the builder: without what a built program sets for itself, which outlives it and points into its...
 - `start`: Start the program at `path` on its own, not as a child of this window (which then closes); `args`: its command-line options.
@@ -37,11 +38,14 @@ The module docstring has the details; this page is the map.
 - `unpack`: Unpack (or sync) `source` into `target` as plan_unpack says, then record what was unpacked (UNPACKED).
 - `came_from_program`: True if an unpack record (UNPACKED) is of a folder unpacked from the program, not only updated from GitHub.
 - `cleanup_place`: Where a program made from `root` goes when the source is to be cleaned up behind it (asked for: offered whenever the program is made, however the source came here;...
-- `mark_for_removal`: Before the program made from `root` removes it (remove_source): write down the files it may remove there, the source's own (source_files), so a folder that was not...
+- `removable`: {path ("/"): sha256} of the source's own files in `root` that may go when the source is removed (F-47: what a user expects, "anything you added or changed stays"): in...
+- `knows_changes`: True when removing the source in `root` can tell your edits from the source as it came (removable: a git checkout, or a folder with an unpack record); otherwise an...
+- `mark_for_removal`: Before the program made from `root` removes it (remove_source): write down the files it may remove there and their contents (removable), so it removes only those, and...
 - `zip_source`: Pack the source in `root` (source_files, with its folders, under one folder named like `root`) into a zip in `folder`, never over a file there ("name (2).zip", ...).
-- `move_save`: Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...).
+- `move_save`: Move a save file (with its -wal / -shm, its .bak backups, the log beside it and a kept Wiktionary download) into `folder`, never over a file already there (then it is...
 - `remove_source`: Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be closing: on Windows a folder in use cannot be removed, so it...
-- `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source".
+- `default_source_folder`: Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source"; on macOS in Documents (F-47: a Mac app keeps nothing of its own...
+- `program_folder`: The folder the program sits in (on macOS the one holding the .app).
 - `existing_source`: A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from that source: T-6 puts it next to tierlist.py), or a folder...
 - `start_source`: Start tierlist.py in `folder` with `python` (and `args`), on its own (not a child of this program, which then closes).
 - `python_for_source`: A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own Python inside, which cannot run loose source files).
@@ -77,6 +81,10 @@ The module docstring has the details; this page is the map.
 - Moving out of the temporary folders is `shutil.move`, never `os.replace` / `os.rename`: they can be on another disk (reported: "[Errno 18] Invalid cross-device link").
 - Self-update (U-1): `replace_program` renames the running program to `OLD_SUFFIX` and moves the new one in; a failed move puts the old one back. `remove_old_program` (main, frozen only) removes only `<name>.*.old` and `UPDATE_DIR` folders beside the program, retried while the old one closes. `fetch_program` refuses a download shorter than the release says (`size`). macOS unzips with `ditto` (keeps the app's links and signature).
 - A build over `BIG_MB` logs its biggest parts (`biggest_parts`, from PyInstaller's PKG / PYZ tables): what else on the computer got pulled in.
+- F-47 (a review, asked for: "does what a user expects"): removing a source takes only `removable` files, written down with their contents by `mark_for_removal` and removed only while unchanged: in a git checkout what git tracks with no uncommitted change, in an unpacked folder what is unchanged since the unpack, otherwise `source_files`. The dialog says which (`knows_changes`). At the top only `TOP_FILES` ship (found: "my notes.md", a script and the Markdown export were removed and packed into builds). An older window's record (a list, no contents) is still read.
+- A new build goes in through `install_program` (copied in as `.new`, then swapped in by `replace_program`), never "delete the old one, then copy": a failed copy across disks left half a program that "Start it" would run.
+- Downloads into temporary folders are removed afterwards (`sources.update_source`, the Unpack page's `download_dir`): they were left in %TEMP% for good.
+- macOS: `start` uses `open -n` (else, while the old copy of the same app is closing, macOS only brings it to the front and nothing starts); the source goes into ~/Documents (`default_source_folder`), and `existing_source` looks there too. `move_save` takes the log (added to one already there) and a kept Wiktionary download along.
 
 ## Changing it
 

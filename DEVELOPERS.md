@@ -408,9 +408,11 @@ README.md          the user-facing introduction; DEVELOPERS.md is this guide
 
 `tierlist.py` stays at the top on purpose: the save is found "next to the script", so moving or
 replacing the other folders never loses your list. A built program (File > Source & Updates, or `tools/build.py`) keeps it next to
-the program instead (on macOS next to the .app), or, if that folder is read-only, in your user data folder
-(`%APPDATA%\Word Tierlister`, `~/Library/Application Support/Word Tierlister`, `~/.local/share/word-tierlister`);
-either way the save you used last is found again, so switching between the two loses nothing.
+the program instead, or, if that folder is read-only, in your user data folder (`%APPDATA%\Word Tierlister`,
+`~/.local/share/word-tierlister`). A Mac app always keeps it in `~/Library/Application Support/Word Tierlister`
+and unpacks its source into `~/Documents/Word Tierlister source` (F-47: nothing of its own beside it in
+Applications; a save an older version kept beside the .app is still found). Either way the save you used last is
+found again, so switching between the two loses nothing.
 
 ## Files
 
@@ -691,7 +693,15 @@ flowchart TB
   the newest release's source instead of this one; offline or already the newest, it uses what you have.
 - Each form offers the other once on its first start (`tierlist.py`: "Make this a standalone program?"; the
   program unpacks its source beside itself unless a copy is there). Not with `--no-install`.
-- Only the program's own files are ever touched (never a save, its log or a `.venv`). Starting one form closes the
+- Cleaning up behind removes only the source's own files as they came (`standalone.removable`, F-47): in a git
+  checkout the files git tracks with no uncommitted change; in an unpacked folder those unchanged since the unpack;
+  otherwise the source's files (`source_files`; at the top only `TOP_FILES`, so an export or a file of yours stays:
+  a new file at the top must be added there, `_selftest_folders` checks it against git's list).
+  The window writes them down with their contents (`mark_for_removal`) and the new program removes a file only if it
+  is still the same. A new build is copied in beside the old program and swapped in (`install_program`), so a failed
+  copy never leaves none or half of one.
+- Unpacking and updating only ever touch the program's own files (never a save, its log or a `.venv`); downloads go
+  into temporary folders that are removed afterwards. Starting one form closes the
   other, so only one uses the save at a time, with a clean environment (`standalone.clean_env`: never the built
   program's Tcl / Tk folders).
 - Packages the program never uses (matplotlib, Pillow, numpy and the like) are always left out of the build.

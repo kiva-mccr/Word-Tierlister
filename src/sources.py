@@ -84,10 +84,12 @@ class SourceDialog:
         self.release = None                       # the newest release, once the check has found one
         self.checked = False
         self.fetched = None                       # (unpacking) the newer version's source, once downloaded
+        self.download_dir = None                  # the temporary folder it was downloaded into
         form = ("the program, built for this computer" if self.frozen else
                 f"the source code (tierlist.py, in {self.root_dir})")
         self.dlg = StyledDialog(app.root, TITLE, f"Word Tierlister {VERSION}", f"You are running {form}.",
                                 animator=app.anim, wrap_chars=64)
+        self.dlg.win.bind("<Destroy>", lambda e: e.widget is self.dlg.win and self._drop_fetched(), add="+")
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
             self._menu_section()                                            # only until it is in the menu)
@@ -339,6 +341,7 @@ class SourceDialog:
         """"Clean up behind?" (asked for, every time the program is made): "keep", "zip" or "remove", or None when
         the question is closed. Keeping is the default (Enter)."""
         git = os.path.isdir(os.path.join(self.root_dir, ".git"))
+        knows = standalone.knows_changes(self.root_dir)       # (F-47: your edits told from the source as it came)
         here = os.path.realpath(place) == os.path.realpath(self.root_dir)
         where = ("The program goes in this folder, where the source is, and the source's own files can be removed "
                  "from it (or packed into a zip here first). Your save stays here, beside the program."
@@ -347,8 +350,12 @@ class SourceDialog:
         return ask_buttons(
             HEADLINE, "Clean up behind?",
             where + " The program carries its source inside it, and can unpack it again any time. Only the source's "
-            "own files are removed; anything you added stays."
-            + (" This folder is a git checkout: its history (.git) stays too." if git else "")
+            + ("own files are removed, and only as they came: anything you added or changed stays (and so does the "
+               "folder then)." if knows else
+               "own files are removed, even ones you edited (Zip it keeps a copy); anything you added stays.")
+            + " Its Python environment (.venv) and caches go too."
+            + (" This folder is a git checkout: its history (.git) stays"
+               + (", and so do changes not yet committed." if knows else ".") if git else "")
             + "\n\nKeep the source: the program goes next to tierlist.py, and nothing else changes.",
             (("Keep the source", "keep"), ("Zip it", "zip"), ("Remove it", "remove")), parent=self.app.root,
             wrap_chars=62)
@@ -443,15 +450,18 @@ class SourceDialog:
         """Download the newer version's source behind the progress window, then show what unpacking it changes
         (the next "Unpack" does it). Returns True if it was downloaded."""
         release, folder = self.release, tempfile.mkdtemp(prefix="wtl-release-")
+        self.download_dir = folder                # (removed once unpacked or the dialog closes: _drop_fetched)
         try:
             folder = run_with_progress(self.app.root, lambda log: standalone.fetch_source(release, folder, log),
                               title="Downloading the newest version", delay_ms=0, initial_stage="Connecting...",
                               intro=f"Version {release['version']}, from GitHub.")
         except SystemExit as exc:
+            self._drop_fetched()
             if str(exc) != STOPPED_MESSAGE:
                 raise
             return False
         except OSError as exc:
+            self._drop_fetched()
             show_error("Unpack the source code", f"The newest version could not be downloaded:\n{exc}\n\nUntick "
                        "the update to unpack the version you have.", parent=self.dlg.win, headline="Not downloaded")
             return False
@@ -459,6 +469,13 @@ class SourceDialog:
         self._show_plan()
         self._show_update()
         return True
+
+    def _drop_fetched(self):
+        """Remove the newer version's downloaded source from the temporary folder (F-47: it was left there for
+        good), once it is unpacked or the dialog closes."""
+        if self.download_dir:
+            shutil.rmtree(self.download_dir, ignore_errors=True)
+            self.download_dir = None
 
     def unpack(self):
         """Unpack (or sync), then open the folder and offer to start tierlist.py from it. Ticked to update and a
@@ -472,6 +489,7 @@ class SourceDialog:
             show_error("Unpack the source code", f"The source could not be written to {self.target}:\n{exc}",
                        parent=self.dlg.win, headline="Not unpacked")
             return None
+        self._drop_fetched()
         self.dlg.close()
         try:
             standalone.open_folder(self.target)
@@ -541,28 +559,31 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
         plan = said
     else:
         get = fetch or standalone.fetch_source
-        try:
-            folder = _download(app, "Downloading the newest version", release,
-                               lambda log: get(release, tempfile.mkdtemp(prefix="wtl-release-"), log))
-        except OSError as exc:
-            show_error(TITLE, f"The newest version could not be downloaded:\n{exc}", parent=dlg.win,
-                       headline="Not updated")
-            return None
-        if folder is None:
-            return None
-        plan = standalone.plan_unpack(folder, root_dir)
-        if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
-                          f"{standalone.summary(plan)}\n\nIn {root_dir}. Only the program's own files change; "
-                          "your save and anything else there stay as they are. Word Tierlister then starts again from "
-                          "the new source, with the same save.", yes="Update", no="Cancel", parent=dlg.win,
-                          wrap_chars=60):
-            return None
-        try:
-            standalone.unpack(folder, root_dir, plan, from_program=False)
-        except OSError as exc:
-            show_error(TITLE, f"The source could not be updated in {root_dir}:\n{exc}", parent=dlg.win,
-                       headline="Not updated")
-            return None
+        folder = tempfile.mkdtemp(prefix="wtl-release-")
+        try:                                  # (F-47: the download is removed afterwards, whatever happens)
+            try:
+                got = _download(app, "Downloading the newest version", release, lambda log: get(release, folder, log))
+            except OSError as exc:
+                show_error(TITLE, f"The newest version could not be downloaded:\n{exc}", parent=dlg.win,
+                           headline="Not updated")
+                return None
+            if got is None:
+                return None
+            plan = standalone.plan_unpack(got, root_dir)
+            if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
+                              f"{standalone.summary(plan)}\n\nIn {root_dir}. Only the program's own files change; "
+                              "your save and anything else there stay as they are. Word Tierlister then starts again "
+                              "from the new source, with the same save.", yes="Update", no="Cancel", parent=dlg.win,
+                              wrap_chars=60):
+                return None
+            try:
+                standalone.unpack(got, root_dir, plan, from_program=False)
+            except OSError as exc:
+                show_error(TITLE, f"The source could not be updated in {root_dir}:\n{exc}", parent=dlg.win,
+                           headline="Not updated")
+                return None
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
     dlg.close()
     app.store.set_meta(UPDATED_FROM, VERSION)
     standalone.start_source(root_dir, sys.executable, args=["--db", app.store.path])

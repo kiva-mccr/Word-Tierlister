@@ -156,6 +156,9 @@ OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
 D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
+F-47 (the folder logic reviewed, asked for "what a user expects": Remove it keeps what you added or changed,
+standalone.removable / TOP_FILES (a new top-level file must be added there); builds swapped in, install_program;
+downloads removed; a Mac app keeps its save in Application Support and its source in Documents, open -n).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
