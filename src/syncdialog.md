@@ -20,6 +20,7 @@ The module docstring has the details; this page is the map.
 
 - Every Syncthing call runs on a worker thread (`_background`); the dialog never waits on the network.
 - AutoSync reads and writes files on a worker thread and applies them on the window's thread, never while `App.busy` (a reshuffle writes the save); closing writes the file one last time (`App.on_close` -> `flush`).
+- Test the window shown (as the program does), never built and kept hidden (`show=False`): on macOS Tk then never runs out of events and `update()` never returns (GitHub's Macs, T-18).
 - This device's file is written at most every `WRITE_GAP` seconds while things change (a 1M save's file is several MB), at once for Sync now and at closing.
 - The dialog's buttons are kept by name (`StyledDialog.buttons`): each device's Accept / Unlink is named with its id and shown with the plain word.
 
