@@ -89,8 +89,14 @@ assert "could not import" in errors[-1][1]
 T.filedialog.askopenfilename = lambda **k: ""
 app.import_progress()                                      # cancelled dialog: nothing happens
 # --- save location info + export via the menu code path
-app.show_save_location()
-assert store.path in shown[-1][1]
+import standalone as _S
+revealed, pick = [], {"answer": "ok"}
+A.ask_buttons = lambda title, headline, msg, buttons, **k: (shown.append((title, msg, buttons)), pick["answer"])[1]
+_S.reveal_file = lambda path, **k: revealed.append(path)
+assert app.show_save_location() == "ok" and store.path in shown[-1][1] and not revealed
+assert [label for label, _v in shown[-1][2]] == ["OK", "Show in folder"]
+pick["answer"] = "show"                                    # Show in folder: the save, selected in the file manager
+assert app.show_save_location() == "show" and revealed == [store.path]
 T.filedialog.asksaveasfilename = lambda **k: os.path.join(tmp, "out.csv")
 app.export()
 assert os.path.getsize(os.path.join(tmp, "out.csv")) > 100

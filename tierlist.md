@@ -22,5 +22,5 @@ The module docstring has the details; this page is the map.
 
 ## Changing it
 
-- New command-line option: `main()`'s argparse block, plus the README's Options table.
+- New command-line option: `main()`'s argparse block, plus the Options table in DEVELOPERS.md.
 - First-run steps: the `set_up` function inside `main()` (keep `wordsource.wiktionary_steps` / `queue_steps` in step).

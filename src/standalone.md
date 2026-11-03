@@ -4,7 +4,7 @@ Turning the source into a program and back (T-3, T-6..T-8): the list of source f
 
 - **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_updates`
+- **Tests:** `_selftest_build`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
@@ -46,6 +46,7 @@ The module docstring has the details; this page is the map.
 - `start_source`: Start tierlist.py in `folder` with `python` (and `args`), on its own (not a child of this program, which then closes).
 - `python_for_source`: A Python on this computer to start the unpacked tierlist.py with, or None (a built program has its own Python inside, which cannot run loose source files).
 - `open_folder`: Show a folder in the system's file manager.
+- `reveal_file`: Show `path` in the system's own file manager with the file selected (asked for: File > Where is my save file?
 - `version_tuple`: (1, 2, 0) for "v1.2.0" (the numbers in it, three at most).
 - `read_version`: The VERSION in `root`'s src/constants.py (the source being built may be another version than this one).
 - `describe_fetch_error`: Why asking GitHub failed, in a line.

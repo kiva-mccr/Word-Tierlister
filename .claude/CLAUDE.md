@@ -4,7 +4,8 @@ A tkinter app that tier-lists (S/A/B/C/D/F) every English word. Words come from 
 (~1M, ranked by wordfreq). Progress autosaves to SQLite and is resumable. Entry point: `tierlist.py`
 (at the top, next to the user's save); modules in `src/`, self-tests in `tests/`, `tools/check_release.py`,
 and this file plus CHECKLIST.md in `.claude/` (R-1). Never move tierlist.py into a sub-folder.
-The README has the file map; the roadmap (steps, status, decisions) is the big comment block at the
+README.md is the user-facing introduction (screenshots in docs/images); DEVELOPERS.md is the developer
+guide (code graphs, the file map, options, tests, builds); the roadmap (steps, status, decisions) is the big comment block at the
 top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Run and test
@@ -104,10 +105,11 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 ## Before handing a round over
 Run through `.claude/CHECKLIST.md` and `python tools/check_release.py --tests`; build the zip with
 `python tools/check_release.py --zip word-tierlister.zip` (never copy files by hand, that is how files get
-missed). Keep the README current in the same commit as the change (the user asked for this explicitly).
+missed). Keep README.md and DEVELOPERS.md current in the same commit as the change (the user asked for this explicitly).
 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
+- Ask questions and show mock-ups (or an outline) for a design or a problem before building it in full (asked for).
 - Finish a step with: tests passing, roadmap ticked, README updated, a short summary.
 - Every prompt, before finishing: tidy what was touched (dead code, stale comments and names, leftover
   debug lines, unused imports via pyflakes, scratch files out of the repo), then:

@@ -68,7 +68,7 @@ How it works
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, build,
 measure_rudeness, notes, speed_check, stress_ui, make_icon, make_typefaces), the Claude notes in .claude/; each code file has a note beside it (name.md: read it
-before editing the file); the README has the same map with more detail)
+before editing the file); DEVELOPERS.md has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
@@ -742,6 +742,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           any of its kinds is censored (Store.censored_words); each smeared meaning keeps its kind (rudeness.results:
 #           [key, kind]; RUDENESS_VERSION 13) so the definitions smear only censored kinds (Store.smeared_meanings).
 #           The kinds now open under "Obscene words" while it or Censor obscene words is ticked (their buttons).
+# [x] D-1   Two READMEs (asked for: a friendly one with pictures for people, a coder one with graphs "legit
+#           useful"; outline, graphs and the rudeness map shown first). README.md: what it does, downloads,
+#           each feature with a screenshot (docs/images, from the real window over a pretend save), keys.
+#           DEVELOPERS.md: Mermaid graphs (the big picture, import layers, start-up, a key press, a word's
+#           life, the save's tables, threads, releases; maps for dealing, rudeness, updates, packages), the
+#           file map (check_release reads it there), options, tests. File > Where is my save file? gained
+#           Show in folder (standalone.reveal_file: the file selected in Explorer / Finder / the file manager).
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
