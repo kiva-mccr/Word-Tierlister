@@ -4,7 +4,8 @@ A tkinter app that tier-lists (S/A/B/C/D/F) every English word. Words come from 
 (~1M, ranked by wordfreq). Progress autosaves to SQLite and is resumable. Entry point: `tierlist.py`
 (at the top, next to the user's save); modules in `src/`, self-tests in `tests/`, `tools/check_release.py`,
 and this file plus CHECKLIST.md in `.claude/` (R-1). Never move tierlist.py into a sub-folder.
-The README has the file map; the roadmap (steps, status, decisions) is the big comment block at the
+README.md is the user-facing introduction (screenshots in docs/images); DEVELOPERS.md is the developer
+guide (code graphs, the file map, options, tests, builds); the roadmap (steps, status, decisions) is the big comment block at the
 top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Run and test
@@ -104,7 +105,7 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 ## Before handing a round over
 Run through `.claude/CHECKLIST.md` and `python tools/check_release.py --tests`; build the zip with
 `python tools/check_release.py --zip word-tierlister.zip` (never copy files by hand, that is how files get
-missed). Keep the README current in the same commit as the change (the user asked for this explicitly).
+missed). Keep README.md and DEVELOPERS.md current in the same commit as the change (the user asked for this explicitly).
 
 ## How the user likes to work
 - Go step by step through the roadmap; show screenshots for UI steps; do not build unapproved steps.
@@ -151,6 +152,8 @@ the programs under the old word-tierlist-* names so 1.0.2 and older can update: 
 the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
+D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
+options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap

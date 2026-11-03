@@ -24,7 +24,7 @@ assert code == 0 and "static checks: OK" in out, out                       # the
 p = put(os.path.join("src", "newmod.py"), "import requests\nimport numpy\n")
 code, out = run()
 assert code == 1 and "'requests' is imported by src/newmod.py but is not in requirements.txt" in out, out
-assert "not in deps.PACKAGES" in out and "src/newmod.py is not in the README file map" in out, out
+assert "not in deps.PACKAGES" in out and "src/newmod.py is not in the file map (DEVELOPERS.md)" in out, out
 os.remove(p)
 
 p = put(os.path.join("tests", "_selftest_new.py"), "print('x')\n")
@@ -52,7 +52,7 @@ open(os.path.join(work, "requirements.txt"), "w").write(req)
 code, out = run("--zip", os.path.join(tmp, "out.zip"))
 assert code == 0 and "zip:" in out, out
 names = zipfile.ZipFile(os.path.join(tmp, "out.zip")).namelist()
-for need in ("tierlist.py", "requirements.txt", "README.md", "LICENSE", "src/app.py", "src/widgets.py",
+for need in ("tierlist.py", "requirements.txt", "README.md", "DEVELOPERS.md", "docs/images/place-light.png", "LICENSE", "src/app.py", "src/widgets.py",
              "tests/run_tests.sh", "tests/_selftest.py", "tests/_paths.py", "tools/check_release.py",
              ".claude/CLAUDE.md", ".claude/CHECKLIST.md"):
     assert "word-tierlister/" + need in names, (need, names)

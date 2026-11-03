@@ -6,7 +6,7 @@
     python tools/check_release.py --zip out.zip   # also build the zip (only if the checks pass)
 
 Checks: every third-party import is in requirements.txt (and the runtime ones in deps.PACKAGES), every
-module is in the README file map, every self-test is in run_tests.sh, every code file has its notes beside it
+module is in the file map (DEVELOPERS.md), every self-test is in run_tests.sh, every code file has its notes beside it
 (name.md, up to date: tools/notes.py), the modules import only from the layers
 below them (LAYERS, as .claude/CLAUDE.md lists them), pyflakes is clean (apart from the known re-export noise),
 and no stray logs, saves or caches would end up in the zip.
@@ -94,17 +94,19 @@ def check_imports(problems):
 
 
 def check_docs(problems):
-    """Every module is in the README's file map, every self-test in run_tests.sh, the notes present, no module at
-    the top but tierlist.py (R-1)."""
-    readme = open(os.path.join(HERE, "README.md"), encoding="utf-8").read()
+    """Every module is in the file map (DEVELOPERS.md; README.md is for users), every self-test in run_tests.sh, the
+    notes present, no module at the top but tierlist.py (R-1)."""
+    guide = os.path.join(HERE, "DEVELOPERS.md")
+    readme = open(guide, encoding="utf-8").read() if os.path.exists(guide) else ""
     for f in py_files():
         if not f.startswith("tests") and f"`{f.replace(os.sep, '/')}`" not in readme and f"`{_name(f)}`" not in readme:
-            problems.append(f"{f} is not in the README file map")
+            problems.append(f"{f} is not in the file map (DEVELOPERS.md)")
     runner = open(os.path.join(HERE, "tests", "run_tests.sh"), encoding="utf-8").read()
     for f in py_files():
         if _name(f).startswith("_selftest") and _name(f)[:-3] not in runner:
             problems.append(f"{f} is not run by tests/run_tests.sh")
-    for need in (".claude/CLAUDE.md", ".claude/CHECKLIST.md", "tierlist.py", "requirements.txt"):
+    for need in (".claude/CLAUDE.md", ".claude/CHECKLIST.md", "tierlist.py", "requirements.txt", "README.md",
+                 "DEVELOPERS.md"):
         if not os.path.exists(os.path.join(HERE, need)):
             problems.append(f"{need} is missing")
     for f in _files_in(""):
