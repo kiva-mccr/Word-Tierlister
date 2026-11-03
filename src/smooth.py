@@ -668,19 +668,16 @@ class SmoothCanvas(tk.Canvas):
 
         def make():
             k = size / 16.0
-            # a shape is a polygon, or ("cut", polygon): that much of what came before is taken away (a gap round
-            # the eye's slash); shapes are laid on in order, their coverage together
-            parts = [(p[0] == "cut", p[1]) if isinstance(p, tuple) else (False, p) for p in ICONS[name]]
-            grids = [(cut, coverage_mask([(x * k, y * k) for x, y in poly], size, size, 0)) for cut, poly in parts]
+            grids = [coverage_mask([(x * k, y * k) for x, y in poly], size, size, 0) for poly in ICONS[name]]
             rows = []
-            for j in range(size):
+            for j in range(size):                       # the shapes' coverage together (they never overlap)
                 cov = [0] * size
-                for cut, g in grids:
+                for g in grids:
                     i = 0
                     for n, qa, _qo in g[j]:
                         if qa:
                             for x in range(i, i + n):
-                                cov[x] = cov[x] * (255 - qa) // 255 if cut else max(cov[x], qa)
+                                cov[x] = max(cov[x], qa)
                         i += n
                 runs = []
                 for v in cov:
