@@ -10,6 +10,7 @@ import tkinter as tk
 import tierlist as T
 from rudeness import KIND_BITS as B
 from fonts import font
+from widgets import UNSMEAR_MS
 from constants import RUDE_NAMES, card_label, mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"
@@ -101,8 +102,12 @@ assert app.shown("shit") == "s••t" and app.shown("table") == "table"
 # the pointer over the word un-smears it, easing; away again, it smears again
 app.anim.reduce_motion = False
 x0, y0, x1, y1 = card.bbox("smear")
-card.event_generate("<Motion>", x=(x0 + x1) // 2, y=(y0 + y1) // 2); pump(2)
+real_clock, t = app.anim.clock, [time.perf_counter()]
+app.anim.clock, app.anim._real = (lambda: t[0]), False   # (stepped by hand: a slow Mac's pump finished it outright)
+card.event_generate("<Motion>", x=(x0 + x1) // 2, y=(y0 + y1) // 2); pump(1)
+t[0] += UNSMEAR_MS / 2500; pump(1)
 assert 0 < card.smear.clear < 1, card.smear.clear                                # on its way
+app.anim.clock, app.anim._real = real_clock, True
 app.anim.finish_all(); pump(1)
 assert card.smear.clear == 1 and card.itemcget("word", "state") != "hidden" and not card.find_withtag("smear")
 card.event_generate("<Motion>", x=3, y=3); app.anim.finish_all(); pump(1)        # (the card's corner: off the word)
