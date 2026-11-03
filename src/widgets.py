@@ -1167,16 +1167,19 @@ class HeaderMenus(tk.Frame):
         top = self.winfo_toplevel()
         top.bind("<ButtonPress-1>", self._click_outside, add="+")
         self._top_geo = None
-        top.bind("<Configure>", lambda e: e.widget is top and self._top_configured(e), add="+")
+        top.bind("<Configure>", lambda e: e.widget is top and self._top_configured(), add="+")
         top.bind("<Unmap>", lambda e: e.widget is top and self.close(), add="+")
 
-    def _top_configured(self, e):
-        """The main window moved or changed size: the open menu would be left behind, so it closes. Windows also
-        sends <Configure> when the window only comes to the front (as the focus goes back to it while the
-        pointer moves from one menu to the next), which must not close the menu just opened."""
-        geo = (e.x, e.y, e.width, e.height)
-        if geo != self._top_geo:
-            self._top_geo = geo
+    def _top_geometry(self):
+        top = self.winfo_toplevel()
+        return top.winfo_rootx(), top.winfo_rooty(), top.winfo_width(), top.winfo_height()
+
+    def _top_configured(self):
+        """The main window moved or changed size since the menu opened: the menu would be left behind, so it
+        closes. Windows also sends <Configure> when nothing changed (as the focus goes back to the window while
+        the pointer moves from one menu to the next), which must not close the menu just opened; so the window's
+        place is compared with where it was when the menu opened, not with the event's own numbers."""
+        if self._open is not None and self._top_geometry() != self._top_geo:
             self.close()
 
     def _click_outside(self, e):
@@ -1197,7 +1200,7 @@ class HeaderMenus(tk.Frame):
     def open_menu(self, name):
         self.close()
         b = self.buttons[name]
-        self._open = name
+        self._open, self._top_geo = name, self._top_geometry()
         b.set_selected(True)
         self.drops[name].open(b.winfo_rootx(), b.winfo_rooty() + b.winfo_height() + 2,
                               on_close=lambda n=name: self._closed(n))
