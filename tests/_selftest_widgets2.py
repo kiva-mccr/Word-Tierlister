@@ -213,9 +213,16 @@ assert hm.open_name == "File" and hm.drops["File"].is_open()
 anim.finish_all(); assert fb.itemcget("shape", "fill") == PALETTE["select_bg"]  # its button looks open
 d = hm.drops["File"].win
 assert abs(d.winfo_rootx() - fb.winfo_rootx()) <= 1 and d.winfo_rooty() >= fb.winfo_rooty() + fb.winfo_height()
+import traceback                                                               # (who closed it, if it closes)
+closers, real_close = [], hm.drops["Edit"].close
+def watched_close():
+    closers.append("".join(traceback.format_stack(limit=6)[:-1]))
+    real_close()
+hm.drops["Edit"].close = watched_close
 eb.event_generate("<Enter>"); before = hm.open_name; update()                 # hover switches menus
+del hm.drops["Edit"].close
 assert hm.open_name == "Edit" and hm.drops["Edit"].is_open() and not hm.drops["File"].is_open(), \
-    (before, hm.open_name, hm.drops["Edit"].is_open(), hm.drops["File"].is_open())
+    (before, hm.open_name, hm.drops["Edit"].is_open(), hm.drops["File"].is_open(), closers)
 anim.finish_all(); assert fb.itemcget("shape", "fill") != PALETTE["select_bg"]
 eb.event_generate("<ButtonPress-1>", x=5, y=5); eb.event_generate("<ButtonRelease-1>", x=5, y=5); update()
 assert hm.open_name is None                                                    # its own button closes it
