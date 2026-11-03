@@ -418,10 +418,13 @@ root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
-assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
-root.after(80, root.quit); root.mainloop(); update()
-assert toast.cget("text") == ""                                                # then simply gone
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=500, in_=page); update()
+assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1, \
+    (toast.cget("text"), toast_xy(), toast.winfo_height())     # Reduce motion: straight to rest (held long enough
+t_end = time.time() + 5                                        # to be seen on a slow Mac)
+while toast.cget("text") and time.time() < t_end:
+    root.after(50, root.quit); root.mainloop()
+update(); assert toast.cget("text") == ""                                      # then simply gone
 toast.show("jump", (PALETTE["ok"][0], PALETTE["ok"][1]), in_=page); assert toast.itemcget("pill", "fill") == PALETTE["ok"][0]
 toast.hide(); assert toast.cget("text") == ""                                     # no fade with Reduce motion
 anim.reduce_motion = False
