@@ -48,13 +48,14 @@ import re
 import sqlite3
 import time
 
-from obscene import RUDE_KINDS, TICKED, on_list
+from obscene import CENSORED, RUDE_KINDS, TICKED, on_list
 from rudeness import KIND_BITS, LISTED
 from constants import (ALL_KINDS, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
 
 _RUDE_BITS = sum(KIND_BITS[k] for k in RUDE_KINDS)
 _TICKED_BITS = sum(KIND_BITS[k] for k in TICKED)
+_CENSOR_BITS = sum(KIND_BITS[k] for k in CENSORED)
 
 
 # --------------------------------------------------------------------------
@@ -206,6 +207,7 @@ class Store:
         self._prog = None    # the shelf's tallies (shelf()), counted once, then kept up to date by each change
         self._counts = None  # placed words per tier (tier_counts()), the same way
         self._obscene = None     # the obscene words (obscene_words()), read once
+        self._censored = None    # the ones smeared while censoring (censored_words()), read once per change
         self._bulk = set()       # the indexes a bulk_write has taken away for now
 
     def close(self):
@@ -306,7 +308,7 @@ class Store:
                         (LISTED[0] if listed else None, int(listed), KIND_BITS[LISTED[3]] if listed else None, word))
         sql, args = self._out_sql()
         self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))
-        self._obscene = None
+        self._obscene = self._censored = None
         self._forget_shelf_totals()
         self.db.commit()
         self._total = None
@@ -421,6 +423,17 @@ class Store:
         self.set_meta("censor", "1" if on else "0")
         self.version += 1
 
+    def censor_kinds(self):
+        """The kinds of rude meaning smeared while censoring (obscene.CENSORED's kinds; each can be let through on
+        its own in How words are dealt, its smear button: all of them to start with)."""
+        bits = self.meta_number("censor_kinds", _CENSOR_BITS, int) & _CENSOR_BITS
+        return {k for k in CENSORED if bits & KIND_BITS[k]}
+
+    def set_censor_kinds(self, kinds):
+        self.set_meta("censor_kinds", sum(KIND_BITS[k] for k in set(kinds) & CENSORED))
+        self._censored = None
+        self.version += 1
+
     def set_kinds(self, pairs):
         """[(word, kinds bits)] from the word source (wordsource.fill_kinds / build_wiktionary)."""
         self.db.executemany("UPDATE words SET kinds=? WHERE word=?", ((k, w) for w, k in pairs))
@@ -473,7 +486,7 @@ class Store:
                 self.db.executemany("INSERT INTO rude(word, senses, smeared) VALUES(?, '[]', ?) ON CONFLICT(word)"
                                     " DO UPDATE SET smeared=excluded.smeared", ((w, m) for w, *_r, m in part if m))
                 self.db.commit()
-                self._obscene = None
+                self._obscene = self._censored = None
                 self.version += 1
                 yield
         return self._stepped(steps(), chunk)
@@ -485,9 +498,14 @@ class Store:
         return next((k for k, bit in KIND_BITS.items() if r and r[0] == bit), None)
 
     def smeared_meanings(self, word):
-        """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring, or []."""
+        """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring (those of a kind in
+        censor_kinds), or []."""
         r = self.db.execute("SELECT smeared FROM rude WHERE word=?", (word,)).fetchone()
-        return json.loads(r[0]) if r and r[0] else []
+        if not (r and r[0]):
+            return []
+        kinds = self.censor_kinds()
+        return [m if isinstance(m, str) else m[0] for m in json.loads(r[0])     # (a bare key: scored before the
+                if isinstance(m, str) or m[1] in kinds]                          # kinds were kept, RUDENESS_VERSION 13)
 
     def obscene_words(self):
         """The words smeared whole while censoring (a few thousand), read once (partial index)."""
@@ -495,9 +513,19 @@ class Store:
             self._obscene = {r[0] for r in self.db.execute("SELECT word FROM words WHERE obscene=1")}
         return self._obscene
 
+    def censored_words(self):
+        """The obscene words smeared while censoring: those with a meaning (or a main kind) of a kind in censor_kinds
+        (a word both crude and sexual stays smeared while either is censored). Read once per change (partial index)."""
+        if self._censored is None:
+            bits = sum(KIND_BITS[k] for k in self.censor_kinds())
+            self._censored = {r[0] for r in self.db.execute(
+                "SELECT word FROM words WHERE obscene=1 AND ((COALESCE(rude, 0) | COALESCE(rude_main, 0)) & ?) != 0",
+                (bits,))} if bits else set()
+        return self._censored
+
     def censored(self, word):
-        """True if `word` is to be shown smeared or masked (Censor obscene words is on and it is smeared whole)."""
-        return bool(word) and self.get_meta("censor", "0") == "1" and word in self.obscene_words()
+        """True if `word` is to be shown smeared or masked (Censor obscene words is on and it is in censored_words)."""
+        return bool(word) and self.get_meta("censor", "0") == "1" and word in self.censored_words()
 
     def kind_counts(self):
         """{kind of word: words of that kind with a clean meaning (the ones its tick deals), "obscene": words with

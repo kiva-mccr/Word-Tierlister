@@ -150,6 +150,7 @@ program and only until it is in the menu; the build's tick only while it is not)
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
+OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -175,9 +176,10 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   read (table rude); prepare_queue scores them ("Scoring rude meanings"); words.rude = kinds of its meanings
   (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
   (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
-  Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED). "Obscene words" still starts unticked.
+  Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED); each can be let through on its own (OB-7: a smear
+  button beside it in How words are dealt, Store.censor_kinds / censored_words; smeared meanings keep their kind). "Obscene words" still starts unticked.
   Only words smeared whole get rude kinds ("Obscene words" = censored words; the user chose it); a group's own
-  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 12; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
+  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 13; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
   the commonest, 0.4% false alarms; forms count as their word's first meaning (F-12); hyphenated parts count on slang meanings; word families replaced the hand list's roots; Wiktionary's examples were tried
   and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
   labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents

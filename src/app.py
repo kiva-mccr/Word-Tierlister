@@ -1128,6 +1128,11 @@ class App:
         if self.censor_var.get():
             self.censor_note()
         self.refresh()
+        self.censor_shown()
+
+    def censor_shown(self):
+        """The definitions and Browse drawn again after censoring changed (View, or How words are dealt: which kinds
+        are smeared)."""
         self._render_defs()
         for b in self.browsers:
             if b.alive():
