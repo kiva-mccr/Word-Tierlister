@@ -66,11 +66,12 @@ assert main["version"] == VERSION + "+4f2c9ab"
 assert S.named({"version": "1.2.0"}) == "version 1.2.0"
 # the same files: nothing to update to; one changed, one new on main, one gone from it: those three
 assert S.nightly_changes(main, proj) == [] and S.nightly_changes(None, proj) == []
-open(os.path.join(proj, "src", "a.py"), "w").write("a = 2\n")
+open(os.path.join(proj, "src", "a.py"), "wb").write(b"a = 2\n")
 os.remove(os.path.join(proj, "tierlist.py"))
 main2 = dict(main, files=dict(main["files"], **{"src/new.py": "n"}))
 assert S.nightly_changes(main2, proj) == ["src/a.py", "src/new.py", "tierlist.py"]
-open(os.path.join(proj, "tierlist.py"), "w").write("x = 1\n"); open(os.path.join(proj, "src", "a.py"), "w").write("a = 1\n")
+open(os.path.join(proj, "tierlist.py"), "wb").write(b"x = 1\n")   # (bytes: Windows' text mode writes \r\n)
+open(os.path.join(proj, "src", "a.py"), "wb").write(b"a = 1\n")
 
 # a git checkout is compared as committed (edits of yours are not what main has)
 if shutil.which("git"):
