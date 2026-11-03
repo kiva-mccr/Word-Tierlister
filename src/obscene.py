@@ -1,5 +1,5 @@
 """Obscene words: the kinds of rude meaning (RUDE_KINDS; TICKED: dealt to start with; CENSORED: smeared while
-censoring), the labels Wiktionary marks rude meanings with (RUDE: shown in the stored definitions), and a short
+censoring to start with, and what "Obscene words" is scored from; CENSORABLE: every kind can be smeared, OB-8), the labels Wiktionary marks rude meanings with (RUDE: shown in the stored definitions), and a short
 list chosen by hand (on_list), which stands in for a save whose Wiktionary meanings have not been read yet and for
 a word added by hand (OB-6: src/rudeness.py decides by rules). No tkinter, no internet.
 
@@ -86,4 +86,6 @@ def obscene_in(words):
 RUDE_KINDS = ("clinical", "crude", "swear", "insult", "sexual", "slur")
 TICKED = frozenset(("clinical", "crude", "swear", "insult"))    # dealt by default (Sexual and Slur left out)
 CENSORED = frozenset(("crude", "swear", "sexual", "slur"))       # smeared while censoring (the user's choice: never
-                                                                # Clinical or Insult)
+                                                                # Clinical or Insult, unless asked for: OB-8)
+CENSORABLE = frozenset(RUDE_KINDS)    # each can be censored on its own (OB-7, OB-8: a smear button per kind; only
+                                      # CENSORED's kinds to start with)

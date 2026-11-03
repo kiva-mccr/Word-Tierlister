@@ -48,7 +48,7 @@ import re
 import sqlite3
 import time
 
-from obscene import CENSORED, RUDE_KINDS, TICKED, on_list
+from obscene import CENSORABLE, CENSORED, RUDE_KINDS, TICKED, on_list
 from rudeness import KIND_BITS, LISTED
 from constants import (ALL_KINDS, csv_word, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QUEUE_SHAPES, SHELF_SOFT, SHELF_SPINES, SHELF_ZIPF, SHELF_ZONE_RANKS,
                        SHELF_ZONES, TIERS, tier_base)
@@ -56,6 +56,8 @@ from constants import (ALL_KINDS, csv_word, KINDS, PEN_UNITS, QUEUE_DEFAULTS, QU
 _RUDE_BITS = sum(KIND_BITS[k] for k in RUDE_KINDS)
 _TICKED_BITS = sum(KIND_BITS[k] for k in TICKED)
 _CENSOR_BITS = sum(KIND_BITS[k] for k in CENSORED)
+_CENSORABLE_BITS = sum(KIND_BITS[k] for k in CENSORABLE)
+_EXTRA_BITS = _CENSORABLE_BITS & ~_CENSOR_BITS     # (Clinical, Insult: censored only when asked for, OB-8)
 
 
 # --------------------------------------------------------------------------
@@ -68,6 +70,7 @@ WORD_INDEXES = (
     # the queue (next_unplaced): the words dealt (out=0) in order, even when nearly all are left out
     ("idx_words_q3", "words(tier, out, skips, qkey)"),
     ("idx_words_obscene", "words(word) WHERE obscene=1"),
+    ("idx_words_extra", "words(word) WHERE smear_extra IS NOT NULL"),   # (smeared whole counting Clinical / Insult)
     ("idx_words_tg", "words(tier, games)"),                     # settled_shares
     ("idx_words_shelf", "words(rank, tier, freq)"),             # shelf_layout(), the shelf's totals
     # nearest ratings in a tier (pick_within), a tier's weakest / strongest (pick_boundary), Browse's order
@@ -129,7 +132,8 @@ CREATE TABLE IF NOT EXISTS words(
     obscene INTEGER NOT NULL DEFAULT 0,
     out INTEGER NOT NULL DEFAULT 0,
     rude INTEGER,
-    rude_main INTEGER
+    rude_main INTEGER,
+    smear_extra INTEGER
 );
 CREATE TABLE IF NOT EXISTS comparisons(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,6 +194,8 @@ class Store:
             self.db.execute("UPDATE words SET rude=? WHERE obscene=1", (KIND_BITS["swear"],))   # (until scored)
         if "rude_main" not in cols:              # what a word smeared whole mostly is (rudeness.main_kind), a bit
             self.db.execute("ALTER TABLE words ADD COLUMN rude_main INTEGER")
+        if "smear_extra" not in cols:            # OB-8: its kinds when counting Clinical / Insult smears it whole
+            self.db.execute("ALTER TABLE words ADD COLUMN smear_extra INTEGER")
         if "changed" not in cols:                # SY-1: when its progress last changed (sync: the newer one wins)
             self.db.execute("ALTER TABLE words ADD COLUMN changed REAL")
         if "origin" not in {r[1] for r in self.db.execute("PRAGMA table_info(comparisons)")}:
@@ -432,13 +438,13 @@ class Store:
         self.version += 1
 
     def censor_kinds(self):
-        """The kinds of rude meaning smeared while censoring (obscene.CENSORED's kinds; each can be let through on
-        its own in How words are dealt, its smear button: all of them to start with)."""
-        bits = self.meta_number("censor_kinds", _CENSOR_BITS, int) & _CENSOR_BITS
-        return {k for k in CENSORED if bits & KIND_BITS[k]}
+        """The kinds of rude meaning smeared while censoring (each one's smear button in How words are dealt;
+        obscene.CENSORED's kinds to start with, Clinical and Insult only when asked for: OB-7, OB-8)."""
+        bits = self.meta_number("censor_kinds", _CENSOR_BITS, int) & _CENSORABLE_BITS
+        return {k for k in CENSORABLE if bits & KIND_BITS[k]}
 
     def set_censor_kinds(self, kinds):
-        self.set_meta("censor_kinds", sum(KIND_BITS[k] for k in set(kinds) & CENSORED))
+        self.set_meta("censor_kinds", sum(KIND_BITS[k] for k in set(kinds) & CENSORABLE))
         self._censored = None
         self.version += 1
 
@@ -480,15 +486,16 @@ class Store:
         [the keys of its meanings smeared in the definitions], its main kind (rudeness.main_kind) or None)}; every
         other word is clean (NULL). Each word's place in the queue follows at once. `chunk`: see _stepped."""
         def steps():
-            old = [r[0] for r in self.db.execute("SELECT word FROM words WHERE rude IS NOT NULL OR obscene=1")]
-            rows = [(w, None, False, None, None) for w in old if w not in found]
-            rows += [(w, v[0], v[1], v[3] if len(v) > 3 else None, json.dumps(v[2]) if v[2] else None)
-                     for w, v in found.items()]
+            old = [r[0] for r in self.db.execute("SELECT word FROM words WHERE rude IS NOT NULL OR obscene=1"
+                                                 " OR smear_extra IS NOT NULL")]
+            rows = [(w, None, False, None, None, None) for w in old if w not in found]
+            rows += [(w, v[0], v[1], v[3] if len(v) > 3 else None, v[4] if len(v) > 4 else None,
+                      json.dumps(v[2]) if v[2] else None) for w, v in found.items()]
             for i in range(0, len(rows), chunk or len(rows) or 1):
                 part = rows[i:i + (chunk or len(rows))]
                 sql, args = self._out_sql()          # (read each time: the settings may change between steps)
-                self.db.executemany("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
-                                    ((b, int(bool(wh)), KIND_BITS.get(k), w) for w, b, wh, k, _m in part))
+                self.db.executemany("UPDATE words SET rude=?, obscene=?, rude_main=?, smear_extra=? WHERE word=?",
+                                    ((b, int(bool(wh)), KIND_BITS.get(k), x, w) for w, b, wh, k, x, _m in part))
                 self.db.executemany(f"UPDATE words SET out = {sql} WHERE word=?", ((*args, w) for w, *_ in part))
                 self.db.executemany("UPDATE rude SET smeared=NULL WHERE word=?", ((w,) for w, *_r, m in part if not m))
                 self.db.executemany("INSERT INTO rude(word, senses, smeared) VALUES(?, '[]', ?) ON CONFLICT(word)"
@@ -508,7 +515,7 @@ class Store:
     def smeared_meanings(self, word):
         """The keys (rudeness.GLOSS_KEY characters) of `word`'s meanings smeared while censoring (those of a kind in
         censor_kinds), or []."""
-        r = self.db.execute("SELECT smeared FROM rude WHERE word=?", (word,)).fetchone()
+        r = self.db.execute("SELECT smeared FROM rude WHERE word=?", (word,)).fetchone()   # ([key, kind] each)
         if not (r and r[0]):
             return []
         kinds = self.censor_kinds()
@@ -522,13 +529,19 @@ class Store:
         return self._obscene
 
     def censored_words(self):
-        """The obscene words smeared while censoring: those with a meaning (or a main kind) of a kind in censor_kinds
-        (a word both crude and sexual stays smeared while either is censored). Read once per change (partial index)."""
+        """The words smeared while censoring: the obscene ones with a meaning (or a main kind) of a kind in
+        censor_kinds (a word both crude and sexual stays smeared while either is censored), and, while Clinical or
+        Insult is censored (OB-8), the words that counting them smears whole with a meaning of such a kind ("penis",
+        "idiot"). Read once per change (partial indexes)."""
         if self._censored is None:
             bits = sum(KIND_BITS[k] for k in self.censor_kinds())
             self._censored = {r[0] for r in self.db.execute(
                 "SELECT word FROM words WHERE obscene=1 AND ((COALESCE(rude, 0) | COALESCE(rude_main, 0)) & ?) != 0",
                 (bits,))} if bits else set()
+            if bits & _EXTRA_BITS:
+                self._censored |= {r[0] for r in self.db.execute(
+                    "SELECT word FROM words WHERE smear_extra IS NOT NULL AND (smear_extra & ?) != 0",
+                    (bits & _EXTRA_BITS,))}
         return self._censored
 
     def censored(self, word):

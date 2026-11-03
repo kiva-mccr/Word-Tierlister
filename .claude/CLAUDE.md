@@ -153,6 +153,7 @@ SY-1 (sync between devices with Syncthing: a file per device, the later change w
 F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
+OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
 D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
@@ -180,10 +181,11 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   read (table rude); prepare_queue scores them ("Scoring rude meanings"); words.rude = kinds of its meanings
   (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
   (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
-  Censoring smears Crude, Swear, Sexual, Slur only (obscene.CENSORED); each can be let through on its own (OB-7: a smear
-  button beside it in How words are dealt, Store.censor_kinds / censored_words; smeared meanings keep their kind). "Obscene words" still starts unticked.
+  Censoring smears Crude, Swear, Sexual, Slur to start with (obscene.CENSORED); each kind has a smear button in How
+  words are dealt (OB-7; Clinical and Insult too, off to start with, OB-8: words.smear_extra; Store.censor_kinds /
+  censored_words; smeared meanings keep their kind). "Obscene words" is still scored from CENSORED alone. "Obscene words" still starts unticked.
   Only words smeared whole get rude kinds ("Obscene words" = censored words; the user chose it); a group's own
-  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 13; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
+  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 14; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
   the commonest, 0.4% false alarms; forms count as their word's first meaning (F-12); hyphenated parts count on slang meanings; word families replaced the hand list's roots; Wiktionary's examples were tried
   and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
   labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents

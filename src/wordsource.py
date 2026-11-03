@@ -28,7 +28,7 @@ import urllib.request
 
 import rudeness
 from constants import OFFLINE_ENV, kind_bits
-from obscene import CENSORED, RUDE, obscene_in
+from obscene import CENSORABLE, CENSORED, RUDE, obscene_in
 from problems import SetupError
 
 
@@ -494,7 +494,7 @@ def find_rude(words, saved, old=(), log=print):
             zipf = lambda w: zipf_frequency(w, "en")       # noqa: E731  (how common: rudeness.COMMON_ZIPF)
         except ImportError:
             zipf = None
-        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log, zipf)
+        return rudeness.score_saved(saved, CENSORED, rudeness.wordnet(), log, zipf, CENSORABLE - CENSORED)
     return {w: rudeness.LISTED for w in [*obscene_in(words), *old]}
 
 

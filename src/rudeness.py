@@ -613,7 +613,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "13"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "14"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["swear"], True, [], "swear")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -759,10 +759,13 @@ def _refers_to(gloss, word):
                                for t in re.findall(r"[a-z][a-z'-]*", gloss.lower()) for st, ends in stems)
 
 
-def score_saved(saved, censored, wn=None, log=None, zipf=None):
+def score_saved(saved, censored, wn=None, log=None, zipf=None, also=()):
     """{word: results(...)} for {word: its compact senses as JSON text} (the save's table rude, filled from the
     Wiktionary download): both passes, reporting "(NN%)" through `log` as it goes (under a minute for 150,000 words).
-    Only a word smeared whole keeps its rude kinds (the rest are ordinary words, their rude meanings smeared)."""
+    Only a word smeared whole keeps its rude kinds (the rest are ordinary words, their rude meanings smeared).
+    `also` (OB-8): kinds that can be censored too (Clinical, Insult, off to start with): their meanings join the
+    smeared ones (each keeps its kind), and a fifth value is the word's kinds (KIND_BITS) when counting them too
+    smears it whole, or None (Store.censored_words). "Obscene words" still comes from `censored` alone."""
     compacts = {w: json.loads(text) for w, text in saved.items()}
     words = {w: [expand(c) for c in cs] for w, cs in compacts.items()}
     pos = {w: [c.get("pos", "") for c in cs] for w, cs in compacts.items()}
@@ -778,17 +781,25 @@ def score_saved(saved, censored, wn=None, log=None, zipf=None):
         tell(i)
         first[w] = score_word(senses, pos[w], w, wn)
     rude, incoming = rude_kinds_of(first), incoming_links(words, first)
-    out = {}
+    out, extra = {}, {}
+    wider = set(censored) | set(also)
     for i, w in enumerate(words, len(words)):
         tell(i)
         common = zipf is not None and zipf(w) >= COMMON_ZIPF
-        out[w] = results(w, words[w], second_pass(w, words[w], first, rude, incoming, family.get(w, ())), censored,
-                         common)
+        scored = second_pass(w, words[w], first, rude, incoming, family.get(w, ()))
+        out[w] = results(w, words[w], scored, censored, common)
+        if also:                             # (OB-8) read again with the kinds that can also be censored counted
+            bits, whole, smeared, _main = results(w, words[w], scored, wider, common)
+            more = [m for m in smeared if m[1] in also]
+            if more:
+                out[w] = (*out[w][:2], out[w][2] + more, out[w][3])
+            extra[w] = bits if whole else None
     for w, senses in words.items():          # a word that is only forms of one other is smeared whole as that one is
         targets = {form_target(s) for s in senses}
         if len(targets) == 1 and all(is_form(s) for s in senses) and (t := targets.pop()) in out and t != w:
             out[w] = (out[w][0], out[t][1], out[w][2], out[t][3])      # (and its main kind: "boobs" is "boob")
+            extra[w] = extra.get(t)
     clean = KIND_BITS["clean"]                # (the user's rule: "Obscene words" holds only words smeared whole; one
-    return {w: (bits if whole else clean, whole, smeared, main if whole else None)   # rude meaning of many ("can:
-            for w, (bits, whole, smeared, main) in out.items()}                     # buttocks") is smeared in the
-                                                                                    # definitions, the word ordinary)
+    return {w: (bits if whole else clean, whole, smeared, main if whole else None, extra.get(w))   # rude meaning of
+            for w, (bits, whole, smeared, main) in out.items()}       # many ("can: buttocks") is smeared in the
+                                                                      # definitions, the word ordinary)
