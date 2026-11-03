@@ -340,6 +340,13 @@ trusted because it comes from this repository's releases over checked HTTPS: kee
 GitHub account that publishes them. Each release also carries `SHA256SUMS.txt` and a build attestation per program
 (S-1) for people to check by hand.
 
+**Checking a download.** Each release carries `SHA256SUMS.txt`, the SHA-256 sums of the three programs
+(`sha256sum word-tierlister-linux`, `certutil -hashfile word-tierlister-windows.exe SHA256` on Windows,
+`shasum -a 256 word-tierlister-macos.zip` on a Mac). GitHub also signs a record of where each program was built
+(`actions/attest-build-provenance` in the release job): with the [GitHub CLI](https://cli.github.com/),
+`gh attestation verify word-tierlister-linux --repo kiva-mccr/Word-Tierlister` says whether that exact file was built
+by this repository's workflow.
+
 ## Find your way
 
 | You want to change... | Start in |
