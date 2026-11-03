@@ -780,7 +780,12 @@ assert tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("one two three
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=wrap_w)
 box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
 texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
-assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
+# (where Tk wraps, and how many end letters a copy leaves out, follow the font: Segoe UI on Windows differs)
+lines = [ln[0] for ln in _W._smear_layout(cv, txt, box)["lines"]]
+assert len(lines) >= 3 and " ".join(lines).split() == "one two three four five six".split(), lines
+for ln in (ln.strip() for ln in lines if len(ln.strip()) > 3):
+    assert [t for t in texts if t != ln and ln.startswith(t) and len(t) >= len(ln) - 3], (ln, texts)
+    assert [t for t in texts if t != ln and ln.endswith(t.lstrip()) and len(t) >= len(ln) - 3], (ln, texts)
 assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # F-37: the band behind the letters runs from the end of the first letter to the start of the last, hidden in the
 # word (at the box's edges it showed as a bar under the smear)
