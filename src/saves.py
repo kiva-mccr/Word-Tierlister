@@ -11,7 +11,7 @@ import sqlite3
 import sys
 import tempfile
 
-from constants import TIERS
+from constants import TIERS, csv_cell
 
 
 # --------------------------------------------------------------------------
@@ -241,9 +241,9 @@ def write_export(path, rows, skipped):
             wr = csv.writer(f)
             wr.writerow(["word", "tier", "rating", "duels"])
             for r in rows:
-                wr.writerow([r["word"], TIERS[r["tier"]], round(r["rating"], 1), r["games"]])
+                wr.writerow([csv_cell(r["word"]), TIERS[r["tier"]], round(r["rating"], 1), r["games"]])
             for w in skipped:
-                wr.writerow([w, "?", "", 0])
+                wr.writerow([csv_cell(w), "?", "", 0])
         return
     md = path.lower().endswith(".md")
     with open(path, "w", encoding="utf-8") as f:

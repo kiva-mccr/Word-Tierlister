@@ -252,6 +252,7 @@ class Client:
             if os.path.normcase(got.get("path", "")) != os.path.normcase(path):
                 got["path"] = path
                 self.call("PUT", f"/rest/config/folders/{FOLDER_ID}", got)
+            self._stop_auto_accept(got)
             return got
         me = self.my_id()
         cfg = self._defaults("folder")
@@ -261,9 +262,21 @@ class Client:
         self.call("PUT", f"/rest/config/folders/{FOLDER_ID}", cfg)
         return cfg
 
+    def _stop_auto_accept(self, folder):
+        """Devices linked by 1.0.3 and older were let make any folder here unasked (autoAcceptFolders): turn that
+        off for the devices sharing the sync folder (S-3). Devices it does not share are not this program's."""
+        me = self.my_id()
+        for d in folder.get("devices", []):
+            did = d.get("deviceID")
+            cfg = self.get(f"/rest/config/devices/{did}") if did and did != me else None
+            if cfg and cfg.get("autoAcceptFolders"):
+                cfg["autoAcceptFolders"] = False
+                self.call("PUT", f"/rest/config/devices/{did}", cfg)
+
     def link(self, device_id, name=""):
-        """Link a device (or accept its request): add it, accept folders it shares, and share the sync folder with
-        it. Raises SyncthingError with what went wrong."""
+        """Link a device (or accept its request): add it and share the sync folder with it. It is never let make
+        other folders here (autoAcceptFolders off, S-3): both devices share FOLDER_ID themselves. Raises
+        SyncthingError with what went wrong."""
         did = clean_id(device_id)
         if not did:
             raise SyncthingError("That is not a device code: it is eight groups of seven letters and digits.")
@@ -271,7 +284,7 @@ class Client:
             raise SyncthingError("That is this device's own code: paste the code shown on the other device.")
         have = self.get(f"/rest/config/devices/{did}")
         cfg = dict(have) if have else self._defaults("device")
-        cfg.update({"deviceID": did, "autoAcceptFolders": True})
+        cfg.update({"deviceID": did, "autoAcceptFolders": False})
         if name or not cfg.get("name"):
             cfg["name"] = name or cfg.get("name") or short_id(did)
         self.call("PUT", f"/rest/config/devices/{did}", cfg)

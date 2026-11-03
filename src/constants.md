@@ -4,7 +4,7 @@ Shared constants and tiny pure helpers that every layer may use: tiers, modes, k
 
 - **Uses:** the standard library only
 - **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_resume`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -15,6 +15,8 @@ The module docstring has the details; this page is the map.
 - `card_label`: What the word card writes faintly above a word (asked for): its parts of speech, "compound word" for one made of words (it was on the frequency line), then for a...
 - `kind_bits`: The words.kinds bit for a part of speech as Wiktionary, WordNet or dictionaryapi.dev name it.
 - `typed_word`: A word typed to look up (UI-51): spaces at the ends gone, runs of spaces made one, and characters that show nothing (zero-width spaces, joiners) dropped: " ice cream"...
+- `csv_cell`: `word` as a CSV export writes it: a ' in front when a spreadsheet would read it as a formula ("-ness", "=1+1"), or when it already starts with ' and then one of those...
+- `csv_word`: The word in a CSV export's cell: csv_cell undone.
 - `mask_word`: A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d.
 - `plan_line`: A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan).
 - `parse_plan`: The steps in a plan line, or None if `line` is not one.

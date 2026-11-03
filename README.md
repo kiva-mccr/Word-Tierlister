@@ -24,6 +24,12 @@ like: it carries on exactly where you left off, even after an update.
 
 No Python needed. [All releases](https://github.com/kiva-mccr/Word-Tierlister/releases) are on GitHub.
 
+**Checking a download (optional).** Each release lists the programs' SHA-256 sums in `SHA256SUMS.txt`
+(`sha256sum word-tierlister-linux`, `certutil -hashfile word-tierlister-windows.exe SHA256` on Windows,
+`shasum -a 256 word-tierlister-macos.zip` on a Mac). GitHub also signs a record of where each program was built:
+with the [GitHub CLI](https://cli.github.com/), `gh attestation verify word-tierlister-linux --repo
+kiva-mccr/Word-Tierlister` says whether that exact file was built here.
+
 1. **Put it in a folder of its own.** It keeps your save file right beside itself.
 2. **Start it.** The programs are not signed, so your computer may hesitate the first time:
    - *Windows* may say it does not know the program: click **More info**, then **Run anyway**.
@@ -170,7 +176,8 @@ All of these can be changed under Settings > Keyboard shortcuts.
 - Replace the program with a newer one, or move between the program and the Python source, and it finds your
   save again by itself.
 - **File > Export tier list** writes your list as a spreadsheet (`.csv`), text or Markdown. **File > Import earlier
-  progress** merges another save or an exported list back in.
+  progress** merges another save or an exported list back in. In the spreadsheet a word that starts like a formula
+  (`-ness`, `=...`) has a `'` in front, so the spreadsheet shows it as text.
 
 ## Syncing between devices
 

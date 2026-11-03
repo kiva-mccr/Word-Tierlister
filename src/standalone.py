@@ -773,6 +773,17 @@ def newer(release, version=VERSION):
     return bool(release) and version_tuple(release["version"]) > version_tuple(version)
 
 
+def inside(folder, parts):
+    """The path in `folder` for a zip entry's `parts` (its name split at "/"), or None when it is a folder entry or
+    would land anywhere but inside `folder` (S-4): "..", a drive or root ("C:", "/x"), a backslash ("..\\x" is a
+    way out on Windows)."""
+    if not parts or not parts[-1] or any(not p or p in (".", "..") or "\\" in p or ":" in p for p in parts):
+        return None
+    dest = os.path.join(folder, *parts)
+    base = os.path.realpath(folder)
+    return dest if os.path.commonpath([base, os.path.realpath(dest)]) == base else None
+
+
 def fetch_source(release, folder, log=print, fetch=_download):
     """Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest,
     ready to unpack (plan_unpack) or build from; returns `folder`. Raises OSError if it cannot."""
@@ -785,10 +796,9 @@ def fetch_source(release, folder, log=print, fetch=_download):
     os.makedirs(folder, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         for name in z.namelist():
-            parts = name.split("/")[1:]              # (GitHub's zip has one folder at the top: owner-repo-commit)
-            if not parts or not parts[-1] or ".." in parts or name.startswith("/"):
+            dest = inside(folder, name.split("/")[1:])   # (GitHub's zip has one folder at the top: owner-repo-commit)
+            if not dest:
                 continue
-            dest = os.path.join(folder, *parts)
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with z.open(name) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)

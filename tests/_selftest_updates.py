@@ -49,12 +49,21 @@ with zipfile.ZipFile(buf, "w") as z:
     z.writestr("kiva-Word-Tierlister-abc123/tierlist.py", "print('v9')\n")
     z.writestr("kiva-Word-Tierlister-abc123/src/constants.py", 'VERSION = "9.1.0"\n')
     z.writestr("kiva-Word-Tierlister-abc123/../evil.py", "x")
+    for bad in ("..\\..\\evil.py", "C:/evil.py", "src/..\\..\\evil.py", "./x.py"):   # (S-4: ways out on Windows)
+        z.writestr("kiva-Word-Tierlister-abc123/" + bad, "x")
 zipped = buf.getvalue()
 folder = os.path.join(tempfile.mkdtemp(), "release")
 got = S.fetch_source(r, folder, log=lambda t: None, fetch=lambda url, timeout=60: zipped)
 m = S.read_manifest(got)
 assert sorted(m["files"]) == ["src/constants.py", "tierlist.py"] and m["version"] == "9.1.0", m
 assert not os.path.exists(os.path.join(os.path.dirname(folder), "evil.py"))
+top = os.path.join(tempfile.mkdtemp(), "top")
+assert S.inside(top, ["src", "a.py"]) == os.path.join(top, "src", "a.py")
+for bad in (["..", "x"], ["..\\x"], ["C:", "x"], ["/x"], ["", "x"], ["src", ""], []):
+    assert S.inside(top, bad) is None, bad
+if hasattr(os, "symlink") and os.name != "nt":                     # (a link inside that points out: refused too)
+    os.makedirs(top); os.symlink(tempfile.gettempdir(), os.path.join(top, "out"))
+    assert S.inside(top, ["out", "x"]) is None
 plan = S.plan_unpack(got, os.path.join(tempfile.mkdtemp(), "here"))  # (ready to unpack, as the program's own)
 assert plan["add"] == ["src/constants.py", "tierlist.py"]
 try:
@@ -152,6 +161,7 @@ assert os.access(os.path.join(dist, S.RELEASE_ASSETS["linux"]), os.X_OK)
 # the workflow: on a button and on a v-tag; builds Linux, Windows and macOS under the names the release and README use
 text = open(os.path.join(_paths.ROOT, ".github", "workflows", B.WORKFLOW), encoding="utf-8").read()
 assert "workflow_dispatch" in text and 'tags: ["v*"]' in text and "gh release create" in text
+assert "SHA256SUMS.txt" in text and "actions/attest-build-provenance" in text and "attestations: write" in text  # (S-1)
 assert "inputs.release" in text and '--target "$GITHUB_SHA"' in text and "refs/heads/main" in text   # (T-17: the button)
 notes = open(os.path.join(_paths.ROOT, ".github", "release-notes.md"), encoding="utf-8").read()
 assert "--notes-file .github/release-notes.md" in text and "Run anyway" in notes and "chmod +x" in notes   # (T-5)

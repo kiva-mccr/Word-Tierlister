@@ -41,8 +41,12 @@ def window():
     s.set_meta("dealt_asked", "1")
     root = tk.Tk()
     app = T.App(root, s, T.Definitions(s))
+    windows_made.append(app)
     pump(root, 10)
     return root, app
+
+
+windows_made = []                 # every window made: closed before the program's checks below
 
 
 behind = []
@@ -362,6 +366,9 @@ root_c, app_c = window()
 app_c.offer_form = True
 app_c.store.close(); assert app_c._offer_other_form() is None               # (no sqlite3 error)
 app_c.on_close(); assert app_c.shut and app_c._offer_other_form() is None
+for a in windows_made:            # (an earlier window's offer, still waiting on a question, would fire as the program
+    if not a.shut:                #  below and unpack beside it a second time: seen on a slow GitHub runner)
+        a.on_close()
 root, app = window()
 app.offer_form = True
 # in the program (T-10, asked for): its first start unpacks the source beside it without asking, and says where;
