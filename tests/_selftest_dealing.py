@@ -11,7 +11,7 @@ import tierlist as T
 from rudeness import KIND_BITS as B
 from fonts import font
 from widgets import UNSMEAR_MS
-from constants import RUDE_NAMES, card_label, mask_word
+from constants import KIND_NOTES, RUDE_NAMES, card_label, mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"
 
@@ -266,7 +266,7 @@ assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {
     "Sexual", "Slurs"}
 # OB-5: the kinds of rude meaning are open under Obscene words while it is ticked
 assert d.obscene_v.get() and d.rude_box.winfo_ismapped() and d.rude_vs["sexual"].get() and not d.rude_vs["slur"].get()
-assert "Censoring smears the kinds" in d.kind_tips["Insults"][0].text_fn(None)
+assert d.kind_tips["Insults"][0].text_fn(None) == KIND_NOTES["insult"]           # (only what it holds: asked for)
 d.obscene_v.set(False); pump(2); assert d.rude_box.winfo_ismapped()     # (censoring: open for its smear buttons)
 d.censor_v.set(False); pump(2); assert not d.rude_box.winfo_ismapped()
 d.censor_v.set(True); d.obscene_v.set(True); pump(2); assert d.rude_box.winfo_ismapped()
@@ -299,7 +299,7 @@ assert app.cur_word == "shit" and card.censored
 d = app.edit_dealing(); pump(4)
 assert set(d.smear_btns) == {"clinical", "crude", "swear", "insult", "sexual", "slur"}
 assert [k for k, v in sorted(d.smear_vs.items()) if not v.get()] == ["clinical", "insult"]   # (OB-8: off to start with)
-assert not d.smear_btns["insult"].find_withtag("smear") and "Clinical and Insult only" in d.kind_tips["Insults"][0].text_fn(None)
+assert not d.smear_btns["insult"].find_withtag("smear")
 crude = d.smear_btns["crude"]
 assert crude.find_withtag("smear") and int(crude.grid_info()["row"]) == int(d.kind_ticks["Crude"].grid_info()["row"])
 crude.event_generate("<ButtonRelease-1>", x=3, y=3); pump(1)

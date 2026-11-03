@@ -748,6 +748,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           kind), and words.smear_extra keeps a word's kinds when that reading smears it whole (partial index
 #           idx_words_extra); Store.censored_words adds those while Clinical or Insult is censored. "Obscene words"
 #           and dealing still come from the four kinds alone ("penis", "idiot" stay ordinary nouns). RUDENESS_VERSION 14.
+#           Later (asked for): the smear buttons have no hover note, and each rude kind's note only says what it
+#           holds (the "A word comes up if one of its meanings..." half is gone: constants.KIND_NOTE_RUDE removed).
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
