@@ -28,12 +28,7 @@ assert sorted(release["assets"]) == sorted(S.RELEASE_ASSETS.values()), release
 assert S.program_download(release, "win32")["url"] == "https://dl/word-tierlister-windows.exe"
 assert S.program_download(release, "linux")["size"] == 5 and S.program_download(release, "darwin")
 assert S.program_download(release, "sunos5") is None and S.program_download(None) is None
-# the rename: a release has each program under its old name too (1.0.2 and older look for it); one with only those
-# names still updates this program
-old_names = {"assets": {n: {"url": "https://dl/" + n, "size": 5} for n in S.OLD_RELEASE_ASSETS.values()}}
-assert S.program_download(old_names, "linux")["url"] == "https://dl/word-tierlist-linux"
-assert set(S.OLD_RELEASE_ASSETS.values()).isdisjoint(S.RELEASE_ASSETS.values())
-# ... the records a source folder or a build kept under the old names still count, and the old-named program and
+# the rename (U-8): the records a source folder or a build kept under the old names still count, and the old-named program and
 # its record go once one is built under the new name
 folder = tempfile.mkdtemp()
 json.dump({"files": {"a": 1}}, open(os.path.join(folder, ".word-tierlist-source.json"), "w"))

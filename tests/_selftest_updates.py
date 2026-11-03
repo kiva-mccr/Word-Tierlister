@@ -168,8 +168,8 @@ assert "--notes-file .github/release-notes.md" in text and "Run anyway" in notes
 assert "Open Anyway" in notes and "ditto -c -k --keepParent" in text and "macos-latest" in text          # (T-16)
 for platform, asset in S.RELEASE_ASSETS.items():
     assert f"asset: {asset}" in text and f"built: dist/{S.output_name(platform)}" in text, asset
-    assert f"cp assets/{asset} assets/{S.OLD_RELEASE_ASSETS[platform]}" in text, asset   # (1.0.2 and older update)
     assert f"releases/latest/download/{asset}" in open(os.path.join(_paths.ROOT, "README.md"), encoding="utf-8").read()
+assert "word-tierlist-" not in text      # (no copies under the names from before U-8: nobody runs 1.0.2 or older)
 assert re.search(r"tools/build\.py --check", text) and "constants.VERSION" in text and "needs: build" in text
 # T-10: the other form, Python, the builder and the file manager start without a built program's leftovers (its
 # Tcl / Tk folders inside its temporary folder, gone once it closes: "Tk data/library directory ... could not be

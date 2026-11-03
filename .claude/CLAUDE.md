@@ -147,9 +147,8 @@ deps.CA_BUNDLES; the update dialog says what went wrong). U-4 (asked for: File >
 & Updates, one panel: Updates on top, then make the program / unpack the source with the update tick; a 404 "Not
 Found" is said to mean the repository is private; it was, and the user has made it public). U-5 (Add to applications menu / Start menu
 moved into Source & Updates, plus a tick when making the program; none on macOS). U-6 (that section only in the
-program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
-the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
-the old data folder, pointer file, records, launcher and shortcut are still found).
+program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; the old
+word-tierlist-* release copies were dropped after 1.0.4 (the user: nobody runs 1.0.2 or older); the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
 F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
