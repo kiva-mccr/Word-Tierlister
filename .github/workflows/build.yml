@@ -94,7 +94,7 @@ jobs:
           cp assets/word-tierlister-linux assets/word-tierlist-linux
           cp assets/word-tierlister-windows.exe assets/word-tierlist-windows.exe
           cp assets/word-tierlister-macos.zip assets/word-tierlist-macos.zip
-      - name: Checksums (S-1; README "Checking a download")
+      - name: Checksums (S-1; DEVELOPERS.md "Checking a download")
         run: cd assets && sha256sum word-tierlister-linux word-tierlister-windows.exe word-tierlister-macos.zip > SHA256SUMS.txt
       - name: Build attestations (S-1; gh attestation verify <file> --repo kiva-mccr/Word-Tierlister)
         uses: actions/attest-build-provenance@v2

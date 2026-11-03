@@ -13,6 +13,3 @@ the first time.
 Put the program in a folder of its own: your save stays next to it, and the first start unpacks the program's
 source code into "Word Tierlister source" beside it (File > Source & Updates has it too). To run from the source
 code instead, see the README.
-
-To check a download: `SHA256SUMS.txt` below lists each program's SHA-256 sum, and `gh attestation verify <file> --repo
-kiva-mccr/Word-Tierlister` checks it was built from this project on GitHub (see the README's "Checking a download").
