@@ -316,6 +316,8 @@ class FakeApp:
 # What keeps resizing (on GitHub's Macs root.update() once never returned with the sync window open): every
 # <Configure> is counted with the sizes it brought, and pump() runs the events one at a time, so a loop inside Tk is
 # reported by name instead of hanging the test (a watchdog thread prints the counts if one event never returns).
+# There, Tk never ran out of events (about 11,000 a second, hardly any resizing) while the sync window was built but
+# still hidden (show=False): the window is shown here, as it is in the program.
 RESIZED, PUMPING = {}, [0.0, ""]
 
 
@@ -327,7 +329,8 @@ def _resized(e):
 
 def _report():
     top = sorted(RESIZED.items(), key=lambda kv: -kv[1][0])[:10]
-    return "; ".join(f"{w} x{c} {sorted(sz)[:4]}" for w, (c, sz) in top)
+    waiting = [str(root.tk.call("after", "info", j)) for j in root.tk.splitlist(root.tk.call("after", "info"))]
+    return "; ".join(f"{w} x{c} {sorted(sz)[:4]}" for w, (c, sz) in top) + f"; timers waiting: {waiting[:10]}"
 
 
 def _watchdog():
@@ -461,7 +464,7 @@ SyncDialog(app1, find=lambda: None, show=False)
 assert asks[-1][0] == "Get Syncthing first?" and opened == [syncdialog.DOWNLOAD_PAGE]
 # the first time: asked once whether Syncthing starts at log-in (no tick box); "no" is kept
 syncdialog.errors.ask_yes_no = answer(False)
-d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing", show=False,
+d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing",
                connect=lambda exe: st.Client("http://127.0.0.1:8384", "KEY", opener=fake),
                autostart=lambda exe: started.append(exe))
 assert asks[-1][0] == syncdialog.AUTOSTART_HEADLINE and one.get_meta("sync_autostart") == "0"
@@ -473,7 +476,7 @@ d.dlg.close(); n = len(asks)
 one.set_meta("sync_autostart", ""); one.db.execute("DELETE FROM meta WHERE key='sync_autostart'"); one.db.commit()
 syncdialog.errors.ask_yes_no = answer(True)
 # installed: started, the folder shared, set to start at log-in (once), this device's code shown
-d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing", show=False,
+d = SyncDialog(app1, find=lambda: "/usr/bin/syncthing",
                connect=lambda exe: st.Client("http://127.0.0.1:8384", "KEY", opener=fake),
                autostart=lambda exe: started.append(exe))
 wait_for(lambda: d.client is not None and d.shown is not None, "the dialog reached Syncthing")
