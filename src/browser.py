@@ -220,9 +220,8 @@ class Browser:
         filled its rows afterwards, which read as a bounce (M-5); a fade of our own then made it open faster
         and differently from the rest (a see-through window gets no system animation). Every pending layout and
         redraw is finished first, while it is still hidden, so it never appears half-settled. Its text size is
-        set here too: Windows sends a hidden window no <Configure>, so it opened at the body size and grew to its
-        zoom in view (T-20, GitHub's Windows)."""
-        self._apply_scale()
+        final before it shows (_apply_scale reads the size it opens at while it is hidden: Windows reports a hidden
+        window's natural size, so it opened at the body size and grew in view; T-20, GitHub's Windows)."""
         self.win.update_idletasks()
         self.win.deiconify()
 
@@ -249,7 +248,8 @@ class Browser:
             w, h = self.win.winfo_width(), self.win.winfo_height()
         except tk.TclError:
             return
-        if w < 100 or h < 100:  # not shown yet: the size it is about to open at (Tk says 1x1 until then)
+        if w < 100 or h < 100 or not self.win.winfo_ismapped():  # not shown yet: the size it is about to open at
+            # (Tk says 1x1 until then; Windows says the size its contents ask for, not the one it opens at)
             w, h = self._open_size or (self.base_w, self.base_h)
         size = max(8, min(64, int(round(ROLES["body"][0] * min(w / self.base_w, h / self.base_h))) + self.zoom))
         if size == self.fsize:

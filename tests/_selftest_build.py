@@ -130,7 +130,7 @@ def packed_files(out):
                 for d, _, fs in os.walk(base, followlinks=True) for f in fs}
     from PyInstaller.archive.readers import CArchiveReader
     reader = CArchiveReader(out)
-    return {n: (lambda n=n: reader.extract(n)) for n in reader.toc}
+    return {n.replace("\\", "/"): (lambda n=n: reader.extract(n)) for n in reader.toc}   # (Windows names use backslashes)
 
 
 if importlib.util.find_spec("PyInstaller") is None:
