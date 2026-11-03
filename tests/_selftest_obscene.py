@@ -41,7 +41,8 @@ assert found["penis"][4] == B["clinical"]          # Clinical: an ordinary word,
                                                    # censored too, OB-8; its meaning, kept with its kind, the same)
 assert found["bonk"][0] == B["sexual"] and found["bonk"][1], found["bonk"]
 if rudeness.wordnet():                    # (WordNet knows "a malicious woman" for an insult: an ordinary word)
-    assert found["bitch"][:4] == (B["clean"], False, [], None), found["bitch"]
+    assert found["bitch"][:4] == (B["clean"], False, [["A malicious woman.", "insult"]], None), found["bitch"]   # (OB-8:
+                                                                    # its insult meaning kept, smeared only while Insult is)
 else:                                     # (without it the "vulgar" label outweighs "derogatory", which alone is only
     assert found["bitch"][:4] == (B["clean"], False, [["A malicious woman.", "swear"]], None), found["bitch"]   # a suspect)
 assert found["bitches"][1] == found["bitch"][1]                                      # a form is smeared as its word
