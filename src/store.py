@@ -298,17 +298,25 @@ class Store:
         self._forget_tallies()
         self.version += 1
 
+    def _mark_added(self, words):
+        """Rudeness and queue place for words new to this list that came without meanings to read (added by hand,
+        by sync or by Import): the hand-picked list decides, as for a looked-up word. Does not commit."""
+        rows = []
+        for w in words:
+            listed = on_list(w)
+            rows.append((LISTED[0] if listed else None, int(listed), KIND_BITS[LISTED[3]] if listed else None, w))
+        self.db.executemany("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?", rows)
+        sql, args = self._out_sql()
+        self.db.executemany(f"UPDATE words SET out = {sql} WHERE word=?", ((*args, r[3]) for r in rows))
+        if rows:
+            self._obscene = self._censored = None
+
     def add_word(self, word):
         """Add one word the list did not have (UI-51: looked up and added by hand), at the very end of it: the
         rarest rank, the back of the queue. Unlike insert_words, nothing else is re-ranked or redone."""
         rank = self.db.execute("SELECT COALESCE(MAX(rank), -1) + 1 FROM words").fetchone()[0]
         self.db.execute("INSERT OR IGNORE INTO words(word, rank, rating, qkey) VALUES (?, ?, 1500, 1e18)", (word, rank))
-        listed = on_list(word)                       # (no meanings to read for it: the hand-picked list)
-        self.db.execute("UPDATE words SET rude=?, obscene=?, rude_main=? WHERE word=?",
-                        (LISTED[0] if listed else None, int(listed), KIND_BITS[LISTED[3]] if listed else None, word))
-        sql, args = self._out_sql()
-        self.db.execute(f"UPDATE words SET out = {sql} WHERE word=?", (*args, word))
-        self._obscene = self._censored = None
+        self._mark_added([word])
         self._forget_shelf_totals()
         self.db.commit()
         self._total = None
@@ -1330,6 +1338,7 @@ class Store:
                 self.db.execute(
                     "INSERT INTO words(word, rank, tier, rating, games, qkey) VALUES(?,?,?,?,?,1e18)",
                     (word, 10_000_000 + int(r.get("rank") or 0), tier, rating, games))
+                self._mark_added([word])
                 res["added"] += 1
                 res["placed"] += 1
             elif cur["tier"] is None:
@@ -1405,6 +1414,7 @@ class Store:
                     ((r["tier"], r["rating"], r["games"], r["skips"], r["word"]) for r in old))
                 # (the trigger stamped them now: they keep the time they changed there, or they would echo back)
                 db.executemany("UPDATE words SET changed=? WHERE word=?", ((r["changed"], r["word"]) for r in todo))
+                self._mark_added([r["word"] for r in new])     # (their rudeness: the hand-picked list)
             res["words"], res["added"] = len(todo), len(new)
             mine = db.execute("SELECT value FROM meta WHERE key='anchors_changed'").fetchone()
             try:

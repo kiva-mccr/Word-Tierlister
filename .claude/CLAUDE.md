@@ -151,6 +151,7 @@ program and only until it is in the menu; the build's tick only while it is not)
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
+F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
