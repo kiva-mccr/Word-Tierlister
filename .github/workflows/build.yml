@@ -81,6 +81,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write                  # (to make the tag and the release)
+      id-token: write                  # (S-1: the build attestations, signed through GitHub's own identity)
+      attestations: write
     steps:
       - uses: actions/checkout@v4              # (for the release notes)
       - uses: actions/download-artifact@v4
@@ -92,6 +94,15 @@ jobs:
           cp assets/word-tierlister-linux assets/word-tierlist-linux
           cp assets/word-tierlister-windows.exe assets/word-tierlist-windows.exe
           cp assets/word-tierlister-macos.zip assets/word-tierlist-macos.zip
+      - name: Checksums (S-1; README "Checking a download")
+        run: cd assets && sha256sum word-tierlister-linux word-tierlister-windows.exe word-tierlister-macos.zip > SHA256SUMS.txt
+      - name: Build attestations (S-1; gh attestation verify <file> --repo kiva-mccr/Word-Tierlister)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            assets/word-tierlister-linux
+            assets/word-tierlister-windows.exe
+            assets/word-tierlister-macos.zip
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

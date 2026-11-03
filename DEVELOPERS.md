@@ -337,7 +337,8 @@ repository (`contents: write` there alone); a downloaded source zip is written e
 `standalone.inside`, never straight out; a linked Syncthing device never gets `autoAcceptFolders`; a CSV export's
 words go through `constants.csv_cell` (no spreadsheet formulas) and come back through `csv_word`. An update is
 trusted because it comes from this repository's releases over checked HTTPS: keep two-factor sign-in on the
-GitHub account that publishes them.
+GitHub account that publishes them. Each release also carries `SHA256SUMS.txt` and a build attestation per program
+(S-1) for people to check by hand.
 
 ## Find your way
 

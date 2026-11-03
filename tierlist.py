@@ -1941,7 +1941,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           skipped (standalone.inside); GitHub's zips never hold one, so it only matters for a tampered download.
 # [x] S-7  CSV export: a word a spreadsheet would take for a formula (-ness, =x, +x, @x) gets a ' in front
 #           (constants.csv_cell); Import takes it off again (csv_word), so every word comes back as it was.
-# [ ] S-1  Updates checked against something beyond GitHub (checksums, attestations or a signature): to decide.
+# [x] S-1  Releases can be checked beyond coming from GitHub (the user chose checksums and attestations over a
+#           signature the program checks): the release job writes SHA256SUMS.txt and a build attestation per
+#           program (actions/attest-build-provenance; gh attestation verify). The program's own Update does not check
+#           them: it trusts the repository's releases over checked HTTPS, so keep two-factor sign-in on its account.
 # [x] F-46 Found checking the merges of #25..#30: a word this list lacked that came in by sync or Import (one
 #           added by hand on another device) arrived with no rude kind, so it showed uncensored. Such words now go
 #           through Store._mark_added, the hand-picked list check a looked-up word gets (the user chose it over
