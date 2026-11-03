@@ -297,7 +297,8 @@ S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "wor
 started.clear()
 d.buttons["Make the program"].invoke(); pump(root, 2)
 text = open(deps.launcher_path()).read()
-assert started == [os.path.join(proj3, "word-tierlister")] and 'Exec="' + os.path.join(proj3, "word-tierlister") in text
+program = os.path.join(proj3, "word-tierlister")
+assert started == [program] and 'Exec="' + program.replace("\\", "\\\\") in text     # (a launcher doubles a \)
 del os.environ["XDG_DATA_HOME"]
 # Windows: the Start menu, the same way (the shortcut itself: _selftest_deps); macOS has nothing to add to
 root, app = window()

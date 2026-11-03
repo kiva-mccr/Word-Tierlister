@@ -54,7 +54,8 @@ open(os.path.join(work, "PKG-00.toc"), "w").write(repr(("p.pkg", {}, [("PYZ-00.p
 open(os.path.join(work, "PYZ-00.toc"), "w").write(repr(("p.pyz", [("numpy.core", small, "PYMODULE"),
                                                                   ("numpy.linalg", small, "PYMODULE")])))
 assert S.biggest_parts(work) == [("torch", 3.0), ("numpy", 2.0)] and S.biggest_parts(tempfile.mkdtemp()) == []
-assert S.executable("/x/Word Tierlister.app", "darwin") == "/x/Word Tierlister.app/Contents/MacOS/Word Tierlister"
+assert S.executable("/x/Word Tierlister.app", "darwin") == os.path.join("/x/Word Tierlister.app", "Contents", "MacOS",
+                                                                         "Word Tierlister")
 assert S.executable("/x/word-tierlister", "linux") == "/x/word-tierlister"
 
 # the source: what the zip ships and the program carries; a manifest tells whether anything changed since a build

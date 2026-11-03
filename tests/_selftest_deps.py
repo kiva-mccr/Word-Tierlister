@@ -318,12 +318,12 @@ tick = lambda: clock[0]
 step = lambda dt: clock.__setitem__(0, clock[0] + 0.05)
 # it gets going: the terminal is told it can close, and gets its prompt back (exit 0)
 assert deps.detach_terminal(["tierlist.py", "--db", "x.db"], out=said.append, popen=popen_of(Child(None, 0)),
-                         clock=tick, sleep=step) == 0
+                         clock=tick, sleep=step, windows=False) == 0
 assert started[-1] == ([sys.executable, "tierlist.py", "--db", "x.db"], True, "1") and "close this terminal" in said[-1]
 # it fails straight away (no window could open): what it said is shown here, with its exit code
 clock[0] = 0.0
 assert deps.detach_terminal(["tierlist.py"], out=said.append, popen=popen_of(Child(1, 2, b"TclError: no display")),
-                         clock=tick, sleep=step) == 1
+                         clock=tick, sleep=step, windows=False) == 1
 assert said[-1] == "TclError: no display"
 # Windows: pythonw.exe, detached from the console (which then closes with this copy), the same arguments and save
 clock[0] = 0.0
