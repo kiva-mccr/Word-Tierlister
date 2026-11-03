@@ -27,7 +27,7 @@ from definitions import Online, wiktionary_url
 import wordsource
 from browser import Browser
 from dealing import DealDialog
-from errors import ask_yes_no, show_error, show_exception, show_message
+from errors import ask_buttons, ask_yes_no, show_error, show_exception, show_message
 from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
                        QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
@@ -2228,12 +2228,19 @@ class App:
 
     # ---- earlier progress ------------------------------------------------------------------------
     def show_save_location(self):
-        """File > Where is my save file?"""
-        show_message(
+        """File > Where is my save file? Show in folder opens it in the system's file manager, selected (asked for)."""
+        answer = ask_buttons(
             "Save file", "Where your progress is saved",
             f"Your progress is saved automatically, after every action, in:\n\n{self.store.path}\n\n"
             "If you replace or move tierlist.py, this file is found and reused automatically. "
-            "To back it up, copy it somewhere safe.", parent=self.root)
+            "To back it up, copy it somewhere safe.", buttons=(("OK", "ok"), ("Show in folder", "show")),
+            cancel="ok", parent=self.root)
+        if answer == "show":
+            try:
+                standalone.reveal_file(self.store.path)
+            except OSError as exc:
+                self.flash(f"Could not open the folder: {exc}", kind="warn")
+        return answer
 
     @staticmethod
     def describe_merge(res):
