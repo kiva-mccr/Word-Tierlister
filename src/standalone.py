@@ -672,6 +672,35 @@ def open_folder(path, popen=subprocess.Popen):
                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)    # (the program's library path broke it)
 
 
+def reveal_file(path, platform=None, popen=subprocess.Popen, run=subprocess.run, which=shutil.which):
+    """Show `path` in the system's own file manager with the file selected (asked for: File > Where is my save
+    file? opens it there): Explorer (/select), Finder (open -R), or on Linux any file manager that answers
+    org.freedesktop.FileManager1 (GNOME Files, Dolphin, Nemo, ...); otherwise its folder opens (xdg-open). Returns
+    how: "selected" or "folder"."""
+    platform = platform or sys.platform
+    path = os.path.abspath(path)
+    quiet = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if platform.startswith("win"):
+        popen(["explorer", "/select,", path], **quiet)
+        return "selected"
+    if platform == "darwin":
+        popen(["open", "-R", path], env=clean_env(), **quiet)
+        return "selected"
+    dbus = which("dbus-send")
+    if dbus:
+        uri = "file://" + urllib.request.pathname2url(path)
+        try:
+            done = run([dbus, "--session", "--print-reply", "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                        "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                        f"array:string:{uri}", "string:"], env=clean_env(), timeout=5, **quiet)
+            if done.returncode == 0:
+                return "selected"
+        except (OSError, subprocess.SubprocessError):
+            pass                                    # (no session bus, or nothing answered in time: the folder)
+    popen(["xdg-open", os.path.dirname(path)], env=clean_env(), **quiet)
+    return "folder"
+
+
 # ---- updates (T-8): the newest release on GitHub ---------------------------------------------------------------------
 RELEASES = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASE_ASSETS = {"linux": "word-tierlister-linux", "win32": "word-tierlister-windows.exe",   # (the workflow's names;

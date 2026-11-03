@@ -1,54 +1,46 @@
 # Word Tierlister
 
-Tier-list every English word (S / A / B / C / D / F). Progress autosaves to SQLite after every
-action and resumes automatically, even if you replace these files.
+**Rank every word in the English language, from S to F.** One word at a time, at your own pace, with your
+progress saved after every single click.
 
-**Download the program** (no Python needed): [for Windows](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-windows.exe)
-· [for Linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-linux)
-· [for macOS](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-macos.zip) (Apple Silicon)
-· [all releases](https://github.com/kiva-mccr/Word-Tierlister/releases). Put it in a folder of its own: it keeps
-its save beside itself. On Linux, make it runnable first (`chmod +x word-tierlister-linux`). Windows may warn that it
-does not know the program (it is not signed): More info > Run anyway. On macOS, unzip it; the first time, System
-Settings > Privacy & Security > Open Anyway. Or run it from source:
+<p align="center">
+  <img src="docs/images/place-light.png" width="720" alt="The main window: the word 'petrichor' on a card, the six tier buttons S to F under it, and its definition below">
+</p>
 
-    python tierlist.py                 # options: python tierlist.py --help
+Word Tierlister deals you words, about a million of them from English Wiktionary, the commonest first. You give
+each one a tier. Later you can pit words against each other to put each tier in order. Close it whenever you
+like: it carries on exactly where you left off, even after an update.
 
-On the first start it offers to install what it needs (see "Missing packages"), or install it yourself
-first: `pip install -r requirements.txt`.
+## Download
 
-See the docstring at the top of `tierlist.py` for how it works and the full code map; the roadmap
-(UI, start-up and packaging steps, ticked as built) is the comment block right under it.
+| | |
+|---|---|
+| **Windows** | [word-tierlister-windows.exe](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-windows.exe) |
+| **Linux** | [word-tierlister-linux](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-linux) |
+| **macOS** (Apple Silicon) | [word-tierlister-macos.zip](https://github.com/kiva-mccr/Word-Tierlister/releases/latest/download/word-tierlister-macos.zip) |
 
-## Using it
+No Python needed. [All releases](https://github.com/kiva-mccr/Word-Tierlister/releases) are on GitHub.
 
-Each word comes up on a card; you put it in a tier, S (best) to F. The tabs along the top:
+1. **Put it in a folder of its own.** It keeps your save file right beside itself.
+2. **Start it.** The programs are not signed, so your computer may hesitate the first time:
+   - *Windows* may say it does not know the program: click **More info**, then **Run anyway**.
+   - *Linux*: make it runnable first, with `chmod +x word-tierlister-linux` (or tick "Allow executing" in its
+     file properties).
+   - *macOS*: unzip it and open it. The first time, go to **System Settings > Privacy & Security** and click
+     **Open Anyway**.
+3. **Set how words are offered**: which kinds of words you want, and in what order (you can change this any time).
 
-- **Place new words**: press 1 to 6 (S to F) or click a tier, or press Space to place it by comparing it with one
-  anchor word per tier (about three questions: ↑ / B better, ↓ / W worse, E / Enter the same tier). U or ? puts a
-  word off for later; / looks up any word to sort it now.
-- **Refine within tier**: two words of the same tier, side by side: ← / A or → / L picks the better one, ↓ / T is a
-  tie, S skips. This puts the words of each tier in order.
-- **Boundary check**: the weakest word of one tier against the strongest of the next; if the lower one wins, they
-  swap tiers.
-- **Resolve conflicts**: answers that contradict each other (A beat B, B beat C, C beat A), to judge again.
+The very first start downloads English Wiktionary (about 3 GB) to build the word list. It shows how far along it
+is and how long is left, and if the download is cut off it picks up where it stopped next time. After that it
+works offline; only the online definitions need the internet.
 
-A tab only shows once it has work. Everywhere: Backspace or Ctrl+Z undoes (even after a restart), D shows the
-definition, Tab moves to the next tab, Ctrl + / Ctrl - / Ctrl 0 zoom. Every key can be changed under Settings >
-Keyboard shortcuts. The other menus:
+> Would you rather run the Python source? Just run `python tierlist.py`: on the first start it offers to install
+> anything that is missing. The [developer guide](DEVELOPERS.md) has the rest.
 
-- **File**: import earlier progress (another save, or an exported list, told by what is in it rather than its name), export the list, where your save file is,
-  and Source & Updates (one panel: check for updates and update what you are running, make it a program, or give
-  its source back; the program can also add itself to the applications menu (Linux) or the Start menu (Windows)).
-- **Edit**: Undo. **View**: Browse / edit the tier list (search, sort, move words between tiers), zoom, Show
-  definitions, Reduce motion, Censor obscene words and Dark mode.
-- **Settings**: anchor words, How words are dealt (the order, which kinds of words), keyboard shortcuts, tier
-  colours, and whether new words are always placed by comparing.
+## Placing words
 
-Everything is saved after every action: close it any time and it carries on where you left off.
-
-## Options
-
-All optional; `python tierlist.py --help` explains each.
+A word comes up on its card. Press a number key, **1** to **6** for S to F, or click a tier. That's it: the next
+word slides in.
 
 | Option | What it does |
 |---|---|
@@ -394,6 +386,5 @@ ended without closing. Each start is marked with the version and the system it r
 
 ## Licence
 
-Word Tierlister is free software under the GNU General Public License, version 3 (`LICENSE`). The two typefaces in
-`src/typefaces/`, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1 (their licences
-are beside them); `tools/make_typefaces.py` tightens their line spacing, which that licence allows.
+Word Tierlister is free software under the GNU General Public License, version 3 ([`LICENSE`](LICENSE)). The two
+typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1.
