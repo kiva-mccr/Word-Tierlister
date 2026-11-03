@@ -211,7 +211,8 @@ area = usable_area(dlg.win)
 assert dlg.win.winfo_height() <= area[3] and dlg.win.winfo_width() <= area[2]     # still on the screen
 cx = dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2
 edge = dlg.win.winfo_rootx() + dlg.win.winfo_width() >= area[0] + area[2] - 1 or dlg.win.winfo_rootx() <= area[0] + 1
-assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 or edge, \
+frame = dlg.win.winfo_rootx() - dlg.win.winfo_x()                   # (Windows: placed by its frame, ~8 px border)
+assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame or edge, \
     (cx, root.winfo_rootx(), root.winfo_width(), dlg.win.winfo_rootx(), dlg.win.winfo_width(), area)  # centred (or kept on
 #                                                                                   the screen it overhangs)
 maximize(False, "1000x700"); pump(4)

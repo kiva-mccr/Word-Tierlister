@@ -1166,8 +1166,18 @@ class HeaderMenus(tk.Frame):
             self.drops[name].on_side = lambda d, n=name: self._side(n, d)
         top = self.winfo_toplevel()
         top.bind("<ButtonPress-1>", self._click_outside, add="+")
-        top.bind("<Configure>", lambda e: e.widget is top and self.close(), add="+")
+        self._top_geo = None
+        top.bind("<Configure>", lambda e: e.widget is top and self._top_configured(e), add="+")
         top.bind("<Unmap>", lambda e: e.widget is top and self.close(), add="+")
+
+    def _top_configured(self, e):
+        """The main window moved or changed size: the open menu would be left behind, so it closes. Windows also
+        sends <Configure> when the window only comes to the front (as the focus goes back to it while the
+        pointer moves from one menu to the next), which must not close the menu just opened."""
+        geo = (e.x, e.y, e.width, e.height)
+        if geo != self._top_geo:
+            self._top_geo = geo
+            self.close()
 
     def _click_outside(self, e):
         """A click anywhere in the main window closes the open menu (its own button toggles it instead)."""

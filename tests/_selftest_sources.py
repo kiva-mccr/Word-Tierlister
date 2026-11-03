@@ -380,8 +380,11 @@ app._offer_other_form(); pump(root, 4)
 assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py"))     # no question; unpacked
 assert "unpacked beside the program" in app.toast.cget("text") and app.store.get_meta("offered_source") == "1"
 shutil.rmtree(beside)
+unpacked, real_unpack = [], S.unpack                              # (watched, not looked for on disk: Windows can
+S.unpack = lambda *a, **k: (unpacked.append(a), real_unpack(*a, **k))[1]   # show a folder a while after removing it)
 app._offer_other_form(); pump(root, 4)
-assert not os.path.exists(beside)                                 # once only
+S.unpack = real_unpack
+assert not unpacked                                               # once only
 app.store.set_meta("offered_source", "0")
 os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "tierlist.py"), "w").write("")
 app._offer_other_form(); pump(root, 4)
