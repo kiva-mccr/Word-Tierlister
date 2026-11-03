@@ -1969,6 +1969,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           added by hand on another device) arrived with no rude kind, so it showed uncensored. Such words now go
 #           through Store._mark_added, the hand-picked list check a looked-up word gets (the user chose it over
 #           carrying the other device's kinds in the sync file).
+# [x] F-47 Asked for: a review of the folder logic (unpacking, cleaning up behind, making the program): "make sure it
+#           does what a user expects". Fixed: Remove it took files you added or edited (any .py / .md at the top, an
+#           export, uncommitted work in a git checkout): now only standalone.removable's, written down with their
+#           contents and removed only while unchanged; at the top only TOP_FILES ship. A new build is swapped in
+#           (install_program), never deleted first. Downloaded sources are removed from the temporary folder. The Mac
+#           program (asked for: what Mac users expect) keeps its save in ~/Library/Application Support and its source
+#           in ~/Documents, never beside it in Applications, and starts the updated app with open -n. Moving the save
+#           takes the log and a kept download along. The rename was checked: "Word Tier List" is left only where
+#           things from 1.0.2 and older are found.
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data

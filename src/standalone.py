@@ -37,7 +37,7 @@ import zipfile
 
 import bundle
 import deps
-from constants import OFFLINE_ENV, REPO, VERSION, plan_line
+from constants import OFFLINE_ENV, REPO, VERSION, WIKT_FILENAME, plan_line
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))     # the top of the project (tierlist.py)
 NAME = "word-tierlister"
@@ -68,19 +68,24 @@ REPO_FILES = ("LICENSE", ".gitignore", ".gitattributes")      # (in every downlo
                                                                # source left its folder behind for one hidden file)
 
 
+# the files at the top that ship, by name (F-47): anything else there (an export, notes of yours, a script) is yours,
+# never packed into a program nor removed with the source (a test keeps this in step with git's list)
+TOP_FILES = ("tierlist.py", "tierlist.md", "README.md", "DEVELOPERS.md", "requirements.txt", *REPO_FILES)
+
+
 def source_files(root=ROOT):
     """The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists
     (REPO_FILES); never saves, logs, caches, exports or a built program (docs/ may hold screenshots; src/icons
-    holds the icon, IC-1; src/typefaces the fonts, UI-73)."""
+    holds the icon, IC-1; src/typefaces the fonts, UI-73). At the top only TOP_FILES."""
     keep = []
     for f in walk(root):
-        top_level = os.sep not in f
-        if f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or f in REPO_FILES or \
+        if os.sep not in f:
+            if f in TOP_FILES:
+                keep.append(f)
+        elif f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or \
                 (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
                 (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico", ".icns"))) or \
                 (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json"))):
-            if top_level and f.endswith(".txt") and f != "requirements.txt":
-                continue                              # an export (tierlist.txt) next to tierlist.py is yours
             keep.append(f)
     return keep
 
@@ -303,12 +308,7 @@ def make_program(root=ROOT, log=print, release=None, place=None):
         if out is None:
             return None
         log("Putting it in place...")
-        target = program_path(place or root)
-        if os.path.isdir(target):
-            shutil.rmtree(target)
-        elif os.path.exists(target):
-            os.remove(target)
-        shutil.move(out, target)
+        target = install_program(out, program_path(place or root))
         shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace: the
                                                   # temporary folder can be on another disk, reported: Errno 18)
         remove_renamed_program(place or root)
@@ -318,6 +318,35 @@ def make_program(root=ROOT, log=print, release=None, place=None):
         return target
     finally:
         shutil.rmtree(dist, ignore_errors=True)
+
+
+NEW_SUFFIX = ".new"                 # beside the program while a new build is copied in, before it is swapped in
+
+
+def install_program(out, target):
+    """Put the program `out` (just built, maybe on another disk) at `target` without ever leaving none or half of
+    one there (F-47): it is copied in beside the old one first (target + NEW_SUFFIX), then swapped in as an update
+    is (replace_program: an old one in use, a running .exe on Windows, is renamed out of the way and removed now, or
+    by the program as it next starts). A failed copy leaves the old one as it was. Returns `target`."""
+    tmp = target + NEW_SUFFIX
+    try:
+        _remove(tmp)                                 # (one left by a copy cut short)
+        shutil.move(out, tmp)
+    except OSError:
+        try:
+            _remove(tmp)
+        except OSError:
+            pass
+        raise
+    if os.path.lexists(target):
+        old = replace_program(tmp, target)
+        try:
+            _remove(old)
+        except OSError:
+            pass                                     # (still running: remove_old_program takes it at its next start)
+    else:
+        os.rename(tmp, target)
+    return target
 
 
 def give_icon(program, platform=None, which=shutil.which, run=subprocess.run, home=None):
@@ -375,7 +404,8 @@ def start(path, popen=subprocess.Popen, args=()):
         flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
         return popen([exe, *args], creationflags=flags, close_fds=True, cwd=os.path.dirname(exe), env=clean_env())
     if sys.platform == "darwin" and path.endswith(".app"):
-        return popen(["open", path, *(["--args", *args] if args else [])], env=clean_env())
+        return popen(["open", "-n", path, *(["--args", *args] if args else [])], env=clean_env())   # (-n: a new
+        # copy even while this one, of the same app, is closing: else macOS only brings this one to the front, F-47)
     return popen([exe, *args], start_new_session=True, close_fds=True, cwd=os.path.dirname(exe), env=clean_env(),
                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -522,12 +552,56 @@ OLD_RECORDS = {SIDE_FILE: ".word-tierlist-build.json", UNPACKED: ".word-tierlist
 OLD_NAME, OLD_MAC_NAME = "word-tierlist", "Word Tier List"     # the program's own names then
 
 
-def mark_for_removal(root=ROOT):
-    """Before the program made from `root` removes it (remove_source): write down the files it may remove there,
-    the source's own (source_files), so a folder that was not unpacked from the program (a download, a clone) loses
-    only those and keeps anything else (a .git, a file of yours)."""
+def _git_unchanged(root, run=subprocess.run):
+    """The files git tracks in `root` that are exactly as committed (no edits, staged or not), or None when it is
+    not a git checkout or git cannot say."""
+    if not git_checkout(root):
+        return None
+    kw = {"cwd": root, "capture_output": True, "timeout": 60, "env": clean_env(),
+          "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0}
+    try:
+        tracked = run(["git", "ls-files", "-z"], **kw)
+        changed = run(["git", "diff", "--name-only", "-z", "HEAD"], **kw)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if tracked.returncode or changed.returncode:
+        return None
+    names = lambda out: {n.decode("utf-8", "surrogateescape") for n in out.split(b"\0") if n}
+    return names(tracked.stdout) - names(changed.stdout)
+
+
+def removable(root=ROOT, git=_git_unchanged):
+    """{path ("/"): sha256} of the source's own files in `root` that may go when the source is removed (F-47: what a
+    user expects, "anything you added or changed stays"): in a git checkout the files git tracks that are as
+    committed; in a folder unpacked from the program those the unpack put there, unchanged since; otherwise the
+    source's files (source_files: at the top only TOP_FILES)."""
+    files = {f.replace(os.sep, "/") for f in source_files(root)}
+    clean = git(root)
+    record = read_manifest(root, UNPACKED)
+    if clean is not None:
+        files &= clean
+    elif record:
+        files = {f for f in files if record.get("files", {}).get(f) == _sha(os.path.join(root, f))}
+    out = {}
+    for f in sorted(files):
+        digest = _sha(os.path.join(root, f))
+        if digest:
+            out[f] = digest
+    return out
+
+
+def knows_changes(root=ROOT, git=_git_unchanged):
+    """True when removing the source in `root` can tell your edits from the source as it came (removable: a git
+    checkout, or a folder with an unpack record); otherwise an edited source file goes with the rest."""
+    return git(root) is not None or bool(read_manifest(root, UNPACKED))
+
+
+def mark_for_removal(root=ROOT, git=_git_unchanged):
+    """Before the program made from `root` removes it (remove_source): write down the files it may remove there and
+    their contents (removable), so it removes only those, and only if they have not changed since: anything else (a
+    .git, a file of yours, one you edited) stays."""
     with open(os.path.join(root, REMOVE_RECORD), "w", encoding="utf-8") as fh:
-        json.dump({"files": [f.replace(os.sep, "/") for f in source_files(root)]}, fh)
+        json.dump({"files": removable(root, git)}, fh)
 
 
 def zip_source(root, folder):
@@ -544,9 +618,9 @@ def zip_source(root, folder):
 
 
 def move_save(save, folder):
-    """Move a save file (with its -wal / -shm, its .bak backups and the log beside it) into `folder`, never over a
-    file already there (then it is saved as tierlist-2.db, ...). Returns the save's new path. The save must be
-    closed."""
+    """Move a save file (with its -wal / -shm, its .bak backups, the log beside it and a kept Wiktionary download)
+    into `folder`, never over a file already there (then it is saved as tierlist-2.db, ...; a log there gets this
+    one added at its end, F-47). Returns the save's new path. The save must be closed."""
     base, ext = os.path.splitext(os.path.basename(save))
     dest, n = os.path.join(folder, base + ext), 2
     while os.path.exists(dest):
@@ -558,8 +632,16 @@ def move_save(save, folder):
             shutil.move(p, dest + name[len(os.path.basename(save)):])
         elif name.startswith(os.path.basename(save) + ".") and name.endswith(".bak"):
             shutil.move(p, dest + name[len(os.path.basename(save)):])
-        elif name == "tierlist.log" and not os.path.exists(os.path.join(folder, name)):
-            shutil.move(p, os.path.join(folder, name))
+        elif name == "tierlist.log":
+            there = os.path.join(folder, name)
+            if not os.path.exists(there):
+                shutil.move(p, there)
+            else:                                     # (added to the one there: nothing of it lost)
+                with open(p, "rb") as src, open(there, "ab") as out:
+                    shutil.copyfileobj(src, out)
+                os.remove(p)
+        elif name.startswith(WIKT_FILENAME) and not os.path.exists(os.path.join(folder, name)):
+            shutil.move(p, os.path.join(folder, name))    # (kept with --keep-download: found beside the save)
     shutil.move(save, dest)
     return dest
 
@@ -571,20 +653,29 @@ OURS = ("__pycache__", ".venv", "tierlist.log", UNPACKED, SIDE_FILE, ".pytest_ca
 def remove_source(folder, tries=120, wait=0.25):
     """Remove an unpacked source folder (T-12), run by the new program as it starts (the old one may still be
     closing: on Windows a folder in use cannot be removed, so it tries again for a while). Only the program's own
-    files go: those its unpack record lists (UNPACKED) or the old window wrote down for it (REMOVE_RECORD, T-14:
-    a source that came from anywhere), OURS and any __pycache__; anything else (a save, a file of yours, a .git)
-    stays, and so does the folder then. A program in the folder (it went where its source was) stays with its build
+    files go: those the old window wrote down for it (REMOVE_RECORD, T-14: a source that came from anywhere; F-47:
+    only while their contents are as written down) or else its unpack record lists, unchanged since (UNPACKED), OURS
+    and any __pycache__; anything else (a save, a file of yours or one you edited, a .git) stays, and so does the
+    folder then. A program in the folder (it went where its source was) stays with its build
     record and the log. Never touches a folder with neither record. Returns the paths left behind, or None."""
     record = read_manifest(folder, UNPACKED)
     marked = read_manifest(folder, REMOVE_RECORD)
     if not came_from_program(record) and not marked:
         return None
-    listed = set((record or {}).get("files", {})) | set((marked or {}).get("files", []))
+    if marked:                         # (F-47: path -> its contents then; a list is an older window's: any contents)
+        listed = marked.get("files") or {}
+        listed = listed if isinstance(listed, dict) else dict.fromkeys(listed)
+    else:
+        listed = (record or {}).get("files", {})     # (only unchanged since it was unpacked)
     kept = (SIDE_FILE, OLD_RECORDS[SIDE_FILE], "tierlist.log") if os.path.exists(program_path(folder)) else ()
 
-    def ours(rel):
+    def ours(rel, path):
         parts = rel.split("/")
-        return rel not in kept and (rel in listed or parts[0] in OURS or "__pycache__" in parts)
+        if rel in kept:
+            return False
+        if parts[0] in OURS or "__pycache__" in parts:
+            return True
+        return rel in listed and (listed[rel] is None or listed[rel] == _sha(path))
 
     left = []
     for _ in range(max(1, tries)):
@@ -597,7 +688,7 @@ def remove_source(folder, tries=120, wait=0.25):
                     if os.path.isdir(p) and not os.path.islink(p):
                         if not os.listdir(p):
                             os.rmdir(p)
-                    elif ours(rel):
+                    elif ours(rel, p):
                         os.remove(p)
                     else:
                         left.append(p)
@@ -613,22 +704,40 @@ def remove_source(folder, tries=120, wait=0.25):
     return left
 
 
-def default_source_folder(program=None):
-    """Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source"."""
+SOURCE_FOLDER = "Word Tierlister source"
+
+
+def default_source_folder(program=None, platform=None, home=None):
+    """Where the source goes unless you pick another folder: beside the program, in "Word Tierlister source"; on
+    macOS in Documents (F-47: a Mac app keeps nothing of its own beside it in Applications, which is what Mac users
+    expect)."""
+    if (platform or sys.platform) == "darwin":
+        return os.path.join(home or os.path.expanduser("~"), "Documents", SOURCE_FOLDER)
+    program = program or (sys.executable if getattr(sys, "frozen", False) else ROOT)
+    return os.path.join(os.path.dirname(program), SOURCE_FOLDER)
+
+
+def program_folder(program=None):
+    """The folder the program sits in (on macOS the one holding the .app)."""
     program = program or (sys.executable if getattr(sys, "frozen", False) else ROOT)
     where = os.path.dirname(program)
     if where.endswith(os.path.join(".app", "Contents", "MacOS")):        # (beside the .app, not inside it)
         where = os.path.dirname(os.path.dirname(os.path.dirname(where)))
-    return os.path.join(where, "Word Tierlister source")
+    return where
 
 
-def existing_source(program=None):
+def existing_source(program=None, platform=None, home=None):
     """A copy of the source the program sits beside already, or None: tierlist.py right there (it was built from
     that source: T-6 puts it next to tierlist.py), or a folder beside it holding one (unpacked before, or made by
-    hand, whatever its name). The first start unpacks the source only where none is (T-10)."""
-    where = os.path.dirname(default_source_folder(program))
+    hand, whatever its name), or the usual folder when that is elsewhere (macOS: Documents, F-47). The first start
+    unpacks the source only where none is (T-10)."""
+    where = program_folder(program)
     if os.path.isfile(os.path.join(where, "tierlist.py")):
         return where
+    usual = default_source_folder(program, platform, home)             # (macOS: in Documents)
+    if os.path.dirname(usual) != where and any(os.path.isfile(os.path.join(usual, n))
+                                               for n in ("tierlist.py", UNPACKED, OLD_RECORDS[UNPACKED])):
+        return usual
     try:
         names = sorted(os.listdir(where))
     except OSError:
@@ -875,7 +984,7 @@ def fetch_program(release, folder, log=print, platform=None, download=_download_
     else:
         with zipfile.ZipFile(dest) as z:
             for info in z.infolist():
-                if ".." in info.filename.split("/") or info.filename.startswith("/"):
+                if not inside(folder, info.filename.split("/")):     # (S-4's check, as for the source's zip)
                     continue
                 path = z.extract(info, folder)
                 mode = info.external_attr >> 16

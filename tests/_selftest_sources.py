@@ -135,15 +135,24 @@ assert S.bundled_source() == os.path.join(meipass, S.SOURCE_DIR)
 del _sys.frozen, _sys._MEIPASS
 assert S.bundled_source() is None                                # (from source: nothing carried)
 J = os.path.join                                                 # (this system's separators, as the program has them)
-assert S.default_source_folder(J("/home", "me", "Programs", "word-tierlister")) == J("/home", "me", "Programs",
-                                                                                       "Word Tierlister source")
-assert S.default_source_folder(J("/Apps", "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister")) == \
-    J("/Apps", "Word Tierlister source")
+assert S.default_source_folder(J("/home", "me", "Programs", "word-tierlister"), platform="linux") == \
+    J("/home", "me", "Programs", "Word Tierlister source")
+# a Mac app keeps nothing beside it in Applications (F-47): its source goes in Documents
+assert S.default_source_folder(J("/Applications", "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister"),
+                               platform="darwin", home=J("/Users", "me")) == J("/Users", "me", "Documents",
+                                                                              "Word Tierlister source")
+mac_home = tempfile.mkdtemp()
+mac_app = J(mac_home, "Applications", "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister")
+os.makedirs(os.path.dirname(mac_app))
+assert S.existing_source(mac_app, platform="darwin", home=mac_home) is None
+os.makedirs(J(mac_home, "Documents", "Word Tierlister source"))
+open(J(mac_home, "Documents", "Word Tierlister source", "tierlist.py"), "w").close()
+assert S.existing_source(mac_app, platform="darwin", home=mac_home) == J(mac_home, "Documents", "Word Tierlister source")
 
 # the dialog in the built program: where, what it will do, then unpack, open the folder, offer to start tierlist.py
 root, app = window()
 target2 = os.path.join(tempfile.mkdtemp(), "Word Tierlister source")
-S.default_source_folder = lambda program=None: target2
+S.default_source_folder = lambda *a, **kw: target2
 opened, asked, popened = [], [], []
 S.open_folder = lambda path, popen=None: opened.append(path)
 S.python_for_source = lambda: "/usr/bin/python3"
@@ -212,16 +221,19 @@ assert "the newest there is" in d.line.cget("text") and "Nothing newer" in d.upd
 v3 = carried({"tierlist.py": "v3\n", "src/a.py": "a3\n", "tests/run_tests.sh": "t\n"})
 fetched = []
 S.fetch_source = lambda rel, folder, log: (fetched.append(rel["version"]), log("Downloading..."), v3)[2]
-target3 = os.path.join(tempfile.mkdtemp(), "Word Tierlister source"); S.default_source_folder = lambda program=None: target3
+target3 = os.path.join(tempfile.mkdtemp(), "Word Tierlister source"); S.default_source_folder = lambda *a, **kw: target3
 S.unpack(v2, target3)
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
 assert "Version 9.1.0 is out" in d.line.cget("text") and '"Unpack" downloads it' in d.update_line.cget("text")
 assert d.tick.instate(["!disabled"])
 d.buttons["Unpack"].invoke(); pump(root)
 assert fetched == ["9.1.0"] and d.alive() and "9.1.0 downloaded" in d.update_line.cget("text")
+download_dir = d.download_dir
+assert download_dir and os.path.isdir(download_dir)
 assert "2 updated" in d.state.cget("text") and "1 removed" in d.state.cget("text"), d.state.cget("text")
 d.buttons["Unpack"].invoke(); pump(root)
 assert open(os.path.join(target3, "tierlist.py")).read() == "v3\n" and fetched == ["9.1.0"] and not d.alive()
+assert not os.path.exists(download_dir)                         # (F-47: the download is removed once unpacked)
 # unticked: the version you have, nothing downloaded
 d = sources.SourceDialog(app, source=v2, frozen=True, check=lambda: release); settle(d)
 d.update_var.set(False); d._show_update()
@@ -253,8 +265,11 @@ pump(root, 2); assert sources.UPDATE in d.buttons and d.buttons[sources.UPDATE].
 assert '"Make the program" builds' in d.update_line.cget("text") and "Nothing is built" in d.how.cget("text")
 assert d.dlg._default is d.buttons[sources.UPDATE]                         # (Enter updates; the build is a click)
 save = app.store.path
+downloads = lambda: {n for n in os.listdir(tempfile.gettempdir()) if n.startswith("wtl-release-")}
+before = downloads()
 d.buttons[sources.UPDATE].invoke(); pump(root, 3)
 assert fetched == ["9.1.0"] and not made                                    # downloaded, nothing built
+assert downloads() <= before                                                # (F-47: the download is not left behind)
 head, body = asked[-1][1], asked[-1][2]
 assert head == "Update the source to version 9.1.0?" and "kept as .bak" in body and "same save" in body, asked[-1]
 assert open(os.path.join(proj2, "tierlist.py")).read() == "v3\n" and open(os.path.join(proj2, "src", "a.py")).read() == "a3\n"
@@ -377,7 +392,8 @@ A.is_frozen = lambda: True
 S.bundled_source = lambda: v2
 home = tempfile.mkdtemp()
 beside = os.path.join(home, "Word Tierlister source")
-S.default_source_folder = lambda program=None: beside
+S.default_source_folder = lambda *a, **kw: beside
+REAL_PROGRAM_FOLDER, S.program_folder = S.program_folder, lambda program=None: home
 sources.is_frozen = lambda: True
 n = len(asked)
 for w in root.winfo_children():                                   # (the start's own question, anchor words, if it is up
@@ -396,12 +412,12 @@ app.store.set_meta("offered_source", "0")
 os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "tierlist.py"), "w").write("")
 app._offer_other_form(); pump(root, 4)
 assert not os.path.exists(beside) and S.existing_source() == os.path.join(home, "my copy")   # (a copy is there)
-S.default_source_folder = REAL_DEFAULT
+S.default_source_folder, S.program_folder = REAL_DEFAULT, REAL_PROGRAM_FOLDER
 prog = os.path.join(tempfile.mkdtemp(), "word-tierlister")
 assert S.existing_source(prog) is None
 open(os.path.join(os.path.dirname(prog), "tierlist.py"), "w").write("")
 assert S.existing_source(prog) == os.path.dirname(prog)          # (built from source: it sits beside tierlist.py)
-S.default_source_folder = lambda program=None: beside
+S.default_source_folder = lambda *a, **kw: beside
 
 # ---- T-12: "Clean up behind?" (asked for): the program goes where the source was (asked for: not the folder holding
 # it); a folder unpacked from a program beside it replaces that program, the save moves next to it, and the new

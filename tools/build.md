@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `build`: Build the program into `dist` (default dist/ in the project), carrying its source inside (T-7); returns its path, or None if the build failed.
-- `check`: Start the built program from a folder of its own, with a short word list and no internet, and see that it opens and stays open, and keeps its save beside itself (T-1).
+- `check`: Start the built program from a folder of its own, with a short word list and no internet, and see that it opens and stays open, and keeps its save beside itself (T-1;...
 - `stop_tree`: Stop a started program and anything it started (on Windows, the one-file program's inner process too); never waits for ever.
 - `remote_ready`: (branch, commit) to build on GitHub, or (None, why not): gh installed and logged in, the commit pushed.
 - `build_all`: Run the "Build programs" workflow on GitHub for the pushed branch, wait for it, and fetch its programs into `dist`: their paths, or (None, why not).

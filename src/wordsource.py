@@ -27,7 +27,7 @@ import urllib.error
 import urllib.request
 
 import rudeness
-from constants import OFFLINE_ENV, kind_bits
+from constants import OFFLINE_ENV, WIKT_FILENAME, kind_bits
 from obscene import CENSORABLE, CENSORED, RUDE, obscene_in
 from problems import SetupError
 
@@ -88,7 +88,6 @@ def build_word_list(custom_path=None):
 # Wiktionary word source (kaikki.org's extract of English Wiktionary)
 # --------------------------------------------------------------------------
 WIKT_URL = "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl"
-WIKT_FILENAME = "kaikki-English.jsonl"
 # Wiktionary entry types (the "pos" field) that are not standalone words, so they are left out.
 SKIP_POS = {"name", "symbol", "character", "punct", "romanization", "prefix", "suffix", "infix",
             "interfix", "affix", "circumfix", "proverb", "phrase", "prep_phrase"}

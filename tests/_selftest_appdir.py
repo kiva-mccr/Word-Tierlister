@@ -13,7 +13,11 @@ assert S.restart_args(["--db", "x.db"], frozen=False) == [os.path.join(ROOT, "ti
 tmp = tempfile.mkdtemp()
 prog = os.path.join(tmp, "Programs", "word-tierlister")
 os.makedirs(os.path.dirname(prog)); open(prog, "w").close()
-assert S.app_dir(frozen=True, executable=prog) == os.path.dirname(prog)
+assert S.app_dir(frozen=True, executable=prog, platform="linux") == os.path.dirname(prog)
+assert S.app_dir(frozen=True, executable=prog, platform="win32") == os.path.dirname(prog)
+# ... but a Mac app always keeps its data in Application Support, never beside it in Applications (F-47)
+assert S.app_dir(frozen=True, executable=prog, platform="darwin", home=os.path.join(tmp, "mac-home")) == \
+    os.path.join(tmp, "mac-home", "Library", "Application Support", "Word Tierlister")
 assert S.restart_args(["--db", "x.db"], frozen=True) == ["--db", "x.db"]          # (the executable is the program)
 # ... on macOS the folder holding the .app, not inside the bundle
 mac = os.path.join(tmp, "Apps", "Word Tierlister.app", "Contents", "MacOS", "word-tierlister")
@@ -52,6 +56,8 @@ print(saves.app_dir()); print(path)
 """
 out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=60)
 assert out.returncode == 0, out.stderr
-where, save = out.stdout.split()
-assert where == os.path.dirname(prog) and save == os.path.join(os.path.dirname(prog), "tierlist.db"), out.stdout
+where, save = out.stdout.splitlines()
+want = os.path.join(home, "Library", "Application Support", "Word Tierlister") if sys.platform == "darwin" else \
+    os.path.dirname(prog)                                                     # (macOS: Application Support, F-47)
+assert where == want and save == os.path.join(want, "tierlist.db"), out.stdout
 print("APPDIR OK")

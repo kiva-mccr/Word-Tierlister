@@ -274,7 +274,7 @@ class App:
         if old == VERSION:
             return None
         self.flash(f"Updated to version {VERSION} (from {old})", kind="info", ms=5000)
-        folder = standalone.default_source_folder()
+        folder = standalone.existing_source() or standalone.default_source_folder()   # (one beside an older Mac app)
         if is_frozen() and standalone.bundled_source() and \
                 standalone.came_from_program(standalone.read_manifest(folder, standalone.UNPACKED)):
             try:
@@ -358,10 +358,12 @@ class App:
         try:
             standalone.unpack(standalone.bundled_source(), where)
         except OSError as exc:
-            self.flash(f"The source code could not be unpacked beside the program ({exc.strerror or exc}); "
+            self.flash(f"The source code could not be unpacked ({exc.strerror or exc}); "
                        "File > Source & Updates can put it elsewhere", ms=6000)
             return None
-        self.flash(f"The source code is unpacked beside the program, in \"{os.path.basename(where)}\" "
+        beside = os.path.dirname(where) == standalone.program_folder()    # (macOS: in Documents, F-47)
+        self.flash(f"The source code is unpacked {'beside the program' if beside else 'in Documents'}, in "
+                   f"\"{os.path.basename(where)}\" "
                    "(File > Source & Updates)", ms=5000)
         return where
 

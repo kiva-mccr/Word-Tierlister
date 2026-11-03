@@ -82,7 +82,7 @@ assert not S.up_to_date(proj)                                   # one removed
 started = []
 S.start(S.program_path(proj), popen=lambda args, **kw: started.append((args, kw)))
 if sys.platform == "darwin" and S.program_path(proj).endswith(".app"):
-    assert started[0][0] == ["open", S.program_path(proj)]                                 # (macOS: an app opens)
+    assert started[0][0] == ["open", "-n", S.program_path(proj)]                     # (macOS: an app opens, anew)
 else:
     kw = started[0][1]                                    # (on its own: a session of its own, or detached on Windows)
     assert started[0][0] == [S.program_path(proj)] and (kw.get("start_new_session") or kw.get("creationflags"))

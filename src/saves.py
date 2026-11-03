@@ -67,11 +67,13 @@ def app_dir(frozen=None, executable=None, writable=_writable, **where):
     """Where the save, its log and exports live. From source: tierlist.py's folder, as always. As a built program
     (T-1): the folder the program sits in, never the folder it unpacks itself into each time it starts (a
     one-file build's temporary folder is deleted when it exits, and the save with it); if that folder is
-    read-only (Program Files, a disk image), the per-user data folder (user_data_dir), made if needed."""
+    read-only (Program Files, a disk image), the per-user data folder (user_data_dir), made if needed. On macOS
+    always that folder, ~/Library/Application Support/Word Tierlister (F-47: where Mac apps keep their data, never
+    beside the app in Applications); a save kept beside the app by an older version is still found (find_saves)."""
     if not (is_frozen() if frozen is None else frozen):
         return SOURCE_DIR
     folder = program_dir(executable)
-    if writable(folder):
+    if (where.get("platform") or sys.platform) != "darwin" and writable(folder):
         return folder
     data = user_data_dir(**where)
     os.makedirs(data, exist_ok=True)
@@ -135,6 +137,8 @@ def find_saves(script_dir):
     """Files that might be tier-list saves, in the places people usually keep them."""
     home = os.path.expanduser("~")
     roots = [script_dir, os.path.dirname(script_dir), os.getcwd(), home, user_data_dir()]   # (a built program's, T-1)
+    if is_frozen():
+        roots.append(program_dir())               # (beside the program: where a Mac app's save was before F-47)
     roots += [os.path.join(home, *sub) for sub in (("Downloads",), ("Documents",), ("Desktop",), ("OneDrive",),
                                                      ("OneDrive", "Documents"), ("OneDrive", "Desktop"))]
     found, seen, seen_roots = [], set(), set()

@@ -44,7 +44,8 @@ def build(dist=None, log=print):
 
 def check(out, seconds=12, log=print):
     """Start the built program from a folder of its own, with a short word list and no internet, and see that it
-    opens and stays open, and keeps its save beside itself (T-1). Returns True if it did."""
+    opens and stays open, and keeps its save beside itself (T-1; macOS: in Application Support, F-47). Returns True
+    if it did."""
     home = tempfile.mkdtemp(prefix="wtl-check-")
     folder = os.path.join(home, "Programs")
     os.makedirs(folder)
@@ -60,8 +61,9 @@ def check(out, seconds=12, log=print):
             open(os.path.join(home, "err.txt"), "w+", encoding="utf-8", errors="replace") as err_f:
         p = subprocess.Popen([executable(target), "--wordlist", words, "--no-install", "--console"],
                              stdout=out_f, stderr=err_f, env=env)
-        save = os.path.join(os.path.dirname(executable(target)) if not target.endswith(".app") else folder,
-                            "tierlist.db")
+        save = os.path.join(os.path.dirname(executable(target)) if not target.endswith(".app") else
+                            os.path.join(home, "Library", "Application Support", "Word Tierlister"),   # (macOS:
+                            "tierlist.db")                                                      # F-47)
         end = time.time() + seconds
         while time.time() < end and p.poll() is None and not os.path.exists(save):
             time.sleep(0.5)
@@ -72,7 +74,7 @@ def check(out, seconds=12, log=print):
         err_f.seek(0)
         outtext, errtext = out_f.read(), err_f.read()
     ok = alive and os.path.exists(save) and "Traceback" not in errtext
-    log("The new program " + ("runs, and keeps its save beside itself." if ok else
+    log("The new program " + ("runs, and keeps its save where it should." if ok else
                               f"did not run as it should:\n{outtext[-1500:]}\n{errtext[-1500:]}"))
     shutil.rmtree(home, ignore_errors=True)
     return ok

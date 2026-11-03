@@ -24,7 +24,9 @@ like: it carries on exactly where you left off, even after an update.
 
 No Python needed. [All releases](https://github.com/kiva-mccr/Word-Tierlister/releases) are on GitHub.
 
-1. **Put it in a folder of its own.** It keeps your save file right beside itself.
+1. **Put it in a folder of its own.** It keeps your save file right beside itself. *On a Mac*, drag it into
+   **Applications** as usual: it keeps your save in `~/Library/Application Support/Word Tierlister`, and its source
+   code (unpacked on the first start) in **Documents**.
 2. **Start it.** The programs are not signed, so your computer may hesitate the first time:
    - *Windows* may say it does not know the program: click **More info**, then **Run anyway**.
    - *Linux*: make it runnable first, with `chmod +x word-tierlister-linux` (or tick "Allow executing" in its
@@ -206,6 +208,13 @@ new version once.
 The same panel can turn the Python source into a standalone program for your computer, or, in the program, unpack
 its source code again (it carries it inside). On Linux and Windows it can also add Word Tierlister to your
 applications menu or Start menu.
+
+When you make the program from the source, it asks whether to **clean up behind**: keep the source, zip it, or
+remove it. Removing takes only the source's own files as they came; anything you added or changed stays (in a git
+checkout, so do changes you have not committed yet).
+
+If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
+ending in `.old`: that is the previous version. Take `.old` off its name and start it.
 
 ## If something goes wrong
 
