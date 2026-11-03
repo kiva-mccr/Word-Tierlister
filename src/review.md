@@ -13,7 +13,7 @@ The module docstring has the details; this page is the map.
 - `kind_colour`: A kind's pastel: a tier colour each (read now: they can be changed), Clean the plain neutral.
 - `read_review`: The review file's words, in order: [{"w", "why", "whole", "senses": [{"key", "pos", "labels", "gloss", "guess"}]}].
 - `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet.
-- `write_answers`: Write every answer (in the review's order) to `path`, through a temporary file, so a crash mid-write never leaves half a file.
+- `write_answers`: Write every answer to `path` (the review's words in its order, then any others: answers from an earlier, smaller review are kept), through a temporary file, so a...
 - `RudeReview`: The review window (see the module's note).
   - methods: item, select, set_kind, toggle_whole, next_word, back, apply_keys, on_key, alive, close
 

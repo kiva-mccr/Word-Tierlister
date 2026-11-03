@@ -80,13 +80,13 @@ def read_answers(path):
 
 
 def write_answers(path, answers, order):
-    """Write every answer (in the review's order) to `path`, through a temporary file, so a crash mid-write never
-    leaves half a file."""
+    """Write every answer to `path` (the review's words in its order, then any others: answers from an earlier,
+    smaller review are kept), through a temporary file, so a crash mid-write never leaves half a file."""
     tmp = path + ".part"
+    listed = set(order)
     with open(tmp, "w", encoding="utf-8") as f:
-        for w in order:
-            if w in answers:
-                f.write(json.dumps(answers[w], ensure_ascii=False) + "\n")
+        for w in [w for w in order if w in answers] + [w for w in answers if w not in listed]:
+            f.write(json.dumps(answers[w], ensure_ascii=False) + "\n")
     os.replace(tmp, path)
 
 

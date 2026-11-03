@@ -139,6 +139,9 @@ assert item["senses"][0]["pos"] == "noun" and item["w"] == "tail" and item["why"
 ans = os.path.join(folder, "a.jsonl")
 R.write_answers(ans, {"tail": {"w": "tail", "keys": [x["key"] for x in item["senses"]],
                                "kinds": ["clean", "crude", "sexual"], "whole": False}}, ["tail"])
+R.write_answers(ans, {**R.read_answers(ans), "idiot": {"w": "idiot", "keys": ["x"], "kinds": ["insult"],
+                                                       "whole": False}}, ["idiot"])
+assert [a["w"] for a in map(json.loads, open(ans))] == ["idiot", "tail"]    # (a word not in this review is kept)
 got = M.read_answers(ans)
 assert got["tail"]["kinds"]["The buttocks."] == "crude" and got["tail"]["whole"] is False
 share = M.score_answers(got, {"tail": senses}, {"tail": scored}, log=lambda *a: None)
