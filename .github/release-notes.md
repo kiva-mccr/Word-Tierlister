@@ -5,7 +5,7 @@ the first time.
   also ask; allow it.
 - **Linux:** a downloaded file cannot be started until it is allowed to run: in its Properties tick "Allow executing
   file as program", or run `chmod +x word-tierlister-linux`.
-- **macOS** (Apple Silicon): unzip `word-tierlister-macos.zip` and move "Word Tierlister" into a folder of its own. The
+- **macOS** (Apple Silicon; not tested on a real Mac yet, only by automated tests on GitHub's Macs): unzip `word-tierlister-macos.zip` and move "Word Tierlister" into a folder of its own. The
   first time, macOS says it cannot check the app: open **System Settings > Privacy & Security**, scroll down and click
   **Open Anyway**. If it says the app "is damaged", run `xattr -dr com.apple.quarantine "Word Tierlister.app"` in
   Terminal, then open it again.
