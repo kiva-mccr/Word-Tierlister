@@ -2001,6 +2001,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the top right (Accept / Link), linked devices, Sync automatically (on), Sync now, Link by code small at
 #           the bottom. Missing Syncthing: asked to install it first. The install window offers it unticked.
 #           AutoSync looks every 10 s, writes at most every minute (and at closing), never while App.busy.
+# [x] SY-2 Reported: "Last synced" had a time before any other device had answered (writing this device's own file
+#           counted). Now only an answer counts (AutoSync._record): another device's file read here, or Syncthing
+#           saying a linked, connected device has all of this one's (/rest/db/completion 100%, the folder idle:
+#           Client.up_to_date, AutoSync.confirm); until then "Never synced yet." (NEVER_SYNCED); an older save's
+#           note reads as never. Asked for too, from mock-ups: this device's code hidden (dots) with a small eye
+#           inside the box's right end (smooth.ICONS "eye"; the more common way: an open eye while hidden, it shows
+#           it; a closed eye with lashes while shown, picked over a slashed eye as cuter); Copy copies it hidden.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

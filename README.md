@@ -189,11 +189,12 @@ All of these can be changed under Settings > Keyboard shortcuts.
 account and no cloud. If Syncthing is missing, the window offers to install it first.
 
 - Open the window on both devices. Each one shows up on the other under "Devices that want to sync": press
-  **Accept**. If it does not show up, copy one device's code into the other at the bottom (**Link by code**).
+  **Accept**. If it does not show up, copy one device's code into the other at the bottom (**Link by code**). The
+  code stays hidden unless you click the eye; **Copy** copies it either way.
 - Syncing then happens by itself while the program runs (untick **Sync automatically** to only sync with **Sync
   now**).
 - Both devices must be switched on, with Syncthing running, at the same time. If both changed the same word, the
-  later change wins.
+  later change wins. "Last synced" only shows a time once another device has really answered.
 
 ## Updates
 
