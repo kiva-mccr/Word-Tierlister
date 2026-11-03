@@ -94,7 +94,8 @@ app.anim.reduce_motion = False
 heights = []
 app.start_compare()
 for _ in range(40):
-    root.update(); heights.append(app.def_frame.winfo_height()); root.after(8, root.quit); root.mainloop()
+    root.update(); heights.append(app.def_frame.winfo_reqheight()); root.after(8, root.quit); root.mainloop()
+#   (the height each frame asks for: a Mac's runner drew the window's own size late)
 app.anim.finish_all(); root.update()
 assert app.def_frame.lines() < lines, (lines, app.def_frame.lines(), root.winfo_height())
 assert len(set(heights)) > 3 and all(b <= a for a, b in zip(heights, heights[1:])), heights
