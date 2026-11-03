@@ -157,6 +157,9 @@ program and only until it is in the menu; the build's tick only while it is not)
 word-tierlist-* release copies were dropped after 1.0.4 (the user: nobody runs 1.0.2 or older); the old data folder, pointer file, records, launcher and shortcut are still found).
 SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). SY-2 ("Last synced" only once another device answers; the device code hidden behind an eye inside its box, closed eye picked). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
 F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
+U-9 (asked for, for testing: "Update to nightly" in Source & Updates, only while main's files differ from yours by git's ids,
+fully manual; the program builds its replacement from main's source in the source folder beside it, --build-nightly;
+release programs are now checked against SHA256SUMS.txt, nightlies not).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
@@ -219,6 +222,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   Fedora or a Mac.
 - The repository must stay public for updates: GitHub answers a private repository's releases with 404 to anyone not
   signed in (it was private until U-4; the user made it public). Never change its visibility; keep secrets out of it.
+- U-9's nightly was checked against the real GitHub API (main's tree) but never run end to end: the program's
+  rebuild (source beside it started with --build-nightly, PyInstaller, swap) was only faked; try it first on Linux.
 - U-1's self-update never ran against a real release or on Windows / macOS (renaming the running .exe, ditto):
   the first test is updating a 1.0.0 program to the next release.
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published

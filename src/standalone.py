@@ -18,9 +18,12 @@ VERSION, fetch_source downloads its source (the repository at its tag) ready to 
 programs a release carries are named in RELEASE_ASSETS. U-1 (File > Check for updates): the program updates itself
 (fetch_program downloads this computer's program from the release, replace_program swaps it in for the running one,
 which is kept as .old until the new one removes it: remove_old_program); a source that is a git checkout updates with
-git_pull. No tkinter.
+git_pull. A release's program must match its SHA256SUMS.txt (release_sums). Nightly (U-9): latest_main is main
+as it is now, nightly_changes the files that differ from a source folder (by git's ids: blob_sha, local_files).
+No tkinter.
 """
 import ast
+import calendar
 import collections
 import hashlib
 import io
@@ -77,17 +80,20 @@ def source_files(root=ROOT):
     """The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists
     (REPO_FILES); never saves, logs, caches, exports or a built program (docs/ may hold screenshots; src/icons
     holds the icon, IC-1; src/typefaces the fonts, UI-73). At the top only TOP_FILES."""
-    keep = []
-    for f in walk(root):
-        if os.sep not in f:
-            if f in TOP_FILES:
-                keep.append(f)
-        elif f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or \
-                (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
-                (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico", ".icns"))) or \
-                (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json"))):
-            keep.append(f)
-    return keep
+    return [f for f in walk(root) if ships(f)]
+
+
+def ships(f):
+    """True if the file `f` (a path relative to the top, with os.sep) is part of the source (source_files)."""
+    parts = f.split(os.sep)
+    if len(parts) == 1:
+        return f in TOP_FILES
+    if parts[0] not in SHIP_DIRS or any(p in SKIP for p in parts):
+        return False
+    return f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or \
+        (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
+        (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico", ".icns"))) or \
+        (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json")))
 
 
 def manifest(root=ROOT, files=None):
@@ -293,13 +299,15 @@ def biggest_parts(folder, n=5):
     return [(name, size / 1e6) for name, size in sizes.most_common(n)]
 
 
-def make_program(root=ROOT, log=print, release=None, place=None):
+def make_program(root=ROOT, log=print, release=None, place=None, target=None):
     """File > Source & Updates, from source (T-6): build the program from the source as it is now and put it next
     to tierlist.py (replacing an older one), with its manifest beside it; `place`: in that folder instead (T-12:
     beside an unpacked source that is then cleaned up). `release` (latest_release): download that version's source
     first and build from it instead (T-8: "Update to the newest version first"). Returns its path, or None if it
-    could not be built (the reason is logged). Run on a worker thread: it takes a minute or two."""
-    log(plan_line(([f"Downloading version {release['version']}"] if release else [])
+    could not be built (the reason is logged). `target`: put it there instead, in place of the program that is
+    there (a nightly update of the program: the one it replaces, under its own name), with no build record beside
+    it. Run on a worker thread: it takes a minute or two."""
+    log(plan_line(([f"Downloading {named(release)}"] if release else [])
                   + (["Installing PyInstaller"] if not has_pyinstaller() else []) + ["Building", "Putting it in place"]))
     dist = tempfile.mkdtemp(prefix="wtl-dist-")
     try:
@@ -308,10 +316,13 @@ def make_program(root=ROOT, log=print, release=None, place=None):
         if out is None:
             return None
         log("Putting it in place...")
-        target = install_program(out, program_path(place or root))
-        shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace: the
-                                                  # temporary folder can be on another disk, reported: Errno 18)
-        remove_renamed_program(place or root)
+        if target:
+            target = install_program(out, target)
+        else:
+            target = install_program(out, program_path(place or root))
+            shutil.move(os.path.join(dist, SIDE_FILE), os.path.join(place or root, SIDE_FILE))   # (not os.replace:
+                                                  # the temporary folder can be on another disk, reported: Errno 18)
+            remove_renamed_program(place or root)
         log(f"  {target}")
         if give_icon(target):
             log("  with its icon (in the file manager)")
@@ -873,6 +884,11 @@ def latest_release(fetch=_download):
             "assets": assets}
 
 
+def named(release):
+    """"version 1.0.5", or for main as it is now (latest_main) "the nightly build (4f2c9ab)"."""
+    return release.get("label") or f"version {release['version']}"
+
+
 def newer(release, version=VERSION):
     """True if `release` (latest_release) is a newer version than `version`."""
     return bool(release) and version_tuple(release["version"]) > version_tuple(version)
@@ -892,11 +908,11 @@ def inside(folder, parts):
 def fetch_source(release, folder, log=print, fetch=_download):
     """Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest,
     ready to unpack (plan_unpack) or build from; returns `folder`. Raises OSError if it cannot."""
-    log(f"Downloading version {release['version']}...")
+    log(f"Downloading {named(release)}...")
     try:
         data = fetch(release["source"], timeout=60)
     except Exception as exc:
-        raise OSError(f"could not download version {release['version']}: {exc}") from exc
+        raise OSError(f"could not download {named(release)}: {exc}") from exc
     log(f"  {len(data) / 1e6:.1f} MB")
     os.makedirs(folder, exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(data)) as z:
@@ -908,8 +924,8 @@ def fetch_source(release, folder, log=print, fetch=_download):
             with z.open(name) as src, open(dest, "wb") as out:
                 shutil.copyfileobj(src, out)
     if not os.path.isfile(os.path.join(folder, "tierlist.py")):
-        raise OSError(f"version {release['version']} on GitHub has no tierlist.py")
-    _write_manifest(folder, folder, version=release["version"])
+        raise OSError(f"{named(release)} on GitHub has no tierlist.py")
+    _write_manifest(folder, folder, version=read_version(folder) if release.get("nightly") else release["version"])
     return folder
 
 
@@ -960,21 +976,49 @@ def _download_to(url, dest, log=print, timeout=60):
     return got
 
 
-def fetch_program(release, folder, log=print, platform=None, download=_download_to):
+SUMS = "SHA256SUMS.txt"           # in every release (S-1): "<sha256>  <name>" for each program
+
+
+def release_sums(release, fetch=_download):
+    """{name: sha256} from `release`'s SUMS. Raises OSError when it has none or it cannot be downloaded."""
+    asset = (release.get("assets") or {}).get(SUMS)
+    if not asset:
+        raise OSError(f"{named(release)} has no checksums ({SUMS}), so its program cannot be checked: the release "
+                      "page has it to download by hand")
+    try:
+        text = fetch(asset["url"], timeout=30).decode("utf-8", "replace")
+    except Exception as exc:
+        raise OSError(f"could not download the checksums of {named(release)}: {exc}") from exc
+    sums = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and re.fullmatch(r"[0-9a-fA-F]{64}", parts[0]):
+            sums[parts[1].lstrip("*")] = parts[0].lower()
+    return sums
+
+
+def fetch_program(release, folder, log=print, platform=None, download=_download_to, fetch=_download):
     """Download this computer's program from `release` into `folder` (macOS: the .app out of its zip) and return its
-    path, ready for replace_program. Raises OSError if the release has none for this computer or it cannot."""
+    path, ready for replace_program. The download must match the release's checksums (SUMS, fetched with `fetch`)
+    or it is removed and never used. Raises OSError if the release has none for this computer or it cannot."""
     asset = program_download(release, platform)
     if not asset:
-        raise OSError(f"version {release['version']} has no program for this computer")
+        raise OSError(f"{named(release)} has no program for this computer")
     name = RELEASE_ASSETS[_platform_key(platform)]
     dest = os.path.join(folder, name)
-    log(f"Downloading version {release['version']}...")
+    sums = release_sums(release, fetch)
+    log(f"Downloading {named(release)}...")
     try:
         got = download(asset["url"], dest, log)
     except Exception as exc:
-        raise OSError(f"could not download version {release['version']}: {exc}") from exc
+        raise OSError(f"could not download {named(release)}: {exc}") from exc
     if not got or (asset.get("size") and got != asset["size"]):
-        raise OSError(f"the download of version {release['version']} was cut short: try again")
+        raise OSError(f"the download of {named(release)} was cut short: try again")
+    if _sha(dest) != sums.get(name):
+        os.remove(dest)
+        raise OSError(f"the download of {named(release)} does not match its checksum ({SUMS}), so it was not used. "
+                      "Try again; if it happens again, download it by hand from the release page")
+    log("  checked against the release's checksums")
     if _platform_key(platform) != "darwin":
         os.chmod(dest, 0o755)
         return dest
@@ -993,7 +1037,7 @@ def fetch_program(release, folder, log=print, platform=None, download=_download_
     os.remove(dest)
     apps = [n for n in os.listdir(folder) if n.endswith(".app")]
     if not apps:
-        raise OSError(f"version {release['version']}'s download holds no program")
+        raise OSError(f"{named(release)}'s download holds no program")
     return os.path.join(folder, apps[0])
 
 
@@ -1065,12 +1109,102 @@ def git_checkout(root=ROOT):
     return os.path.isdir(os.path.join(root, ".git")) and bool(shutil.which("git"))
 
 
-def git_pull(root=ROOT, run=subprocess.run):
-    """`git pull --ff-only` in `root`: (True, what git said) if it worked, else (False, why). It never merges or
-    overwrites your own changes: git refuses instead, and says why."""
+def git_pull(root=ROOT, run=subprocess.run, branch=None):
+    """`git pull --ff-only` in `root` (`branch`: that branch of origin's, for a nightly: main): (True, what git said)
+    if it worked, else (False, why). It never merges or overwrites your own changes: git refuses instead, and says
+    why."""
     try:
-        r = run(["git", "pull", "--ff-only"], cwd=root, capture_output=True, text=True, timeout=180, env=clean_env(),
+        r = run(["git", "pull", "--ff-only", *(["origin", branch] if branch else [])], cwd=root, capture_output=True, text=True, timeout=180, env=clean_env(),
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
     except (OSError, subprocess.SubprocessError) as exc:
         return False, str(exc)
     return r.returncode == 0, ((r.stdout or "") + (r.stderr or "")).strip()
+
+
+def _git(root, *args, run=subprocess.run):
+    """What `git args` in `root` printed, or None when it failed."""
+    try:
+        r = run(["git", *args], cwd=root, capture_output=True, timeout=60, env=clean_env(),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.decode("utf-8", "surrogateescape") if r.returncode == 0 else None
+
+
+def git_branch(root=ROOT, run=subprocess.run):
+    """The branch a git checkout in `root` is on ("main"), or None ("HEAD" when on no branch)."""
+    out = _git(root, "rev-parse", "--abbrev-ref", "HEAD", run=run)
+    return out.strip() if out else None
+
+
+# ---- nightly (asked for, for testing): main as it is now, even with no release -------------------------------------
+MAIN = "main"
+MAIN_COMMIT = f"https://api.github.com/repos/{REPO}/commits/{MAIN}"
+TREE = "https://api.github.com/repos/" + REPO + "/git/trees/{}?recursive=1"
+MAIN_PAGE = f"https://github.com/{REPO}/commits/{MAIN}"
+NIGHTLY = "nightly "               # UPDATED_FROM after a nightly update: "nightly 4f2c9ab" (the toast says so)
+BUILD_NIGHTLY = "--build-nightly"  # tierlist.py's option: build the program from this source, in place of that one
+TEXT = (".py", ".md", ".txt", ".sh", ".yml", ".json")
+
+
+def blob_sha(path):
+    """The id git gives the file at `path` (sha1 of "blob <size>\\0" and its bytes), with Windows line ends read as
+    git keeps them (a checkout or a build on Windows may have written "\\r\\n"), or None when it cannot be read."""
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError:
+        return None
+    if path.endswith(TEXT) or os.path.basename(path) in REPO_FILES:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def latest_main(fetch=_download):
+    """main as it is now on GitHub, like latest_release: {"nightly": True, "label", "version", "sha", "short",
+    "message" (its first line), "when" (seconds since 1970), "source" (its zip), "page", "files" ({path ("/"):
+    git's id} of the source's own files)}, or None when offline or GitHub cannot be reached (last_error: why)."""
+    global last_error
+    last_error = None
+    if os.environ.get(OFFLINE_ENV):
+        return None
+    try:
+        commit = json.loads(fetch(MAIN_COMMIT))
+        sha, tree = commit["sha"], commit["commit"]["tree"]["sha"]
+        files = json.loads(fetch(TREE.format(tree), timeout=30))["tree"]
+        when = commit["commit"]["committer"]["date"]
+        when = calendar.timegm(time.strptime(when, "%Y-%m-%dT%H:%M:%SZ"))
+    except Exception as exc:                # offline, rate-limited, an odd answer
+        last_error = describe_fetch_error(exc)
+        return None
+    short = sha[:7]
+    return {"nightly": True, "label": f"the nightly build ({short})", "version": f"{VERSION}+{short}", "sha": sha,
+            "short": short, "message": (commit["commit"].get("message") or "").split("\n")[0], "when": when,
+            "source": f"https://api.github.com/repos/{REPO}/zipball/{sha}", "page": MAIN_PAGE,
+            "files": {f["path"]: f["sha"] for f in files if isinstance(f, dict) and f.get("type") == "blob"
+                      and ships(f["path"].replace("/", os.sep))}}
+
+
+def local_files(root):
+    """{path ("/"): git's id} of the source's own files in `root`: in a git checkout as last committed (your edits
+    are not what main is compared with), otherwise as they are."""
+    if git_checkout(root):
+        out = _git(root, "ls-tree", "-r", "HEAD")
+        if out is not None:
+            got = {}
+            for line in out.splitlines():
+                meta, _, path = line.partition("\t")
+                bits = meta.split()
+                if len(bits) == 3 and bits[1] == "blob" and ships(path.replace("/", os.sep)):
+                    got[path] = bits[2]
+            return got
+    return {f.replace(os.sep, "/"): blob_sha(os.path.join(root, f)) for f in source_files(root)}
+
+
+def nightly_changes(nightly, root):
+    """The source's files (paths with "/") that differ between main (latest_main) and the source in `root`: none
+    when that source is main as it is now. (A program compares the source it carries, bundled_source.)"""
+    if not nightly:
+        return []
+    have, want = local_files(root), nightly.get("files") or {}
+    return sorted(f for f in set(have) | set(want) if have.get(f) != want.get(f))

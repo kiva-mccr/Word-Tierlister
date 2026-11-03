@@ -214,6 +214,13 @@ When you make the program from the source, it asks whether to **clean up behind*
 remove it. Removing takes only the source's own files as they came; anything you added or changed stays (in a git
 checkout, so do changes you have not committed yet).
 
+**Nightly builds**, for testing: when the project's main branch on GitHub has changes the version you run does
+not, the same panel shows **Update to nightly** (it checks only when you open it). From the source it brings your
+folder up to main. In the program it puts main's source into the source folder beside the program and builds a new
+program from it there, in place of this one, so it needs Python on your computer. A nightly may be broken; your
+save is kept either way, and the next release is offered as usual. A release's program is checked against the
+release's checksums before it is used; nightlies are built on your computer, so there is nothing to check.
+
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.
 

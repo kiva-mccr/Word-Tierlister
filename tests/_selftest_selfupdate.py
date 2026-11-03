@@ -18,13 +18,13 @@ from constants import VERSION
 # ---- the release's programs ---------------------------------------------------------------------------------------
 answer = {"tag_name": "v9.1.0", "zipball_url": "zip", "html_url": "page",
           "assets": [{"name": n, "browser_download_url": "https://dl/" + n, "size": 5} for n in S.RELEASE_ASSETS.values()]
-          + [{"name": "odd"}]}
+          + [{"name": "odd"}, {"name": "SHA256SUMS.txt", "browser_download_url": "https://dl/sums", "size": 9}]}
 offline = os.environ.pop("WORD_TIERLISTER_OFFLINE")
 try:
     release = S.latest_release(lambda url, timeout=10: json.dumps(answer).encode())
 finally:
     os.environ["WORD_TIERLISTER_OFFLINE"] = offline
-assert sorted(release["assets"]) == sorted(S.RELEASE_ASSETS.values()), release
+assert sorted(release["assets"]) == sorted([*S.RELEASE_ASSETS.values(), S.SUMS]), release
 assert S.program_download(release, "win32")["url"] == "https://dl/word-tierlister-windows.exe"
 assert S.program_download(release, "linux")["size"] == 5 and S.program_download(release, "darwin")
 assert S.program_download(release, "sunos5") is None and S.program_download(None) is None
@@ -48,12 +48,34 @@ def downloader(data):
     def download(url, dest, log):
         open(dest, "wb").write(data); log("  5 of 5 MB (100%)"); return len(data)
     return download
+import hashlib
+def sums_of(**files):                   # (the release's SHA256SUMS.txt, as sha256sum writes it)
+    text = "".join(f"{hashlib.sha256(data).hexdigest()}  {name}\n" for name, data in files.items())
+    return lambda url, timeout=10: (asked_sums.append(url), text.encode())[1]
+asked_sums = []
+good = sums_of(**{"word-tierlister-linux": b"12345", "word-tierlister-windows.exe": b"12345"})
 d = tempfile.mkdtemp()
-got = S.fetch_program(release, d, log=lambda t: None, platform="linux", download=downloader(b"12345"))
-assert got == os.path.join(d, "word-tierlister-linux") and os.access(got, os.X_OK)
+got = S.fetch_program(release, d, log=lambda t: None, platform="linux", download=downloader(b"12345"), fetch=good)
+assert got == os.path.join(d, "word-tierlister-linux") and os.access(got, os.X_OK) and asked_sums == ["https://dl/sums"]
+# the release's checksums (S-1) are checked: a download that differs is removed and never used; none at all, refused
+d = tempfile.mkdtemp()
+try:
+    S.fetch_program(release, d, log=lambda t: None, platform="linux", download=downloader(b"54321"), fetch=good)
+    raise AssertionError("should have failed")
+except OSError as exc:
+    assert "does not match its checksum" in str(exc) and os.listdir(d) == [], (exc, os.listdir(d))
+no_sums = dict(release, assets={k: v for k, v in release["assets"].items() if k != S.SUMS})
+try:
+    S.fetch_program(no_sums, d, log=lambda t: None, platform="linux", download=downloader(b"12345"), fetch=good)
+    raise AssertionError("should have failed")
+except OSError as exc:
+    assert "has no checksums" in str(exc) and os.listdir(d) == []
+assert S.release_sums(release, sums_of(**{"a b": b"x"})) == {} and \
+    S.release_sums(release, lambda url, timeout=10: b"bad line\n" + b"0" * 64 + b" *star\n") == {"star": "0" * 64}
 for bad in (b"12", b""):
     try:
-        S.fetch_program(release, tempfile.mkdtemp(), log=lambda t: None, platform="win32", download=downloader(bad))
+        S.fetch_program(release, tempfile.mkdtemp(), log=lambda t: None, platform="win32", download=downloader(bad),
+                        fetch=good)
         raise AssertionError("should have failed")
     except OSError as exc:
         assert "cut short" in str(exc)
@@ -80,7 +102,8 @@ else:
     mac = buf.getvalue()
 release_mac = dict(release, assets=dict(release["assets"], **{"word-tierlister-macos.zip": {"url": "u", "size": len(mac)}}))
 d = tempfile.mkdtemp()
-got = S.fetch_program(release_mac, d, log=lambda t: None, platform="darwin", download=downloader(mac))
+got = S.fetch_program(release_mac, d, log=lambda t: None, platform="darwin", download=downloader(mac),
+                      fetch=sums_of(**{"word-tierlister-macos.zip": mac}))
 assert got == os.path.join(d, "Word Tierlister.app") and os.listdir(d) == ["Word Tierlister.app"]
 assert os.access(S.executable(got, "darwin"), os.X_OK)
 

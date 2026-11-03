@@ -338,7 +338,8 @@ repository (`contents: write` there alone); a downloaded source zip is written e
 words go through `constants.csv_cell` (no spreadsheet formulas) and come back through `csv_word`. An update is
 trusted because it comes from this repository's releases over checked HTTPS: keep two-factor sign-in on the
 GitHub account that publishes them. Each release also carries `SHA256SUMS.txt` and a build attestation per program
-(S-1) for people to check by hand.
+(S-1); Update checks the program it downloads against `SHA256SUMS.txt` (`standalone.release_sums`) and refuses
+a mismatch or a release without it. Nightlies are built on the user's computer from main's source and have no sums.
 
 **Checking a download.** Each release carries `SHA256SUMS.txt`, the SHA-256 sums of the three programs
 (`sha256sum word-tierlister-linux`, `certutil -hashfile word-tierlister-windows.exe SHA256` on Windows,
@@ -459,7 +460,7 @@ found again, so switching between the two loses nothing.
 | `tools/notes.py` | Keeps each code file's notes (`name.md` beside `name.py`) up to date: regenerates their uses / used by / tests / public API from the code, keeping the hand-written parts; `--check` lists what is missing or stale. |
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
-| `src/sources.py` | File > Source & Updates... (one panel since U-4). Updates (U-1): asks GitHub for the newest release and says why when it cannot (a private repository answers "Not Found"); "Update" replaces the program with the newest release's, or updates the source with git pull or a sync; both start again on the same save. From source (T-6): make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, the Updates section's "Update" updates this folder without making the program (T-13). |
+| `src/sources.py` | File > Source & Updates... (one panel since U-4). Updates (U-1): asks GitHub for the newest release and says why when it cannot (a private repository answers "Not Found"); "Update" replaces the program with the newest release's, or updates the source with git pull or a sync; both start again on the same save. From source (T-6): make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, the Updates section's "Update" updates this folder without making the program (T-13). Nightly (U-9): "Update to nightly" only while main differs; the program's is built here from main's source. |
 | `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
 | `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
 | `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
@@ -681,6 +682,10 @@ flowchart TB
     US -- yes --> GP["git pull (git refuses rather than touch your changes)"]
     US -- no --> SY["download the source zip and sync this folder<br/>(the changes shown first; your edits kept as .bak)"]
     U -- "the check fails" --> WHY["the panel says why<br/>(404 Not Found: the repository is private)"]
+    P --> N["Nightly: main's files compared with this source's<br/>(standalone.latest_main, nightly_changes)"]
+    N -- "they differ, from source" --> US
+    N -- "they differ, in the program" --> NB["main's source into the source folder beside it,<br/>which starts with --build-nightly and builds<br/>the program in its place"]
+    NB --> RS
     P --> F{"which form?"}
     F -- "the source, tierlist.py" --> MK["Make a standalone program:<br/>missing builder or packages offered first,<br/>PyInstaller builds it next to tierlist.py, then it starts"]
     MK --> CL{"Clean up behind?"}
@@ -693,6 +698,11 @@ flowchart TB
     SY --> RS
 ```
 
+- Nightly (U-9, for testing) is fully manual: "Update to nightly" shows only when main differs, never a toast. Files
+  are compared by git's ids (`standalone.blob_sha`, CRLF read as LF; a git checkout by `git ls-tree HEAD`), so it
+  works with no commit recorded anywhere. A git checkout pulls main only while it is on main. In the program the
+  source beside it builds the replacement (`SourceDialog(go=True, target=...)`: no clean-up question), then starts it
+  with `--db`; meta `nightly_pending` / `updated_from` carry "nightly <sha>" to the new program's toast.
 - The update tick (**Update to the newest version first**, on by default) makes the program from, or unpacks,
   the newest release's source instead of this one; offline or already the newest, it uses what you have.
 - Each form offers the other once on its first start (`tierlist.py`: "Make this a standalone program?"; the

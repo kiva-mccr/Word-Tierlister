@@ -2008,6 +2008,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           note reads as never. Asked for too, from mock-ups: this device's code hidden (dots) with a small eye
 #           inside the box's right end (smooth.ICONS "eye"; the more common way: an open eye while hidden, it shows
 #           it; a closed eye with lashes while shown, picked over a slashed eye as cuter); Copy copies it hidden.
+# [x] U-9  Asked for (for testing): a nightly update, main as it is now even with no release. Fully manual: File >
+#           Source & Updates shows "Update to nightly" (and "What's changed": main's commits) only when main differs
+#           from the source you run, compared file by file with git's ids (standalone.latest_main, nightly_changes;
+#           a git checkout as committed, the program by the source it carries); no toast, no check at start. From
+#           source: git pull --ff-only origin main (only on main), or main's source synced in as an update is. In the
+#           program (the user: use source and build the program): main's source into the source folder beside it,
+#           which starts with --build-nightly and builds the program in its place, then starts it on the same save
+#           ("Updated to the nightly build (4f2c9ab)"). Needs Python there. No checksums for nightlies (built here);
+#           releases' programs are now checked against their SHA256SUMS.txt before they are used (the user asked:
+#           a mismatch or no checksums refuses the update). Mock-up first, then the user's answers. _selftest_nightly.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
@@ -2143,6 +2153,7 @@ def main():
                          "nor to make a program / unpack the source on the first start")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--remove-source", help=argparse.SUPPRESS)  # T-12: the unpacked source this was made from
+    ap.add_argument(standalone.BUILD_NIGHTLY, help=argparse.SUPPRESS)  # the program to build in place of (nightly)
     ap.add_argument("--seed", type=int,
                     help="seed for the random queue order (reshuffles the words you haven't placed yet)")
     args = ap.parse_args()
@@ -2293,6 +2304,9 @@ def main():
                       ask_dealing=store.get_meta("dealt_asked") != "1",   # (ST-6: once a save)
                       offer_form=not args.no_install)                     # (T-9: the other form, once)
             app.open_window()
+            if args.build_nightly and not getattr(sys, "frozen", False):   # (the program's nightly update: build it
+                from sources import SourceDialog                               # from this source, in its place)
+                root.after(500, lambda: SourceDialog(app, go=True, target=args.build_nightly))
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

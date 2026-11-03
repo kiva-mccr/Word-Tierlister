@@ -4,7 +4,7 @@ Turning the source into a program and back (T-3, T-6..T-8): the list of source f
 
 - **Uses:** `bundle`, `constants`, `deps`
 - **Used by:** `app`, `build`, `check_release`, `sources`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_folders`, `_selftest_fonts`, `_selftest_icon`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
+- **Tests:** `_selftest_build`, `_selftest_folders`, `_selftest_fonts`, `_selftest_icon`, `_selftest_nightly`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_ui2`, `_selftest_updates`
 
 The module docstring has the details; this page is the map.
 
@@ -12,6 +12,7 @@ The module docstring has the details; this page is the map.
 
 - `walk`: Files under `d` (relative to `root`), skipping version control, environments and caches; at the top only the folders that ship (SHIP_DIRS).
 - `source_files`: The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists (REPO_FILES); never saves, logs, caches, exports or a...
+- `ships`: True if the file `f` (a path relative to the top, with os.sep) is part of the source (source_files).
 - `manifest`: {"files": {path ("/" between folders): sha256 of its bytes}} for `files` (default: source_files).
 - `output_name`: (no docstring)
 - `output_path`: Where the built program ends up in `dist` for `platform` (sys.platform).
@@ -55,17 +56,24 @@ The module docstring has the details; this page is the map.
 - `read_version`: The VERSION in `root`'s src/constants.py (the source being built may be another version than this one).
 - `describe_fetch_error`: Why asking GitHub failed, in a line.
 - `latest_release`: The newest release on GitHub, {"version", "tag", "source" (its source as a zip), "page"}, or None when offline, GitHub cannot be reached or there is none yet.
+- `named`: "version 1.0.5", or for main as it is now (latest_main) "the nightly build (4f2c9ab)".
 - `newer`: True if `release` (latest_release) is a newer version than `version`.
 - `inside`: The path in `folder` for a zip entry's `parts` (its name split at "/"), or None when it is a folder entry or would land anywhere but inside `folder` (S-4): "..", a...
 - `fetch_source`: Download `release`'s source (GitHub's zip of the repository at its tag) into `folder`, with its manifest, ready to unpack (plan_unpack) or build from; returns `folder`.
 - `running_program`: The program now running (the .exe or the Linux file; on macOS its .app), or None when running from source.
 - `program_download`: {"url", "size"} of the program in `release` (latest_release) for this computer, or None (none built for it).
+- `release_sums`: {name: sha256} from `release`'s SUMS.
 - `fetch_program`: Download this computer's program from `release` into `folder` (macOS: the .app out of its zip) and return its path, ready for replace_program.
 - `update_folder`: A new, empty folder beside `program` to download the new one into (the same disk, so swapping it in is one move); raises OSError when the program's folder cannot be...
 - `replace_program`: Put the program `new` where `current` is (the running one: Windows lets a running .exe be renamed, never overwritten), keeping the old one as current + OLD_SUFFIX...
 - `remove_old_program`: As an updated program starts: remove the program it replaced (OLD_SUFFIX) and any download folder left beside it (UPDATE_DIR).
 - `git_checkout`: True if `root` is a git checkout and git is installed: then an update is a git pull.
-- `git_pull`: `git pull --ff-only` in `root`: (True, what git said) if it worked, else (False, why).
+- `git_pull`: `git pull --ff-only` in `root` (`branch`: that branch of origin's, for a nightly: main): (True, what git said) if it worked, else (False, why).
+- `git_branch`: The branch a git checkout in `root` is on ("main"), or None ("HEAD" when on no branch).
+- `blob_sha`: The id git gives the file at `path` (sha1 of "blob <size>\0" and its bytes), with Windows line ends read as git keeps them (a checkout or a build on Windows may have...
+- `latest_main`: main as it is now on GitHub, like latest_release: {"nightly": True, "label", "version", "sha", "short", "message" (its first line), "when" (seconds since 1970),...
+- `local_files`: {path ("/"): git's id} of the source's own files in `root`: in a git checkout as last committed (your edits are not what main is compared with), otherwise as they are.
+- `nightly_changes`: The source's files (paths with "/") that differ between main (latest_main) and the source in `root`: none when that source is main as it is now.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -93,3 +101,5 @@ The module docstring has the details; this page is the map.
 - The unpack record (`UNPACKED`) says whether the folder came from the program (`from_program`; older records: yes, `came_from_program`). Only such a folder is offered to be cleaned up behind or removed (`cleanup_place`, `remove_source`): a source only updated from GitHub (T-13, `unpack(..., from_program=False)`) could be someone's own clone (T-13).
 - `give_icon` (IC-2) sets GNOME Files' custom icon on a Linux program (gio, to `deps.kept_icon`); it fails quietly where no desktop metadata service runs.
 - Removing a source (T-14) only ever takes the files written down for it: the unpack record's or `REMOVE_RECORD`'s (`mark_for_removal`: `source_files`), plus OURS; a folder with neither is never touched.
+- Nightly (asked for, for testing): `latest_main` reads main's newest commit and its tree (two API calls); `nightly_changes` compares each source file's git id (`blob_sha`, CRLF read as LF so a Windows checkout or build is not "changed") with main's, so it works for any form: a git checkout as committed (`local_files`: `git ls-tree`, your edits are not counted), any other folder as it is, the program by the source it carries. `ships` is the one rule for what counts as source (`source_files` and main's tree both use it).
+- Release programs are checked against the release's `SHA256SUMS.txt` (`release_sums`, in `fetch_program`): a mismatch removes the download, and a release without the file is refused (the user: releases verified, nightlies not). Nightlies are built here from main's source, so they have nothing to check against.
