@@ -19,6 +19,9 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
   Python has no tkinter: `TK_PYTHON=/usr/bin/python3.12 sh tests/run_tests.sh`. Window tests need a display;
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
+- GitHub's test workflows (tests.yml, macos.yml) skip a push that changes only `.md` files, docs or images (asked for:
+  a waste of time there); anything touching code still runs them. Locally, for a text-only or removal change, run just
+  the tests that cover it.
 - Every new widget or behaviour gets a `tests/_selftest_*.py` (first line `import _paths`) and a line in
   `tests/run_tests.sh`.
 

@@ -102,9 +102,6 @@ def card_label(kinds, rude=None, compound=False):
 
 RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
                "sexual": "Sexual", "slur": "Slurs"}
-KIND_NOTE_RUDE = ("A word comes up if one of its meanings is of a ticked kind, or it has a clean meaning and its kind "
-                  "of word is ticked. Censoring smears the kinds whose small smear button is smeared: Crude, Swear, "
-                  "Sexual and Slur to start with; Clinical and Insult only once their button is clicked.")
 # what is said when censoring is turned on (asked for: it is not fully accurate): a line under the tick box in How
 # words are dealt, and the same words in a toast when it is turned on from View (U-2, asked for: one short text)
 CENSOR_CAVEAT_LINE = "picked out by rules: it may miss some, or smear an ordinary word"

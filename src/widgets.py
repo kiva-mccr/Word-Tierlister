@@ -1571,14 +1571,14 @@ class LinkButton(SmoothCanvas):
 class SmearToggle(SmoothCanvas):
     """A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space /
     Return once it has focus) flips it: the censor button beside each kind of rude meaning in How words are dealt
-    (asked for: censoring each kind on its own). `note`: a hover note, called with the event.
+    (asked for: censoring each kind on its own; no hover note, asked for).
 
-        SmearToggle(parent, tk.BooleanVar(value=True), note=lambda e: "Smeared while censoring")
+        SmearToggle(parent, tk.BooleanVar(value=True))
     """
 
     TEXT = "abc"
 
-    def __init__(self, parent, variable, note=None, font_=None, bg=None):
+    def __init__(self, parent, variable, font_=None, bg=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
@@ -1590,8 +1590,6 @@ class SmearToggle(SmoothCanvas):
         self.bind("<Leave>", lambda e: self._set_hover(False))
         self._trace = variable.trace_add("write", lambda *_: self._draw())
         self.bind("<Destroy>", lambda e: e.widget is self and self._untrace())
-        if note:
-            Tooltip(self, note)
         self._draw()
 
     def _untrace(self):
