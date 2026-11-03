@@ -710,8 +710,12 @@ for amount in (1.0, 0.3, 0.05):
     # letters only move inward and the letters between both ways: nothing reaches past the word (it was cut off
     # straight there, and cropped by a canvas only as wide as the word)
     if amount > 0.1:                                                    # (at the very end: only the word itself)
-        assert {"a smeared meanin", " smeared meaning", "a smeared meaning"} <= set(xs), set(xs)   # (and short runs)
-        assert all(x > 10 for x in xs["a smeared meanin"])
+        # (how many end letters a copy leaves out follows the font's widths: Segoe UI on Windows leaves out two)
+        word = "a smeared meaning"
+        lefts = [t for t in xs if t != word and word.startswith(t) and len(t) >= len(word) - 3]
+        rights = [t for t in xs if t != word and word.endswith(t.lstrip()) and len(t) >= len(word) - 3]
+        assert lefts and rights, set(xs)                                # (and short runs)
+        assert all(x > 10 for t in lefts for x in xs[t])
     assert xs["a smeared meaning"] == [10]                              # (the word, drawn last)
     assert cv.itemcget(copies[-1], "text") == "a smeared meaning"
     for texts in xs.values():
