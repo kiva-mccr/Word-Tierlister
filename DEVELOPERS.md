@@ -79,7 +79,7 @@ flowchart TB
     end
     subgraph L4["windows and views"]
         direction LR
-        ui_chart["ui_chart"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ dealing["dealing"] ~~~ sources["sources"]
+        ui_chart["ui_chart"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ dealing["dealing"] ~~~ sources["sources"]
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
@@ -87,14 +87,14 @@ flowchart TB
     end
     subgraph L2["words and saves (no tkinter)"]
         direction LR
-        wordsource["wordsource"] ~~~ saves["saves"] ~~~ definitions["definitions"]
+        wordsource["wordsource"] ~~~ saves["saves"] ~~~ definitions["definitions"] ~~~ syncfiles["syncfiles"]
     end
     subgraph L1["the save"]
         store["store"]
     end
     subgraph L0["foundations (no tkinter)"]
         direction LR
-        constants["constants"] ~~~ obscene["obscene"] ~~~ rudeness["rudeness"] ~~~ problems["problems"] ~~~ deps["deps"] ~~~ keymap["keymap"] ~~~ bundle["bundle"] ~~~ standalone["standalone"]
+        constants["constants"] ~~~ obscene["obscene"] ~~~ rudeness["rudeness"] ~~~ problems["problems"] ~~~ deps["deps"] ~~~ syncthing_api["syncthing_api"] ~~~ keymap["keymap"] ~~~ bundle["bundle"] ~~~ standalone["standalone"]
     end
     L6 --> L5 --> L4 --> L3 --> L2 --> L1 --> L0
     L6 -. "also store, saves, startup, deps, ..." .-> L1
@@ -108,8 +108,9 @@ note):
 | Module | Imports |
 |---|---|
 | `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, keymap, rudeness, saves, shortcuts, sizing, sources, standalone, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
+| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, keymap, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
 | `sources` | constants, deps, errors, filepicker, fonts, problems, saves, standalone, startup, theme, widgets |
+| `syncdialog` | deps, errors, fonts, problems, saves, startup, syncfiles, syncthing_api, theme, widgets |
 | `browser` | constants, errors, fonts, keymap, sizing, smooth, store, theme, ui_motion, widgets |
 | `filepicker` | errors, fonts, saves, store, theme, widgets |
 | `dealing` | constants, fonts, obscene, rudeness, theme, widgets |
@@ -117,16 +118,18 @@ note):
 | `shortcuts` | fonts, keymap, sizing, theme, widgets |
 | `ui_chart` | constants, smooth, theme, ui_motion |
 | `widgets` | constants, definitions, fonts, rudeness, sizing, smooth, theme, ui_motion |
-| `startup` | constants, deps, errors, fonts, problems, sizing, theme |
+| `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme |
 | `errors` | constants, fonts, problems, theme, ui_style, widgets |
 | `ui_style` | fonts, theme |
 | `smooth` | fonts |
 | `wordsource` | constants, obscene, problems, rudeness |
 | `saves`, `definitions` | constants |
+| `syncfiles` | store |
 | `store` | constants, obscene, rudeness |
 | `standalone` | bundle, constants, deps |
 | `rudeness` | obscene |
 | `deps` | constants |
+| `syncthing_api` | deps |
 | `constants`, `obscene`, `problems`, `keymap`, `bundle`, `theme`, `fonts`, `sizing`, `ui_motion` | nothing of ours |
 
 ## Start-up
@@ -301,6 +304,7 @@ flowchart LR
         RudeRead["App._start_rude_read:<br/>an older save's rude meanings"]
         Deal["dealing.py: a reshuffle<br/>(App.busy; nothing else writes)"]
         Pip["deps.install: pip, and a watcher<br/>measuring its download"]
+        Sync["syncdialog.AutoSync: writing and reading<br/>the sync files; Syncthing's answers"]
         Watch["errors: the freeze watchdog<br/>(a window stuck for 10 s goes in the log)"]
     end
     Setup -- "log lines, queue" --> App
@@ -308,6 +312,7 @@ flowchart LR
     Upd -- "queue" --> App
     RudeRead -- "queue" --> App
     Deal -- "done" --> App
+    Sync -- "queue; folded in a step at a time" --> App
 ```
 
 ## Builds, releases and updates
@@ -346,6 +351,7 @@ The download links in the README must keep naming the current assets (`standalon
 | Definitions | `src/definitions.py` |
 | An error's wording | `src/problems.py` (`describe`) |
 | Packages and their install dialog | `src/deps.py`, `src/startup.py` |
+| Syncing between devices | `src/syncfiles.py`, `src/syncthing_api.py`, `src/syncdialog.py`, `Store.apply_sync` |
 | Builds, updates, unpacking the source | `src/standalone.py`, `src/sources.py`, `tools/build.py`, `.github/workflows/build.yml` |
 
 The more detailed list is [Where to change things](#where-to-change-things), and every code file has a note
@@ -404,7 +410,8 @@ either way the save you used last is found again, so switching between the two l
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `.github/workflows/build.yml` | Build programs (T-8, T-16): builds the Linux, Windows and macOS (Apple Silicon) programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
-| `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test, builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pull requests that touch the code, pushes to main, and the Run workflow button. |
+| `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test (split over 2 machines for Apple Silicon and 3 for Intel, run at once: `SHARD=k/n`, `tests/_shard.py`), builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
+| `.github/workflows/tests.yml` | Test on Linux and Windows (T-20): every self-test on GitHub's Linux (under xvfb and openbox, 2 machines) and Windows (3 machines), run at once, with the build test making and starting the program. Runs on pull requests that touch the code (a newer push cancels the older run), pushes to main, and the Run workflow button. |
 | `.github/release-notes.md` | The short note at the top of every release's page (T-5): the programs are unsigned, so Windows may warn (More info > Run anyway) and Linux needs the download made runnable. |
 | `src/definitions.py` | Background definition lookup (WordNet offline, dictionaryapi.dev online); splitting it into senses; the word a meaning only names ("Alternative spelling of jail": `form_target`), whose first meaning the panes show under it. |
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
@@ -436,6 +443,9 @@ either way the save you used last is found again, so switching between the two l
 | `src/bundle.py` | What a built program carries besides its code (T-2): wordfreq's English word lists only (1.6 of its 60 MB), langcodes' registry, nltk's VERSION; `python src/bundle.py` lists them. WordNet stays an optional download. |
 | `src/standalone.py` | The program and its source (T-3, T-6, T-7): the complete source (the same list the zip ships), its manifest (a hash per file), whether the program next to tierlist.py was built from exactly this source, the PyInstaller build that carries the source inside the program, and unpacking / syncing that source into a folder (only the program's own files; edits kept as .bak); the newest release on GitHub and downloading its source (T-8). No tkinter. |
 | `src/sources.py` | File > Source & Updates... (one panel since U-4). Updates (U-1): asks GitHub for the newest release and says why when it cannot (a private repository answers "Not Found"); "Update" replaces the program with the newest release's, or updates the source with git pull or a sync; both start again on the same save. From source (T-6): make a standalone program for this computer next to tierlist.py (same save), then start it; or start the one already built from this source. In the program: unpack its source into a folder (or bring one up to date), showing what will change first, then open it and offer to start tierlist.py (this one then closes). Either way, ticked to start with: update to the newest version on GitHub first (T-8); from source, the Updates section's "Update" updates this folder without making the program (T-13). |
+| `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
+| `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
+| `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
 | `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`). |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -489,7 +499,10 @@ tkinter and run headless under `xvfb-run` when there is no display. A single tes
 `python tests/_selftest_ui.py`. Before handing work over: `python tools/check_release.py --tests`.
 It stops at the first failure; `KEEP_GOING=1` runs them all and lists every failure. A test that runs past
 `TEST_TIMEOUT` seconds (600 by default) is stopped, and shortly before that it prints where each thread was.
-Without a Mac, the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS).
+`SHARD=k/n` runs only part k of n, the parts about equally long (`tests/_shard.py` weighs each test by its time on
+GitHub's Intel Mac); the workflows run the parts on separate machines at once.
+Without a Mac, the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS), and
+Test on Linux and Windows runs them on GitHub's Linux and Windows machines.
 
 ## Reference
 
@@ -665,6 +678,29 @@ flowchart TB
   program's Tcl / Tk folders).
 - Packages the program never uses (matplotlib, Pillow, numpy and the like) are always left out of the build.
 - Updating needs the repository to stay public: GitHub answers a private one's releases with 404.
+
+### Syncing between devices
+
+File > Sync with other devices (`src/syncdialog.py`) keeps the list the same on several computers through
+[Syncthing](https://syncthing.net/), which copies one folder straight between your own devices (no account, no cloud).
+
+- Each device writes one file of its own into the sync folder (`src/syncfiles.py`: `<computer>-<save>.wtsync`, gzip
+  JSON), so no two devices ever write the same file and Syncthing never has a conflict to settle. A device never
+  reads back its own computer's files.
+- Every change to a word's tier, rating, games or skips is stamped with its time (`words.changed`, kept by
+  triggers in `store.SYNC_TRIGGERS`). Reading another device's file (`Store.apply_sync`) keeps the newer change of
+  each word; the anchors follow the newer anchors as a whole; each device's duels are kept apart
+  (`comparisons.origin`). The later change wins by each device's clock.
+- `AutoSync` looks at the folder every 10 s and writes this device's file at most once a minute while things keep
+  changing, and once more on closing. Files are read on a worker thread and folded in 1,000 words a step, so a
+  first sync of a million words never freezes the window; later rounds read only what changed since (`sync_marks`).
+  Nothing syncs while `App.busy` (a reshuffle).
+- `src/syncthing_api.py` finds Syncthing, starts it (and at log-in once the user agrees: systemd, an autostart
+  file, a Startup shortcut or a LaunchAgent), and uses its local REST API to share the folder and link devices.
+  Syncthing is an unticked option in the install window, and the sync window offers to install it first when it is
+  missing.
+- Tests never start the real Syncthing: `tests/_selftest_sync.py` talks to a pretend one. Test the sync window shown,
+  never built and kept hidden: on macOS Tk then never runs out of events.
 
 ### Missing packages
 
