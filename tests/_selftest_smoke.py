@@ -4,6 +4,7 @@ on any error raised along the way. With Pillow installed it saves a screenshot o
 a temporary folder: the path is printed) for a look by eye."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 

@@ -13,6 +13,7 @@ few milliseconds: while it opens they only rise (or stay put), while it closes t
 rounding at most."""
 import os, shutil, subprocess, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 

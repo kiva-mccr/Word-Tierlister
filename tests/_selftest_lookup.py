@@ -5,6 +5,7 @@ clicked in a definition (the drawer or Browse's pane) shows its definition there
 bottom, to be placed with the tier buttons or keys; a word not in the list is offered to add first."""
 import os, tempfile, time, types
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 

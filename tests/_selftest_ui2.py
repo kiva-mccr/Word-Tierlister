@@ -3,6 +3,7 @@ import os, sys, tempfile, time
 tmp = tempfile.mkdtemp()
 HOME = os.path.join(tmp, "home"); os.makedirs(HOME)
 os.environ["HOME"] = HOME
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 
@@ -147,7 +148,7 @@ for _ in range(12):
     pump(1); geos.add(bw.win.geometry())
 assert mapped and mapped[0][2] > 0, mapped                        # rows already in when it first shows
 assert len(geos) == 1, geos                                       # never resized or moved while opening
-assert mapped[0][3] == bw.fsize                                   # its text size already final when it first shows
+assert mapped[0][3] == bw.fsize, (mapped, bw.fsize, bw.win.geometry())   # its text size already final when it first shows
 assert float(bw.win.attributes("-alpha")) == 1.0 and bw.search_var.get() == ""   # never see-through
 w_full = bw.win.winfo_width()
 bw.close()

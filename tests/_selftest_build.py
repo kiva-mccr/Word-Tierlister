@@ -20,7 +20,7 @@ for plat, out, onefile in (("linux", "word-tierlister", True), ("win32", "word-t
     assert S.program_path(_paths.ROOT, plat) == os.path.join(_paths.ROOT, out)     # (next to tierlist.py: T-6)
     assert ("--onefile" in args) == onefile and ("--onedir" in args) != onefile and "--windowed" in args
     sep = ";" if plat == "win32" else ":"
-    added = [args[i + 1] for i, a in enumerate(args) if a == "--add-data"]
+    added = [args[i + 1].replace(os.sep, "/") for i, a in enumerate(args) if a == "--add-data"]   # (/ on any system)
     assert any(a.endswith(f"large_en.msgpack.gz{sep}wordfreq/data") for a in added), added
     assert not any("_fr." in a for a in added) and "jieba" in args and "MeCab" in args
     assert f"/tmp/work/source{sep}source" in added                 # the source inside it (T-7 gives it back)
@@ -54,7 +54,8 @@ open(os.path.join(work, "PKG-00.toc"), "w").write(repr(("p.pkg", {}, [("PYZ-00.p
 open(os.path.join(work, "PYZ-00.toc"), "w").write(repr(("p.pyz", [("numpy.core", small, "PYMODULE"),
                                                                   ("numpy.linalg", small, "PYMODULE")])))
 assert S.biggest_parts(work) == [("torch", 3.0), ("numpy", 2.0)] and S.biggest_parts(tempfile.mkdtemp()) == []
-assert S.executable("/x/Word Tierlister.app", "darwin") == "/x/Word Tierlister.app/Contents/MacOS/Word Tierlister"
+assert S.executable("/x/Word Tierlister.app", "darwin") == os.path.join("/x/Word Tierlister.app", "Contents", "MacOS",
+                                                                         "Word Tierlister")
 assert S.executable("/x/word-tierlister", "linux") == "/x/word-tierlister"
 
 # the source: what the zip ships and the program carries; a manifest tells whether anything changed since a build
@@ -83,7 +84,8 @@ S.start(S.program_path(proj), popen=lambda args, **kw: started.append((args, kw)
 if sys.platform == "darwin" and S.program_path(proj).endswith(".app"):
     assert started[0][0] == ["open", S.program_path(proj)]                                 # (macOS: an app opens)
 else:
-    assert started[0][0] == [S.program_path(proj)] and started[0][1]["start_new_session"]   # (on its own)
+    kw = started[0][1]                                    # (on its own: a session of its own, or detached on Windows)
+    assert started[0][0] == [S.program_path(proj)] and (kw.get("start_new_session") or kw.get("creationflags"))
 hook = open(os.path.join(_paths.ROOT, "tools", "hooks", "hook-nltk.py")).read()
 assert "datas = []" in hook                                       # (PyInstaller's own packs ~/nltk_data)
 
@@ -128,7 +130,7 @@ def packed_files(out):
                 for d, _, fs in os.walk(base, followlinks=True) for f in fs}
     from PyInstaller.archive.readers import CArchiveReader
     reader = CArchiveReader(out)
-    return {n: (lambda n=n: reader.extract(n)) for n in reader.toc}
+    return {n.replace("\\", "/"): (lambda n=n: reader.extract(n)) for n in reader.toc}   # (Windows names use backslashes)
 
 
 if importlib.util.find_spec("PyInstaller") is None:

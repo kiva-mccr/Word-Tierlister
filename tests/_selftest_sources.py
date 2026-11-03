@@ -6,6 +6,7 @@ unpacking its source into a folder, and syncing a folder unpacked before (only t
 kept as .bak), shown before it happens; then the folder opens and tierlist.py can start from it."""
 import json, os, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 import tkinter as tk
 import tierlist as T
 import sources
@@ -129,8 +130,11 @@ _sys.frozen, _sys._MEIPASS = True, meipass
 assert S.bundled_source() == os.path.join(meipass, S.SOURCE_DIR)
 del _sys.frozen, _sys._MEIPASS
 assert S.bundled_source() is None                                # (from source: nothing carried)
-assert S.default_source_folder("/home/me/Programs/word-tierlister") == "/home/me/Programs/Word Tierlister source"
-assert S.default_source_folder("/Apps/Word Tierlister.app/Contents/MacOS/Word Tierlister") == "/Apps/Word Tierlister source"
+J = os.path.join                                                 # (this system's separators, as the program has them)
+assert S.default_source_folder(J("/home", "me", "Programs", "word-tierlister")) == J("/home", "me", "Programs",
+                                                                                       "Word Tierlister source")
+assert S.default_source_folder(J("/Apps", "Word Tierlister.app", "Contents", "MacOS", "Word Tierlister")) == \
+    J("/Apps", "Word Tierlister source")
 
 # the dialog in the built program: where, what it will do, then unpack, open the folder, offer to start tierlist.py
 root, app = window()
@@ -293,7 +297,8 @@ S.make_program = lambda root_dir, log, release=None: os.path.join(root_dir, "wor
 started.clear()
 d.buttons["Make the program"].invoke(); pump(root, 2)
 text = open(deps.launcher_path()).read()
-assert started == [os.path.join(proj3, "word-tierlister")] and 'Exec="' + os.path.join(proj3, "word-tierlister") in text
+program = os.path.join(proj3, "word-tierlister")
+assert started == [program] and 'Exec="' + program.replace("\\", "\\\\") in text     # (a launcher doubles a \)
 del os.environ["XDG_DATA_HOME"]
 # Windows: the Start menu, the same way (the shortcut itself: _selftest_deps); macOS has nothing to add to
 root, app = window()
@@ -375,8 +380,11 @@ app._offer_other_form(); pump(root, 4)
 assert len(asked) == n and os.path.exists(os.path.join(beside, "tierlist.py"))     # no question; unpacked
 assert "unpacked beside the program" in app.toast.cget("text") and app.store.get_meta("offered_source") == "1"
 shutil.rmtree(beside)
+unpacked, real_unpack = [], S.unpack                              # (watched, not looked for on disk: Windows can
+S.unpack = lambda *a, **k: (unpacked.append(a), real_unpack(*a, **k))[1]   # show a folder a while after removing it)
 app._offer_other_form(); pump(root, 4)
-assert not os.path.exists(beside)                                 # once only
+S.unpack = real_unpack
+assert not [a for a in unpacked if beside in map(str, a)], unpacked   # once only (another job may unpack elsewhere)
 app.store.set_meta("offered_source", "0")
 os.makedirs(os.path.join(home, "my copy")); open(os.path.join(home, "my copy", "tierlist.py"), "w").write("")
 app._offer_other_form(); pump(root, 4)

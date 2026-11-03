@@ -6,6 +6,7 @@ rests on every edge and the middle of the magnifier, and new words are shown und
 and nothing hangs (a hang ends the test with the stacks, not a test run that never finishes)."""
 import faulthandler, os, shutil, subprocess, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
+os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home from USERPROFILE)
 faulthandler.dump_traceback_later(60, exit=True)                  # (a freeze fails the test instead of hanging it)
 import tkinter as tk
 import tierlist as T

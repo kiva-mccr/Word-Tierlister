@@ -149,7 +149,7 @@ moved into Source & Updates, plus a tick when making the program; none on macOS)
 program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; releases also carry
 the programs under the old word-tierlist-* names so 1.0.2 and older can update: keep that copy step in the workflow;
 the old data folder, pointer file, records, launcher and shortcut are still found).
-T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled).
+T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1). T-19 (that workflow split over 5 machines at once, SHARD=k/n; older PR runs cancelled). T-20 (.github/workflows/tests.yml: the self-tests on GitHub's Linux and Windows on every PR).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
@@ -204,6 +204,9 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 - T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
   yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
 - The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
+- T-20's workflow runs every self-test on GitHub's Windows (and Linux): Windows lessons so far: paths with backslashes, home from
+  USERPROFILE, no os.geteuid, a hidden window gets no <Configure>, <Configure> on the main window when nothing moved, Segoe UI
+  wraps and measures differently (check a smear's runs from its layout, not fixed strings).
 - T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
   (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
   animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.

@@ -135,9 +135,11 @@ def peek(self, stage, detail, percent, elapsed, eta=None, step=None):
     orig_show2(self, stage, detail, percent, elapsed, eta, step)
     seen["step"] = self.step.cget("text")
     self.win.update_idletasks()
-    seen.setdefault("first", (self.bar.winfo_ismapped(), str(self.bar.cget("mode")), float(self.bar["value"]),
-                              self.detail.cget("text")))
-    seen["last"] = (self.bar.winfo_ismapped(), str(self.bar.cget("mode")), float(self.bar["value"]), self.detail.cget("text"))
+    # (shown: laid out in the window; Windows maps a new window and its contents only at a later update(), so
+    # being mapped is read only where the system has done it by now)
+    shown_bar = self.bar.winfo_manager() == "pack" and (self.bar.winfo_ismapped() or sys.platform == "win32")
+    seen.setdefault("first", (shown_bar, str(self.bar.cget("mode")), float(self.bar["value"]), self.detail.cget("text")))
+    seen["last"] = (shown_bar, str(self.bar.cget("mode")), float(self.bar["value"]), self.detail.cget("text"))
 S.StartupWindow.show = peek
 def stages(log):
     time.sleep(0.3)

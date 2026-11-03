@@ -213,11 +213,15 @@ assert hm.open_name == "File" and hm.drops["File"].is_open()
 anim.finish_all(); assert fb.itemcget("shape", "fill") == PALETTE["select_bg"]  # its button looks open
 d = hm.drops["File"].win
 assert abs(d.winfo_rootx() - fb.winfo_rootx()) <= 1 and d.winfo_rooty() >= fb.winfo_rooty() + fb.winfo_height()
-eb.event_generate("<Enter>"); update()                                         # hover switches menus
+eb.event_generate("<Enter>"); update()                                        # hover switches menus
 assert hm.open_name == "Edit" and hm.drops["Edit"].is_open() and not hm.drops["File"].is_open()
 anim.finish_all(); assert fb.itemcget("shape", "fill") != PALETTE["select_bg"]
 eb.event_generate("<ButtonPress-1>", x=5, y=5); eb.event_generate("<ButtonRelease-1>", x=5, y=5); update()
 assert hm.open_name is None                                                    # its own button closes it
+hm.open_menu("File"); update(); root.event_generate("<Configure>"); update()
+assert hm.open_name == "File"                                    # (a <Configure> with nothing changed: still open)
+hm._top_geo = (-1, -1, 1, 1); root.event_generate("<Configure>"); update()   # (as if it had moved: a real move is
+assert hm.open_name is None                                      # late on macOS) the menu would be left behind
 hm.open_menu("File"); update()
 seg.event_generate("<ButtonPress-1>", x=3, y=3); update()                      # a click elsewhere closes it
 assert hm.open_name is None and not hm.drops["File"].is_open()
@@ -414,10 +418,13 @@ root.after(60, root.quit); root.mainloop(); anim.finish_all(); update()
 assert toast.cget("text") == "new" and toast.winfo_ismapped() and abs(toast_xy()[0]) <= 2
 toast.hide(); anim.finish_all()
 anim.reduce_motion = True
-toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=30, in_=page); update()
-assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1         # Reduce motion: straight to rest
-root.after(80, root.quit); root.mainloop(); update()
-assert toast.cget("text") == ""                                                # then simply gone
+toast.fling("still", (TIER_COLORS[2], PALETTE["text"]), start_bottom=180, rest_bottom=60, target=(-100, 0), hold_ms=500, in_=page); update()
+assert toast.cget("text") == "still" and abs(toast_xy()[1] + toast.winfo_height() - 60) <= 1, \
+    (toast.cget("text"), toast_xy(), toast.winfo_height())     # Reduce motion: straight to rest (held long enough
+t_end = time.time() + 5                                        # to be seen on a slow Mac)
+while toast.cget("text") and time.time() < t_end:
+    root.after(50, root.quit); root.mainloop()
+update(); assert toast.cget("text") == ""                                      # then simply gone
 toast.show("jump", (PALETTE["ok"][0], PALETTE["ok"][1]), in_=page); assert toast.itemcget("pill", "fill") == PALETTE["ok"][0]
 toast.hide(); assert toast.cget("text") == ""                                     # no fade with Reduce motion
 anim.reduce_motion = False
@@ -706,8 +713,12 @@ for amount in (1.0, 0.3, 0.05):
     # letters only move inward and the letters between both ways: nothing reaches past the word (it was cut off
     # straight there, and cropped by a canvas only as wide as the word)
     if amount > 0.1:                                                    # (at the very end: only the word itself)
-        assert {"a smeared meanin", " smeared meaning", "a smeared meaning"} <= set(xs), set(xs)   # (and short runs)
-        assert all(x > 10 for x in xs["a smeared meanin"])
+        # (how many end letters a copy leaves out follows the font's widths: Segoe UI on Windows leaves out two)
+        word = "a smeared meaning"
+        lefts = [t for t in xs if t != word and word.startswith(t) and len(t) >= len(word) - 3]
+        rights = [t for t in xs if t != word and word.endswith(t.lstrip()) and len(t) >= len(word) - 3]
+        assert lefts and rights, set(xs)                                # (and short runs)
+        assert all(x > 10 for t in lefts for x in xs[t])
     assert xs["a smeared meaning"] == [10]                              # (the word, drawn last)
     assert cv.itemcget(copies[-1], "text") == "a smeared meaning"
     for texts in xs.values():
@@ -772,7 +783,12 @@ assert tkfont.Font(root=root, font=("TkDefaultFont", 11)).measure("one two three
 txt = cv.create_text(10, 10, text="one two three four five six", font=("TkDefaultFont", 11), anchor="nw", width=wrap_w)
 box = cv.bbox(txt); smear_items(cv, txt, "#3D3A4B", "#ffffff", 1.0, ("s",))
 texts = {cv.itemcget(i, "text") for i in cv.find_withtag("s") if cv.type(i) == "text"}
-assert {"one tw", "ne two", "three fou", "hree four", "five si", "ive six"} <= texts, texts
+# (where Tk wraps, and how many end letters a copy leaves out, follow the font: Segoe UI on Windows differs)
+lines = [ln[0] for ln in _W._smear_layout(cv, txt, box)["lines"]]
+assert len(lines) >= 3 and " ".join(lines).split() == "one two three four five six".split(), lines
+for ln in (ln.strip() for ln in lines if len(ln.strip()) > 3):
+    assert [t for t in texts if t != ln and ln.startswith(t) and len(t) >= len(ln) - 3], (ln, texts)
+    assert [t for t in texts if t != ln and ln.endswith(t.lstrip()) and len(t) >= len(ln) - 3], (ln, texts)
 assert all(box[0] - 1 <= cv.bbox(i)[0] and cv.bbox(i)[2] <= box[2] + 1 for i in cv.find_withtag("s") if cv.type(i) == "text")
 # F-37: the band behind the letters runs from the end of the first letter to the start of the last, hidden in the
 # word (at the box's edges it showed as a bar under the smear)

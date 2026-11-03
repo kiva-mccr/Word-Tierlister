@@ -15,6 +15,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `_apply_scale` takes the size Browse opens at (`_open_size`) while the window is not mapped: Windows reports a hidden window's natural size, so it opened at the body size and grew in view (T-20, GitHub's Windows).
 - Looked-up words (W-1) live in `app.lookups`; `reload` drops them unless `keep_lookups` (opening the window, or the lookup itself, which may have just added the word and bumped the save's version). Keep the waiting rows last after `_load_more`.
 - Censored words: a blank cell with the word smeared over it (`widgets.TreeSmears`); refresh the smears whenever rows move (`_draw_outline` does).
 - Selection is an outline over the row (the row keeps its tier colour).
