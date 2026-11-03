@@ -732,7 +732,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           count (Store.kind_counts), Clinical, Crude, Swear words and Insults ticked to start with (meta
 #           deal_rude); a word with a meaning of a ticked kind is dealt, one with only rude meanings is otherwise
 #           left out, any other word goes by its kind of word (Store._out_sql). Censoring smears only Crude,
-#           Swear, Sexual and Slur (obscene.CENSORED; the user: never Clinical or Insult).
+#           Swear, Sexual and Slur (obscene.CENSORED; the user: never Clinical or Insult, until OB-8 made them optional).
 # [x] OB-7  A censor button per kind of rude meaning (asked for: "a lil toggleable censor symbol to each category";
 #           picked from two mock-ups: beside each kind, not a row of pills). Beside Crude, Swear words, Sexual and
 #           Slurs in How words are dealt a small pill (widgets.SmearToggle) shows "abc" smeared while that kind is
@@ -742,6 +742,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           any of its kinds is censored (Store.censored_words); each smeared meaning keeps its kind (rudeness.results:
 #           [key, kind]; RUDENESS_VERSION 13) so the definitions smear only censored kinds (Store.smeared_meanings).
 #           The kinds now open under "Obscene words" while it or Censor obscene words is ticked (their buttons).
+# [x] OB-8  Clinical and Insults get a smear button too (asked for: "have them start uncensored, but give the option
+#           to censor"; the mock-up agreed). Their buttons start plain. The rules read each word a second time counting
+#           them (rudeness.score_saved(also=CENSORABLE - CENSORED)): their meanings join the smeared ones (with their
+#           kind), and words.smear_extra keeps a word's kinds when that reading smears it whole (partial index
+#           idx_words_extra); Store.censored_words adds those while Clinical or Insult is censored. "Obscene words"
+#           and dealing still come from the four kinds alone ("penis", "idiot" stay ordinary nouns). RUDENESS_VERSION 14.
 # [x] D-1   Two READMEs (asked for: a friendly one with pictures for people, a coder one with graphs "legit
 #           useful"; outline, graphs and the rudeness map shown first). README.md: what it does, downloads,
 #           each feature with a screenshot (docs/images, from the real window over a pretend save), keys.

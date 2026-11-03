@@ -8,9 +8,9 @@ Order is "Most common first" (strictly by frequency) or "Mostly common, a little
 (UI-41), spread, seed and compound strength. Which words: a tick box per kind (constants.KINDS) and one for
 obscene words (all of their meanings rude), with how many words each holds; ticking it opens a tick box per kind
 of rude meaning (OB-5: obscene.RUDE_KINDS, Clinical, Crude, Swear words and Insults ticked to start with). Unticked
-ones are left out of the queue, never deleted (Store.set_deal). Beside each kind censoring can smear (obscene.CENSORED)
-is a small smear button (SmearToggle): smeared, that kind is censored; plain, it is shown even while censoring
-(Store.censor_kinds; asked for). The kinds open while Obscene words or Censor obscene words is ticked.
+ones are left out of the queue, never deleted (Store.set_deal). Beside each kind is a small smear button (SmearToggle):
+smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7;
+Clinical and Insult too, plain to start with: OB-8). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once.
 """
@@ -22,7 +22,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from constants import CENSOR_CAVEAT_LINE, KIND_NOTE_EXTRA, KIND_NOTE_RUDE, KIND_NOTES, KINDS, RUDE_LABELS
-from obscene import CENSORED, RUDE_KINDS
+from obscene import CENSORABLE, RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
@@ -61,7 +61,7 @@ class DealDialog:
         self.censor_v = tk.BooleanVar(value=deal["censor"])
         self.start_censor_kinds = self.store.censor_kinds()
         self.censor_changed = False
-        self.smear_vs = {k: tk.BooleanVar(value=k in self.start_censor_kinds) for k in sorted(CENSORED)}
+        self.smear_vs = {k: tk.BooleanVar(value=k in self.start_censor_kinds) for k in sorted(CENSORABLE)}
         if first:
             self.head_lbl = tk.Label(self.body, font=font("head"), bg=PALETTE["bg"], fg=PALETTE["text"],
                                      wraplength=dlg.wrap, justify="left")
@@ -193,7 +193,7 @@ class DealDialog:
             tick.grid(row=r, column=c, sticky="w", padx=(0, 18))
             count = ttk.Label(box, text=f"{counts[k]:,}", foreground=PALETTE["muted"])
             count.grid(row=r, column=c + 1, sticky="e", padx=(0, 8))
-            if k in self.smear_vs:           # (a censor button beside each kind censoring can smear; asked for)
+            if k in self.smear_vs:           # (a censor button beside each kind; asked for: OB-7, OB-8)
                 label = RUDE_LABELS[k]
                 self.smear_btns[k] = SmearToggle(box, self.smear_vs[k], note=lambda e, k=k, label=label: (
                     SMEAR_ON if self.smear_vs[k].get() else SMEAR_OFF).format(kind=label))

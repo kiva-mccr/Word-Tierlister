@@ -69,8 +69,20 @@ s.set_censor_kinds({"crude"})
 assert s.censored("shit") and not s.censored("bastard") and s.smeared_meanings("table") == []
 assert s.censor_kinds() == {"crude"} and s.censored_words() == {"shit"}
 s.set_censor_kinds(set()); assert not s.censored("shit") and s.censor_kinds() == set()
-s.set_censor_kinds({"crude", "swear", "sexual", "slur", "insult"}); s.set_rude(FOUND)     # (Insult: never censored)
+# OB-8: Clinical and Insult can be censored too (off to start with): a word that counting them smears whole, and
+# their meanings; "Obscene words" (dealing) stays as it was
+s.set_rude({**FOUND, "bureaucracy": (B["clean"] | B["insult"], False, [["Red tape.", "insult"]], None,
+                                     B["clean"] | B["insult"])})
+s.set_censor_kinds({"crude", "swear", "sexual", "slur"})
+assert not s.censored("bureaucracy") and s.smeared_meanings("bureaucracy") == []
+s.set_censor_kinds({"crude", "swear", "sexual", "slur", "insult"})
+assert s.censor_kinds() == {"crude", "swear", "sexual", "slur", "insult"} and s.censored("bureaucracy")
+assert s.smeared_meanings("bureaucracy") == ["Red tape."] and s.obscene_words() == {"bastard", "shit"}
+assert s.get_word("bureaucracy")["out"] == 0                                  # (still dealt as an ordinary noun)
+s.set_censor_kinds({"insult"}); assert s.censored_words() == {"bureaucracy"}
+s.set_censor_kinds({"crude", "swear", "sexual", "slur", "nonsense"}); s.set_rude(FOUND)
 assert s.censor_kinds() == {"crude", "swear", "sexual", "slur"} and s.smeared_meanings("table") == ["Something rude."]
+assert not s.censored("bureaucracy")
 
 # ---- the window ----------------------------------------------------------------------------------------------
 s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"])
@@ -254,7 +266,7 @@ assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {
     "Sexual", "Slurs"}
 # OB-5: the kinds of rude meaning are open under Obscene words while it is ticked
 assert d.obscene_v.get() and d.rude_box.winfo_ismapped() and d.rude_vs["sexual"].get() and not d.rude_vs["slur"].get()
-assert "Censoring smears Crude" in d.kind_tips["Insults"][0].text_fn(None)
+assert "Censoring smears the kinds" in d.kind_tips["Insults"][0].text_fn(None)
 d.obscene_v.set(False); pump(2); assert d.rude_box.winfo_ismapped()     # (censoring: open for its smear buttons)
 d.censor_v.set(False); pump(2); assert not d.rude_box.winfo_ismapped()
 d.censor_v.set(True); d.obscene_v.set(True); pump(2); assert d.rude_box.winfo_ismapped()
@@ -285,7 +297,9 @@ assert not d.alive() and not s.deal_settings()["censor"] and not card.censored
 s.set_censor(True); app.after_external_change(); pump(2)
 assert app.cur_word == "shit" and card.censored
 d = app.edit_dealing(); pump(4)
-assert set(d.smear_btns) == {"crude", "swear", "sexual", "slur"} and all(v.get() for v in d.smear_vs.values())
+assert set(d.smear_btns) == {"clinical", "crude", "swear", "insult", "sexual", "slur"}
+assert [k for k, v in sorted(d.smear_vs.items()) if not v.get()] == ["clinical", "insult"]   # (OB-8: off to start with)
+assert not d.smear_btns["insult"].find_withtag("smear") and "Clinical and Insult only" in d.kind_tips["Insults"][0].text_fn(None)
 crude = d.smear_btns["crude"]
 assert crude.find_withtag("smear") and int(crude.grid_info()["row"]) == int(d.kind_ticks["Crude"].grid_info()["row"])
 crude.event_generate("<ButtonRelease-1>", x=3, y=3); pump(1)

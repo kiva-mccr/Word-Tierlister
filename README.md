@@ -117,8 +117,9 @@ and Ctrl+Z brings it back.
   swear words, insults, sexual, slurs, clinical).
 - **Censor obscene words** smears a rude word sideways until you point at it, on the card, in Browse and in the
   definitions. A word that is only rude in one of its meanings (like "can") keeps its word, and only that meaning
-  is smeared. A small smeared "abc" button beside crude, swear words, sexual and slurs lets you censor each kind
-  or let it through on its own. Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
+  is smeared. A small "abc" button beside each kind of rude meaning lets you censor that kind or let it
+  through on its own: crude, swear words, sexual and slurs are censored to start with, clinical and insults are not
+  (click their button to smear words like "penis" or "idiot" too). Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
   or an innocent word gets smeared. Exports always keep the real words.
 
 ## Make it yours

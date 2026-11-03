@@ -150,7 +150,7 @@ assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][2] == [["Fellat
 # "Obscene words" holds only words smeared whole (asked for): one rude meaning of many ("box: the vagina") is smeared
 # in the definitions, and the word itself is an ordinary one
 box = score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["box"]
-assert box == (KIND_BITS_["clean"], False, [["The vagina.", "sexual"]], None), box
+assert box == (KIND_BITS_["clean"], False, [["The vagina.", "sexual"]], None, None), box
 
 # borrowed ideas, measured on random lists judged by hand (OB-6): a rude label alone is a suspect, not an insult;
 # a euphemism is the polite word; a slang meaning that is a rude word, or a short slang name for a body part, is rude
@@ -182,11 +182,16 @@ assert got["shithead"][0] == KIND_BITS["clean"] and got["shit"][1], got         
 both = {"bitch": json.dumps(compact_entry({"word": "bitch", "pos": "noun", "senses": [
     {"glosses": ["A stupid, contemptible person."], "tags": ["derogatory"]},
     {"glosses": ["To complain."], "tags": ["vulgar"]}]}))}
-b, whole, _, _k = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"]
+b, whole, _, _k, _x = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"]
 assert not whole and b == KIND_BITS["clean"], b                   # (its first meaning an insult: not smeared whole)
+# OB-8: counting Insult too (censored only when asked for) smears it whole, the four kinds' reading unchanged
+b2, whole2, smeared2, _k, extra = score_saved(both, {"crude", "swear", "sexual", "slur"}, also={"clinical", "insult"})["bitch"]
+assert (b2, whole2) == (b, whole) and extra and extra & KIND_BITS["insult"], extra
+assert ["A stupid, contemptible person.", "insult"] in smeared2, smeared2          # (its insult meaning, kept with its kind)
+assert score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"][4] is None              # (not asked: none)
 both["bitch2"] = json.dumps(compact_entry({"word": "bitch2", "pos": "noun", "senses": [
     {"glosses": ["A contemptible woman."], "tags": ["vulgar", "derogatory"]}, {"glosses": ["To complain."], "tags": ["vulgar"]}]}))
-b, whole, _, _k = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch2"]
+b, whole, _, _k, _x = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch2"]
 assert whole and b & KIND_BITS["swear"] and b & KIND_BITS["insult"], b      # smeared whole: all its kinds count
 # a group's own name is no slur (SLUR_MARKS): a word with a plain meaning naming one, "sometimes" rude, a letter-case
 # form, or named by the word itself; a slur label, "ethnic" or "vulgar" still makes one
