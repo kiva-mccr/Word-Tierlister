@@ -219,7 +219,10 @@ class Browser:
         appears: the system's own opening (Windows 11 animates it). It once grew from 94% round its centre and
         filled its rows afterwards, which read as a bounce (M-5); a fade of our own then made it open faster
         and differently from the rest (a see-through window gets no system animation). Every pending layout and
-        redraw is finished first, while it is still hidden, so it never appears half-settled."""
+        redraw is finished first, while it is still hidden, so it never appears half-settled. Its text size is
+        set here too: Windows sends a hidden window no <Configure>, so it opened at the body size and grew to its
+        zoom in view (T-20, GitHub's Windows)."""
+        self._apply_scale()
         self.win.update_idletasks()
         self.win.deiconify()
 

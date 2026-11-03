@@ -84,7 +84,8 @@ S.start(S.program_path(proj), popen=lambda args, **kw: started.append((args, kw)
 if sys.platform == "darwin" and S.program_path(proj).endswith(".app"):
     assert started[0][0] == ["open", S.program_path(proj)]                                 # (macOS: an app opens)
 else:
-    assert started[0][0] == [S.program_path(proj)] and started[0][1]["start_new_session"]   # (on its own)
+    kw = started[0][1]                                    # (on its own: a session of its own, or detached on Windows)
+    assert started[0][0] == [S.program_path(proj)] and (kw.get("start_new_session") or kw.get("creationflags"))
 hook = open(os.path.join(_paths.ROOT, "tools", "hooks", "hook-nltk.py")).read()
 assert "datas = []" in hook                                       # (PyInstaller's own packs ~/nltk_data)
 
