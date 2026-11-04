@@ -129,6 +129,10 @@ pump(2); assert rv.item["w"] == "tail"
 key(rv, "Return"); pump(2); assert rv.item["w"] == "idiot"
 key(rv, "Return"); pump(2); assert rv.item["w"] == "shitload"
 key(rv, "BackSpace"); pump(2); assert rv.item["w"] == "idiot"
+# an answer is saved as it is given: a change, then Back with no Enter, is kept
+key(rv, "4"); key(rv, "BackSpace"); pump(2)
+assert saved()[1]["kinds"] == ["swear"] and rv.item["w"] == "tail"
+key(rv, "Return"); pump(2); assert rv.item["w"] == "idiot" and rv.kinds == ["swear"]
 rv.close(); pump(1)
 
 # starting again carries on at the first word not answered, with the earlier answers kept

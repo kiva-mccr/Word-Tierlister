@@ -586,7 +586,7 @@ and any meaning with a sign of rudeness, each with the rules' guess filled in. K
 kind (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur), S says whether the whole word should be smeared,
 W opens the word's Wiktionary page (greyed out while offline), Enter goes to the next word and Backspace goes back
 one word in the file. These keys can be changed in Keyboard shortcuts, which shows
-them only while the review is open. The answers are saved after every word, to `rude_review_answers.jsonl` beside
+them only while the review is open. The answers are saved on every change (a kind, the whole word), to `rude_review_answers.jsonl` beside
 the review file. Starting again carries on where you stopped. `python tools/measure_rudeness.py answers --show 40`
 scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never
 reads them.
