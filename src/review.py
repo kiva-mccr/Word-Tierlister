@@ -15,8 +15,8 @@ whether the rules smear the whole word. The keys (the keymap's "review" group, c
     Backspace    back one word in the file, as it was answered (a straight walk: Back then Enter returns to where
                  it was; a history of words answered made Enter after Back skip ahead: reported)
 
-The answers go to the answers file beside the review file (constants.review_answers_path), rewritten after every
-word, so stopping any time loses nothing and starting again carries on at the first word not answered. Nothing is
+The answers go to the answers file beside the review file (constants.review_answers_path), rewritten on every
+answer (a kind, the whole word) and on Enter, so stopping any time loses nothing and starting again carries on at the first word not answered. Nothing is
 smeared here, and nothing in the save changes: the answers only test and tune the rules (measure_rudeness answers).
 
     RudeReview(app, path)          # app: the main App (root, keys, animator)
@@ -272,27 +272,34 @@ class RudeReview:
         if self.item is None:
             return
         self.kinds[self.sel] = kind
+        self._save()
         self._render()
 
     def toggle_whole(self):
         """Smear the whole word, or not."""
         if self.item is not None:
             self.whole = not self.whole
+            self._save()
             self._render()
 
     def next_word(self):
-        """Keep this word's answers (as shown), save them all, and go on to the next word not answered yet."""
-        it = self.item
-        if it is None:
+        """Keep this word's answers (as shown, the guesses too) and go on to the next word in the file."""
+        if self.item is None:
             return
-        self.answers[it["w"]] = {"w": it["w"], "keys": [s["key"] for s in it["senses"]], "kinds": list(self.kinds),
-                                 "whole": self.whole}
-        write_answers(self.answers_path, self.answers, self.order)
+        self._save()
         self.i += 1                              # the next word in the file (shown as answered if it was)
         if self.i >= len(self.items):            # past the last: any word skipped earlier, else the end
             self.i = next((n for n in range(len(self.items)) if self.items[n]["w"] not in self.answers),
                           len(self.items))
         self._load()
+
+    def _save(self):
+        """Save this word's answers as shown, at once (every kind key or click, not only on moving on: going Back
+        after changing a kind kept the old answer, reported), and rewrite the answers file."""
+        it = self.item
+        self.answers[it["w"]] = {"w": it["w"], "keys": [s["key"] for s in it["senses"]], "kinds": list(self.kinds),
+                                 "whole": self.whole}
+        write_answers(self.answers_path, self.answers, self.order)
 
     def back(self):
         """Back one word in the file, shown as it was answered."""

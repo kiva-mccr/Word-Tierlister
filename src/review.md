@@ -1,6 +1,6 @@
 # `src/review.py`
 
-The review of rude meanings by hand (OB-9, a developer option: `python tierlist.py --review-rude`): a window that goes through a review file word by word, the rules' guess filled in for each meaning, and saves the answers beside it after every word. The answers only test and tune the rules (`tools/measure_rudeness.py answers`); the program never reads them.
+The review of rude meanings by hand (OB-9, a developer option: `python tierlist.py --review-rude`): a window that goes through a review file word by word, the rules' guess filled in for each meaning, and saves the answers beside it on every change. The answers only test and tune the rules (`tools/measure_rudeness.py answers`); the program never reads them.
 
 - **Uses:** `constants`, `fonts`, `keymap`, `sizing`, `theme`, `ui_style`, `widgets`
 - **Used by:** `app`
@@ -32,7 +32,9 @@ The module docstring has the details; this page is the map.
   answered this time made Enter after Back jump to the first unanswered word, so Back no longer walked straight
   (reported).
 - The Wiktionary button follows App.online (App._watch_online calls `show_online`); tests never go online.
-- The answers file is rewritten whole through a `.part` file after every word, so quitting any time loses nothing.
+- The answers file is rewritten whole through a `.part` file on every answer (a kind key or click, the whole word)
+  and on Enter, so Back, quitting or a crash never loses a change (saving only on Enter lost a change before Back:
+  reported).
 - A new look (App.reopen) closes the review and App.take_over opens it again on the new window.
 
 ## Changing it

@@ -757,10 +757,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           window: the main meaning and those with a sign of rudeness, the rules' guess filled in, one kind each
 #           (picked from a mock-up: per meaning, Enter accepts), and whether to smear the whole word; the keymap's
 #           "review" group (shown in Keyboard shortcuts only then); answers in rude_review_answers.jsonl beside it
-#           after every word; measure_rudeness answers scores the rules against them. _selftest_review.py.
+#           on every answer; measure_rudeness answers scores the rules against them. _selftest_review.py.
 #           Fixed after use: a kind key keeps its meaning selected (moving on lit the next one's kind: "offset by one").
 #           Then (asked for): an Open in Wiktionary button (W, greyed out offline); Back and Enter walk the file one
-#           word at a time (Back followed a history of words answered, so Enter after Back skipped ahead: reported).
+#           word at a time (Back followed a history of words answered, so Enter after Back skipped ahead: reported);
+#           each answer is saved as it is given, not on Enter (a change then Back was lost: reported).
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
