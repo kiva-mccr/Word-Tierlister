@@ -110,6 +110,12 @@ cmds = app.make_review_words(d.dlg, run=lambda c, cwd: (1, "MemoryError"))
 assert [c[1:] for c in cmds] == [[mr, "next", "--review", fresh]]   # (entries there, a review file: 300 more)
 pump(3)
 assert app._tool_job is None
+before = app.open_review(fresh)                                     # (an open review: opened again on the new words)
+app.make_review_words(None, run=lambda c, cwd: (0, "300 new words to review"))
+pump(3)
+assert app.review is not None and app.review is not before and app.review.alive() and not before.alive()
+app.review.close()
+d = app.edit_dealing(); pump(3)
 started = []
 assert app.tune_rules(d.dlg, start=started.append) is None and shown[-1][1] == "Nothing answered yet"
 open(review_answers_path(fresh), "w").write("")

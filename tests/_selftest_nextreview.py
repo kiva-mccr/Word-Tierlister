@@ -1,8 +1,9 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """The next review (active review: tools/measure_rudeness.py next): candidate signals mined from Wiktionary's own
-rude labels, the groups a word is in (a candidate signal, signals that disagree, near the line, no sign at all), the
-words picked (none reviewed already, a few per candidate) and added to the end of the review file, the meaning they
-were picked for always asked about."""
+rude labels, the groups a word is in (like your misses, a candidate signal, signals that disagree, near the line, no
+sign at all), the groups weighted by where the rules were wrong, the words picked (one-part, none answered already, a
+few per candidate) and the review file refreshed: the answered words first, as they were, the unanswered ones replaced
+by the new ones; the meaning a word was picked for always asked about."""
 import json, os, sys, tempfile
 sys.path.insert(0, os.path.join(_paths.ROOT, "tools"))
 import measure_rudeness as M
@@ -80,23 +81,55 @@ assert not {"ice-cream", "ice cream"} & set(picked) and not {"ice-cream", "ice c
 assert picked["flagword"] == ('a candidate signal: the topic "lgbt"', [2]) and picked["table"][1] == []
 assert len(M.pick_next(words, scored, size=10)) == 5     # (all 5: no sign at all takes the shares left over)
 
-# added to the end of a review file, after the words already there; answered words are skipped too
+# learning from the answers: groups weighted by where the rules were wrong, and the signs on the misses
+def item(w, why, senses, whole=False):
+    return {"w": w, "why": why, "whole": whole, "senses": [{"key": g, "pos": "noun", "labels": labs, "gloss": g,
+                                                            "guess": guess} for g, labs, guess in senses]}
+
+
+done = [item("a", "near the line: 2.6 points, 3 counts", [("A zibbly fellow.", ["slang"], "clean")]),
+        item("b", "near the line: 3.1 points, 3 counts", [("A zibbly sort.", [], "clean")]),
+        item("c", "no sign at all (to count what the rules miss)", [("A pot.", [], "clean")]),
+        item("d", "the rules say sexual", [("Sex.", ["vulgar"], "sexual")])]        # (the first sample: no group)
+said = {"a": {"kinds": {"A zibbly fellow.": "insult"}, "whole": False},
+        "b": {"kinds": {"A zibbly sort.": "insult"}, "whole": False},
+        "c": {"kinds": {"A pot.": "clean"}, "whole": False}, "d": {"kinds": {"Sex.": "sexual"}, "whole": True}}
+assert M.group_of(done[0]["why"]) == "near the line" and M.group_of(done[3]["why"]) is None
+assert M.group_of("near the line for the whole word: 2.8 points, 3.5 smears it") == "near the line"
+shares = M.group_shares(done, said)
+assert abs(sum(shares.values()) - 1) < 1e-9 and set(shares) == set(dict(M.NEXT_SHARES))
+base = dict(M.NEXT_SHARES)
+assert shares["near the line"] / base["near the line"] > shares["no sign at all"] / base["no sign at all"]   # (3/4
+assert abs(shares["no sign at all"] / shares["a candidate signal"] - (1 / 3) / (1 / 2) * 0.15 / 0.25) < 1e-9  # vs 1/3)
+signs = M.miss_signs(done, said)
+assert signs == {"zibbly": 1.0}, signs                         # (in two misses; "slang" and "fellow" in one only)
+zib = [rudeness.expand(sense("A box.")), rudeness.expand(sense("A zibbly person."))]
+why = M.next_reasons("zib", zib, [{}, {}], {}, {}, misses=signs)
+assert why["like your misses"] == ('like your misses: "zibbly" (you answered 100% of its meanings differently)', 1,
+                                   "zibbly"), why
+assert "like your misses" not in M.next_reasons("zib", zib, [{}, {}], {}, {})
+
+# the refresh: the answered words stay first, in their order (Back walks them), the unanswered give way to new ones
 review = os.path.join(folder, "rude_review.jsonl")
-old = M.review_item("chair", words["chair"], scored["chair"], "a test", poses["chair"])
+lines = [json.dumps(M.review_item(w, words[w], scored[w], "a test", poses[w])) for w in ("chair", "plain3", "plain5")]
 with open(review, "w", encoding="utf-8") as f:
-    f.write(json.dumps(old) + "\n")
+    f.write(lines[0] + "\n" + lines[1] + "\n" + lines[2] + "\n")
 with open(review_answers_path(review), "w", encoding="utf-8") as f:
-    f.write(json.dumps({"w": "seen", "keys": ["A thing."], "kinds": ["clean"], "whole": False}) + "\n")
-assert M.reviewed(review) == {"chair", "seen"}
-said = []
-M.make_next(entries, review, size=20, log=said.append)
-items = [json.loads(line) for line in open(review, encoding="utf-8")]
-assert items[0]["w"] == "chair" and len({it["w"] for it in items}) == len(items)
-assert "seen" not in {it["w"] for it in items[1:]}
+    for w, key in (("plain5", "A tool for work number 5."), ("seen", "A thing.")):   # (seen: from an older list)
+        f.write(json.dumps({"w": w, "keys": [key], "kinds": ["clean"], "whole": False}) + "\n")
+told = []
+M.make_next(entries, review, size=20, log=told.append)
+got = open(review, encoding="utf-8").read().splitlines()
+assert got[0] == lines[2], got[:2]                               # (plain5 answered: kept first, as it was)
+items = [json.loads(line) for line in got]
+ws = [it["w"] for it in items]
+assert ws[0] == "plain5" and "plain3" not in ws and "seen" not in ws and len(set(ws)) == len(ws)
+assert "chair" in ws[1:]                                         # (unanswered: dropped, then picked again)
 flag = next(it for it in items if it["w"] == "flagword")
 assert [s["key"] for s in flag["senses"]] == ["A banner.", "A flag of pride."] and flag["why"].startswith("a candid")
-assert said and said[0].startswith(f"Added {len(items) - 1} words") and "no sign at all 1" in said[0], said
-M.make_next(entries, review, size=20, log=said.append)              # (again: nothing picked twice)
+assert told and told[0].startswith(f"{len(ws) - 1} new words to review (after the 1 answered; 2 unanswered replaced)")
+assert not os.path.exists(review + ".part")
+M.make_next(entries, review, size=20, log=told.append)          # (again: the same answered word first, no repeats)
 again = [json.loads(line)["w"] for line in open(review, encoding="utf-8")]
-assert len(set(again)) == len(again)
+assert again[0] == "plain5" and len(set(again)) == len(again)
 print("next review self-test passed")

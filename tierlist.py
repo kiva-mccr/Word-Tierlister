@@ -781,6 +781,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (asked for): one-part words only (no hyphenated or spaced entries; contractions kept), and two
 #           Developer tools bubbles in How words are dealt: Make review words (sample, then next, in the background;
 #           the entries fetched first when missing) and Tune the rules (the tuner's window). _selftest_devtools.py.
+#           Then (asked for: "the words that teach the system the most"): next refreshes the file (the answered words
+#           stay first, Back still walks them; the unanswered ones are replaced), its groups weighted by where the
+#           rules were wrong, and a group like your misses (a label or gloss word on meanings answered otherwise).
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to

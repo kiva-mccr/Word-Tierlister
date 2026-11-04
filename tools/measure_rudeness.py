@@ -320,8 +320,13 @@ def weak_signs(words, limit_zipf=2.5):
 
 
 # ---- the next review: the words that teach the rules most (active review) -----------------------------------
-NEXT_SHARES = (("a candidate signal", 0.3), ("signals disagree", 0.2), ("near the line", 0.3),
-               ("no sign at all", 0.2))  # (picked in this order: a word goes to the first group it is in)
+NEXT_SHARES = (("like your misses", 0.2), ("a candidate signal", 0.25), ("signals disagree", 0.15),
+               ("near the line", 0.25), ("no sign at all", 0.15))
+# (picked in this order: a word goes to the first group it is in; each share is weighted by how often the rules were
+# wrong on the words that group gave before: group_shares)
+MISS_MIN = 2              # a sign of the misses (a label or gloss word) needs this many meanings answered otherwise ...
+MISS_SHARE = 0.5          # ... and at least this share of the answered meanings it is on
+MISS_SIGNS = 40           # at most this many
 NEAR = 1.0                # points from MEANING_MIN (or WHOLE_MIN) that count as near the line
 DISAGREE_MIN = 1.5        # both kinds need this many points ...
 DISAGREE_SHARE = 0.6      # ... and the second at least this share of the first
@@ -384,14 +389,20 @@ def _near(points, line):
     return 0 < points and abs(points - line) <= NEAR
 
 
-def next_reasons(word, senses, scored, topics, lean, censored=obscene.CENSORED):
+def next_reasons(word, senses, scored, topics, lean, censored=obscene.CENSORED, misses=None):
     """{group: (why, the meaning's index or None, what it shares with others: spread over, see _spread)} for the
-    groups of NEXT_SHARES a word is in."""
+    groups of NEXT_SHARES a word is in. `misses`: miss_signs (like your misses)."""
     out = {}
     real = [i for i, s in enumerate(senses) if not rudeness.is_form(s)]
     if not real:
         return out
     shown = shown_meanings(senses, scored)
+    for i in real[:SHOWN_MAX] if misses else ():
+        hit = sorted((_labels(senses[i]) | _gloss_words(senses[i])) & set(misses), key=lambda f: (-misses[f], f))
+        if hit:
+            out["like your misses"] = (f'like your misses: "{hit[0]}" (you answered '
+                                       f'{misses[hit[0]]:.0%} of its meanings differently)', i, hit[0])
+            break
     for i in real[:SHOWN_MAX]:
         if rudeness.sense_kind(scored[i]) != "clean":
             continue
@@ -427,10 +438,11 @@ def next_reasons(word, senses, scored, topics, lean, censored=obscene.CENSORED):
     return out
 
 
-def pick_next(words, scored, size=300, skip=(), seed=11):
-    """{word: (why, [meaning index to ask about])}: the words of NEXT_SHARES, none of `skip` (words reviewed
-    already). Each group's share is spread over what its words share (a candidate signal: PER_CANDIDATE words each
-    at most; two kinds disagreeing; points near the line), and a group short of words hands its share on."""
+def pick_next(words, scored, size=300, skip=(), seed=11, shares=None, misses=None):
+    """{word: (why, [meaning index to ask about])}: the words of NEXT_SHARES (`shares`: {group: share} in their
+    place, group_shares), none of `skip` (words answered already). Each group's share is spread over what its words
+    share (a candidate signal or a sign of the misses: PER_CANDIDATE words each at most; two kinds disagreeing;
+    points near the line), and a group short of words hands its share on. `misses`: miss_signs."""
     import random
     rng = random.Random(seed)
     topics, lean = candidates(words)
@@ -438,16 +450,17 @@ def pick_next(words, scored, size=300, skip=(), seed=11):
     skip = set(skip)
     for w, sc in scored.items():
         if w not in skip and ONE_PART.fullmatch(w):
-            for g, why in next_reasons(w, words[w], sc, topics, lean).items():
+            for g, why in next_reasons(w, words[w], sc, topics, lean, misses=misses).items():
                 groups[g][w] = why
     picked, owed = {}, 0
     for g, share in NEXT_SHARES:
+        share = (shares or {}).get(g, share)
         pool = {w: why for w, why in groups[g].items() if w not in picked}
         n = round(size * share) + owed
         by = collections.defaultdict(list)
         for w, why in pool.items():
             by[why[2] if len(why) > 2 else None].append(w)
-        got = _spread(by, n, PER_CANDIDATE if g == "a candidate signal" else n, rng)
+        got = _spread(by, n, PER_CANDIDATE if g in ("a candidate signal", "like your misses") else n, rng)
         owed = n - len(got)                   # (a group short of words hands its share on)
         picked.update((w, (pool[w][0], [] if pool[w][1] is None else [pool[w][1]])) for w in got)
     return picked
@@ -465,35 +478,93 @@ def _spread(by, n, cap, rng):
     return got
 
 
-def reviewed(review):
-    """The words a review file and its answers already hold."""
-    out = set()
-    for path in (review, review_answers_path(review)):
-        try:
-            with open(path, encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        out.add(json.loads(line)["w"])
-                    except (ValueError, KeyError, TypeError):
-                        continue
-        except OSError:
-            pass
+def group_of(why):
+    """The NEXT_SHARES group a review word's "why" names ("near the line: 2.6 points, ..." -> "near the line"), or
+    None (a word of the first sample)."""
+    g = why.split(":")[0].split(" (")[0]
+    if g == "near the line for the whole word":
+        g = "near the line"
+    return g if g in dict(NEXT_SHARES) else None
+
+
+def _answered_otherwise(item, answer):
+    """True if any answered meaning's kind, or the whole word, differs from the rules' guess in the review file."""
+    guess = {s["key"]: s["guess"] for s in item["senses"]}
+    return (any(k in guess and guess[k] != v for k, v in answer["kinds"].items())
+            or answer["whole"] != bool(item.get("whole")))
+
+
+def group_shares(items, answers):
+    """{group: share}: NEXT_SHARES, each weighted by how often its words so far were answered otherwise than the
+    rules guessed ((misses + 1) / (answered + 2): a group not tried yet counts as a coin toss), adding up to 1."""
+    seen, missed = collections.Counter(), collections.Counter()
+    for it in items:
+        g = group_of(it.get("why", ""))
+        if g and it["w"] in answers:
+            seen[g] += 1
+            missed[g] += _answered_otherwise(it, answers[it["w"]])
+    weight = {g: share * (missed[g] + 1) / (seen[g] + 2) for g, share in NEXT_SHARES}
+    total = sum(weight.values())
+    return {g: v / total for g, v in weight.items()}
+
+
+def miss_signs(items, answers):
+    """{label or gloss word: the share of its answered meanings answered otherwise than the rules guessed} for the
+    signs most often on the misses (MISS_MIN of them at least, MISS_SHARE of its meanings): like your misses."""
+    seen, missed = collections.Counter(), collections.Counter()
+    for it in items:
+        a = answers.get(it["w"])
+        for s in it["senses"] if a else ():
+            if s["key"] not in a["kinds"]:
+                continue
+            signs = set(s.get("labels", [])) | _gloss_words({"glosses": [s.get("gloss", "")]})
+            seen.update(signs)
+            if a["kinds"][s["key"]] != s["guess"]:
+                missed.update(signs)
+    good = [f for f in missed if missed[f] >= MISS_MIN and missed[f] / seen[f] >= MISS_SHARE]
+    return {f: missed[f] / seen[f] for f in sorted(good, key=lambda f: (-missed[f], f))[:MISS_SIGNS]}
+
+
+def review_lines(review):
+    """[(the line, its word or None)] of a review file, or [] when there is none."""
+    out = []
+    try:
+        with open(review, encoding="utf-8") as f:
+            for line in f:
+                try:
+                    out.append((line.rstrip("\n"), json.loads(line)["w"]))
+                except (ValueError, KeyError, TypeError):
+                    continue
+    except OSError:
+        pass
     return out
 
 
 def make_next(entries, review, size=300, wn=None, log=print):
-    """Add the next words to review (pick_next) to the end of the review file, commonest first: the review window
-    goes on from the first word not yet answered."""
+    """Refresh the review file with the next words (pick_next): the words answered so far stay, in their order (the
+    review's Back still walks them), the unanswered ones give way to `size` new ones after them, commonest first; the
+    groups are weighted by where the rules were wrong (group_shares), and like your misses follows the answers'
+    misses (miss_signs). The review window goes on from the first word not yet answered."""
+    answers = read_answers(review_answers_path(review)) if os.path.exists(review_answers_path(review)) else {}
+    lines = review_lines(review)
+    kept = [(line, w) for line, w in lines if w in answers]
+    items = [json.loads(line) for line, _w in kept]
     words, poses, family = load(entries)
     scored = rudeness.score_words(words, poses, wn, family)
-    picked = pick_next(words, scored, size, skip=reviewed(review))
-    with open(review, "a", encoding="utf-8") as f:
+    picked = pick_next(words, scored, size, skip=set(answers), shares=group_shares(items, answers),
+                       misses=miss_signs(items, answers))
+    tmp = review + ".part"
+    with open(tmp, "w", encoding="utf-8") as f:
+        for line, _w in kept:
+            f.write(line + "\n")
         for w in sorted(picked, key=lambda w: (-zipf(w), w)):
             why, also = picked[w]
             f.write(json.dumps(review_item(w, words[w], scored[w], why, poses[w], also=also),
                                ensure_ascii=False) + "\n")
-    groups = collections.Counter(why.split(":")[0].split(" (")[0] for why, _a in picked.values())
-    log(f"Added {len(picked):,} words to {review}: " + ", ".join(f"{g} {n}" for g, n in sorted(groups.items())))
+    os.replace(tmp, review)
+    groups = collections.Counter(group_of(why) for why, _a in picked.values())
+    log(f"{len(picked):,} new words to review (after the {len(kept):,} answered; {len(lines) - len(kept):,} "
+        f"unanswered replaced): " + ", ".join(f"{g} {n}" for g, n in sorted(groups.items())))
 
 
 def make_sample(entries, out, size=1500, wn=None, log=print):

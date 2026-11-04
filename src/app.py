@@ -2264,8 +2264,8 @@ class App:
 
     def make_review_words(self, dlg=None, ask=None, run=None):
         """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
-        next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (300 more, none
-        reviewed already). The Wiktionary entries it reads (rudeness_entries.jsonl in the source folder) are fetched
+        next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (the answered
+        words kept, the rest replaced by 300 picked from the answers' misses; an open review opens again on them). The Wiktionary entries it reads (rudeness_entries.jsonl in the source folder) are fetched
         first when missing, after asking (`ask(): yes?`, tests). A toast says when it starts and what it made.
         `run(commands) -> (exit code, its last line)` runs them, on a worker thread (tests: at once). Returns the
         commands, or None."""
@@ -2290,8 +2290,8 @@ class App:
         cmds.append([sys.executable, tool, "sample", "--out", path] if first else
                     [sys.executable, tool, "next", "--review", path])
         self.store.set_meta("review_file", os.path.abspath(path))
-        self.flash(f"Making {'1,500' if first else '300 more'} review words: a few minutes", kind="info", ms=5000)
-        self._tool_job = {"done": None}
+        self.flash(f"Making {'1,500' if first else '300 new'} review words: a few minutes", kind="info", ms=5000)
+        self._tool_job = {"done": None, "path": path}
         job = self._tool_job
 
         def work():
@@ -2311,6 +2311,9 @@ class App:
         self._tool_job = None
         code, last = job["done"]
         if code == 0:
+            if self.review is not None and self.review.alive() and self.review_path == job["path"]:
+                self.review.close()               # (the file was refreshed under it: open it again on the new words,
+                self.open_review(job["path"])     # its answers saved already)
             self.flash(last or "Review words made", kind="ok", ms=6000)
         else:
             self.flash(f"Making review words failed: {last}", kind="warn", ms=8000)

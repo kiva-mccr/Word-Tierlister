@@ -173,8 +173,8 @@ still rules only: the program never reads the answers).
 OB-10 (asked for: tune the rules' numbers against those answers: `python tools/tune_rudeness.py`, a window: 5 parts,
 each tested on numbers tuned without it, the error round by round, a guard over the program's words, the meanings still
 wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups).
-OB-11 (asked for: active review: `tools/measure_rudeness.py next` appends 300 words to the review file, none reviewed
-already: near the line, signals disagreeing, candidate signals mined from Wiktionary's own rude labels, common words
+OB-11 (asked for: active review: `tools/measure_rudeness.py next` refreshes the review file: answered words stay first,
+the rest replaced by 300 new ones, groups weighted by where the rules were wrong, plus like your misses; near the line, signals disagreeing, candidate signals mined from Wiktionary's own rude labels, common words
 with no sign at all; each group spread over what its words share; one-part words only, contractions kept). Developer
 tools bubbles in How words are dealt: Make review words (sample, then next, in the background) and Tune the rules
 (the tuner's window); both run tools/ from the source.
