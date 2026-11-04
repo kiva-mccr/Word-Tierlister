@@ -771,6 +771,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           than doubling, the meanings still wrong are listed (rude_tune_misses.txt), and Keep writes the numbers
 #           tuned on every answered word at the best round into src/rudeness.py (RUDENESS_VERSION bumped).
 #           _selftest_tune.py.
+# [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
+#           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
+#           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
+#           close), a candidate signal (a topic the rules never read, or a gloss word leaning to Wiktionary's rude
+#           labels by log-odds, on a meaning found clean; a few words each) and common words with no sign at all (the
+#           only way to count what the rules miss). The meaning a word was picked for is always asked about.
+#           _selftest_nextreview.py.
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
