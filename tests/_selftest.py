@@ -191,6 +191,7 @@ try:
     h = T.Store(os.path.join(tempfile.mkdtemp(), "hyph.db"))
     h.insert_words(["the", "well-known", "ice cream", "qzxv-wvqz"])
     h.set_meta("pen_done", "1"); h.set_meta("freq_done", "1")              # filled by version 1
+    h.set_meta("source", "custom")                    # (a list of its own keeps hyphenated words: W-3)
     prepare_queue(h, log=lambda m: None)
     fq = {r[0]: r[1] for r in h.db.execute("SELECT word, freq FROM words")}
     assert h.get_meta("freq_done") == T.Store.FREQ_VERSION and fq["well-known"] > 0 and fq["ice cream"] > 0, fq

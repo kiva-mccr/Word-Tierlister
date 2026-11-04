@@ -177,6 +177,8 @@ Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes th
 definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
 now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
+W-3 (asked for: one-part words only, contractions kept: hyphenated entries are never read; an older save leaves out
+its untouched ones once at start, Store.leave_out_hyphenated; --include-phrases gone; a --words list is never touched).
 F-47 (the folder logic reviewed, asked for "what a user expects": Remove it keeps what you added or changed,
 standalone.removable / TOP_FILES (a new top-level file must be added there); builds swapped in, install_program;
 downloads removed; a Mac app keeps its save in Application Support and its source in Documents, open -n).

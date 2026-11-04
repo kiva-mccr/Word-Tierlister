@@ -93,10 +93,9 @@ SKIP_POS = {"name", "symbol", "character", "punct", "romanization", "prefix", "s
             "interfix", "affix", "circumfix", "proverb", "phrase", "prep_phrase"}
 # Senses carrying only these labels count as "dead": such words are pushed further back.
 DEAD_TAGS = {"obsolete", "archaic", "rare", "dialectal"}
-# A word is letters, optionally joined by single hyphens/apostrophes ("well-known", "don't").
-# _PHRASE_RE additionally allows spaces ("ice cream"); it is used only with --include-phrases.
-_WORD_RE = re.compile(r"^[^\W\d_]+(?:[-'’][^\W\d_]+)*$")
-_PHRASE_RE = re.compile(r"^[^\W\d_]+(?:[-' ’][^\W\d_]+)*$")
+# A word is one part: letters, optionally joined by single apostrophes ("don't"). Hyphenated entries
+# ("well-known", "what-you-see-is-what-you-get") and phrases ("ice cream") are left out (W-3, asked for).
+_WORD_RE = re.compile(r"^[^\W\d_]+(?:['’][^\W\d_]+)*$")
 # Insert a parsed entry into the staging table, or merge it with an earlier entry for the same word
 # (a word often has several parts of speech): add the senses, keep the definition text (capped).
 _WK_UPSERT = (
@@ -236,13 +235,12 @@ class RudeCollector:
         return self.kept
 
 
-def _parse_wiktionary(db, path, include_phrases, log, rude=None):
+def _parse_wiktionary(db, path, log, rude=None):
     """Stream the kaikki.org JSONL dump into the staging table `wk`, one row per word (committed in batches).
 
-    Keeps English entries whose headword is lowercase, word-shaped, not an affix/name/symbol and has
+    Keeps English entries whose headword is lowercase, one word (_WORD_RE), not an affix/name/symbol and has
     at least one gloss; `rude` (a RudeCollector) is handed each one. Lines are read one at a time.
     """
-    shape = _PHRASE_RE if include_phrases else _WORD_RE
     batch, lines, kept = [], 0, 0
     # Progress = characters read / file size. Close enough for a progress bar on the plain .jsonl
     # (almost all ASCII); for a .gz the sizes are not comparable, so no percentage is reported.
@@ -264,7 +262,7 @@ def _parse_wiktionary(db, path, include_phrases, log, rude=None):
                 continue
             word = entry.get("word")
             if (not word or entry.get("pos") in SKIP_POS or word != word.lower()
-                    or not shape.match(word)):
+                    or not _WORD_RE.match(word)):
                 continue
             n, lemma, live, text = _summarize(entry)
             if n == 0:
@@ -283,7 +281,7 @@ def _parse_wiktionary(db, path, include_phrases, log, rude=None):
     log(f"  parsed {lines:,} entries, kept {kept:,}")
 
 
-def build_wiktionary(store, path=None, include_phrases=False, keep_download=False, log=print):
+def build_wiktionary(store, path=None, keep_download=False, log=print):
     """Load every English Wiktionary word into `store`, most common first.
 
     Order = wordfreq frequency; words with no frequency data are ordered by how "real" they look
@@ -313,7 +311,7 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
             download_resumable(WIKT_URL, path, log)
         log("Reading entries...")
         rude = RudeCollector()
-        _parse_wiktionary(db, path, include_phrases, log, rude)
+        _parse_wiktionary(db, path, log, rude)
         store.save_rude_senses(rude.finish())         # (the rules score them in prepare_queue)
         store.set_meta("wk_done", "1")
 
@@ -354,6 +352,8 @@ def build_wiktionary(store, path=None, include_phrases=False, keep_download=Fals
     db.execute("DROP TABLE wk")
     db.commit()
     store.set_meta("source", "wiktionary")
+    if not older:
+        store.set_meta("hyphens_done", "1")      # (a list built since W-3 has none to leave out)
     store.set_meta("wk_done", "0")
     if ours and not keep_download and os.path.exists(path):
         try:
@@ -558,16 +558,25 @@ def queue_steps(store, adds_words=False, by_wiktionary=False):
     by a Wiktionary build, which records their kinds and frequencies itself."""
     if not adds_words and not store.count_words():
         return []
+    hyphens = hyphens_left(store)
     pen = adds_words or store.get_meta("pen_done") != "1"
     freq = not by_wiktionary and (adds_words or store.get_meta("freq_done") != store.FREQ_VERSION)
     kinds = not by_wiktionary and store.get_meta("kinds_done") != "1"
     rude = adds_words or store.get_meta("rude_done") != rude_version(store)
-    shuffle = pen or store.db.execute(
+    shuffle = pen or hyphens or store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
-    return ((["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
+    return ((["Leaving out hyphenated words"] if hyphens else []) + (["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
             + (["Sorting words into kinds"] if kinds else [])
             + (["Scoring rude meanings"] if rude else [])
             + (["Shuffling the queue"] if shuffle else []))
+
+
+def hyphens_left(store):
+    """True while a save made before W-3 may still hold hyphenated words to leave out (Store.leave_out_hyphenated):
+    once per save, never for a list of the user's own (--words)."""
+    return (store.get_meta("hyphens_done") != "1" and store.get_meta("source") != "custom"
+            and store.db.execute("SELECT 1 FROM words WHERE tier IS NULL AND instr(word, '-') > 0 LIMIT 1").fetchone()
+            is not None)
 
 
 def prepare_queue(store, log=print):
@@ -575,6 +584,12 @@ def prepare_queue(store, log=print):
     if not store.count_words():
         return
     changed = False
+    if hyphens_left(store):
+        log("Leaving out hyphenated words (one time, about ten seconds on a large list)...")
+        log(f"  left out {store.leave_out_hyphenated():,} hyphenated words.")
+        changed = True
+    if store.get_meta("hyphens_done") != "1":
+        store.set_meta("hyphens_done", "1")
     if store.get_meta("pen_done") != "1":
         log("Detecting compound words (one time, can take a minute on a large list)...")
         if compute_penalties(store, log):

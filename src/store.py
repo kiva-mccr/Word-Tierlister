@@ -329,6 +329,28 @@ class Store:
         self._forget_tallies()
         self.version += 1
 
+    def leave_out_hyphenated(self):
+        """Take the hyphenated words nobody has touched ("well-known", "what-you-see-is-what-you-get") out of the
+        list, with their definitions: the list keeps one-part words (W-3, asked for; contractions stay). One
+        already placed, skipped or compared stays. The ranks close up behind them, so the shelf still fits the
+        list. Returns how many went; the queue needs reshuffling after (prepare_queue does it)."""
+        gone = [(r[0],) for r in self.db.execute(
+            "SELECT word FROM words WHERE tier IS NULL AND skips=0 AND games=0 AND instr(word, '-') > 0")]
+        if not gone:
+            return 0
+        self.db.executemany("DELETE FROM words WHERE word=?", gone)
+        self.db.executemany("DELETE FROM defs WHERE word=?", gone)
+        with self.bulk_write(("idx_words_shelf", "idx_unplaced_queue", "idx_unplaced_rank")):   # (~7 s at 1M words)
+            moved = [(new, w) for w, old, new in self.db.execute(
+                "SELECT word, rank, ROW_NUMBER() OVER (ORDER BY rank, word) - 1 FROM words").fetchall() if old != new]
+            self.db.executemany("UPDATE words SET rank=? WHERE word=?", moved)
+        self._forget_shelf_totals()
+        self.db.commit()
+        self._total = self._obscene = self._censored = None
+        self._forget_tallies()
+        self.version += 1
+        return len(gone)
+
     def has_word(self, word):
         """True if `word` is in the list."""
         return self.db.execute("SELECT 1 FROM words WHERE word=?", (word,)).fetchone() is not None

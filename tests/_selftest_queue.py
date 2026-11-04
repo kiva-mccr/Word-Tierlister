@@ -99,23 +99,31 @@ CREATE TABLE words(word TEXT PRIMARY KEY, rank INTEGER NOT NULL, tier INTEGER,
 CREATE INDEX idx_words_queue ON words(tier, skips, rank);
 """)
 words = ["the", "of", "bookshelf", "table", "moist", "serendipity", "notebook", "gristle", "luminous",
-         "bureaucracy", "well-known", "zymolytic"] + [f"zz{i:04d}" for i in range(500)]
+         "bureaucracy", "well-known", "zymolytic", "x-ray", "what-have-you"] + [f"zz{i:04d}" for i in range(500)]
 con.executemany("INSERT INTO words(word, rank, tier, rating, games, skips) VALUES(?,?,?,?,?,?)",
-                [(w, i, 2 if w in ("table", "the") else None, 1500.0, 3 if w == "table" else 0,
-                  1 if w == "moist" else 0) for i, w in enumerate(words)])
+                [(w, i, 2 if w in ("table", "the", "x-ray") else None, 1500.0, 3 if w == "table" else 0,
+                  1 if w in ("moist", "what-have-you") else 0) for i, w in enumerate(words)])
 con.commit(); con.close()
 m = T.Store(old)
 cols = {r[1] for r in m.db.execute("PRAGMA table_info(words)")}
 assert {"qkey", "pen"} <= cols
 assert m.get_word("table")["tier"] == 2 and m.get_word("table")["games"] == 3   # progress intact
 assert m.get_word("moist")["skips"] == 1
+m.set_def("well-known", "famous")
+assert T.queue_steps(m)[0] == "Leaving out hyphenated words"
 T.prepare_queue(m, quiet)
 assert m.db.execute("SELECT COUNT(*) FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey>=1e17)").fetchone()[0] == 0
+# W-3: an untouched hyphenated word is left out, with its definition; placed or skipped ones stay; the ranks close up
+assert not m.has_word("well-known") and m.get_def("well-known") is None
+assert m.get_word("x-ray")["tier"] == 2 and m.get_word("what-have-you")["skips"] == 1
+assert [r[0] for r in m.db.execute("SELECT rank FROM words ORDER BY rank")] == list(range(len(words) - 1))
+assert m.get_word("zymolytic")["rank"] == words.index("zymolytic") - 1 and m.get_word("the")["rank"] == 0
+assert m.get_meta("hyphens_done") == "1" and m.stats()["total"] == len(words) - 1
 assert m.get_meta("pen_done") == "1" and m.get_word("bookshelf")["pen"] == 1
 nxt = m.next_unplaced()
 assert nxt["tier"] is None and nxt["skips"] == 0     # skipped 'moist' is not next
 q = [r[0] for r in m.db.execute("SELECT word FROM words WHERE tier IS NULL ORDER BY skips, qkey")]
-assert q[-1] == "moist"                                # skipped words still go to the very back
+assert set(q[-2:]) == {"moist", "what-have-you"}       # skipped words still go to the very back
 seed_before = m.queue_settings()["seed"]
 T.prepare_queue(m, quiet)                              # idempotent: no reshuffle when up to date
 assert m.queue_settings()["seed"] == seed_before

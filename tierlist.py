@@ -798,6 +798,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           life, the save's tables, threads, releases; maps for dealing, rudeness, updates, packages), the
 #           file map (check_release reads it there), options, tests. File > Where is my save file? gained
 #           Show in folder (standalone.reveal_file: the file selected in Explorer / Finder / the file manager).
+# [x] W-3   One-part words only (asked for: "many of these words are almost full sentences"; contractions stay; no tick
+#           box, simply never read). wordfreq has no hyphenated words, so it scored "what-have-you" like the phrase
+#           "what have you": 613 of the first 1,000 words were hyphenated. wordsource._WORD_RE now takes letters and
+#           apostrophes only (48,775 of 832,897 entries go; --include-phrases is gone). An older save leaves out its
+#           untouched hyphenated words once at start ("Leaving out hyphenated words", Store.leave_out_hyphenated: ~8 s
+#           at a million; placed, skipped or compared ones stay; ranks close up); a --words list is never touched.
 # [x] ST-7  Progress windows: a real download speed for packages, and "Step i of n" (asked for). Installing
 #           packages used to show only a sweeping bar (pip prints no progress into a pipe), so there was no
 #           time left. Now pip gets a temporary folder of its own (TMPDIR) and a watcher thread follows the
@@ -2178,8 +2184,6 @@ def main():
                          "wordnet = ~77k base-form dictionary words")
     ap.add_argument("--wiktionary-file", help="use an already-downloaded kaikki.org English JSONL "
                                               "(.jsonl or .jsonl.gz) instead of downloading it")
-    ap.add_argument("--include-phrases", action="store_true",
-                    help="also include multi-word entries such as 'ice cream' (Wiktionary source)")
     ap.add_argument("--keep-download", action="store_true",
                     help="keep the 3 GB Wiktionary download after building the word list")
     ap.add_argument("--console", action="store_true",
@@ -2288,8 +2292,7 @@ def main():
                     log(f"Upgrading your {existing:,}-word list to the full Wiktionary list. "
                         "Your progress is kept.")
                 try:
-                    build_wiktionary(store, args.wiktionary_file, args.include_phrases,
-                                     args.keep_download, log=log)
+                    build_wiktionary(store, args.wiktionary_file, args.keep_download, log=log)
                 except (RuntimeError, OSError) as exc:
                     raise SetupError(f"Could not build the Wiktionary word list: {exc}\n\n"
                                      "Try again (downloads resume), download the file yourself and pass "

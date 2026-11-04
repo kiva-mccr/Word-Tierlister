@@ -394,9 +394,8 @@ All optional; `python tierlist.py --help` explains each.
 |---|---|
 | `--db FILE` | Use this save. Without it, the save you used last (or the one with the most progress) is found by itself. |
 | `--wordlist FILE` | Start a new save from your own list, one word per line, in that order. |
-| `--source wiktionary` / `wordnet` | Where a new save's words come from: all of English Wiktionary (default, about 1M) or WordNet's ~77k base forms. |
+| `--source wiktionary` / `wordnet` | Where a new save's words come from: all of English Wiktionary's one-part words (default, about 785k; no hyphenated words or phrases) or WordNet's ~77k base forms. |
 | `--wiktionary-file FILE` | Build from a kaikki.org English download you already have (`.jsonl` or `.jsonl.gz`). |
-| `--include-phrases` | Also take multi-word entries such as "ice cream" (Wiktionary). |
 | `--keep-download` | Keep the 3 GB Wiktionary download after building. |
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |

@@ -28,9 +28,9 @@ lines = [
     entry("zzzform", "noun", ["plural of zzz"], form_of="zzz"),
     entry("don't", "contraction", ["do not"]),
     entry("café", "noun", ["a coffee shop"]),
-    entry("well-known", "adj", ["famous"]),
+    entry("well-known", "adj", ["famous"]),                   # hyphenated -> excluded (W-3)
     entry("London", "name", ["capital of England"]),          # capitalised -> excluded
-    entry("ice cream", "noun", ["frozen dessert"]),           # phrase -> excluded by default
+    entry("ice cream", "noun", ["frozen dessert"]),           # phrase -> excluded
     entry("un-", "prefix", ["not"]),                          # affix -> excluded
     entry("bonjour", "intj", ["hello"], lang="fr"),           # wrong language -> excluded
     entry("empty", "noun", []),                               # no glosses -> excluded
@@ -62,8 +62,8 @@ n = T.build_wiktionary(s, src, log=quiet)
 words = [r[0] for r in s.db.execute("SELECT word FROM words ORDER BY rank")]
 print(words)
 assert "london" not in [w.lower() for w in words] and "London" not in words
-assert "ice cream" not in words and "un-" not in words and "bonjour" not in words and "empty" not in words
-assert {"the", "of", "run", "running", "serendipity", "gristle", "don't", "café", "well-known"} <= set(words)
+assert "ice cream" not in words and "well-known" not in words and "un-" not in words and "bonjour" not in words and "empty" not in words
+assert {"the", "of", "run", "running", "serendipity", "gristle", "don't", "café"} <= set(words)
 assert words.index("the") < words.index("serendipity") < words.index("zymolytic") or True
 assert words.index("the") < words.index("run") < words.index("gristle")
 # unknown words: live headword before obsolete-only before bare inflected form
@@ -99,10 +99,7 @@ assert s.obscene_words() == {"shit"}, s.obscene_words()          # (an insult is
 assert s.smeared_meanings("come") == ["to orgasm"] and s.smeared_meanings("bastard") == []
 assert s.get_word("gyp")["out"] == 0 and s.get_word("come")["out"] == 0   # (a clean meaning: dealt by its kind)
 
-# ---- phrases flag --------------------------------------------------------------
-s2 = T.Store(os.path.join(tmp, "b.db"))
-T.build_wiktionary(s2, src, include_phrases=True, log=quiet)
-assert s2.has_word("ice cream")
+assert s.get_meta("hyphens_done") == "1"           # (a fresh build has no hyphenated words to leave out)
 
 # ---- upgrade an existing WordNet-style save keeps progress ----------------------
 s3 = T.Store(os.path.join(tmp, "c.db"))
