@@ -21,6 +21,8 @@ The module docstring has the details; this page is the map.
 
 - Rules only (the user's choice): the answers are a yardstick for the rules, never a list the program reads.
 - The word is never smeared here: judging a rude word needs to see it.
+- A kind key leaves its meaning selected: moving on by itself lit the next meaning's kind, which read as the key
+  changing the meaning below (reported). Down moves on.
 - Every key comes from the keymap's "review" group (App.apply_keys calls `apply_keys` here); Keyboard shortcuts
   shows that group only while the review is open (keymap.DEV_GROUPS).
 - The answers file is rewritten whole through a `.part` file after every word, so quitting any time loses nothing.
