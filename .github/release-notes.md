@@ -5,11 +5,13 @@ the first time.
   also ask; allow it.
 - **Linux:** a downloaded file cannot be started until it is allowed to run: in its Properties tick "Allow executing
   file as program", or run `chmod +x word-tierlister-linux`.
-- **macOS** (Apple Silicon; not tested on a real Mac yet, only by automated tests on GitHub's Macs): unzip `word-tierlister-macos.zip` and move "Word Tierlister" into a folder of its own. The
-  first time, macOS says it cannot check the app: open **System Settings > Privacy & Security**, scroll down and click
-  **Open Anyway**. If it says the app "is damaged", run `xattr -dr com.apple.quarantine "Word Tierlister.app"` in
-  Terminal, then open it again.
+- **macOS** (Apple Silicon; not tested on a real Mac yet, only by automated tests on GitHub's Macs): unzip
+  `word-tierlister-macos.zip` and drag "Word Tierlister" into **Applications**. The first time, macOS says it cannot
+  check the app: open **System Settings > Privacy & Security**, scroll down and click **Open Anyway**. If it says the
+  app "is damaged", run `xattr -dr com.apple.quarantine "/Applications/Word Tierlister.app"` in Terminal, then open
+  it again.
 
-Put the program in a folder of its own: your save stays next to it, and the first start unpacks the program's
-source code into "Word Tierlister source" beside it (File > Source & Updates has it too). To run from the source
-code instead, see the README.
+On Windows and Linux, put the program in a folder of its own: your save stays next to it, and the first start
+unpacks the program's source code into "Word Tierlister source" beside it. A Mac app keeps your save in
+`~/Library/Application Support/Word Tierlister` and unpacks its source into **Documents**. File > Source & Updates
+has the source too. To run from the source code instead, see the README.
