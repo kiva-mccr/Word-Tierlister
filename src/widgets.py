@@ -355,6 +355,9 @@ class RoundButton(SmoothCanvas):
             if "font" in mine:
                 f = mine["font"]
                 self._font = f if isinstance(f, tkfont.Font) else tkfont.Font(root=self, font=f)
+            if self._anim is not None and ("bg" in mine or "fg" in mine):
+                self._anim.stop(f"rb{id(self)}")     # (a fade still running would end at the old colour: the
+                                                     # review's lit kind showed the meaning before, reported)
             self._look = self._target()
             self._draw()
             if self._censor and self._hover:        # (and un-smears at once under a pointer already on it)

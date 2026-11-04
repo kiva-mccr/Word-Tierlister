@@ -187,7 +187,8 @@ class RudeReview:
         done = sum(1 for w in self.order if w in self.answers)
         total = len(self.items)
         self.count.config(text=f"{done:,} of {total:,} answered ({100 * done // max(1, total)}%)")
-        self.back_btn.set_enabled(bool(self.history) or self.i > 0)
+        if self.back_btn.enabled != (bool(self.history) or self.i > 0):
+            self.back_btn.set_enabled(bool(self.history) or self.i > 0)
         if it is None:
             self.word.config(text="Every word is answered" if total else "Nothing to review")
             self.why.config(text=f"The answers are in {self.answers_path}" if total else
@@ -196,11 +197,13 @@ class RudeReview:
                 w.destroy()
             self.ask.config(text="")
             for b in (*self.kind_btns.values(), self.whole_btn, self.next_btn):
-                b.set_enabled(False)
+                if b.enabled:
+                    b.set_enabled(False)
             self._refit()
             return
         for b in (*self.kind_btns.values(), self.whole_btn, self.next_btn):
-            b.set_enabled(True)
+            if not b.enabled:                # (only on a change: it starts a fade)
+                b.set_enabled(True)
         if new:
             self.word.config(text=it["w"])               # (never smeared: judging it needs the real word)
             guess = "smeared whole" if it.get("whole") else "not smeared whole"

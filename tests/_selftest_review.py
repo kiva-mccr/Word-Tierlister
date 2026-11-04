@@ -69,6 +69,16 @@ key(rv, "Up"); key(rv, "3"); assert rv.kinds[1] == "crude" and rv.sel == 1
 key(rv, "s"); assert rv.whole is True and "yes" in rv.whole_btn.cget("text")
 assert key(rv, "x") is None                               # a key of no review action passes
 rv.select(0); pump(1); assert rv.sel == 0                 # (a click on a meaning)
+# with motion on, the lit button is the selected meaning's kind once the fades end (a fade from set_enabled used
+# to end at the colour before: the lit kind was the meaning navigated from, reported)
+app.anim.reduce_motion = False
+for n in (1, 2, 1, 0):
+    rv.select(n)
+    for _ in range(30):
+        root.update(); time.sleep(0.01)
+    drawn = [k for k, b in rv.kind_btns.items() if b._look[0] != T.PALETTE["surface"]]
+    assert drawn == [rv.kinds[n]], (n, drawn, rv.kinds)
+app.anim.reduce_motion = True
 key(rv, "Return"); pump(2)
 assert rv.item["w"] == "idiot" and saved() == [{"w": "tail", "keys": [x["key"] for x in ITEMS[0]["senses"]],
                                                  "kinds": ["clean", "crude", "sexual"], "whole": True}]
