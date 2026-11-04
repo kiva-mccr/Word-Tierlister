@@ -3,7 +3,7 @@
 The kinds of rude meaning (Clinical, Crude, Swear, Insult, Sexual, Slur), which are dealt and which are smeared, and a short hand-picked list that stands in until a save has Wiktionary's meanings scored (OB-6).
 
 - **Uses:** the standard library only
-- **Used by:** `dealing`, `measure_rudeness`, `rudeness`, `store`, `wordsource`
+- **Used by:** `dealing`, `measure_rudeness`, `rudeness`, `store`, `tune_rudeness`, `wordsource`
 - **Tests:** `_selftest_obscene`
 
 The module docstring has the details; this page is the map.

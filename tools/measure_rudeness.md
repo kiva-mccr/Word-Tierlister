@@ -3,7 +3,7 @@
 Measuring the rudeness rules against an earlier sorting by Claude (a yardstick only, never shipped): agreement, per-kind precision and recall, false alarms on a control sample. OB-9: `sample` writes a review file for `tierlist.py --review-rude`, and `answers` scores the rules against what the review answered, meaning by meaning.
 
 - **Uses:** `constants`, `obscene`, `rudeness`, `wordsource`
-- **Used by:** nothing (run directly)
+- **Used by:** `tune_rudeness`
 - **Tests:** `_selftest_review`
 
 The module docstring has the details; this page is the map.
