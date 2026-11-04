@@ -38,12 +38,14 @@ flowchart TB
     wordsource["wordsource.py<br/>build the word list from Wiktionary or WordNet,<br/>frequencies, kinds of word, queue prep"]
     app["app.py: App<br/>the main window and its four modes"]
     widgets["widgets.py, ui_chart.py, smooth.py<br/>word card, tier pills, duel cards, toasts,<br/>definitions pane, tier chart, progress shelf"]
-    dialogs["browser.py, dealing.py, tiercolours.py,<br/>shortcuts.py, sources.py, filepicker.py<br/>Browse and the settings windows"]
+    dialogs["browser.py, dealing.py, tiercolours.py,<br/>shortcuts.py, sources.py, filepicker.py, review.py<br/>Browse, the settings windows, the rude-meaning review"]
+    sync["syncdialog.py, syncfiles.py, syncthing_api.py<br/>sync with other devices"]
     defs["definitions.py: Definitions<br/>lookups on a worker thread"]
     store[("store.py: Store<br/>tierlist.db (SQLite)")]
     rude["rudeness.py, obscene.py<br/>which meanings are rude"]
     standalone["standalone.py, deps.py<br/>packages, builds, self-update"]
-    net{{"the internet:<br/>kaikki.org Wiktionary, dictionaryapi.dev,<br/>GitHub releases, PyPI"}}
+    net{{"the internet:<br/>kaikki.org Wiktionary, dictionaryapi.dev,<br/>GitHub releases and main, PyPI"}}
+    peers{{"your other devices,<br/>through Syncthing"}}
 
     user --> app
     main --> startup --> wordsource --> store
@@ -60,6 +62,9 @@ flowchart TB
     standalone -.-> net
     dialogs --> standalone
     store --> rude
+    app --> sync
+    sync -- "Store.apply_sync: the newer change wins" --> store
+    sync -.-> peers
 ```
 
 ## Import layers
@@ -79,7 +84,7 @@ flowchart TB
     end
     subgraph L4["windows and views"]
         direction LR
-        ui_chart["ui_chart"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ dealing["dealing"] ~~~ sources["sources"]
+        ui_chart["ui_chart"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"]
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
@@ -107,8 +112,8 @@ note):
 
 | Module | Imports |
 |---|---|
-| `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, keymap, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
+| `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
+| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
 | `sources` | constants, deps, errors, filepicker, fonts, problems, saves, standalone, startup, theme, widgets |
 | `syncdialog` | deps, errors, fonts, problems, saves, startup, syncfiles, syncthing_api, theme, widgets |
 | `browser` | constants, errors, fonts, keymap, sizing, smooth, store, theme, ui_motion, widgets |
@@ -116,6 +121,7 @@ note):
 | `dealing` | constants, fonts, obscene, rudeness, theme, widgets |
 | `tiercolours` | constants, fonts, smooth, theme, ui_motion, widgets |
 | `shortcuts` | fonts, keymap, sizing, theme, widgets |
+| `review` | constants, fonts, keymap, sizing, theme, ui_style, widgets |
 | `ui_chart` | constants, smooth, theme, ui_motion |
 | `widgets` | constants, definitions, fonts, rudeness, sizing, smooth, theme, ui_motion |
 | `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme |
@@ -153,7 +159,12 @@ flowchart TB
     J --> K["startup.run_with_progress(set_up)<br/>on a worker thread, a progress window with time left"]
     K --> K1["set_up: build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
     K1 --> L["App(root, store, Definitions(store)).open_window()"]
-    L --> M["root.mainloop()"]
+    L --> L1{"--build-nightly or --review-rude?<br/>(the program's nightly update; a developer option)"}
+    L1 -- "--build-nightly" --> L2["SourceDialog(go=True, target=...):<br/>build the program in place of the old one"]
+    L1 -- "--review-rude" --> L3["the review of rude meanings<br/>(src/review.py) opens over the window"]
+    L1 -- neither --> M["root.mainloop()"]
+    L2 --> M
+    L3 --> M
     M --> N{"App.reopen asked?<br/>(dark mode, tier colours)"}
     N -- yes --> I2["app.reopen_while_asked: build the window again<br/>in the new look, then take over the old one"] --> M
     N -- no --> O["end_session in the log"]
@@ -276,7 +287,7 @@ erDiagram
     }
     meta {
         text key PK
-        text value "settings: zoom, dark_mode, keymap, tier_colors, qseed, ..."
+        text value "settings: zoom, monitor_zooms, dark_mode, keymap, tier_colors, censor_kinds, dev_tools, qseed, ..."
     }
     words ||--o{ comparisons : "winner / loser"
     words ||--o{ conflicts : "a / b"
@@ -300,7 +311,7 @@ flowchart LR
     subgraph workers["worker threads (never tkinter)"]
         Setup["startup.run_with_progress:<br/>building the word list"]
         Defs["Definitions._worker:<br/>WordNet, then dictionaryapi.dev"]
-        Upd["the update check:<br/>standalone.latest_release"]
+        Upd["the update check (sources.py):<br/>standalone.latest_release, then main<br/>for a nightly (latest_main, nightly_changes)"]
         RudeRead["App._start_rude_read:<br/>an older save's rude meanings"]
         Deal["dealing.py: a reshuffle<br/>(App.busy; nothing else writes)"]
         Pip["deps.install: pip, and a watcher<br/>measuring its download"]
@@ -322,9 +333,11 @@ flowchart LR
     src["the source<br/>(tierlist.py + src/)"] -- "tools/build.py<br/>(PyInstaller; standalone.py)" --> prog["a program for this computer<br/>(word-tierlister, .exe, .app),<br/>its source packed inside"]
     src -- "push to main" --> gh["GitHub"]
     gh -- "Actions > Build programs > Run workflow,<br/>or a pushed tag v&lt;VERSION&gt;" --> wf[".github/workflows/build.yml<br/>Linux, Windows, macOS builds,<br/>each started once to check it"]
-    wf --> rel["a GitHub Release<br/>word-tierlister-linux, -windows.exe, -macos.zip"]
+    wf --> rel["a GitHub Release<br/>word-tierlister-linux, -windows.exe, -macos.zip,<br/>SHA256SUMS.txt and a build attestation each"]
     rel -- "README download links" --> users["people"]
-    rel -- "File > Source & Updates > Update<br/>(sources.py, standalone.latest_release)" --> prog2["the program replaces itself<br/>(kept as .old until the new one starts)"]
+    rel -- "File > Source & Updates > Update<br/>(sources.py, standalone.latest_release),<br/>checked against SHA256SUMS.txt" --> prog2["the program replaces itself<br/>(kept as .old until the new one starts)"]
+    gh -- "Update to nightly, while main differs<br/>(standalone.latest_main)" --> night["main's source into the source folder<br/>beside the program, which builds<br/>its replacement (--build-nightly)"]
+    night --> prog2
     gh -- "git pull, or a sync of the source zip" --> src2["a source folder brought up to date"]
     prog -- "Unpack the source code" --> src
 ```
@@ -400,10 +413,11 @@ src/               the program's modules; src/icons/ holds its icon (drawn by to
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
                    build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules),
+                   tune_rudeness.py (tunes the rules' numbers against the review's answers),
                    make_icon.py (draws the icon), make_typefaces.py (fetches the fonts), speed_check.py and
                    stress_ui.py (speed and stress checks), notes.py (keeps the notes beside the code current)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
-.github/           the build and macOS test workflows, the release notes
+.github/           the build workflow, the test workflows (Linux and Windows; macOS), the release notes
 docs/images/       the README's screenshots
 README.md          the user-facing introduction; DEVELOPERS.md is this guide
 ```
@@ -527,7 +541,9 @@ It stops at the first failure; `KEEP_GOING=1` runs them all and lists every fail
 `SHARD=k/n` runs only part k of n, the parts about equally long (`tests/_shard.py` weighs each test by its time on
 GitHub's Intel Mac); the workflows run the parts on separate machines at once.
 Without a Mac, the Test on macOS workflow runs the same tests on GitHub's Macs (Actions > Test on macOS), and
-Test on Linux and Windows runs them on GitHub's Linux and Windows machines.
+Test on Linux and Windows runs them on GitHub's Linux and Windows machines. Both test workflows run only when
+a change touches code (`.py` files, `src/`, `tests/`, `requirements.txt` or the workflow itself): a push or pull
+request that changes only `.md` files, docs or images skips them. For such a change, run just the tests that cover it.
 
 ## Reference
 
@@ -603,6 +619,20 @@ with the best numbers (a kind more than doubling is marked, and Keep asks first)
 listed (all of them in `rude_tune_misses.txt` beside the answers: ideas for new rules, since no number fixes those).
 Keep writes the best numbers into `src/rudeness.py` and bumps `RUDENESS_VERSION`; read the diff, run the tests and
 commit. It is still rules only: nothing in the program reads the answers.
+
+```mermaid
+flowchart TB
+    D["the Wiktionary download"] -- "measure_rudeness.py fetch" --> E["the compact entries<br/>(read once, about 3 GB)"]
+    E -- "measure_rudeness.py sample" --> RV["rude_review.jsonl<br/>1,500 words, the rules' guesses filled in"]
+    RV --> WIN["Review rude meanings (src/review.py)<br/>How words are dealt's bubble, or --review-rude"]
+    WIN -- "1-7 a meaning's kind, S smear the word;<br/>saved on every change" --> ANS["rude_review_answers.jsonl<br/>beside the review file"]
+    ANS -- "Score the rules (bubble), or<br/>measure_rudeness.py answers" --> SC["how often the rules agree,<br/>meaning by meaning"]
+    ANS -- "tune_rudeness.py" --> TU["tune on 4 parts, test on the 5th,<br/>each part in turn; the guard;<br/>the meanings still wrong"]
+    E --> TU
+    TU -- "Keep" --> RU["src/rudeness.py: the new numbers,<br/>RUDENESS_VERSION bumped"]
+    RU -- "read the diff, run the tests, commit" --> PR["the program scores words again<br/>with the new rules (never the answers)"]
+    RU -. "the next sample" .-> RV
+```
 
 ```mermaid
 flowchart TB

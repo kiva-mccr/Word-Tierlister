@@ -32,7 +32,7 @@ pitfalls" are written by hand: add the rule or the bug there when you fix one. c
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
 constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> syncfiles -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, tiercolours, syncdialog, dealing, sources -> app -> tierlist.
+ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
