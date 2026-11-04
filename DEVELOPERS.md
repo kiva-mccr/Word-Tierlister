@@ -584,7 +584,8 @@ and a rude later one, and likely misses (found clean but with a slang label or a
 and start `python tierlist.py --review-rude`. A window goes through the words one by one, showing the main meaning
 and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 7 set the selected meaning's
 kind (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur), S says whether the whole word should be smeared,
-Enter goes to the next word and Backspace goes back. These keys can be changed in Keyboard shortcuts, which shows
+W opens the word's Wiktionary page (greyed out while offline), Enter goes to the next word and Backspace goes back
+one word in the file. These keys can be changed in Keyboard shortcuts, which shows
 them only while the review is open. The answers are saved after every word, to `rude_review_answers.jsonl` beside
 the review file. Starting again carries on where you stopped. `python tools/measure_rudeness.py answers --show 40`
 scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never
