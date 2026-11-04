@@ -15,7 +15,7 @@ The module docstring has the details; this page is the map.
 - `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet.
 - `write_answers`: Write every answer to `path` (the review's words in its order, then any others: answers from an earlier, smaller review are kept), through a temporary file, so a...
 - `RudeReview`: The review window (see the module's note).
-  - methods: item, select, set_kind, toggle_whole, next_word, back, apply_keys, on_key, alive, close
+  - methods: item, select, set_kind, toggle_whole, next_word, back, open_wiktionary, show_online, apply_keys, on_key, alive, close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -28,6 +28,10 @@ The module docstring has the details; this page is the map.
   stops a running fade when its colours change.
 - Every key comes from the keymap's "review" group (App.apply_keys calls `apply_keys` here); Keyboard shortcuts
   shows that group only while the review is open (keymap.DEV_GROUPS).
+- Back and Enter walk the file one word at a time (an answered word shows as answered). A history of words
+  answered this time made Enter after Back jump to the first unanswered word, so Back no longer walked straight
+  (reported).
+- The Wiktionary button follows App.online (App._watch_online calls `show_online`); tests never go online.
 - The answers file is rewritten whole through a `.part` file after every word, so quitting any time loses nothing.
 - A new look (App.reopen) closes the review and App.take_over opens it again on the new window.
 

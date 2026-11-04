@@ -10,8 +10,10 @@ whether the rules smear the whole word. The keys (the keymap's "review" group, c
                  as the key changing the meaning below: reported)
     Up / Down    another meaning (a click on one, or on its kind, selects it too)
     S            smear the whole word, or not
-    Enter        keep the answers (as shown) and go on to the next word
-    Backspace    back one word, as it was answered
+    W            open the word's Wiktionary page in the browser (greyed out while Wiktionary cannot be reached)
+    Enter        keep the answers (as shown) and go on to the next word in the file
+    Backspace    back one word in the file, as it was answered (a straight walk: Back then Enter returns to where
+                 it was; a history of words answered made Enter after Back skip ahead: reported)
 
 The answers go to the answers file beside the review file (constants.review_answers_path), rewritten after every
 word, so stopping any time loses nothing and starting again carries on at the first word not answered. Nothing is
@@ -103,7 +105,6 @@ class RudeReview:
         self.answers = read_answers(self.answers_path)
         self.i = next((n for n, it in enumerate(self.items) if it["w"] not in self.answers), len(self.items))
         self.sel, self.kinds, self.whole = 0, [], False
-        self.history = []                        # the words answered this time, for Back
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(app.root)
         self.win.withdraw()                      # (shown once built and placed)
@@ -143,6 +144,9 @@ class RudeReview:
         self.whole_btn = RoundButton(nav, "", self.toggle_whole, bg=PALETTE["surface"], font=body, padx=14, pady=6,
                                      radius=12, animator=app.anim)
         self.whole_btn.pack(side="left")
+        self.wikt_btn = RoundButton(nav, "Open in Wiktionary", self.open_wiktionary, bg=PALETTE["surface"], font=body,
+                                    padx=14, pady=6, radius=12, animator=app.anim)
+        self.wikt_btn.pack(side="left", padx=(8, 0))
         self.next_btn = RoundButton(nav, "Next word", self.next_word, bg=PALETTE["select_bg"], font=body,
                                     padx=16, pady=6, radius=12, animator=app.anim)
         self.next_btn.pack(side="right")
@@ -187,8 +191,9 @@ class RudeReview:
         done = sum(1 for w in self.order if w in self.answers)
         total = len(self.items)
         self.count.config(text=f"{done:,} of {total:,} answered ({100 * done // max(1, total)}%)")
-        if self.back_btn.enabled != (bool(self.history) or self.i > 0):
-            self.back_btn.set_enabled(bool(self.history) or self.i > 0)
+        if self.back_btn.enabled != (self.i > 0):
+            self.back_btn.set_enabled(self.i > 0)
+        self.show_online()
         if it is None:
             self.word.config(text="Every word is answered" if total else "Nothing to review")
             self.why.config(text=f"The answers are in {self.answers_path}" if total else
@@ -283,23 +288,28 @@ class RudeReview:
         self.answers[it["w"]] = {"w": it["w"], "keys": [s["key"] for s in it["senses"]], "kinds": list(self.kinds),
                                  "whole": self.whole}
         write_answers(self.answers_path, self.answers, self.order)
-        self.history.append(self.i)
-        nxt = next((n for n in range(self.i + 1, len(self.items)) if self.items[n]["w"] not in self.answers), None)
-        if nxt is None:
-            nxt = next((n for n in range(len(self.items)) if self.items[n]["w"] not in self.answers),
-                       len(self.items))
-        self.i = nxt
+        self.i += 1                              # the next word in the file (shown as answered if it was)
+        if self.i >= len(self.items):            # past the last: any word skipped earlier, else the end
+            self.i = next((n for n in range(len(self.items)) if self.items[n]["w"] not in self.answers),
+                          len(self.items))
         self._load()
 
     def back(self):
-        """Back one word (the last one answered this time, else the one before), shown as it was answered."""
-        if self.history:
-            self.i = self.history.pop()
-        elif self.i > 0:
+        """Back one word in the file, shown as it was answered."""
+        if self.i > 0:
             self.i -= 1
-        else:
-            return
-        self._load()
+            self._load()
+
+    def open_wiktionary(self):
+        """The word's Wiktionary page in the browser (the same link as a definition's)."""
+        if self.item is not None and self.app.online.online:
+            self.app.open_wiktionary(self.item["w"])
+
+    def show_online(self):
+        """Grey the Wiktionary button out while there is no word or Wiktionary cannot be reached."""
+        on = self.item is not None and bool(self.app.online.online)
+        if self.wikt_btn.enabled != on:
+            self.wikt_btn.set_enabled(on)
 
     # ---- keys -----------------------------------------------------------------------------------------------
     def apply_keys(self):
@@ -309,6 +319,7 @@ class RudeReview:
         for k, b in self.kind_btns.items():
             b.config(hint=hint("review_" + k))
         self.whole_btn.config(hint=hint("review_whole"))
+        self.wikt_btn.config(hint=hint("review_wiktionary"))
         self.next_btn.config(hint=hint("review_next"))
         self.back_btn.config(hint=hint("review_back"))
 
@@ -323,7 +334,7 @@ class RudeReview:
             self.set_kind(kind)
         else:
             {"review_up": lambda: self.select(self.sel - 1), "review_down": lambda: self.select(self.sel + 1),
-             "review_whole": self.toggle_whole, "review_next": self.next_word, "review_back": self.back}[action]()
+             "review_whole": self.toggle_whole, "review_wiktionary": self.open_wiktionary, "review_next": self.next_word, "review_back": self.back}[action]()
         return "break"
 
     def alive(self):

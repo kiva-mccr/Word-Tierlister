@@ -93,10 +93,19 @@ key(rv, "Return"); pump(2)
 assert rv.item["w"] == "shitload" and [a["w"] for a in saved()] == ["tail", "idiot"]
 assert saved()[1]["kinds"] == ["sexual"]
 # the keys follow the keymap: a changed key shows on its button and works
-app.keys.set("review_whole", ["w"]); app.apply_keys(); pump(1)
-assert rv.whole_btn.cget("hint") == "W" and rv.whole is True
+app.keys.set("review_whole", ["z"]); app.apply_keys(); pump(1)
+assert rv.whole_btn.cget("hint") == "Z" and rv.whole is True
 key(rv, "s"); assert rv.whole is True
-key(rv, "w"); assert rv.whole is False
+key(rv, "z"); assert rv.whole is False
+# Open in Wiktionary (W): greyed out offline; online it opens the word's page (the browser faked)
+opened = []
+app.open_page = opened.append
+assert rv.wikt_btn.cget("hint") == "W" and not rv.wikt_btn.enabled
+key(rv, "w"); assert opened == []
+app.online.online = True; rv.show_online(); pump(1)
+assert rv.wikt_btn.enabled
+key(rv, "w"); assert len(opened) == 1 and "/shitload#English" in opened[0]
+app.online.online = False; rv.show_online()
 # Keyboard shortcuts shows the review's keys while it is open
 d = app.edit_keys(); pump(2)
 assert ("review_next", 0) in d.caps
@@ -110,6 +119,17 @@ assert app.review is None
 d = app.edit_keys(); pump(2)
 assert ("review_next", 0) not in d.caps                   # (and only then)
 d.dlg.close(); pump(1)
+
+# Back walks the file one word at a time, and Enter after Back goes to the next word, not the first unanswered one
+rv = app.open_review(path); pump(3)
+assert rv.item is None
+for _ in range(3):
+    key(rv, "BackSpace")
+pump(2); assert rv.item["w"] == "tail"
+key(rv, "Return"); pump(2); assert rv.item["w"] == "idiot"
+key(rv, "Return"); pump(2); assert rv.item["w"] == "shitload"
+key(rv, "BackSpace"); pump(2); assert rv.item["w"] == "idiot"
+rv.close(); pump(1)
 
 # starting again carries on at the first word not answered, with the earlier answers kept
 lines = saved()

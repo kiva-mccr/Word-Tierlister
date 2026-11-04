@@ -2014,6 +2014,8 @@ class App:
             for b in self.browsers:
                 if b.alive():
                     b.render_def()
+            if self.review is not None and self.review.alive():
+                self.review.show_online()
         self.root.after(self.ONLINE_POLL_MS, self._watch_online)
 
     # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
