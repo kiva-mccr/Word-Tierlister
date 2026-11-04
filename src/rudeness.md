@@ -4,7 +4,7 @@ How rude each meaning is, by hand-written rules over Wiktionary's data (OB-6): p
 
 - **Uses:** `obscene`
 - **Used by:** `app`, `dealing`, `measure_rudeness`, `store`, `tune_rudeness`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_obscene`, `_selftest_review`, `_selftest_rudeness`, `_selftest_tune`, `_selftest_wikt`
+- **Tests:** `_selftest_dealing`, `_selftest_nextreview`, `_selftest_obscene`, `_selftest_review`, `_selftest_rudeness`, `_selftest_tune`, `_selftest_wikt`
 
 The module docstring has the details; this page is the map.
 

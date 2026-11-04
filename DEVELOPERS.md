@@ -480,7 +480,7 @@ found again, so switching between the two loses nothing.
 | `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
 | `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
 | `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
-| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`); `sample` writes a review file for `--review-rude` and `answers` scores the rules against its answers (OB-9). |
+| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`); `sample` writes a review file for `--review-rude`, `next` adds the words that teach the rules most (active review, OB-11) and `answers` scores the rules against its answers (OB-9). |
 | `tools/tune_rudeness.py` | Tunes `src/rudeness.py`'s numbers against the review's answers (OB-10; developers): a window with the error round by round (5 parts, each tested on numbers tuned without it), each kind before and after, the numbers changed, a guard over every word the program scores and the meanings still wrong; Keep writes the numbers back. |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
@@ -610,6 +610,14 @@ the review file. Starting again carries on where you stopped. `python tools/meas
 scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never
 reads them.
 
+Once the first sample is answered (or while it is), `python tools/measure_rudeness.py next` (OB-11, active review)
+adds 300 more words (`--size`) to the end of the review file, picked to teach the rules most, none reviewed
+already: a meaning near the line (within a point of counting as rude, or of smearing the word), meanings whose
+signals point to two kinds, candidate signals the rules never read (a Wiktionary topic, or a gloss word common in
+Wiktionary's own rude meanings, on a meaning found clean; a few words each, so each candidate gets tested), and
+common words with no sign at all, the only way to count what the rules miss. The review window goes on from the
+first word not answered; "Here because" says why each word was picked.
+
 To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
 `--review` file; `--entries` the compact download). It splits the answered words into 5 parts, tunes the numbers the
 rules already have (the points of each label, topic, wording and WordNet meaning, the thresholds and weights) on 4
@@ -632,6 +640,7 @@ flowchart TB
     TU -- "Keep" --> RU["src/rudeness.py: the new numbers,<br/>RUDENESS_VERSION bumped"]
     RU -- "read the diff, run the tests, commit" --> PR["the program scores words again<br/>with the new rules (never the answers)"]
     RU -. "the next sample" .-> RV
+    E -- "measure_rudeness.py next<br/>(near the line, disagreeing, candidates, no sign)" --> RV
 ```
 
 ```mermaid

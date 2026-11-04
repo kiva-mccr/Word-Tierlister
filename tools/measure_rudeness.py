@@ -5,12 +5,16 @@
                                                                               lower-case English entry, compactly
     python tools/measure_rudeness.py measure [--policy B] [--show 40] [--no-links] [--no-wordnet] [--no-families]
     python tools/measure_rudeness.py sample [--size 1500] [--out rude_review.jsonl]     words for a review by hand
+    python tools/measure_rudeness.py next [--size 300] [--review rude_review.jsonl]   the next words to review
     python tools/measure_rudeness.py answers [--review rude_review.jsonl] [--show 40]  the rules against its answers
 
 OB-9: `sample` picks words for `python tierlist.py --review-rude` (a weighted sample: each main kind the rules
 find, words with a clean main meaning and a rude later one, and words found clean with a weak sign of rudeness,
 the likely misses), each with the meanings worth asking about and the rules' guesses; `answers` scores the rules
-against what the review answered (rude_review_answers.jsonl beside it), meaning by meaning. The answers only test
+against what the review answered (rude_review_answers.jsonl beside it), meaning by meaning. `next` (active review)
+adds the words that teach the rules most to the end of the review file, none reviewed already: a meaning near the
+line, signals that disagree, a candidate signal (a topic the rules never read, or a gloss word common in Wiktionary's
+rude meanings, on a meaning the rules find clean) and common words with no sign at all (what the rules miss). The answers only test
 and tune the rules: the program never reads them.
 
 The compact entries (rudeness_entries.jsonl next to the sorting, about 300 MB) keep each meaning as the program does
@@ -27,6 +31,7 @@ import argparse
 import collections
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -229,23 +234,26 @@ def _signal(sense, points):
     return any(v > 0 for v in points.values()) or rudeness.has_signal(rudeness.compact(sense))
 
 
-def shown_meanings(senses, scored):
+def shown_meanings(senses, scored, also=()):
     """The indexes of the meanings a review asks about: the main (first real) one, then those with a sign of
-    rudeness, at most SHOWN_MAX; meanings that only name another word are left out."""
+    rudeness, at most SHOWN_MAX; meanings that only name another word are left out. `also`: meanings to ask about
+    whatever they show (the one `next` picked the word for), in their place among the rest."""
     real = [i for i, s in enumerate(senses) if not rudeness.is_form(s)]
     if not real:
         return []
     main = real[0]
-    return [main] + [i for i in real[1:] if _signal(senses[i], scored[i])][:SHOWN_MAX - 1]
+    extra = [i for i in also if i != main and i in real]
+    rest = [i for i in real[1:] if i not in extra and _signal(senses[i], scored[i])][:SHOWN_MAX - 1 - len(extra)]
+    return [main] + sorted(extra + rest)
 
 
-def review_item(word, senses, scored, why, pos=(), censored=obscene.CENSORED):
+def review_item(word, senses, scored, why, pos=(), censored=obscene.CENSORED, also=()):
     """One word of a review file: its meanings to ask about, each with the rules' guess (rudeness.sense_kind),
-    and whether the rules smear it whole. `pos`: each meaning's part of speech."""
+    and whether the rules smear it whole. `pos`: each meaning's part of speech; `also`: see shown_meanings."""
     common = zipf(word) >= rudeness.COMMON_ZIPF
     _bits, whole, _smeared, _main = rudeness.results(word, senses, scored, censored, common)
     rows = []
-    for i in shown_meanings(senses, scored):
+    for i in shown_meanings(senses, scored, also):
         s = senses[i]
         rows.append({"key": rudeness.gloss_of(s)[:rudeness.GLOSS_KEY], "pos": pos[i] if i < len(pos) else "",
                      "labels": [rudeness._label(x) for x in s.get("tags", []) + s.get("raw_tags", [])],
@@ -275,14 +283,19 @@ def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
     share = {g: (size // 10 if g.startswith("the rules say") else size // 5) for g in groups}
     picked = {}
     for g in sorted(groups):
-        pool = sorted(set(groups[g]) - set(picked), key=lambda w: (-zipf(w), w))
-        n = min(share[g], len(pool))
-        top = pool[:n * 3]
-        got = rng.sample(top, min(n // 2, len(top)))
-        rest = [w for w in pool if w not in set(got)]
-        got += rng.sample(rest, min(n - len(got), len(rest)))
-        picked.update((w, g) for w in got)
+        picked.update((w, g) for w in _half_common(set(groups[g]) - set(picked), share[g], rng))
     return picked
+
+
+def _half_common(words, n, rng):
+    """n of `words`: half from the commonest (the top 3n), the rest from all the others."""
+    pool = sorted(words, key=lambda w: (-zipf(w), w))
+    n = min(n, len(pool))
+    top = pool[:n * 3]
+    got = rng.sample(top, min(n // 2, len(top)))
+    taken = set(got)
+    rest = [w for w in pool if w not in taken]
+    return got + rng.sample(rest, min(n - len(got), len(rest)))
 
 
 def weak_signs(words, limit_zipf=2.5):
@@ -298,6 +311,183 @@ def weak_signs(words, limit_zipf=2.5):
                 out.append(w)
                 break
     return out
+
+
+# ---- the next review: the words that teach the rules most (active review) -----------------------------------
+NEXT_SHARES = (("a candidate signal", 0.3), ("signals disagree", 0.2), ("near the line", 0.3),
+               ("no sign at all", 0.2))  # (picked in this order: a word goes to the first group it is in)
+NEAR = 1.0                # points from MEANING_MIN (or WHOLE_MIN) that count as near the line
+DISAGREE_MIN = 1.5        # both kinds need this many points ...
+DISAGREE_SHARE = 0.6      # ... and the second at least this share of the first
+RUDE_LABELS = {"vulgar", "derogatory", "offensive", "pejorative", "slur", "ethnic"}   # (Wiktionary's own)
+CANDIDATE_MIN = 30        # meanings with a rude label a candidate needs (a topic: meanings in all)
+CANDIDATE_SHARE = 0.10    # an unread topic: at least this share of its meanings have a rude label
+CANDIDATE_Z = 15.0        # a gloss word: at least this far towards rude meanings (log-odds z-score) ...
+CANDIDATE_WORD_SHARE = 0.10   # ... and at least this share of the meanings it is in have a rude label
+CANDIDATE_WORDS = 60      # at most this many gloss words
+PER_CANDIDATE = 4         # words asked about per candidate signal
+PRIOR = 500.0             # the informative prior's size (Monroe et al., "Fightin' Words")
+NO_SIGN_ZIPF = 2.5        # a word with no sign at all is asked about only if at least this common
+
+
+def _labels(sense):
+    return {rudeness._label(t) for t in list(sense.get("tags", [])) + list(sense.get("raw_tags", []))}
+
+
+def _topics(sense):
+    return {rudeness._label(t) for t in sense.get("topics", [])}
+
+
+def _gloss_words(sense):
+    return set(re.findall(r"[a-z]+", rudeness.gloss_of(sense).lower())) - rudeness._STOP
+
+
+def candidates(words):
+    """Signals the rules may be missing, mined from Wiktionary's own rude labels (RUDE_LABELS) as a stand-in for the
+    answers: ({topic: share of its meanings with a rude label} for topics the rules never read, {gloss word: how far
+    it leans to rude meanings} for the words likeliest in a rude meaning, by log-odds with an informative prior)."""
+    top_n, top_r, w_r, w_c = (collections.Counter() for _ in range(4))
+    for senses in words.values():
+        for s in senses:
+            if rudeness.is_form(s):
+                continue
+            rude = bool(_labels(s) & RUDE_LABELS)
+            for t in _topics(s):
+                top_n[t] += 1
+                top_r[t] += rude
+            (w_r if rude else w_c).update(_gloss_words(s))
+    read = set(rudeness.TOPIC_POINTS) | rudeness.RUDE_CATEGORIES
+    topics = {t: top_r[t] / n for t, n in top_n.items()
+              if n >= CANDIDATE_MIN and t not in read and top_r[t] / n >= CANDIDATE_SHARE}
+    r_all, c_all = sum(w_r.values()), sum(w_c.values())
+    total = r_all + c_all
+    lean = {}
+    for w, n in w_r.items():
+        if n < CANDIDATE_MIN:
+            continue
+        a = PRIOR * (n + w_c[w]) / total
+        d = (math.log((n + a) / (r_all + PRIOR - n - a)) -
+             math.log((w_c[w] + a) / (c_all + PRIOR - w_c[w] - a)))
+        z = d / math.sqrt(1 / (n + a) + 1 / (w_c[w] + a))
+        if z >= CANDIDATE_Z and n / (n + w_c[w]) >= CANDIDATE_WORD_SHARE:
+            lean[w] = z
+    return topics, dict(sorted(lean.items(), key=lambda kv: -kv[1])[:CANDIDATE_WORDS])
+
+
+def _near(points, line):
+    return 0 < points and abs(points - line) <= NEAR
+
+
+def next_reasons(word, senses, scored, topics, lean, censored=obscene.CENSORED):
+    """{group: (why, the meaning's index or None, what it shares with others: spread over, see _spread)} for the
+    groups of NEXT_SHARES a word is in."""
+    out = {}
+    real = [i for i, s in enumerate(senses) if not rudeness.is_form(s)]
+    if not real:
+        return out
+    shown = shown_meanings(senses, scored)
+    for i in real[:SHOWN_MAX]:
+        if rudeness.sense_kind(scored[i]) != "clean":
+            continue
+        hit = sorted(_topics(senses[i]) & set(topics)) or sorted(_gloss_words(senses[i]) & set(lean),
+                                                                  key=lambda w: -lean[w])
+        if hit:
+            what = f'the topic "{hit[0]}"' if hit[0] in topics else f'"{hit[0]}" in the meaning'
+            out["a candidate signal"] = (f"a candidate signal: {what}", i, hit[0])
+            break
+    for i in shown:
+        pts = sorted(scored[i].values(), reverse=True)
+        if len(pts) > 1 and pts[1] >= DISAGREE_MIN and pts[1] >= DISAGREE_SHARE * pts[0]:
+            k1, k2 = sorted(scored[i], key=lambda k: -scored[i][k])[:2]
+            why = f"signals disagree: {k1} {scored[i][k1]:.1f}, {k2} {scored[i][k2]:.1f}"
+            out["signals disagree"] = (why, i, why)
+            break
+    for i in shown:
+        pts = rudeness.sense_points(scored[i])
+        if _near(pts, rudeness.MEANING_MIN):
+            out["near the line"] = (f"near the line: {pts:.1f} points, {rudeness.MEANING_MIN:g} counts", i,
+                                    (rudeness.sense_kind({k: v + NEAR for k, v in scored[i].items()}), round(pts, 1)))
+            break
+    else:
+        pts = rudeness.word_points(scored, censored)
+        if _near(pts, rudeness.WHOLE_MIN):
+            out["near the line"] = (f"near the line for the whole word: {pts:.1f} points, "
+                                    f"{rudeness.WHOLE_MIN:g} smears it", None, ("whole", round(pts, 1)))
+    if (not any(any(v > 0 for v in p.values()) for p in scored) and re.fullmatch(r"[a-z][a-z']*(-[a-z']+)*", word)
+            and len(word) > 1 and word not in rudeness._STOP
+            and not any(rudeness.has_signal(rudeness.compact(s)) for s in senses)
+            and zipf(word) >= NO_SIGN_ZIPF):
+        out["no sign at all"] = ("no sign at all (to count what the rules miss)", None)
+    return out
+
+
+def pick_next(words, scored, size=300, skip=(), seed=11):
+    """{word: (why, [meaning index to ask about])}: the words of NEXT_SHARES, none of `skip` (words reviewed
+    already). Each group's share is spread over what its words share (a candidate signal: PER_CANDIDATE words each
+    at most; two kinds disagreeing; points near the line), and a group short of words hands its share on."""
+    import random
+    rng = random.Random(seed)
+    topics, lean = candidates(words)
+    groups = collections.defaultdict(dict)
+    skip = set(skip)
+    for w, sc in scored.items():
+        if w not in skip:
+            for g, why in next_reasons(w, words[w], sc, topics, lean).items():
+                groups[g][w] = why
+    picked, owed = {}, 0
+    for g, share in NEXT_SHARES:
+        pool = {w: why for w, why in groups[g].items() if w not in picked}
+        n = round(size * share) + owed
+        by = collections.defaultdict(list)
+        for w, why in pool.items():
+            by[why[2] if len(why) > 2 else None].append(w)
+        got = _spread(by, n, PER_CANDIDATE if g == "a candidate signal" else n, rng)
+        owed = n - len(got)                   # (a group short of words hands its share on)
+        picked.update((w, (pool[w][0], [] if pool[w][1] is None else [pool[w][1]])) for w in got)
+    return picked
+
+
+def _spread(by, n, cap, rng):
+    """n words from {what they share: [word]}, taken in turn from each (its commonest half first, _half_common), at
+    most `cap` from one: "swear 3.5, sexual 3.0" or the gloss word "woman" never fills a group alone."""
+    lists = [_half_common(by[k], cap, rng) for k in sorted(by, key=lambda k: (-len(by[k]), str(k)))]
+    got = []
+    for i in range(cap):
+        for ws in lists:
+            if i < len(ws) and len(got) < n:
+                got.append(ws[i])
+    return got
+
+
+def reviewed(review):
+    """The words a review file and its answers already hold."""
+    out = set()
+    for path in (review, review_answers_path(review)):
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        out.add(json.loads(line)["w"])
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except OSError:
+            pass
+    return out
+
+
+def make_next(entries, review, size=300, wn=None, log=print):
+    """Add the next words to review (pick_next) to the end of the review file, commonest first: the review window
+    goes on from the first word not yet answered."""
+    words, poses, family = load(entries)
+    scored = rudeness.score_words(words, poses, wn, family)
+    picked = pick_next(words, scored, size, skip=reviewed(review))
+    with open(review, "a", encoding="utf-8") as f:
+        for w in sorted(picked, key=lambda w: (-zipf(w), w)):
+            why, also = picked[w]
+            f.write(json.dumps(review_item(w, words[w], scored[w], why, poses[w], also=also),
+                               ensure_ascii=False) + "\n")
+    groups = collections.Counter(why.split(":")[0].split(" (")[0] for why, _a in picked.values())
+    log(f"Added {len(picked):,} words to {review}: " + ", ".join(f"{g} {n}" for g, n in sorted(groups.items())))
 
 
 def make_sample(entries, out, size=1500, wn=None, log=print):
@@ -361,13 +551,13 @@ def score_answers(answers, words, scored, censored=obscene.CENSORED, show=0, log
 
 
 def main(argv=None):
-    """The command line: fetch, measure, sample or answers."""
+    """The command line: fetch, measure, sample, next or answers."""
     ap = argparse.ArgumentParser(description="Measure the rudeness rules against Claude's sorting.")
-    ap.add_argument("command", choices=("fetch", "measure", "sample", "answers"))
-    ap.add_argument("--size", type=int, default=1500, help="sample: how many words")
+    ap.add_argument("command", choices=("fetch", "measure", "sample", "next", "answers"))
+    ap.add_argument("--size", type=int, default=None, help="sample (1500) / next (300): how many words")
     ap.add_argument("--out", default=os.path.join(ROOT, REVIEW_FILE), help="sample: the review file")
     ap.add_argument("--review", default=os.path.join(ROOT, REVIEW_FILE),
-                    help="answers: the review file (its answers are rude_review_answers.jsonl beside it)")
+                    help="answers / next: the review file (its answers are rude_review_answers.jsonl beside it)")
     ap.add_argument("--sorting", default=os.path.join(ROOT, "word_categories.tsv"))
     ap.add_argument("--policy", choices=sorted(POLICIES), default="B")
     ap.add_argument("--show", type=int, default=0, help="list this many words where the two differ (commonest)")
@@ -382,7 +572,9 @@ def main(argv=None):
     if args.command == "fetch":
         fetch(entries)
     elif args.command == "sample":
-        make_sample(entries, args.out, args.size, wn=wn)
+        make_sample(entries, args.out, args.size or 1500, wn=wn)
+    elif args.command == "next":
+        make_next(entries, args.review, args.size or 300, wn=wn)
     elif args.command == "answers":
         answers = read_answers(review_answers_path(args.review))
         words, poses, family = load(entries)
