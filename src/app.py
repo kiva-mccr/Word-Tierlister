@@ -274,9 +274,12 @@ class App:
         if not old:
             return None
         self.store.set_meta(UPDATED_FROM, "")
-        if old == VERSION:
+        if old.startswith(standalone.NIGHTLY):          # (the nightly build: main as it was then)
+            self.flash(f"Updated to the nightly build ({old[len(standalone.NIGHTLY):]})", kind="info", ms=5000)
+        elif old == VERSION:
             return None
-        self.flash(f"Updated to version {VERSION} (from {old})", kind="info", ms=5000)
+        else:
+            self.flash(f"Updated to version {VERSION} (from {old})", kind="info", ms=5000)
         folder = standalone.existing_source() or standalone.default_source_folder()   # (one beside an older Mac app)
         if is_frozen() and standalone.bundled_source() and \
                 standalone.came_from_program(standalone.read_manifest(folder, standalone.UNPACKED)):

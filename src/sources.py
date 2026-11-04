@@ -22,6 +22,11 @@ changed files are updated, new ones added, and ones the program no longer has re
 are ever touched, and a file you edited there is kept as name.bak first. What it will do is shown before it does
 it. Then it opens the folder and offers to start tierlist.py from it (that needs a Python on this computer).
 
+Nightly (U-9, for testing): the check also asks for main as it is now (standalone.latest_main) and, only when its
+files differ from this source's, shows "Update to nightly": from source the folder is brought up to main
+(update_source: git pull from main, or main's source synced in); in the program main's source goes into the source
+folder beside it, which then builds the program in this one's place (update_nightly_program, --build-nightly).
+
 Either way a tick box, "Update to the newest version first" (T-8), ticked to start with and usable once a newer
 version is found: "Make the program" then downloads that version's source and builds from it, and "Unpack" downloads
 it and shows what unpacking it would change before it does it. The first start of either form offers the other once
@@ -53,6 +58,7 @@ from constants import REPO_PAGE, VERSION
 TITLE = "Source & Updates"
 HEADLINE = "Make a standalone program"
 UPDATE = "Update"
+NIGHTLY = "Update to nightly"
 INTRO = ("Builds Word Tierlister into one program for this computer, with its source code inside it. It keeps using "
          "the same save, and Python is no longer needed to run it. It takes a minute or two; the first time, it "
          "asks to install the builder (PyInstaller, about 15 MB) and anything else the program needs.")
@@ -69,19 +75,27 @@ class SourceDialog:
     update_source; either way it starts again on the same save). Below it, the other form: from source, make the
     program; in the program, unpack its source; with the "Update to the newest version first" tick (T-8)."""
 
-    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None, go=False, platform=None):
+    def __init__(self, app, root_dir=None, source=None, frozen=None, check=None, go=False, platform=None,
+                 nightly=None, target=None):
         """`root_dir`: the project (from source); `source`: the source the program carries, and `frozen`: which
         side to show; `check() -> release or None`: how to find the newest release (tests pass them; the program
         finds them itself). `go`: do it straight away, without showing the page (T-9's "yes": make the program,
         or unpack beside it, from the version you have); if unpacking fails, the page shows to try elsewhere.
-        `platform`: which applications menu to offer (tests)."""
+        `platform`: which applications menu to offer (tests). `nightly() -> main or None`: how to find main as it
+        is now (standalone.latest_main; tests pass their own). `target`: from source with `go`, the program to build
+        in place of (a nightly update of the program: tierlist.py --build-nightly)."""
         self.app = app
         self.platform = platform or sys.platform
         self.menu = deps.menu_name(self.platform)      # (None: macOS, nothing to add to)
         self.frozen = is_frozen() if frozen is None else frozen
         self.root_dir = root_dir or standalone.ROOT
         self.check = check or standalone.latest_release
+        self.nightly_check = nightly or standalone.latest_main
+        self.target = None
+        self.build_target = target
         self.release = None                       # the newest release, once the check has found one
+        self.nightly = None                       # main as it is now, once found, when it differs from this source
+        self.nightly_files = []                   # the files that differ
         self.checked = False
         self.fetched = None                       # (unpacking) the newer version's source, once downloaded
         self.download_dir = None                  # the temporary folder it was downloaded into
@@ -93,8 +107,9 @@ class SourceDialog:
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
             self._menu_section()                                            # only until it is in the menu)
+        self.source = (source or standalone.bundled_source()) if self.frozen else None
+        self.here = self.source if self.frozen else self.root_dir     # (what main is compared with)
         if self.frozen:
-            self.source = source or standalone.bundled_source()
             self._unpack_page()
         else:
             self._make_page()
@@ -118,27 +133,36 @@ class SourceDialog:
         self.how = self.dlg.text("", muted=True, pady=(4, 0))
         self.update_buttons = tk.Frame(self.dlg.body, bg=PALETTE["bg"])
         self.update_buttons.pack(anchor="w", pady=(8, 0))
+        self.nightly_box = tk.Frame(self.dlg.body, bg=PALETTE["bg"])     # (only while main differs: _show_nightly)
+        self.nightly_box.pack(anchor="w", fill="x")
 
     def _start_check(self):
-        """Ask GitHub on a worker thread (it never touches the window); the answer is collected every 100 ms."""
+        """Ask GitHub on a worker thread (it never touches the window): the newest release, then main as it is now
+        and which files differ from this source (nightly). The answer is collected every 100 ms."""
         answer = queue.Queue()
-        threading.Thread(target=lambda: answer.put(self.check()), daemon=True).start()
+
+        def ask():
+            release = self.check()
+            main = self.nightly_check() if self.here else None
+            answer.put((release, main, standalone.nightly_changes(main, self.here) if main else []))
+        threading.Thread(target=ask, daemon=True).start()
 
         def collect():
             if not self.dlg.alive():
                 return
             try:
-                self.release = answer.get_nowait()
+                self.release, main, files = answer.get_nowait()
             except queue.Empty:
                 self.dlg.win.after(100, collect)
                 return
             self.checked = True
+            self.nightly, self.nightly_files = (main, files) if files else (None, [])
             self._show_check()
         collect()
 
     def again(self):
         """"Try again": ask GitHub once more."""
-        self.checked, self.release = False, None
+        self.checked, self.release, self.nightly, self.nightly_files = False, None, None, []
         self._clear_update_buttons()
         self.line.config(text=CHECKING)
         self.how.config(text="")
@@ -146,7 +170,7 @@ class SourceDialog:
         self._start_check()
 
     def _clear_update_buttons(self):
-        for w in self.update_buttons.winfo_children():
+        for w in self.update_buttons.winfo_children() + self.nightly_box.winfo_children():
             for name, b in list(self.dlg.buttons.items()):
                 if b is w:
                     del self.dlg.buttons[name]
@@ -188,7 +212,41 @@ class SourceDialog:
                     dlg.button(UPDATE, self.update_source, default=True, row=row)
         self.line.config(text=text)
         self.how.config(text=how)
+        if how:                                   # (an empty line left a gap above the nightly build)
+            self.how.pack(anchor="w", pady=(4, 0), after=self.line)
+        else:
+            self.how.pack_forget()
+        self._show_nightly()
         self._show_update()
+
+    # ---- nightly (asked for, for testing): main as it is now, shown only when it differs ---------------------------
+    def _show_nightly(self):
+        """When main on GitHub differs from this source (or the source this program was built from): a line saying
+        so and "Update to nightly"; nothing at all otherwise."""
+        n, box = self.nightly, self.nightly_box
+        if not n:
+            return
+        files = len(self.nightly_files)
+        msg = f': "{n["message"]}"' if n.get("message") else ""
+        what = ("it downloads main's source into the source folder beside this program and builds a new program "
+                "from it there, in place of this one (needs Python; a few minutes)" if self.frozen else
+                "it updates this folder with git pull from main" if standalone.git_checkout(self.root_dir) else
+                "it downloads main's source and shows what it changes in this folder first")
+        self.dlg.text(f"Nightly build: main has {files:,} changed file{'s' if files != 1 else ''} "
+                      f"(commit {n['short']}, {ago(n['when'])}{msg}).", parent=box, pady=(10, 0))
+        self.dlg.text(f"For testing: it may be broken. {what[0].upper() + what[1:]}; your save is kept.",
+                      muted=True, parent=box, pady=(2, 0))
+        row = tk.Frame(box, bg=PALETTE["bg"])
+        row.pack(anchor="w", pady=(8, 0))
+        self.dlg.button("What's changed", lambda: errors.open_link(n["page"]), row=row)
+        self.dlg.button(NIGHTLY, self.update_nightly, row=row)
+
+    def update_nightly(self, fetch=None):
+        """"Update to nightly": from source, this folder brought up to main (update_source); in the program, its
+        source folder, which then builds the program in place of this one (update_nightly_program)."""
+        if self.frozen:
+            return update_nightly_program(self.app, self.nightly, self.dlg, fetch=fetch)
+        return update_source(self.app, self.nightly, self.root_dir, self.dlg, fetch)
 
     def update_source(self, fetch=None):
         """"Update" from source: update_source below, for this folder."""
@@ -296,7 +354,8 @@ class SourceDialog:
         if not self.packages_ready():
             return None
         lines = []
-        place = standalone.cleanup_place(self.root_dir)       # (where the source is: T-12, T-14)
+        target = self.build_target                # (a nightly update of the program: in its place, nothing asked)
+        place = None if target else standalone.cleanup_place(self.root_dir)    # (where the source is: T-12, T-14)
         self.behind = None
         if place:
             self.behind = self.ask_behind(place)
@@ -310,7 +369,7 @@ class SourceDialog:
             def keep(text):
                 lines.append(str(text))
                 log(text)
-            kw = {"place": place} if place else {}
+            kw = {"place": place} if place else {"target": target} if target else {}
             if release:
                 return standalone.make_program(self.root_dir, keep, release=release, **kw)
             return standalone.make_program(self.root_dir, keep, **kw)
@@ -330,6 +389,11 @@ class SourceDialog:
                        "your save and the source are unchanged.", details="\n".join(lines[-40:]), parent=app.root,
                        headline="Not built")
             return None
+        if target:                                # (the program it replaced: same save, nothing else changes)
+            app.store.set_meta(UPDATED_FROM, standalone.NIGHTLY + (app.store.get_meta(PENDING) or "main"))
+            standalone.start(path, args=["--db", app.store.path])
+            app.on_close()
+            return path
         self._menu_for(path)
         if place:
             self.start_cleaned(path, place, zip_it=self.behind == "zip")
@@ -525,14 +589,30 @@ class SourceDialog:
 
 
 # ---- U-1: updating the form you are running ------------------------------------------------------------------------------------
+PENDING = "nightly_pending"           # meta: the nightly commit the program's source is building (the toast after)
 UPDATED_FROM = "updated_from"        # meta: the version an update was made from (the new one says so, then forgets)
+
+
+def ago(when, now=None):
+    """"3 hours ago" for a time (seconds since 1970)."""
+    s = max(0, (time.time() if now is None else now) - when)
+    for size, unit in ((86400, "day"), (3600, "hour"), (60, "minute")):
+        if s >= size:
+            n = int(s // size)
+            return f"{n} {unit}{'s' if n != 1 else ''} ago"
+    return "just now"
+
+
+def _named(release):
+    name = standalone.named(release)
+    return name[0].upper() + name[1:]
 
 
 def _download(app, title, release, work):
     """Run `work(log)` (a download) behind the progress window: its result, or None if it was stopped."""
     try:
         return run_with_progress(app.root, work, title=title, delay_ms=0, initial_stage="Connecting...",
-                                 intro=f"Version {release['version']}, from GitHub.")
+                                 intro=f"{_named(release)}, from GitHub.")
     except SystemExit as exc:
         if str(exc) != STOPPED_MESSAGE:
             raise
@@ -544,14 +624,24 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
     closes). A git checkout (with git installed) is updated with git pull, which never touches your own changes;
     any other folder downloads the release's source and syncs it in: what it changes is shown first, only the
     program's own files change (an edited one is kept as .bak first), and the folder is not marked as unpacked from
-    the program (so it is never offered to be cleaned up behind). `dlg`: the dialog asking; `fetch` / `git`: tests."""
+    the program (so it is never offered to be cleaned up behind). `release` may be main as it is now (nightly:
+    standalone.latest_main): git pulls main then, and only on main. `dlg`: the dialog asking; `fetch` / `git`:
+    tests."""
+    nightly = release.get("nightly")
     if standalone.git_checkout(root_dir) if git is None else git:
-        if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
-                          f"This folder is a git checkout, so it is updated with git pull, which never touches "
+        on = standalone.git_branch(root_dir) if nightly else None
+        if nightly and on != standalone.MAIN:
+            show_error(TITLE, f"This git checkout is on {'branch ' + on if on and on != 'HEAD' else 'no branch'}, "
+                       f"not {standalone.MAIN}: switch it to {standalone.MAIN} (git switch {standalone.MAIN}) to take "
+                       "the nightly build. Nothing was changed.", parent=dlg.win, headline="Not updated")
+            return None
+        if not ask_yes_no(TITLE, f"Update the source to {standalone.named(release)}?",
+                          f"This folder is a git checkout, so it is updated with git pull"
+                          f"{' from ' + standalone.MAIN if nightly else ''}, which never touches "
                           f"your own changes.\n\nIn {root_dir}. Word Tierlister then starts again from the new "
                           "source, with the same save.", yes="Update", no="Cancel", parent=dlg.win, wrap_chars=60):
             return None
-        ok, said = standalone.git_pull(root_dir)
+        ok, said = standalone.git_pull(root_dir, branch=standalone.MAIN) if nightly else standalone.git_pull(root_dir)
         if not ok:
             show_error(TITLE, "git pull did not update this folder. What git said is below; nothing "
                        "was changed.", details=said, parent=dlg.win, headline="Not updated")
@@ -564,13 +654,13 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
             try:
                 got = _download(app, "Downloading the newest version", release, lambda log: get(release, folder, log))
             except OSError as exc:
-                show_error(TITLE, f"The newest version could not be downloaded:\n{exc}", parent=dlg.win,
+                show_error(TITLE, f"{_named(release)} could not be downloaded:\n{exc}", parent=dlg.win,
                            headline="Not updated")
                 return None
             if got is None:
                 return None
             plan = standalone.plan_unpack(got, root_dir)
-            if not ask_yes_no(TITLE, f"Update the source to version {release['version']}?",
+            if not ask_yes_no(TITLE, f"Update the source to {standalone.named(release)}?",
                               f"{standalone.summary(plan)}\n\nIn {root_dir}. Only the program's own files change; "
                               "your save and anything else there stay as they are. Word Tierlister then starts again "
                               "from the new source, with the same save.", yes="Update", no="Cancel", parent=dlg.win,
@@ -585,7 +675,7 @@ def update_source(app, release, root_dir, dlg, fetch=None, git=None):
         finally:
             shutil.rmtree(folder, ignore_errors=True)
     dlg.close()
-    app.store.set_meta(UPDATED_FROM, VERSION)
+    app.store.set_meta(UPDATED_FROM, standalone.NIGHTLY + release["short"] if nightly else VERSION)
     standalone.start_source(root_dir, sys.executable, args=["--db", app.store.path])
     app.on_close()                            # (one at a time on a save: the new source takes over)
     return plan
@@ -626,3 +716,76 @@ def update_program(app, release, dlg, program=None, fetch=None):
     standalone.start(program, args=["--db", app.store.path])
     app.on_close()
     return program
+
+
+def update_nightly_program(app, nightly, dlg, program=None, fetch=None, folder=None):
+    """In the program, "Update to nightly" (asked for: from main's source, built here): main's source goes into the
+    source folder beside the program (standalone.existing_source, or the one it unpacks into; synced as unpacking
+    is, shown first: only the program's own files, an edited one kept as .bak; a git checkout pulls main), which then
+    starts with --build-nightly: it builds the program from that source (asking for the builder, PyInstaller, if
+    it is missing) in place of this one, and starts it with the same save. This window closes first. Needs a
+    Python on this computer (offered if there is none). `program`, `fetch`, `folder`: tests."""
+    program = program or standalone.running_program()
+    folder = folder or standalone.existing_source() or standalone.default_source_folder()
+    python = standalone.python_for_source()
+    if not python and offer_system_install(app.root, "python", "Building the nightly program needs Python on this "
+                                           "computer, which it does not have yet."):
+        python = standalone.python_for_source()
+    if not python:
+        show_message(TITLE, "Not updated", "Building the nightly program needs Python 3 on this computer "
+                     "(python.org). Nothing was changed.", parent=dlg.win)
+        return None
+    then = (f"Then Word Tierlister starts from that source and builds a new program from it (a few minutes; the "
+            f"first time it may ask to install the builder, PyInstaller), which replaces this one in "
+            f"{os.path.dirname(program)} and starts with the same save.")
+    if standalone.git_checkout(folder):
+        on = standalone.git_branch(folder)
+        if on != standalone.MAIN:
+            show_error(TITLE, f"The source beside this program ({folder}) is a git checkout on "
+                       f"{'branch ' + on if on and on != 'HEAD' else 'no branch'}, not {standalone.MAIN}: switch it "
+                       f"to {standalone.MAIN} to take the nightly build. Nothing was changed.", parent=dlg.win,
+                       headline="Not updated")
+            return None
+        if not ask_yes_no(TITLE, f"Update to {standalone.named(nightly)}?",
+                          f"It is {standalone.MAIN} as it is now on GitHub, for testing: it may be broken. The source "
+                          f"in {folder} is a git checkout, so it is updated with git pull, which never touches your "
+                          f"own changes.\n\n{then}", yes="Update", no="Cancel", parent=dlg.win, wrap_chars=60):
+            return None
+        ok, said = standalone.git_pull(folder, branch=standalone.MAIN)
+        if not ok:
+            show_error(TITLE, "git pull did not update the source. What git said is below; nothing was changed.",
+                       details=said, parent=dlg.win, headline="Not updated")
+            return None
+    else:
+        down = tempfile.mkdtemp(prefix="wtl-nightly-")
+        try:
+            try:
+                got = _download(app, "Downloading the nightly build", nightly,
+                                lambda log: (fetch or standalone.fetch_source)(nightly, down, log))
+            except OSError as exc:
+                show_error(TITLE, f"{_named(nightly)} could not be downloaded:\n{exc}", parent=dlg.win,
+                           headline="Not updated")
+                return None
+            if got is None:
+                return None
+            plan = standalone.plan_unpack(got, folder)
+            if not ask_yes_no(TITLE, f"Update to {standalone.named(nightly)}?",
+                              f"It is {standalone.MAIN} as it is now on GitHub, for testing: it may be broken. "
+                              f"Its source goes into {folder}: {standalone.summary(plan)[0].lower()}"
+                              f"{standalone.summary(plan)[1:]} Only the program's own files change.\n\n{then}",
+                              yes="Update", no="Cancel", parent=dlg.win, wrap_chars=60):
+                return None
+            try:
+                standalone.unpack(got, folder, plan, from_program=False)
+            except OSError as exc:
+                show_error(TITLE, f"The source could not be written to {folder}:\n{exc}", parent=dlg.win,
+                           headline="Not updated")
+                return None
+        finally:
+            shutil.rmtree(down, ignore_errors=True)
+    dlg.close()
+    app.store.set_meta("offered_program", "1")      # (that source is not asked to make a program: it is making one)
+    app.store.set_meta(PENDING, nightly["short"])     # (the new program then says it is the nightly build)
+    standalone.start_source(folder, python, args=["--db", app.store.path, standalone.BUILD_NIGHTLY, program])
+    app.on_close()                                  # (one at a time on a save: the source takes over)
+    return folder

@@ -2,9 +2,9 @@
 
 The program's entry point and its roadmap. `main()` parses the options, finds or makes the save, gets packages and the word list ready behind the progress window, then opens the main window. The big comment block at the top is the roadmap: every step, its status and the decisions behind it. It also re-exports the main classes so tests can `import tierlist as T`.
 
-- **Uses:** `app`, `browser`, `constants`, `definitions`, `deps`, `errors`, `fonts`, `problems`, `saves`, `sizing`, `standalone`, `startup`, `store`, `theme`, `ui_style`, `wordsource`
+- **Uses:** `app`, `browser`, `constants`, `definitions`, `deps`, `errors`, `fonts`, `problems`, `saves`, `sizing`, `sources`, `standalone`, `startup`, `store`, `theme`, `ui_style`, `wordsource`
 - **Used by:** `layout_trace`, `stress_ui`
-- **Tests:** `_selftest`, `_selftest_appdir`, `_selftest_build`, `_selftest_dealing`, `_selftest_defsize`, `_selftest_deps`, `_selftest_drawer`, `_selftest_filepicker`, `_selftest_folders`, `_selftest_fonts`, `_selftest_freeze`, `_selftest_install`, `_selftest_looks`, `_selftest_lookup`, `_selftest_motion`, `_selftest_queue`, `_selftest_release`, `_selftest_resume`, `_selftest_review`, `_selftest_selfupdate`, `_selftest_shortcuts`, `_selftest_sizing`, `_selftest_smoke`, `_selftest_sources`, `_selftest_startup`, `_selftest_tidy`, `_selftest_ui`, `_selftest_ui2`, `_selftest_updates`, `_selftest_wikt`, `_selftest_zoom`
+- **Tests:** `_selftest`, `_selftest_appdir`, `_selftest_build`, `_selftest_dealing`, `_selftest_defsize`, `_selftest_deps`, `_selftest_drawer`, `_selftest_filepicker`, `_selftest_folders`, `_selftest_fonts`, `_selftest_freeze`, `_selftest_install`, `_selftest_looks`, `_selftest_lookup`, `_selftest_motion`, `_selftest_nightly`, `_selftest_queue`, `_selftest_release`, `_selftest_resume`, `_selftest_review`, `_selftest_selfupdate`, `_selftest_shortcuts`, `_selftest_sizing`, `_selftest_smoke`, `_selftest_sources`, `_selftest_startup`, `_selftest_tidy`, `_selftest_ui`, `_selftest_ui2`, `_selftest_updates`, `_selftest_wikt`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
