@@ -3,7 +3,7 @@
 How big windows can be: the usable screen of the monitor in use, Windows dpi awareness, the UI scale factor, and placing windows and pop-ups (on their own monitor).
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `shortcuts`, `startup`, `stress_ui`, `tierlist`, `widgets`
+- **Used by:** `app`, `browser`, `review`, `shortcuts`, `startup`, `stress_ui`, `tierlist`, `widgets`
 - **Tests:** `_selftest_sizing`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.

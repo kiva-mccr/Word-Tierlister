@@ -3,7 +3,7 @@
 Every keyboard shortcut (UI-48): one table of actions with their view and default keys, the user's changes on top, and turning a Tk key event into a key name (`spec_of` / `event_spec`).
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `shortcuts`
+- **Used by:** `app`, `browser`, `review`, `shortcuts`
 - **Tests:** `_selftest_keymap`, `_selftest_shortcuts`
 
 The module docstring has the details; this page is the map.

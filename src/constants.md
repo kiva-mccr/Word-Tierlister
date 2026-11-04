@@ -3,8 +3,8 @@
 Shared constants and tiny pure helpers that every layer may use: tiers, modes, kinds of words, queue shapes, the program's `VERSION` and GitHub `REPO`, and the offline switch the tests set.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_nightly`, `_selftest_resume`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
+- **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `measure_rudeness`, `review`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `ui_chart`, `widgets`, `wordsource`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_install`, `_selftest_lookup`, `_selftest_nightly`, `_selftest_resume`, `_selftest_review`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -20,6 +20,7 @@ The module docstring has the details; this page is the map.
 - `mask_word`: A censored word as plain text (ST-6), only where nothing can be drawn (messages): b•••••d.
 - `plan_line`: A job's main steps as one log line (never shown): the progress window's "Step i of n" (parse_plan).
 - `parse_plan`: The steps in a plan line, or None if `line` is not one.
+- `review_answers_path`: The answers file beside a review file: rude_review.jsonl -> rude_review_answers.jsonl.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
