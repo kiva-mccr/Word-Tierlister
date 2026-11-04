@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- The nightly is for developers only (DT-2): `_nightly_on` (Developer tools on, the Nightly bubble lit) gates the whole section, and main is not asked for while Developer tools is off. It once showed to everyone whenever main was ahead.
 - The nightly section's buttons sit in a row frame inside `nightly_box`: clearing it (the Nightly bubble) drops them from `dlg.buttons` by their path too, or a stale entry stayed.
 - What it will do is always shown before it does it (the plan's summary); an update downloads first, shows the plan, and the next Unpack does it.
 - The GitHub check runs on a worker thread; the dialog polls its answer.

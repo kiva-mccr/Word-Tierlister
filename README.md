@@ -215,8 +215,9 @@ When you make the program from the source, it asks whether to **clean up behind*
 remove it. Removing takes only the source's own files as they came; anything you added or changed stays (in a git
 checkout, so do changes you have not committed yet).
 
-**Nightly builds**, for testing: when the project's main branch on GitHub has changes the version you run does
-not, the same panel shows **Update to nightly** (it checks only when you open it). From the source it brings your
+**Nightly builds**, for testing, only with Settings > Developer tools ticked and the **Nightly** bubble lit (see
+below): when the project's main branch on GitHub has changes the version you run does not, the same panel shows
+**Update to nightly** (it checks only when you open it). From the source it brings your
 folder up to main. In the program it puts main's source into the source folder beside the program and builds a new
 program from it there, in place of this one, so it needs Python on your computer. A nightly may be broken; your
 save is kept either way, and the next release is offered as usual. A release's program is checked against the

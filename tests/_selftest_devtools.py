@@ -135,7 +135,7 @@ for _ in range(20):
     if errors_seen:
         break
 assert errors_seen and isinstance(errors_seen[0], ZeroDivisionError)
-# switched off: no bubbles, and the nightly section only while main differs (as before)
+# switched off: no bubbles and no nightly section at all (it showed to everyone while main was ahead: reported)
 app.dev_var.set(False); app.toggle_dev()
 d = dialog()
 assert d.nightly_always is None and not hasattr(d, "bubbles") and said(d) == ""

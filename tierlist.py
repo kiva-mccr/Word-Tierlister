@@ -2067,10 +2067,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           review; with no rude_review.jsonl next to the save it asks for one and remembers it, meta review_file)
 #           and "Score the rules" (the answers so far against the review file's own guesses, review.score_guesses:
 #           the rules as they were when it was made); Source & Updates has "Nightly" (a switch, lit to start with:
-#           the nightly section shows even while main is the same, saying so; off, only while main differs, as
-#           U-9), "Log" (tierlist.log in the system's viewer) and "Crash test" (was --crash-test). The commands
+#           the nightly section shows even while main is the same, saying so), "Log" (tierlist.log in the system's viewer) and "Crash test" (was --crash-test). The commands
 #           still work. Making a sample (measure_rudeness sample, a 3 GB read) and the repo's own tools stay
 #           commands. Picked from a mock-up. _selftest_devtools.
+# [x] DT-2 Reported: the nightly still showed to everyone whenever main was ahead (U-9's rule, left as it was). Now the
+#           nightly section shows only while Developer tools is on and the Nightly bubble is lit; otherwise main is
+#           not even asked for. _selftest_nightly, _selftest_devtools.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

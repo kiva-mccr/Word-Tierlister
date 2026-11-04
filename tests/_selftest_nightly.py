@@ -99,6 +99,7 @@ def pump(root, n=6):
 def window():
     s = T.Store(os.path.join(tempfile.mkdtemp(), "s.db")); s.insert_words(["alpha", "beta", "gamma"])
     s.set_meta("dealt_asked", "1")
+    s.set_meta("dev_tools", "1")                 # (the nightly shows only with Developer tools on, its bubble lit)
     root = tk.Tk()
     app = T.App(root, s, T.Definitions(s))
     pump(root, 10)
@@ -130,10 +131,18 @@ S.start_source = lambda folder, python, args=(): started.append((folder, list(ar
 
 root, app = window()
 Dialog = lambda **kw: sources.SourceDialog(app, source=None, platform="darwin", check=lambda: release, **kw)
-# main is the same as this source: no nightly at all
+# main is the same as this source: nothing to update to, only a line saying so
 d = Dialog(frozen=False, root_dir=proj, nightly=lambda: main); settle(d, root)
-assert sources.NIGHTLY not in d.buttons and not d.nightly_box.winfo_children()
+assert sources.NIGHTLY not in d.buttons and len(d.nightly_box.winfo_children()) == 1
 d.close()
+# Developer tools off: no nightly at all, even while main differs, and main is never asked for (reported)
+asked_main = []
+app.dev_tools = False
+d = Dialog(frozen=False, root_dir=project(**{"src/a.py": "a = 99\n"}), nightly=lambda: asked_main.append(1) or main)
+settle(d, root)
+assert sources.NIGHTLY not in d.buttons and not d.nightly_box.winfo_children() and not asked_main
+d.close()
+app.dev_tools = True
 # main differs: says how and offers it; "What's changed" opens main's commits
 proj2 = project(**{"src/a.py": "a = 99\n"})
 d = Dialog(frozen=False, root_dir=proj2, nightly=lambda: main); settle(d, root)
