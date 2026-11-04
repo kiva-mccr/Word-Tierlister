@@ -1,6 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """Developer tools from the window (asked for: not only by command): Settings > Developer tools (off to start with,
-saved) shows small bubbles at the top right of How words are dealt ("Review rude meanings", "Score the rules") and
+saved) shows small bubbles at the top right of How words are dealt ("Make review words", "Review rude meanings", "Score
+the rules", "Tune the rules": the first and last run tools/ from the source) and
 Source & Updates ("Nightly", "Log", "Crash test"); none while it is off. The review asks for a file when there is
 none next to the save and remembers it; the score compares the answers with the review file's guesses."""
 import json, os, tempfile, time
@@ -50,7 +51,7 @@ b.destroy()
 
 # ---- How words are dealt: the review and its score ------------------------------------------------------------
 d = app.edit_dealing(); pump(3)
-assert list(d.bubbles) == ["Review rude meanings", "Score the rules"]
+assert list(d.bubbles) == ["Make review words", "Review rude meanings", "Score the rules", "Tune the rules"]
 x_head = d.dlg.head_row.winfo_children()[0].winfo_rootx()
 x_bub = d.bubbles["Review rude meanings"].winfo_rootx()
 assert x_bub > x_head + d.dlg.head_row.winfo_children()[0].winfo_width(), "the bubbles sit right of the headline"
@@ -84,6 +85,38 @@ text = app.score_rules(d.dlg)
 assert "2 words answered, 3 meanings" in text and "67%" in text and "Insult: 100% right, found 1 of 1" in text, text
 assert "Crude: - right, found 0 of 1" in text and "Clinical" not in text
 d.dlg.close()
+
+# ---- Make review words and Tune the rules: the tools in the source folder (OB-10, OB-11) ----------------------------
+src_root = tempfile.mkdtemp()
+app.TOOLS_ROOT = src_root
+d = app.edit_dealing(); pump(3)
+assert app.make_review_words(d.dlg) is None and shown[-1][1] == "Only from the source"    # (no tools/ there)
+assert app.tune_rules(d.dlg) is None and shown[-1][1] == "Only from the source"
+os.makedirs(os.path.join(src_root, "tools"))
+for name in ("measure_rudeness.py", "tune_rudeness.py"):
+    open(os.path.join(src_root, "tools", name), "w").write("")
+mr = os.path.join(src_root, "tools", "measure_rudeness.py")
+asked, ran = [], []
+assert app.make_review_words(d.dlg, ask=lambda: asked.append(1) or False) is None and asked    # (no entries: asked)
+fresh = os.path.join(folder, "rude_review.jsonl")                    # (no review file yet: sample makes one here)
+s.set_meta("review_file", "")
+cmds = app.make_review_words(d.dlg, ask=lambda: True, run=lambda c, cwd: ran.append((c, cwd)) or (0, "Wrote 1,500"))
+assert [c[1:] for c in cmds] == [[mr, "fetch"], [mr, "sample", "--out", fresh]] and ran[0][1] == src_root
+pump(3)
+assert app._tool_job is None and s.get_meta("review_file") == fresh
+open(os.path.join(src_root, "rudeness_entries.jsonl"), "w").write("")
+open(fresh, "w").write("")
+cmds = app.make_review_words(d.dlg, run=lambda c, cwd: (1, "MemoryError"))
+assert [c[1:] for c in cmds] == [[mr, "next", "--review", fresh]]   # (entries there, a review file: 300 more)
+pump(3)
+assert app._tool_job is None
+started = []
+assert app.tune_rules(d.dlg, start=started.append) is None and shown[-1][1] == "Nothing answered yet"
+open(review_answers_path(fresh), "w").write("")
+cmd = app.tune_rules(d.dlg, start=started.append)
+assert started == [cmd] and cmd[1:] == [os.path.join(src_root, "tools", "tune_rudeness.py"), "--review", fresh,
+                                        "--entries", os.path.join(src_root, "rudeness_entries.jsonl")]
+assert not d.dlg.alive()                                             # (the tuner is a window of its own)
 
 # ---- Source & Updates: Nightly (a switch), Log, Crash test ----------------------------------------------------------
 proj = tempfile.mkdtemp()

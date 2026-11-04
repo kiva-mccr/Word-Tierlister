@@ -21,6 +21,7 @@ ENTRIES = {
     **{f"plain{i}": [sense(f"A tool for work number {i}.")] for i in range(40)},
     "flagword": [sense("A banner."), sense("To wave."), sense("A flag of pride.", topics=["LGBT"])],
     "zorby": [sense("A zorbish thing."), sense("A box.")],
+    "ice-cream": [sense("A frozen dessert.")], "ice cream": [sense("A frozen dessert.")],   # (compounds: never asked)
     "table": [sense("A piece of furniture with a flat top.")],
     "chair": [sense("A seat for one person.")],
     "seen": [sense("A thing.")],
@@ -57,7 +58,8 @@ assert "no sign at all" not in M.next_reasons("plain1", words["plain1"], scored[
 assert "a candidate signal" not in M.next_reasons("x", words["rude1"], [{"insult": 4.0}], topics, lean)  # (found rude)
 
 assert M.next_reasons("of", one, [{}], {}, {}) == {} == M.next_reasons("i", one, [{}], {}, {}) and M.next_reasons("an-", one, [{}], {}, {}) == {}   # (common,
-assert "no sign at all" in M.next_reasons("one-way", one, [{}], {}, {})          # but a function word or an affix)
+assert "no sign at all" not in M.next_reasons("one-way", one, [{}], {}, {})    # an affix, or a compound: one-part
+assert "no sign at all" in M.next_reasons("don't", one, [{}], {}, {})           # words only, contractions kept)
 
 # each group spread over what its words share, a group short of words handing its share on
 import random
@@ -73,6 +75,8 @@ assert M.shown_meanings(words["flagword"], scored["flagword"], also=[2]) == [0, 
 # the pick: none reviewed already, the candidate signals spread out
 picked = M.pick_next(words, scored, size=20, skip={"chair"})
 assert "chair" not in picked and {"flagword", "zorby", "table"} <= set(picked), picked
+assert not {"ice-cream", "ice cream"} & set(picked) and not {"ice-cream", "ice cream"} & set(M.pick_sample(
+    words, scored, size=40, weak_words=["ice-cream"]))
 assert picked["flagword"] == ('a candidate signal: the topic "lgbt"', [2]) and picked["table"][1] == []
 assert len(M.pick_next(words, scored, size=10)) == 5     # (all 5: no sign at all takes the shares left over)
 

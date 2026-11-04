@@ -12,6 +12,7 @@ import os
 import random
 import re
 import sqlite3
+import subprocess
 import sys
 import queue
 import threading
@@ -102,6 +103,19 @@ def reopen_while_asked(app, store, defs, new_root):
         else:                                    # one still waiting would end the next window's loop at once)
             root.mainloop()
     return app
+
+
+def _run_tools(cmds, cwd):
+    """Run each command in turn (a worker thread: no Tk here): (the exit code, the last line it printed), stopping
+    at the first that fails."""
+    code, last = 0, ""
+    for cmd in cmds:
+        r = subprocess.run(cmd, cwd=cwd, env=standalone.clean_env(), capture_output=True, text=True)
+        lines = [x for x in (r.stdout + r.stderr).splitlines() if x.strip()]
+        code, last = r.returncode, (lines[-1].strip() if lines else "")
+        if code:
+            break
+    return code, last
 
 
 class App:
@@ -2233,6 +2247,99 @@ class App:
         text = describe_score(score_guesses(read_review(path), read_answers(review_answers_path(path))))
         show_message("Score the rules", "The rules against your answers", text, parent=parent)
         return text
+
+    TOOLS_ROOT = standalone.ROOT          # (the source folder whose tools/ the developer bubbles run; tests point it
+                                          # elsewhere)
+
+    def _tool(self, name, parent):
+        """tools/<name> in the source folder, or None after saying the bubble works only from the source (a built
+        program carries no tools to run)."""
+        path = os.path.join(self.TOOLS_ROOT, "tools", name)
+        if not is_frozen() and os.path.exists(path):
+            return path
+        show_message("Developer tools", "Only from the source", f"tools/{name} runs from the source folder: start "
+                     "Word Tierlister with python tierlist.py (File > Source & Updates can unpack the source).",
+                     parent=parent)
+        return None
+
+    def make_review_words(self, dlg=None, ask=None, run=None):
+        """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
+        next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (300 more, none
+        reviewed already). The Wiktionary entries it reads (rudeness_entries.jsonl in the source folder) are fetched
+        first when missing, after asking (`ask(): yes?`, tests). A toast says when it starts and what it made.
+        `run(commands) -> (exit code, its last line)` runs them, on a worker thread (tests: at once). Returns the
+        commands, or None."""
+        parent = dlg.win if dlg else self.root
+        tool = self._tool("measure_rudeness.py", parent)
+        if tool is None:
+            return None
+        if getattr(self, "_tool_job", None):
+            self.flash("Still making review words", kind="info")
+            return None
+        path = self.review_file()
+        cmds = []
+        if not os.path.exists(os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")):
+            if not (ask or (lambda: ask_yes_no(
+                    "Make review words", "Read Wiktionary's entries first?",
+                    "The words are picked from every English entry of Wiktionary: about 3 GB to read once, kept as "
+                    "rudeness_entries.jsonl (about 300 MB) in the source folder. It can take half an hour.",
+                    yes="Read them", parent=parent)))():
+                return None
+            cmds.append([sys.executable, tool, "fetch"])
+        first = not os.path.exists(path)
+        cmds.append([sys.executable, tool, "sample", "--out", path] if first else
+                    [sys.executable, tool, "next", "--review", path])
+        self.store.set_meta("review_file", os.path.abspath(path))
+        self.flash(f"Making {'1,500' if first else '300 more'} review words: a few minutes", kind="info", ms=5000)
+        self._tool_job = {"done": None}
+        job = self._tool_job
+
+        def work():
+            job["done"] = (run or _run_tools)(cmds, self.TOOLS_ROOT)
+        if run:
+            work()
+        else:
+            threading.Thread(target=work, daemon=True).start()
+        self._watch_tool(job)
+        return cmds
+
+    def _watch_tool(self, job):
+        """The toast once the tools have run (polled: the worker thread never touches Tk)."""
+        if job["done"] is None:
+            self.root.after(500, lambda: self._watch_tool(job))
+            return
+        self._tool_job = None
+        code, last = job["done"]
+        if code == 0:
+            self.flash(last or "Review words made", kind="ok", ms=6000)
+        else:
+            self.flash(f"Making review words failed: {last}", kind="warn", ms=8000)
+
+    def tune_rules(self, dlg=None, ask=None, start=None):
+        """The "Tune the rules" bubble (OB-10): tools/tune_rudeness.py's window, a program of its own, on the review
+        file and its answers (asked for when there is none next to the save). It needs the Wiktionary entries
+        (Make review words reads them) and some answers. `start(command)`: how to start it (tests). Returns the
+        command, or None."""
+        parent = dlg.win if dlg else self.root
+        tool = self._tool("tune_rudeness.py", parent)
+        path = tool and self.pick_review_file(parent, ask)
+        if not path:
+            return None
+        entries = os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")
+        if not os.path.exists(review_answers_path(path)):
+            show_message("Tune the rules", "Nothing answered yet", "Review some rude meanings first: the rules are "
+                         "tuned against your answers.", parent=parent)
+            return None
+        if not os.path.exists(entries):
+            show_message("Tune the rules", "Wiktionary's entries are missing", "Make review words reads them "
+                         "first (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
+            return None
+        cmd = [sys.executable, tool, "--review", path, "--entries", entries]
+        (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env())))(cmd)
+        if dlg is not None:
+            dlg.close()
+        self.flash("The tuner is opening: it reads Wiktionary's entries first (about a minute)", kind="info", ms=5000)
+        return cmd
 
     def open_log(self):
         """The "Log" bubble (Source & Updates): tierlist.log next to the save, in the system's text viewer."""

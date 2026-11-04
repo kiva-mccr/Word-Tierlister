@@ -261,6 +261,10 @@ def review_item(word, senses, scored, why, pos=(), censored=obscene.CENSORED, al
     return {"w": word, "why": why, "whole": bool(whole), "senses": rows}
 
 
+ONE_PART = re.compile(r"[a-z][a-z']*")     # a review asks only about one-part words (asked for, as the word list):
+                                          # no hyphenated or spaced entries; contractions ("don't") stay
+
+
 def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
     """{word: why it was picked}: about size / 10 words of each main kind the rules find, a fifth with a clean main
     meaning and a rude later one, and a fifth found clean with a weak sign (`weak_words`: the likely misses). Half of
@@ -269,6 +273,8 @@ def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
     rng = random.Random(seed)
     groups = collections.defaultdict(list)
     for w, sc in scored.items():
+        if not ONE_PART.fullmatch(w):
+            continue
         kinds = [rudeness.sense_kind(p) for p in sc]
         idx = shown_meanings(words[w], sc)
         if not idx:
@@ -278,7 +284,7 @@ def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
             groups[f"the rules say {main}"].append(w)
         elif any(k != "clean" for k in kinds):
             groups["a clean main meaning, a rude later one"].append(w)
-    groups["found clean, with a weak sign"] = [w for w in weak_words if w in scored
+    groups["found clean, with a weak sign"] = [w for w in weak_words if w in scored and ONE_PART.fullmatch(w)
                                                 and all(rudeness.sense_kind(p) == "clean" for p in scored[w])]
     share = {g: (size // 10 if g.startswith("the rules say") else size // 5) for g in groups}
     picked = {}
@@ -413,7 +419,7 @@ def next_reasons(word, senses, scored, topics, lean, censored=obscene.CENSORED):
         if _near(pts, rudeness.WHOLE_MIN):
             out["near the line"] = (f"near the line for the whole word: {pts:.1f} points, "
                                     f"{rudeness.WHOLE_MIN:g} smears it", None, ("whole", round(pts, 1)))
-    if (not any(any(v > 0 for v in p.values()) for p in scored) and re.fullmatch(r"[a-z][a-z']*(-[a-z']+)*", word)
+    if (not any(any(v > 0 for v in p.values()) for p in scored) and ONE_PART.fullmatch(word)
             and len(word) > 1 and word not in rudeness._STOP
             and not any(rudeness.has_signal(rudeness.compact(s)) for s in senses)
             and zipf(word) >= NO_SIGN_ZIPF):
@@ -431,7 +437,7 @@ def pick_next(words, scored, size=300, skip=(), seed=11):
     groups = collections.defaultdict(dict)
     skip = set(skip)
     for w, sc in scored.items():
-        if w not in skip:
+        if w not in skip and ONE_PART.fullmatch(w):
             for g, why in next_reasons(w, words[w], sc, topics, lean).items():
                 groups[g][w] = why
     picked, owed = {}, 0

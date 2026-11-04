@@ -4,7 +4,7 @@ Measuring the rudeness rules against an earlier sorting by Claude (a yardstick o
 
 - **Uses:** `constants`, `obscene`, `rudeness`, `wordsource`
 - **Used by:** `tune_rudeness`
-- **Tests:** `_selftest_nextreview`, `_selftest_review`
+- **Tests:** `_selftest_devtools`, `_selftest_nextreview`, `_selftest_review`
 
 The module docstring has the details; this page is the map.
 
@@ -46,6 +46,8 @@ The module docstring has the details; this page is the map.
   rules. Each group is spread over what its words share (`_spread`: a candidate, PER_CANDIDATE each; a pair of kinds;
   the points near the line): unspread, "swear 3.5, sexual 3.0" (one link rule) and "woman" filled their groups. Function
   words and affixes ("of", "an-") are never asked about for having no sign.
+- `sample` and `next` ask only about one-part words (`ONE_PART`, asked for, like the word list): no hyphenated or
+  spaced entries; contractions ("don't") stay. The Make review words bubble (App.make_review_words) runs them.
 
 ## Changing it
 
