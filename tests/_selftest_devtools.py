@@ -140,8 +140,14 @@ app.dev_var.set(False); app.toggle_dev()
 d = dialog()
 assert d.nightly_always is None and not hasattr(d, "bubbles") and said(d) == ""
 d.close()
-# Keyboard shortcuts lists the review's keys while Developer tools is on
+# Keyboard shortcuts lists the review's keys only while the review is open, not for Developer tools alone (F-48:
+# the long card made the three stack on a narrower screen)
 import keymap
 assert "review" in keymap.DEV_GROUPS
+app.dev_var.set(True); app.toggle_dev()
+assert app.dev_tools and getattr(app, "review", None) is None
+k = app.edit_keys(); root.update()
+assert "review_clean" not in k.rows and "left" in k.rows
+k.dlg.close(); root.update()
 root.destroy()
 print("devtools self-test passed")

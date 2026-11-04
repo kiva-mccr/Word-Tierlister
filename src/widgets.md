@@ -2,9 +2,9 @@
 
 The program's own widgets: buttons, the word card, tier pills, duel cards, the header menus and drop-downs, toasts, dialog frame, the definitions pane, smeared (censored) words and more. New widgets go here.
 
-- **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
+- **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`, `ui_style`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `review`, `shortcuts`, `sources`, `syncdialog`, `tiercolours`, `tune_rudeness`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_veil`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -65,6 +65,8 @@ The module docstring has the details; this page is the map.
 - `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; a definitions...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
+
+- `StyledDialog.show` veils the dialog while it draws (`ui_style.veil` / `unveil`, F-48): shown plainly it appeared as a heading alone, then labels, then the rest, over ~0.2 s.
 
 - Developer bubbles (`StyledDialog.dev_bubbles`) are packed in the headline's own row, never placed over the dialog: a placed frame takes no room, so a narrow dialog ran its headline under them.
 - RoundButton.configure with a new bg / fg stops a fade still running (it ended at the old colour: the review's

@@ -92,7 +92,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
   `deps.SIZE`, `PURPOSE` and `HOMEPAGE` entries. The builder (PyInstaller) is in `deps.BUILD_PACKAGES`, not requirements.txt.
 - Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
-  messagebox. The bottom bar's square ttk buttons stay on purpose.
+  messagebox. A new window is built withdrawn, placed, then shown with `ui_style.show_drawn` (F-48: drawn
+  see-through, so it never appears piece by piece); the main window stays see-through until it settles (App._unveil). The bottom bar's square ttk buttons stay on purpose.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
