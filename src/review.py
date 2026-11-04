@@ -5,8 +5,9 @@ tools/measure_rudeness.py sample: JSON lines, commonest first), word by word. Fo
 worth asking about (the main one, then those with a sign of rudeness), each with the rules' guess filled in, and
 whether the rules smear the whole word. The keys (the keymap's "review" group, changeable) answer:
 
-    1 ... 7      the kind of the selected meaning (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur); the
-                 next meaning is selected after it
+    1 ... 7      the kind of the selected meaning (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur); it
+                 stays selected (moving on by itself made the lit button show the next meaning's kind, which read
+                 as the key changing the meaning below: reported)
     Up / Down    another meaning (a click on one, or on its kind, selects it too)
     S            smear the whole word, or not
     Enter        keep the answers (as shown) and go on to the next word
@@ -259,11 +260,10 @@ class RudeReview:
             self._render()
 
     def set_kind(self, kind):
-        """The kind of the selected meaning (a button or its key); the next meaning is selected after it."""
+        """The kind of the selected meaning (a button or its key); it stays selected (Down moves on)."""
         if self.item is None:
             return
         self.kinds[self.sel] = kind
-        self.sel = min(self.sel + 1, len(self.kinds) - 1)
         self._render()
 
     def toggle_whole(self):

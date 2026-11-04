@@ -59,11 +59,13 @@ assert rv.word.cget("text") == "tail" and len(rv.row_parts) == 3
 assert rv.kinds == ["clinical", "crude", "sexual"] and rv.whole is False          # the rules' guesses
 assert rv.kind_btns["clean"].cget("hint") == "1" and rv.next_btn.cget("hint") == "Enter"
 assert "0 of 3" in rv.count.cget("text")
-# 1 sets the first meaning Clean and selects the next; Down / Up move; S toggles the whole word
-assert key(rv, "1") == "break" and rv.kinds[0] == "clean" and rv.sel == 1
-key(rv, "Down"); assert rv.sel == 2
+# 1 sets the first meaning Clean, which stays selected (its button lit, as its tag says); Down / Up move; S toggles
+assert key(rv, "1") == "break" and rv.kinds[0] == "clean" and rv.sel == 0
+lit = [k for k, b in rv.kind_btns.items() if b.cget("bg") != T.PALETTE["surface"]]
+assert lit == ["clean"] and rv.row_parts[0][2].cget("text") == "Clean"
+key(rv, "Down"); key(rv, "Down"); assert rv.sel == 2
 key(rv, "Down"); assert rv.sel == 2                       # (stays on the last)
-key(rv, "Up"); key(rv, "3"); assert rv.kinds[1] == "crude" and rv.sel == 2
+key(rv, "Up"); key(rv, "3"); assert rv.kinds[1] == "crude" and rv.sel == 1
 key(rv, "s"); assert rv.whole is True and "yes" in rv.whole_btn.cget("text")
 assert key(rv, "x") is None                               # a key of no review action passes
 rv.select(0); pump(1); assert rv.sel == 0                 # (a click on a meaning)
