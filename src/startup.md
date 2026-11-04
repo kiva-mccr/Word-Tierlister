@@ -2,9 +2,9 @@
 
 Long jobs behind a progress window (ST-1): `run_with_progress` runs `work(log)` on a worker thread and turns its log lines into a stage, a detail line, a bar with an ETA and "Step i of n"; also the install dialog (ST-4) and Windows' console detach.
 
-- **Uses:** `constants`, `deps`, `errors`, `fonts`, `problems`, `sizing`, `syncthing_api`, `theme`
+- **Uses:** `constants`, `deps`, `errors`, `fonts`, `problems`, `sizing`, `syncthing_api`, `theme`, `ui_style`
 - **Used by:** `sources`, `syncdialog`, `tierlist`
-- **Tests:** `_selftest_sizing`, `_selftest_startup`
+- **Tests:** `_selftest_sizing`, `_selftest_startup`, `_selftest_veil`
 
 The module docstring has the details; this page is the map.
 
@@ -24,6 +24,8 @@ The module docstring has the details; this page is the map.
 - `offer_system_install`: Something the program needs comes from the system, not from pip (deps.SYSTEM_PACKAGES: pip itself, Python's venv module, Python): ask to install it with the system's...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
+
+- The setup window is withdrawn until it is placed, then shown with `ui_style.show_drawn` (F-48): it used to show in the top-left corner for a frame, then jump to the middle.
 
 - Worker threads never touch tkinter; errors in the work are re-raised in the caller, closing the window raises `SystemExit(STOPPED_MESSAGE)`.
 - A bar with a real percentage always shows an ETA (`EtaTracker` / `format_eta`).

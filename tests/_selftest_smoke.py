@@ -23,7 +23,7 @@ app = T.App(root, s, T.Definitions(s))
 assert root.state() == "withdrawn"                                    # F-1: built hidden...
 app.open_window()
 assert root.state() == "normal" and app.status_band.winfo_viewable()  # ...and shown complete, drawn straight away
-root.after(80, root.quit); root.mainloop()
+root.after(app.SETTLE_MS + 200, root.quit); root.mainloop()       # (see-through until it settled, F-48)
 assert float(root.attributes("-alpha")) == 1.0                        # (drawn see-through, then shown)
 errors = []
 root.report_callback_exception = lambda *exc: errors.append(exc)         # any error inside a Tk callback

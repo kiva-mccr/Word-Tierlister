@@ -31,7 +31,7 @@ from fonts import font
 from keymap import spec_of
 from sizing import keep_on_screen, place_dialog
 from theme import PALETTE, TIER_COLORS
-from ui_style import set_icon
+from ui_style import set_icon, show_drawn
 from widgets import RoundButton
 
 KINDS = (("clean", "Clean"), ("clinical", "Clinical"), ("crude", "Crude"), ("swear", "Swear word"),
@@ -208,7 +208,7 @@ class RudeReview:
         self.apply_keys()
         self._load()
         place_dialog(self.win, app.root)
-        self.win.deiconify()
+        show_drawn(self.win)                     # (appears complete)
         self.win.lift()
         self.win.focus_force()
 

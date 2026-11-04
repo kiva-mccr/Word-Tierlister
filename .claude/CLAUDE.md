@@ -92,7 +92,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, sh
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
   `deps.SIZE`, `PURPOSE` and `HOMEPAGE` entries. The builder (PyInstaller) is in `deps.BUILD_PACKAGES`, not requirements.txt.
 - Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
-  messagebox. The bottom bar's square ttk buttons stay on purpose.
+  messagebox. A new window is built withdrawn, placed, then shown with `ui_style.show_drawn` (F-48: drawn
+  see-through, so it never appears piece by piece); the main window stays see-through until it settles (App._unveil). The bottom bar's square ttk buttons stay on purpose.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
@@ -177,7 +178,8 @@ Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes th
 definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
 now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
 options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
-F-47 (the folder logic reviewed, asked for "what a user expects": Remove it keeps what you added or changed,
+F-48 (asked for: no window shows unfinished: dialogs drawn see-through; the main window see-through until the
+window manager stops resizing it; maximizing to a big zoom no longer tries each size on screen). F-47 (the folder logic reviewed, asked for "what a user expects": Remove it keeps what you added or changed,
 standalone.removable / TOP_FILES (a new top-level file must be added there); builds swapped in, install_program;
 downloads removed; a Mac app keeps its save in Application Support and its source in Documents, open -n).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
