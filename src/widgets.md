@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `review`, `shortcuts`, `sources`, `syncdialog`, `tiercolours`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -37,6 +37,8 @@ The module docstring has the details; this page is the map.
   - methods: refresh
 - `SmearToggle`: A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space / Return once it has focus) flips it: the censor button...
   - methods: toggle, refresh
+- `DevBubble`: A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for: dev tools reachable from the window, not only by command;...
+  - methods: invoke, lit, refresh
 - `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
 - `word_at`: (start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning, an example or a form's line (LINK_TAGS), or None (a heading, a...
 - `smeared_label`: A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places that are not our own canvases (the definition panes,...
@@ -59,11 +61,12 @@ The module docstring has the details; this page is the map.
 - `watch_focus`: When the whole program loses focus (another program came to the front), close its drop-downs (close_popups) and call on_lost().
 - `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
-  - methods: text, button, make_default, clear_buttons, show, refit, rescale, close, alive
+  - methods: dev_bubbles, text, button, make_default, clear_buttons, show, refit, rescale, close, alive
 - `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; a definitions...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- Developer bubbles (`StyledDialog.dev_bubbles`) are packed in the headline's own row, never placed over the dialog: a placed frame takes no room, so a narrow dialog ran its headline under them.
 - RoundButton.configure with a new bg / fg stops a fade still running (it ended at the old colour: the review's
   lit kind lagged one step behind the arrow keys).
 - Aqua (macOS) leaves trailing spaces out of a text item's bbox: never take the end of the text before a word as where the word starts. `_canvas_word` measures up to the last letter before it and adds the spaces' width (a smeared pane's clickable word was underlined from the space before it, seen on GitHub's Macs, T-18).

@@ -98,7 +98,7 @@ before editing the file); DEVELOPERS.md has the same map with more detail)
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
-    review.py       the review of rude meanings by hand (OB-9, --review-rude; a developer option).
+    review.py       the review of rude meanings by hand (OB-9; a developer tool: How words are dealt's bubble or --review-rude).
     tiercolours.py  Settings > Tier colours... (UI-61).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     sources.py      File > Source & Updates...: updates; make a standalone program; in the program, unpack its source.
@@ -2030,6 +2030,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           ("Updated to the nightly build (4f2c9ab)"). Needs Python there. No checksums for nightlies (built here);
 #           releases' programs are now checked against their SHA256SUMS.txt before they are used (the user asked:
 #           a mismatch or no checksums refuses the update). Mock-up first, then the user's answers. _selftest_nightly.
+# [x] DT-1 Asked for: the developer tools from the window, not only by command. Settings > Developer tools (off to
+#           start with, saved per save, never synced) shows small lilac bubbles at the top right of a dialog's headline
+#           (widgets.DevBubble, StyledDialog.dev_bubbles): How words are dealt has "Review rude meanings" (OB-9's
+#           review; with no rude_review.jsonl next to the save it asks for one and remembers it, meta review_file)
+#           and "Score the rules" (the answers so far against the review file's own guesses, review.score_guesses:
+#           the rules as they were when it was made); Source & Updates has "Nightly" (a switch, lit to start with:
+#           the nightly section shows even while main is the same, saying so; off, only while main differs, as
+#           U-9), "Log" (tierlist.log in the system's viewer) and "Crash test" (was --crash-test). The commands
+#           still work. Making a sample (measure_rudeness sample, a 3 GB read) and the repo's own tools stay
+#           commands. Picked from a mock-up. _selftest_devtools.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
@@ -2101,7 +2111,7 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES, REVIEW_FILE, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES, REVIEW_FILE, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
@@ -2217,7 +2227,7 @@ def main():
             print(f"Also found: {o['path']} ({o['placed']:,} placed). You'll be asked whether to merge it.")
         # --- 3. Windows: close the console window behind the app (messages go to tierlist.log from
         #        here on, and errors become dialogs; see startup.detach_console / run_guarded).
-        log_path = os.path.join(os.path.dirname(db_path), "tierlist.log")
+        log_path = os.path.join(os.path.dirname(db_path), LOG_FILE)
         if os.environ.get(deps.DETACHED_ENV):     # (ST-5: the copy that gave the terminal back)
             sys.stdout = sys.stderr = open_log(log_path)
         elif not args.console:
@@ -2343,7 +2353,7 @@ def main():
 
     # Everything from opening the save onward is guarded, so even a save that cannot be opened
     # ends in a dialog (logged next to this script until the save's folder is known).
-    run_guarded(start, os.path.join(script_dir, "tierlist.log"), args.db)
+    run_guarded(start, os.path.join(script_dir, LOG_FILE), args.db)
 
 if __name__ == "__main__":
     main()

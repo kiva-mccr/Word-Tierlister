@@ -4,7 +4,7 @@ File > Source & Updates (T-6..T-8, U-1; one panel since U-4): Updates on top (ch
 
 - **Uses:** `constants`, `deps`, `errors`, `filepicker`, `fonts`, `problems`, `saves`, `standalone`, `startup`, `theme`, `widgets`
 - **Used by:** `app`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_nightly`, `_selftest_selfupdate`, `_selftest_sources`
+- **Tests:** `_selftest_devtools`, `_selftest_nightly`, `_selftest_selfupdate`, `_selftest_sources`
 
 The module docstring has the details; this page is the map.
 
@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- The nightly section's buttons sit in a row frame inside `nightly_box`: clearing it (the Nightly bubble) drops them from `dlg.buttons` by their path too, or a stale entry stayed.
 - What it will do is always shown before it does it (the plan's summary); an update downloads first, shows the plan, and the next Unpack does it.
 - The GitHub check runs on a worker thread; the dialog polls its answer.
 - `SourceDialog(app, go=True)` does the page's action at once (T-9's yes), from the version you have; an unpack that fails shows the page.

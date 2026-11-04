@@ -165,6 +165,7 @@ def parse_plan(line):
 # The review of rude meanings by hand (OB-9: python tierlist.py --review-rude; tools/measure_rudeness.py sample /
 # answers): the words to review, and the answers beside them. The answers only test the rules: never read by them.
 REVIEW_FILE = "rude_review.jsonl"
+LOG_FILE = "tierlist.log"                # (next to the save: sessions, errors, hard crashes; F-19)
 
 
 def review_answers_path(review):

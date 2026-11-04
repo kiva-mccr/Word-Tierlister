@@ -4,7 +4,7 @@ Every keyboard shortcut (UI-48): one table of actions with their view and defaul
 
 - **Uses:** the standard library only
 - **Used by:** `app`, `browser`, `review`, `shortcuts`
-- **Tests:** `_selftest_keymap`, `_selftest_shortcuts`
+- **Tests:** `_selftest_devtools`, `_selftest_keymap`, `_selftest_shortcuts`
 
 The module docstring has the details; this page is the map.
 
