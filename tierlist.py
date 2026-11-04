@@ -762,6 +762,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (asked for): an Open in Wiktionary button (W, greyed out offline); Back and Enter walk the file one
 #           word at a time (Back followed a history of words answered, so Enter after Back skipped ahead: reported);
 #           each answer is saved as it is given, not on Enter (a change then Back was lost: reported).
+# [x] OB-10 Tune the rules' numbers against the review's answers (asked for: "can it also optimize the rules
+#           statistically?"; rules only stays; the window picked from five mock-ups): tools/tune_rudeness.py splits the
+#           answered words into 5 parts (tuned on 4, tested on the 5th, each in turn: every word tested, never by
+#           numbers tuned on it), searches the numbers rudeness.py already has one at a time, and draws the error
+#           (100% minus the average F1 of the kinds and of smearing whole, a percent error, asked for) round by round,
+#           every line named in a legend (asked for); a guard over every word the program scores marks a kind more
+#           than doubling, the meanings still wrong are listed (rude_tune_misses.txt), and Keep writes the numbers
+#           tuned on every answered word at the best round into src/rudeness.py (RUDENESS_VERSION bumped).
+#           _selftest_tune.py.
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to

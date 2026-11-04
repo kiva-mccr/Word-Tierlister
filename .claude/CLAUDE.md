@@ -170,6 +170,9 @@ OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra f
 OB-9 (asked for: review rude meanings by hand to test the rules: `tools/measure_rudeness.py sample` -> rude_review.jsonl,
 `python tierlist.py --review-rude` (src/review.py, a window; per meaning, the rules' guess filled in), answers beside it, `measure_rudeness answers`;
 still rules only: the program never reads the answers).
+OB-10 (asked for: tune the rules' numbers against those answers: `python tools/tune_rudeness.py`, a window: 5 parts,
+each tested on numbers tuned without it, the error round by round, a guard over the program's words, the meanings still
+wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups).
 Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes the window or its text; the
 definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
 now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
@@ -214,7 +217,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents
   (scratch only): see OB-6). Never name a module like a PyPI package (src/ is first on the path: "packaging").
   Ask the user's examples of false matches.
-  OB-9's review answers (the user's, rude_review_answers.jsonl) are the yardstick to tune against now; a draft of a
+  OB-9's review answers (the user's, rude_review_answers.jsonl) are the yardstick to tune against now (OB-10's tuner:
+  only ever run on stand-in answers here; a round takes about a minute on 4 cores for 1,500 words); a draft of a
   tighter Clinical rule and more WordNet trees was tried in scratch (not built): ask before building it.
   Tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
 - IC-2 (gio custom icon) works on Fedora (the user saw it); IC-3 (taskbar) could not be seen here (no GNOME Shell). Earlier:
