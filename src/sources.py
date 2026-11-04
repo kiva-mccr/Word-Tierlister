@@ -26,8 +26,8 @@ Nightly (U-9, for testing): the check also asks for main as it is now (standalon
 files differ from this source's, shows "Update to nightly": from source the folder is brought up to main
 (update_source: git pull from main, or main's source synced in); in the program main's source goes into the source
 folder beside it, which then builds the program in this one's place (update_nightly_program, --build-nightly).
-With Settings > Developer tools ticked, bubbles at the top right: "Nightly" (a switch, lit to start with: the nightly
-section shows even while main is the same, saying so), "Log" (tierlist.log, App.open_log) and "Crash test"
+The nightly section shows only with Settings > Developer tools ticked and its "Nightly" bubble lit (a switch at the
+top right, lit to start with; it says so while main is the same); main is not even asked for otherwise. Beside it: "Log" (tierlist.log, App.open_log) and "Crash test"
 (App.crash_test, was --crash-test).
 
 Either way a tick box, "Update to the newest version first" (T-8), ticked to start with and usable once a newer
@@ -153,7 +153,7 @@ class SourceDialog:
 
         def ask():
             release = self.check()
-            main = self.nightly_check() if self.here else None
+            main = self.nightly_check() if self.here and self.nightly_always is not None else None
             answer.put((release, main, standalone.nightly_changes(main, self.here) if main else []))
         threading.Thread(target=ask, daemon=True).start()
 
@@ -245,13 +245,20 @@ class SourceDialog:
             self._show_nightly()
             self.dlg.refit()
 
+    def _nightly_on(self):
+        """The nightly section shows only while Settings > Developer tools is on and the Nightly bubble is lit (asked
+        for: it showed to everyone whenever main was ahead)."""
+        return self.nightly_always is not None and bool(self.nightly_always.get())
+
     def _show_nightly(self):
-        """When main on GitHub differs from this source (or the source this program was built from): a line saying
-        so and "Update to nightly"; nothing at all otherwise, unless the Nightly bubble is lit (developer tools):
-        then a line saying this is main as it is now, or that main could not be checked."""
+        """Only while _nightly_on: when main on GitHub differs from this source (or the source this program was built
+        from), a line saying so and "Update to nightly"; otherwise a line saying this is main as it is now, or that
+        main could not be checked. Nothing at all while Developer tools is off or the Nightly bubble is not lit."""
         n, box = self.nightly, self.nightly_box
+        if not self._nightly_on():                # (only for developers: never offered with the bubble off, reported)
+            return
         if not n:
-            if self.nightly_always is not None and self.nightly_always.get() and self.here:
+            if self.here:
                 m = self.main_now
                 self.dlg.text(f"Nightly build: you have main as it is now (commit {m['short']}, {ago(m['when'])})."
                               if m else "Nightly build: main on GitHub could not be checked.", parent=box,
