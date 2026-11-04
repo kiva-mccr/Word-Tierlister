@@ -7,7 +7,8 @@ progress saved after every single click.
   <img src="docs/images/place-light.png" width="720" alt="The main window: the word 'petrichor' on a card, the six tier buttons S to F under it, and its definition below">
 </p>
 
-Word Tierlister deals you words, about a million of them from English Wiktionary, the commonest first. You give
+Word Tierlister deals you words, about 785,000 of them from English Wiktionary (single words only: no
+hyphenated ones or phrases), the commonest first. You give
 each one a tier. Later you can pit words against each other to put each tier in order. Close it whenever you
 like: it carries on exactly where you left off, even after an update.
 

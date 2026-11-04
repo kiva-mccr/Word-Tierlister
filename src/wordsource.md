@@ -26,6 +26,7 @@ The module docstring has the details; this page is the map.
 - `fetch_rude_senses`: Download English Wiktionary next to the save (resumable, like the first run's), keep the meanings the rules read for the words in `keep`, and remove the download.
 - `wiktionary_steps`: The main steps build_wiktionary will report, for the progress window's "Step 2 of 5" (plan_line).
 - `queue_steps`: The main steps prepare_queue will report (see wiktionary_steps).
+- `hyphens_left`: True while a save made before W-3 may still hold hyphenated words to leave out (Store.leave_out_hyphenated): once per save, never for a list of the user's own (--words).
 - `prepare_queue`: Make sure every unplaced word has a queue position.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
@@ -33,6 +34,7 @@ The module docstring has the details; this page is the map.
 - Every stage is resumable and never touches existing progress.
 - Keep `wiktionary_steps` / `queue_steps` in step with the stage lines they predict (the "Step i of n" corner).
 - The background read of rude meanings honours `OFFLINE_ENV` and retries only after `RUDE_RETRY_S`.
+- A word is one part (`_WORD_RE`: letters, apostrophes allowed): hyphenated entries and phrases are never read (W-3, asked for: wordfreq scores "what-have-you" like the phrase, so they crowded the front). An older save loses its untouched ones once (`hyphens_left`, meta `hyphens_done`); a `--words` list of the user's own is never touched.
 - A Wiktionary build stores the frequencies it ranked by (`frequency`, the same as fill_frequencies) and the kinds, inside one `bulk_write`; `queue_steps(by_wiktionary=True)` then predicts neither step.
 
 ## Changing it

@@ -265,7 +265,7 @@ st2 = T.Store(os.path.join(tmp, "p.db"))
 st2.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT,"
                " kinds INTEGER, marks TEXT)")
 lines = []
-W._parse_wiktionary(st2.db, big, False, lines.append)
+W._parse_wiktionary(st2.db, big, lines.append)
 assert lines[0].strip().startswith("opening the file") and S.parse_progress(lines[0]) == 1
 pcts = [S.parse_progress(l) for l in lines if "parsed" in l]
 assert len([p for p in pcts if p is not None]) >= 2, lines
@@ -273,7 +273,7 @@ vals = [p for p in pcts if p is not None]
 assert vals == sorted(vals) and 0 < vals[0] < vals[-1] <= 99, vals
 gz = os.path.join(tmp, "g.jsonl.gz")
 with gzip.open(gz, "wt", encoding="utf-8") as f: f.write(json.dumps(entry("hello")) + "\n")
-lines = []; W._parse_wiktionary(st2.db, gz, False, lines.append)
+lines = []; W._parse_wiktionary(st2.db, gz, lines.append)
 assert S.parse_progress(lines[0]) is None and "opening the file" in lines[0]   # .gz: stand-in, no percent
 st3 = T.Store(os.path.join(tmp, "q.db")); lines = []
 W.build_wiktionary(st3, src, log=lines.append)
