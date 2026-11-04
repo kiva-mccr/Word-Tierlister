@@ -4,7 +4,7 @@ The main window (`App`): the header, the three placing views, the duel tabs, the
 
 - **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -38,6 +38,8 @@ The module docstring has the details; this page is the map.
 - Every key goes through `on_key` and the keymap; a held key repeats after 500 ms, then every 250 ms (`_repeat_allowed`).
 - Messages: `flash(text, kind)`; each is its own toast, newest on top. Text-only places name a censored word with `shown()` (masked); everything drawn smears it.
 - The window opens complete (`open_window`, F-1).
+- It stays see-through after opening until nothing has resized or moved it for `SETTLE_MS` (`_unveil`, at most `VEIL_MAX_MS`; F-48, asked for): GNOME maximizes a new window that nearly fills the screen just after it shows, and the re-fit that follows was seen as a resize "test". While see-through, `_on_root_configure` runs the grow and the monitor check after 20 ms instead of 80 / 300.
+- A fit never starts above the limit `_precheck_zoom` found for this screen (`_fit_size` reads `_zoom_cap`; F-48): maximizing to a kept zoom (UI-57) this screen cannot fit tried each size on screen from that zoom down.
 - The first start offers the other form once (`_offer_other_form`, T-9), never while a dialog is open (`widgets.dialog_open`), a job runs or a download is going; `App(offer_form=...)` is off unless `main()` turns it on, so tests never see it.
 - Every word in a message goes through `shown()` (duel results too: they once printed censored words whole).
 - `on_close` waits while `busy` (a worker writing the save) and cancels pending timers before destroying the window.

@@ -2008,6 +2008,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           in ~/Documents, never beside it in Applications, and starts the updated app with open -n. Moving the save
 #           takes the log and a kept download along. The rename was checked: "Word Tier List" is left only where
 #           things from 1.0.2 and older are found.
+# [x] F-48 Asked for: no window shows before it is finished, and no re-sizing "test" in view on Linux (it showed on
+#           maximizing). Found: maximizing to a zoom kept for it (UI-57) that this screen cannot fit tried each text
+#           size on screen from that zoom down (1.6, 1.5, 1.4..., ~1.7 s); now the fit starts below the limit found
+#           while the window was hidden (F-30), so one size shows. The main window stays see-through after opening
+#           until nothing has moved it for 120 ms (GNOME maximizes a new window that nearly fills the screen; another
+#           monitor), its re-fits run then, out of sight (App._unveil, at most 1.5 s). Dialogs (StyledDialog), the
+#           setup window and the review window are drawn see-through and shown in one go (ui_style.veil / unveil /
+#           show_drawn); they appeared piece by piece over ~0.2 s, and the setup window in the top-left corner first.
+#           Browse and the drop-downs already appeared complete.
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data

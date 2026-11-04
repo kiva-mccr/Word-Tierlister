@@ -45,7 +45,7 @@ from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_fact
 import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
-from ui_style import apply_ttk_style
+from ui_style import apply_ttk_style, unveil, veil
 from filepicker import ask_export, ask_import, browse, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
@@ -173,6 +173,8 @@ class App:
         self.grow = 1.0           # > 1 while the window is bigger than its preferred size (UI-25)
         self._ref_size = None     # the window size at which grow is 1 (set by _fit_window)
         self._grow_job = None
+        self._veil_since = None   # while the window is still see-through after opening (open_window, _unveil)
+        self._last_configure = 0.0
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -225,25 +227,39 @@ class App:
 
     def open_window(self):
         """Show the main window once it is built, sized and filled (F-1): every pending layout is finished while
-        it is still hidden, and it is drawn while see-through (where the system allows it: Windows, macOS, a
-        Linux desktop with a compositor), so it appears complete rather than as a blank frame filling in."""
+        it is still hidden, and it stays see-through (where the system allows it: Windows, macOS, a Linux desktop
+        with a compositor) until it has drawn and settled (_unveil), so it appears complete and at its final size
+        rather than as a blank frame filling in or text changing size."""
         r = self.root
         r.update_idletasks()
         self._precheck_zoom()
         r.update_idletasks()
-        try:
-            r.attributes("-alpha", 0.0)
-        except tk.TclError:
-            pass
+        veil(r)
+        self._veil_since = time.time()
         r.deiconify()
         r.update()                                  # (mapped, exposed and every widget drawn)
-        r.after(30, self._unveil)
+        r.after(self.SETTLE_MS, self._unveil)
+
+    SETTLE_MS = 120          # see-through until the window has had no new size or place for this long...
+    VEIL_MAX_MS = 1500       # ...but never longer than this
 
     def _unveil(self):
+        """Turn the window opaque once it has settled (asked for: no re-sizing in view as it opens). The window
+        manager may still change it just after it shows: GNOME maximizes a new window that nearly fills the screen,
+        another may place it on another monitor; the re-fit that follows (_apply_grow, _check_monitor, run sooner
+        while it is see-through) then happens out of sight."""
         try:
-            self.root.attributes("-alpha", 1.0)
+            if not self.root.winfo_exists():
+                return
         except tk.TclError:
-            pass
+            return
+        now = time.time()
+        busy = self._grow_job or self._monitor_job or (now - self._last_configure) * 1000 < self.SETTLE_MS
+        if busy and (now - self._veil_since) * 1000 < self.VEIL_MAX_MS:
+            self.root.after(20, self._unveil)
+            return
+        self._veil_since = None
+        unveil(self.root)
 
     def _startup(self):
         """One-time prompts after the window opens: which save was resumed, merge offers, how words are dealt
@@ -1045,6 +1061,10 @@ class App:
         start = self.zoom if initial else self._fit_cache.get(key, self.zoom)
         if self._fit_at_most is not None:
             start = min(start, self._fit_at_most)
+        cap = self._zoom_cap.get((area[2], area[3]))   # (the first size found not to fit this screen while the
+        if cap is not None:                            # window was hidden, _precheck_zoom: never tried on screen;
+            start = min(start, round(cap - self.FIT_STEP, 2))   # asked for: maximizing to a big zoom showed each
+                                                       # size from it down, 1.6, 1.5, 1.4..., as a resize "test")
         lowest = min(self.zoom, 1.0) * self.FIT_LOWEST      # (half the normal size: a big zoom on a small
         sizes = [round(self.zoom - k * self.FIT_STEP, 2)      # screen may shrink as far as no zoom would)
                  for k in range(int((self.zoom - lowest) / self.FIT_STEP + 1e-6) + 1)]
@@ -1115,12 +1135,14 @@ class App:
         once it has stopped moving, see whether it is on another monitor now (Z-1)."""
         if e.widget is not self.root:
             return
+        self._last_configure = time.time()
+        veiled = self._veil_since is not None      # (just opened, still see-through: _unveil waits for these)
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
-        self._grow_job = self.root.after(80, self._apply_grow)
+        self._grow_job = self.root.after(20 if veiled else 80, self._apply_grow)
         if self._monitor_job:
             self.root.after_cancel(self._monitor_job)
-        self._monitor_job = self.root.after(self.MONITOR_PAUSE_MS, self._check_monitor)
+        self._monitor_job = self.root.after(20 if veiled else self.MONITOR_PAUSE_MS, self._check_monitor)
 
     MONITOR_PAUSE_MS = 300
 

@@ -17,6 +17,7 @@ from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
 from ui_motion import HURRY_MS, lerp_color
+from ui_style import unveil, veil
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
 DIP = 2                 # pixels the button sinks while pressed
@@ -3357,12 +3358,14 @@ class StyledDialog:
         """Size to the contents, centre over the parent, then appear there; take the input (and with wait, block
         until closed)."""
         place_dialog(self.win, self.parent)
+        veil(self.win)                   # drawn while see-through: it appears complete, not piece by piece
         self.win.deiconify()
         try:                             # some Linux window managers refuse a grab before the window shows
             self.win.wait_visibility()
             self.win.grab_set()
         except tk.TclError:
             pass
+        unveil(self.win)
         self.win.lift()                  # in front, even of a window that was raised a moment before
         self.win.focus_force()
         if wait:

@@ -124,7 +124,7 @@ note):
 | `review` | constants, fonts, keymap, sizing, theme, ui_style, widgets |
 | `ui_chart` | constants, smooth, theme, ui_motion |
 | `widgets` | constants, definitions, fonts, rudeness, sizing, smooth, theme, ui_motion |
-| `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme |
+| `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme, ui_style |
 | `errors` | constants, fonts, problems, theme, ui_style, widgets |
 | `ui_style` | fonts, theme |
 | `smooth` | fonts |
@@ -450,7 +450,7 @@ found again, so switching between the two loses nothing.
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
 | `src/fonts.py` | Typography (UI-73): loads the two bundled typefaces for this program only (never installed) and builds the named size roles: Young Serif for the words, Atkinson Hyperlegible for the rest, the text in three sizes (20 / 12 / 10 pt). |
 | `src/typefaces/` | Young Serif and Atkinson Hyperlegible (regular, bold, both italics), from Google Fonts under the SIL Open Font Licence (the licences beside them), with their line spacing tightened by `tools/make_typefaces.py`; `overhang.json`, the letters whose ink reaches past their box. |
-| `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1). |
+| `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1); shows a window only once it has drawn (`show_drawn`, F-48). |
 | `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile with a slightly darker border (IC-4), the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
 | `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
 | `src/problems.py` | Plain-language error text (`describe`), `SetupError`, log helpers. No tkinter. |
@@ -518,10 +518,15 @@ missing or out of date, and also checks that each module imports only from the l
   keeps a zoom of its own: maximizing or restoring the window brings back the zoom you last used in that state
   (`App._follow_maximize`, UI-57). A zoom in past what
   fits is refused with a "no" shake of its message, never tried on screen: the limits are found while the window is
-  still hidden as it opens and kept for each screen (`App._precheck_zoom`, F-30). The page keeps room under its
+  still hidden as it opens and kept for each screen (`App._precheck_zoom`, F-30); no fit starts above them, so
+  maximizing to a big zoom shows one size, never each size from it down (F-48). The page keeps room under its
   contents for a message, so one never covers the word card or the definitions pane (UI-72); comparing to anchors
   eases the pane shorter (F-29, Z-1). Browse has its own zoom (`Browser.zoom_by`).
 - Contents growing with a bigger window (UI-25): `App._grow_for` / `App._apply_grow` (`GROW_MAX`, `GROW_STEP`).
+- Windows appear complete (F-48): build a new window withdrawn, place it, then `ui_style.show_drawn` (or `veil`
+  before `deiconify` and `unveil` after, as `StyledDialog.show` does): it is drawn see-through and shows in one go.
+  The main window stays see-through after opening until the window manager has stopped resizing or moving it
+  (`App._unveil`: GNOME maximizes a window that nearly fills the screen).
 - Definitions while comparing two words (UI-60): side by side, each under its own card (`DefinitionDrawer`'s two
   columns; one word is one column).
 - Clicking a word in a definition (W-1): any word in a meaning, an example or a form's line is underlined under the

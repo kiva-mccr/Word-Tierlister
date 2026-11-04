@@ -183,3 +183,56 @@ def set_icon(root):
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_ID)
         except (AttributeError, OSError):
             pass
+
+
+# ---- windows appear complete (asked for: no window shows before it has finished drawing) -----------------------
+UNVEIL_MS = 30          # after the first full draw: time for the compositor to take the finished picture
+
+
+def veil(win):
+    """Make `win` see-through, before it is shown. Tk draws a window only once it is on screen, so a window shown
+    plainly appears in pieces (the heading, then the labels, then the rest, over a tenth of a second or more);
+    shown see-through, drawn, then made opaque (unveil), it appears in one go. Works where the system can make a
+    window see-through (Windows, macOS, a Linux desktop with a compositor, as GNOME and KDE have); elsewhere it does
+    nothing and the window shows as before. True if it could."""
+    try:
+        win.attributes("-alpha", 0.0)
+        return True
+    except tk.TclError:
+        return False
+
+
+def unveil(win, ms=UNVEIL_MS, wait_ms=1000):
+    """Make a veiled window opaque once it has drawn: once it is on screen (looked for every 10 ms, for at most
+    `wait_ms`), every pending redraw is finished, and `ms` later it turns opaque. Never runs the event loop itself
+    (a timer could run twice under it), so it can be called from anywhere."""
+    state = {"left": max(1, wait_ms // 10)}
+
+    def opaque():
+        try:
+            if win.winfo_exists():
+                win.attributes("-alpha", 1.0)
+        except tk.TclError:
+            pass
+
+    def drawn():
+        try:
+            if not win.winfo_exists():
+                return
+            state["left"] -= 1
+            if not win.winfo_viewable() and state["left"] > 0:
+                win.after(10, drawn)
+                return
+            win.update_idletasks()
+            win.after(ms, opaque)
+        except tk.TclError:
+            pass
+    drawn()
+
+
+def show_drawn(win):
+    """Show a withdrawn, already built and placed window so that it appears complete: veiled, shown, unveiled once
+    drawn (veil, unveil). Returns at once."""
+    veil(win)
+    win.deiconify()
+    unveil(win)

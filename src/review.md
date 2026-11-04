@@ -21,6 +21,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- It opens with `ui_style.show_drawn`, complete (F-48).
+
 - `score_guesses` (the Score the rules bubble) reads only the review file's own guesses: the program never runs the rules over the 300 MB entries; `measure_rudeness answers` scores the rules as they are now.
 - Rules only (the user's choice): the answers are a yardstick for the rules, never a list the program reads.
 - The word is never smeared here: judging a rude word needs to see it.

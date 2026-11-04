@@ -45,6 +45,7 @@ from errors import ask_choices, ask_yes_no
 from fonts import font
 from problems import STOPPED_MESSAGE, SetupError, ensure_streams, open_log
 from sizing import ui_factor, usable_area
+from ui_style import show_drawn
 from theme import PALETTE
 
 DELAY_MS = 400     # show the window only if the work is still running after this long
@@ -150,6 +151,7 @@ class StartupWindow:
 
     def __init__(self, root, title, on_close, intro=INTRO):
         self.win = tk.Toplevel(root)
+        self.win.withdraw()                       # (placed first, then shown complete: show_drawn)
         self.win.title(title)
         self.win.resizable(False, False)
         # Text width: grows with the screen's dpi, and with the actual font (measured), whichever is wider.
@@ -179,6 +181,7 @@ class StartupWindow:
         w, h = self.win.winfo_reqwidth(), self.win.winfo_reqheight()
         ax, ay, aw, ah = usable_area(root)        # the monitor the pointer is on
         self.win.geometry(f"+{max(ax + (aw - w) // 2, 0)}+{max(ay + (ah - h) // 3, 0)}")
+        show_drawn(self.win)
 
     def show(self, stage, detail, percent, elapsed, eta=None, step=None):
         """Update the labels and bar. `percent` None means unknown: the bar sweeps instead of filling.
