@@ -17,7 +17,7 @@ import json
 GROUPS = (("all", "Everywhere"), ("place", "Place new words"), ("compare", "While comparing"),
           ("duel", "Duels (Refine, Boundary, Conflicts)"), ("browse", "Browse / edit"),
           ("review", "Review rude meanings (developer tools)"))
-DEV_GROUPS = ("review",)         # shown in Keyboard shortcuts only while the review is open or Developer tools is on
+DEV_GROUPS = ("review",)         # shown in Keyboard shortcuts only while the review is open (F-48)
 GROUP_NAMES = dict(GROUPS)
 
 # id, group, label, default keys (at most MAX_KEYS)

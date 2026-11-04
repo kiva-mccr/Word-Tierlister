@@ -2008,6 +2008,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           in ~/Documents, never beside it in Applications, and starts the updated app with open -n. Moving the save
 #           takes the log and a kept download along. The rename was checked: "Word Tier List" is left only where
 #           things from 1.0.2 and older are found.
+# [x] F-48 Reported: Keyboard shortcuts' cards stacked instead of sitting side by side. Since DT-1 the review's keys
+#           were listed whenever Developer tools was on; that third card grew so tall and wide that the three no
+#           longer fit across a screen under ~1,500 px. The user chose: the review's keys only while its window is
+#           open, as before DT-1 (the other choice was a card of their own below). _selftest_devtools.
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data

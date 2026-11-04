@@ -51,8 +51,9 @@ class ShortcutsDialog:
             # room for "↺ default" kept on every row, so nothing shifts when one appears
             col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
-            shown = [g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", None) is not None
-                     or getattr(self.app, "dev_tools", False)]
+            # the review's keys only while its window is open (F-48: listed whenever Developer tools was on, the
+            # third card grew so tall and wide that the cards stacked on a screen under ~1,500 px)
+            shown = [g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", None) is not None]
             for gi, g in enumerate(shown):
                 tk.Label(col, text=GROUP_NAMES[g], bg=bg, fg=PALETTE["muted"], font=f).grid(
                     row=r, column=0, columnspan=3, sticky="w", pady=(0 if gi == 0 else round(line * 0.8), 2))
