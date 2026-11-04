@@ -1630,6 +1630,62 @@ class SmearToggle(SmoothCanvas):
         self._draw()
 
 
+class DevBubble(SmoothCanvas):
+    """A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for:
+    dev tools reachable from the window, not only by command; only while Settings > Developer tools is ticked).
+    A click (or Space / Return once it has focus) runs `command`. With `variable` it is a switch, lit while True.
+
+        DevBubble(parent, "Review rude meanings", app.review_rude)
+        DevBubble(parent, "Nightly", toggle, variable=shown)
+    """
+
+    def __init__(self, parent, text, command, variable=None, font_=None, bg=None):
+        super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
+                         bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
+                         highlightcolor=PALETTE["accent"])
+        self.text, self.command, self.variable = text, command, variable
+        self._font, self._bg, self._hover = font_ or font("small"), bg, False
+        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
+            self.bind(seq, lambda e: self.invoke())
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self._draw()
+
+    def invoke(self):
+        if self.variable is not None:
+            self.variable.set(not self.variable.get())
+            self._draw()
+        if self.command:
+            self.command()
+
+    def lit(self):
+        return self.variable is not None and bool(self.variable.get())
+
+    def _set_hover(self, on):
+        self._hover = on
+        self._draw()
+
+    def _draw(self):
+        self.delete("all")
+        f, on = self._font, self.lit()
+        line = f.metrics("linespace")
+        h = line + 6
+        dot = max(4, line // 3)
+        pad = h // 2
+        w = pad + dot + dot + f.measure(self.text) + pad
+        super().configure(width=w + 2, height=h + 2)
+        fill = PALETTE["select_bg"] if on or self._hover else PALETTE["surface"]
+        edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
+        self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
+        y = 1 + h / 2
+        self.round_rect(1 + pad, y - dot / 2, 1 + pad + dot, y + dot / 2, dot, fill=PALETTE["accent"])
+        self.create_text(1 + pad + 2 * dot, y, text=self.text, font=f, anchor="w",
+                         fill=PALETTE["text"] if on or self._hover else PALETTE["muted"])
+
+    def refresh(self):
+        self._draw()
+
+
 WIKTIONARY_NOTE = "Open on Wiktionary: where the word comes from, and more"
 
 
@@ -3224,9 +3280,12 @@ class StyledDialog:
         self.wrap = max(380, font("body").measure("n") * wrap_chars)
         box = tk.Frame(self.win, bg=bg, padx=26, pady=22)
         box.pack(fill="both", expand=True)
+        self.head_row = None             # (the headline's row: developer bubbles go at its right, dev_bubbles)
         if headline:
-            tk.Label(box, text=headline, font=font("head"), bg=bg, fg=PALETTE["text"], wraplength=self.wrap,
-                     justify="left").pack(anchor="w")
+            self.head_row = tk.Frame(box, bg=bg)
+            self.head_row.pack(fill="x")
+            tk.Label(self.head_row, text=headline, font=font("head"), bg=bg, fg=PALETTE["text"],
+                     wraplength=self.wrap, justify="left").pack(side="left", anchor="w")
         if intro:
             tk.Label(box, text=intro, font=font("body"), bg=bg, fg=PALETTE["muted"], wraplength=self.wrap,
                      justify="left").pack(anchor="w", pady=(8 if headline else 0, 0))
@@ -3240,6 +3299,21 @@ class StyledDialog:
         self.win.bind("<Return>", lambda e: self._default.invoke() if self._default else None)
         self.win.bind("<Escape>", lambda e: self.on_cancel())
         self.win.protocol("WM_DELETE_WINDOW", lambda: self.on_cancel())
+
+    def dev_bubbles(self, items):
+        """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
+        (text, command) or (text, command, variable) for a switch. Returns the bubbles, by their text."""
+        out = {}
+        if self.head_row is None or not items:
+            return out
+        row = tk.Frame(self.head_row, bg=PALETTE["bg"])
+        row.pack(side="right", anchor="n", padx=(24, 0))
+        for item in items:
+            text, command, variable = (tuple(item) + (None,))[:3]
+            b = DevBubble(row, text, command, variable=variable)
+            b.pack(side="left", padx=(6 if out else 0, 0))
+            out[text] = b
+        return out
 
     def text(self, text, muted=False, parent=None, room=0, **pack):
         """A wrapped line of text in the body (or `parent`), packed to the left (`pack`: more pack options); muted

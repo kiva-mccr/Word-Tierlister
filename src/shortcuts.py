@@ -51,7 +51,8 @@ class ShortcutsDialog:
             # room for "↺ default" kept on every row, so nothing shifts when one appears
             col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
-            shown = [g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", None) is not None]
+            shown = [g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", None) is not None
+                     or getattr(self.app, "dev_tools", False)]
             for gi, g in enumerate(shown):
                 tk.Label(col, text=GROUP_NAMES[g], bg=bg, fg=PALETTE["muted"], font=f).grid(
                     row=r, column=0, columnspan=3, sticky="w", pady=(0 if gi == 0 else round(line * 0.8), 2))

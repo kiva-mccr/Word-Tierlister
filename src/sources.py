@@ -26,6 +26,9 @@ Nightly (U-9, for testing): the check also asks for main as it is now (standalon
 files differ from this source's, shows "Update to nightly": from source the folder is brought up to main
 (update_source: git pull from main, or main's source synced in); in the program main's source goes into the source
 folder beside it, which then builds the program in this one's place (update_nightly_program, --build-nightly).
+With Settings > Developer tools ticked, bubbles at the top right: "Nightly" (a switch, lit to start with: the nightly
+section shows even while main is the same, saying so), "Log" (tierlist.log, App.open_log) and "Crash test"
+(App.crash_test, was --crash-test).
 
 Either way a tick box, "Update to the newest version first" (T-8), ticked to start with and usable once a newer
 version is found: "Make the program" then downloads that version's source and builds from it, and "Unpack" downloads
@@ -104,6 +107,13 @@ class SourceDialog:
         self.dlg = StyledDialog(app.root, TITLE, f"Word Tierlister {VERSION}", f"You are running {form}.",
                                 animator=app.anim, wrap_chars=64)
         self.dlg.win.bind("<Destroy>", lambda e: e.widget is self.dlg.win and self._drop_fetched(), add="+")
+        self.nightly_always = (tk.BooleanVar(value=app.store.get_meta("nightly_always", "1") == "1")
+                               if getattr(app, "dev_tools", False) else None)
+        self.main_now = None                      # main as it is now, once found (the Nightly bubble shows it the same)
+        if self.nightly_always is not None:       # (Settings > Developer tools: the dialog's bubbles)
+            self.bubbles = self.dlg.dev_bubbles((("Nightly", self._toggle_nightly, self.nightly_always),
+                                                 ("Log", app.open_log),
+                                                 ("Crash test", lambda: app.crash_test(self.dlg))))
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
             self._menu_section()                                            # only until it is in the menu)
@@ -156,6 +166,7 @@ class SourceDialog:
                 self.dlg.win.after(100, collect)
                 return
             self.checked = True
+            self.main_now = main
             self.nightly, self.nightly_files = (main, files) if files else (None, [])
             self._show_check()
         collect()
@@ -163,6 +174,7 @@ class SourceDialog:
     def again(self):
         """"Try again": ask GitHub once more."""
         self.checked, self.release, self.nightly, self.nightly_files = False, None, None, []
+        self.main_now = None
         self._clear_update_buttons()
         self.line.config(text=CHECKING)
         self.how.config(text="")
@@ -220,11 +232,30 @@ class SourceDialog:
         self._show_update()
 
     # ---- nightly (asked for, for testing): main as it is now, shown only when it differs ---------------------------
+    def _toggle_nightly(self):
+        """The "Nightly" bubble (a switch, lit to start with): the nightly section shown even while main is the same
+        as this source. Saved."""
+        self.app.store.set_meta("nightly_always", int(self.nightly_always.get()))
+        if self.checked:
+            for w in self.nightly_box.winfo_children():
+                for name, b in list(self.dlg.buttons.items()):
+                    if b is w or str(b).startswith(str(w) + "."):
+                        del self.dlg.buttons[name]
+                w.destroy()
+            self._show_nightly()
+            self.dlg.refit()
+
     def _show_nightly(self):
         """When main on GitHub differs from this source (or the source this program was built from): a line saying
-        so and "Update to nightly"; nothing at all otherwise."""
+        so and "Update to nightly"; nothing at all otherwise, unless the Nightly bubble is lit (developer tools):
+        then a line saying this is main as it is now, or that main could not be checked."""
         n, box = self.nightly, self.nightly_box
         if not n:
+            if self.nightly_always is not None and self.nightly_always.get() and self.here:
+                m = self.main_now
+                self.dlg.text(f"Nightly build: you have main as it is now (commit {m['short']}, {ago(m['when'])})."
+                              if m else "Nightly build: main on GitHub could not be checked.", parent=box,
+                              pady=(10, 0))
             return
         files = len(self.nightly_files)
         msg = f': "{n["message"]}"' if n.get("message") else ""

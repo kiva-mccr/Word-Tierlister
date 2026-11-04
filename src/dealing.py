@@ -12,7 +12,8 @@ ones are left out of the queue, never deleted (Store.set_deal). Beside each kind
 smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7;
 Clinical and Insult too, plain to start with: OB-8). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
-applies at once.
+applies at once. With Settings > Developer tools ticked, two bubbles at the top right: "Review rude meanings" (OB-9's
+review window, App.review_rude) and "Score the rules" (the answers so far against the rules' guesses, App.score_rules).
 """
 import gc
 import random
@@ -83,6 +84,9 @@ class DealDialog:
             self.body.rowconfigure(1, weight=1)          # (the Order column's extra height goes under Obscene words)
             dlg.button("Cancel", dlg.close)
             dlg.button("Apply", self.apply, default=True)
+            if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
+                self.bubbles = dlg.dev_bubbles((("Review rude meanings", lambda: app.review_rude(dlg)),
+                                                ("Score the rules", lambda: app.score_rules(dlg))))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------

@@ -29,15 +29,16 @@ import wordsource
 from browser import Browser
 from dealing import DealDialog
 from errors import ask_buttons, ask_yes_no, show_error, show_exception, show_message
-from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
-                       QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
+from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES,
+                       QUEUE_SHAPES, REPO_PAGE, REVIEW_FILE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word,
+                       review_answers_path, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
-from review import RudeReview
+from review import RudeReview, describe_score, read_answers, read_review, score_guesses
 from syncdialog import AutoSync, SyncDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_factor, usable_area
@@ -45,7 +46,7 @@ import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style
-from filepicker import ask_export, ask_import, use_themed
+from filepicker import ask_export, ask_import, browse, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
@@ -139,6 +140,7 @@ class App:
         self.show_defs = store.get_meta("show_defs", "0") == "1"
         self.auto_compare = store.get_meta("auto_compare", "0") == "1"
         self.reduce_motion = store.get_meta("reduce_motion", "0") == "1"
+        self.dev_tools = store.get_meta("dev_tools", "0") == "1"   # (Settings > Developer tools: the dialogs' bubbles)
         self.keys = Keymap(store.get_meta("keymap"))      # every action's keys (UI-48)
         self._ws = root.tk.call("tk", "windowingsystem")
         self.cur_word = None
@@ -196,6 +198,7 @@ class App:
         self.defs_var = tk.BooleanVar(value=self.show_defs)
         self.auto_var = tk.BooleanVar(value=self.auto_compare)
         self.motion_var = tk.BooleanVar(value=self.reduce_motion)
+        self.dev_var = tk.BooleanVar(value=self.dev_tools)
         self.censor_var = tk.BooleanVar(value=store.deal_settings()["censor"])
         self.dark_var = tk.BooleanVar(value=store.get_meta("dark_mode") == "1")
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
@@ -402,7 +405,9 @@ class App:
                           ("command", "How words are dealt...", self.edit_dealing, None),
                           ("command", "Keyboard shortcuts...", self.edit_keys, None),
                           ("command", "Tier colours...", self.edit_tier_colours, None),
-                          ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto)]),
+                          ("check", "Always compare new words to anchors", self.auto_var, self.toggle_auto),
+                          ("separator",),
+                          ("check", "Developer tools", self.dev_var, self.toggle_dev)]),
         ]
 
     def _build_header(self):
@@ -1222,6 +1227,13 @@ class App:
         """Censoring was just turned on from View (asked for: say it may not be fully accurate): a short toast, the
         same words How words are dealt shows under its tick box (U-2, asked for: never the long note)."""
         self.flash(CENSOR_CAVEAT_SHORT, kind="info", ms=4000)
+
+    def toggle_dev(self):
+        """Settings > Developer tools (asked for: dev tools from the window, not only by command): small bubbles at the
+        top right of How words are dealt (the rude-meaning review) and Source & Updates (nightly, the log, a crash
+        test), shown in dialogs opened from now on. Off to start with; saved for this save (never synced)."""
+        self.dev_tools = self.dev_var.get()
+        self.store.set_meta("dev_tools", int(self.dev_tools))
 
     def toggle_auto(self):
         """'Always compare new words to anchors' menu switch (saved); restarts any comparison."""
@@ -2171,6 +2183,74 @@ class App:
         self.review_path = path
         self.review = RudeReview(self, path)
         return self.review
+
+    # ---- developer tools (the dialogs' bubbles, Settings > Developer tools) --------------------------------------
+    def review_file(self):
+        """The review file to use: the last one opened, else REVIEW_FILE next to the save (it may not exist)."""
+        last = self.store.get_meta("review_file")
+        if last and os.path.exists(last):
+            return last
+        return os.path.join(os.path.dirname(os.path.abspath(self.store.path)), REVIEW_FILE)
+
+    def pick_review_file(self, parent, ask=None):
+        """The review file, or None: when there is none at review_file(), ask for one (it is made by
+        tools/measure_rudeness.py sample). `ask(start) -> path or None`: how to ask (tests)."""
+        path = self.review_file()
+        if os.path.exists(path):
+            return path
+        start = os.path.dirname(path)
+        if ask is None:
+            if use_themed(self.root):
+                ask = lambda d: browse(parent, "Open a review file", d, mode="file", exts=(".jsonl",),
+                                       animator=self.anim, note="No rude_review.jsonl next to the save: pick one "
+                                       "made by tools/measure_rudeness.py sample.")
+            else:
+                ask = lambda d: filedialog.askopenfilename(parent=parent, initialdir=d, title="Open a review file",
+                                                           filetypes=[("Review files", "*.jsonl"), ("All", "*")])
+        path = ask(start)
+        if not path:
+            return None
+        self.store.set_meta("review_file", os.path.abspath(path))
+        return path
+
+    def review_rude(self, dlg=None, ask=None):
+        """The "Review rude meanings" bubble (How words are dealt): close the dialog (it holds the input), then open
+        the review (open_review), asking for the file first when there is none next to the save."""
+        path = self.pick_review_file(dlg.win if dlg else self.root, ask)
+        if not path:
+            return None
+        if dlg is not None:
+            dlg.close()
+        return self.open_review(path)
+
+    def score_rules(self, dlg=None, ask=None):
+        """The "Score the rules" bubble: the answers so far against the rules' guesses in the review file
+        (review.score_guesses: the rules as they were when the file was made). Returns the text shown."""
+        parent = dlg.win if dlg else self.root
+        path = self.pick_review_file(parent, ask)
+        if not path:
+            return None
+        text = describe_score(score_guesses(read_review(path), read_answers(review_answers_path(path))))
+        show_message("Score the rules", "The rules against your answers", text, parent=parent)
+        return text
+
+    def open_log(self):
+        """The "Log" bubble (Source & Updates): tierlist.log next to the save, in the system's text viewer."""
+        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), LOG_FILE)
+        try:
+            if not os.path.exists(path):
+                raise OSError(f"there is no {LOG_FILE} yet")
+            standalone.open_folder(path)          # (xdg-open / open / startfile open a file with its own program)
+        except OSError as exc:
+            self.flash(f"Could not open the log: {exc}", kind="warn")
+        return path
+
+    def crash_test(self, dlg=None, delay=300):
+        """The "Crash test" bubble (was --crash-test): close the dialog, then fail on purpose, to see the error
+        dialog and the log entry; the program keeps running."""
+        if dlg is not None:
+            dlg.close()
+        self.root.after(delay, lambda: 1 / 0)
 
     def edit_anchors(self):
         """Dialog to choose the six anchor words (UI-28): a pill per tier, and any problem (empty, used twice,
