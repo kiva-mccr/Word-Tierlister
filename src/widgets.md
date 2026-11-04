@@ -64,6 +64,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- RoundButton.configure with a new bg / fg stops a fade still running (it ended at the old colour: the review's
+  lit kind lagged one step behind the arrow keys).
 - Aqua (macOS) leaves trailing spaces out of a text item's bbox: never take the end of the text before a word as where the word starts. `_canvas_word` measures up to the last letter before it and adds the spaces' width (a smeared pane's clickable word was underlined from the space before it, seen on GitHub's Macs, T-18).
 - HeaderMenus closes its menu on the main window's `<Configure>` only when it really moved or changed size since the menu opened (`_top_configured` compares `_top_geometry()` with `_top_geo`, taken in `open_menu`; never the event's own numbers): Windows sends one when the window just comes to the front, which closed the menu opened by hovering from File to Edit (T-20, GitHub's Windows).
 - `DefinitionDrawer.pin()` / `unpin()` (F-41): while App changes its lines (`_fill_pane`) or fits the window, the pane and its box keep the height they show and the scroll bars stay as they are (`_pin_box`); a pane stopped sliding open eases on from there at `unpin()`. `ease_from` starts from the pinned height, so unpin with `follow=False` before it.
