@@ -4,7 +4,7 @@ Measuring the rudeness rules against an earlier sorting by Claude (a yardstick o
 
 - **Uses:** `constants`, `obscene`, `rudeness`, `wordsource`
 - **Used by:** `tune_rudeness`
-- **Tests:** `_selftest_nextreview`, `_selftest_review`
+- **Tests:** `_selftest_devtools`, `_selftest_nextreview`, `_selftest_review`
 
 The module docstring has the details; this page is the map.
 
@@ -28,9 +28,12 @@ The module docstring has the details; this page is the map.
 - `weak_signs`: Words with a weak sign of rudeness among their first three meanings (a slang or rude label, a body or insult word), common enough to matter: the ones to check for misses.
 - `candidates`: Signals the rules may be missing, mined from Wiktionary's own rude labels (RUDE_LABELS) as a stand-in for the answers: ({topic: share of its meanings with a rude...
 - `next_reasons`: {group: (why, the meaning's index or None, what it shares with others: spread over, see _spread)} for the groups of NEXT_SHARES a word is in.
-- `pick_next`: {word: (why, [meaning index to ask about])}: the words of NEXT_SHARES, none of `skip` (words reviewed already).
-- `reviewed`: The words a review file and its answers already hold.
-- `make_next`: Add the next words to review (pick_next) to the end of the review file, commonest first: the review window goes on from the first word not yet answered.
+- `pick_next`: {word: (why, [meaning index to ask about])}: the words of NEXT_SHARES (`shares`: {group: share} in their place, group_shares), none of `skip` (words answered already).
+- `group_of`: The NEXT_SHARES group a review word's "why" names ("near the line: 2.6 points, ..." -> "near the line"), or None (a word of the first sample).
+- `group_shares`: {group: share}: NEXT_SHARES, each weighted by how often its words so far were answered otherwise than the rules guessed ((misses + 1) / (answered + 2): a group not...
+- `miss_signs`: {label or gloss word: the share of its answered meanings answered otherwise than the rules guessed} for the signs most often on the misses (MISS_MIN of them at least,...
+- `review_lines`: [(the line, its word or None)] of a review file, or [] when there is none.
+- `make_next`: Refresh the review file with the next words (pick_next): the words answered so far stay, in their order (the review's Back still walks them), the unanswered ones give...
 - `make_sample`: Write a review file (JSON lines, commonest first) for `python tierlist.py --review-rude`.
 - `read_answers`: {word: {"kinds": {meaning key: kind}, "whole": bool}} from a review's answers file (the last answer for a word wins).
 - `score_answers`: How often the rules agree with the answers: meaning by meaning, per kind (precision / recall), and on smearing the whole word.
@@ -39,13 +42,18 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - It compares meaning by meaning, so rules that only change which words are listed (not which meanings are rude) leave it unchanged.
-- `next` appends to the review file and skips every word already in it or in its answers: never rewrite the file
-  (the answers and the window's place follow its words). The meaning a word was picked for is always shown
+- `next` refreshes the review file (asked for): the answered words' lines stay first, byte for byte and in their order
+  (the window's Back walks them; the answers follow the words, never their place), the unanswered ones are replaced,
+  through a `.part` file. Every answered word is skipped, even one from an older list. Its groups are weighted by
+  where the rules were wrong (`group_shares`, from each word's "why" and the guesses written in the file) and "like
+  your misses" follows the signs on the meanings answered otherwise (`miss_signs`). The meaning a word was picked for is always shown
   (`shown_meanings(also=...)`): a candidate topic is no signal the rules read, so it would be left out otherwise.
 - `next`'s candidates come from Wiktionary's own rude labels, a stand-in for the answers: leads to check, never
   rules. Each group is spread over what its words share (`_spread`: a candidate, PER_CANDIDATE each; a pair of kinds;
   the points near the line): unspread, "swear 3.5, sexual 3.0" (one link rule) and "woman" filled their groups. Function
   words and affixes ("of", "an-") are never asked about for having no sign.
+- `sample` and `next` ask only about one-part words (`ONE_PART`, asked for, like the word list): no hyphenated or
+  spaced entries; contractions ("don't") stay. The Make review words bubble (App.make_review_words) runs them.
 
 ## Changing it
 

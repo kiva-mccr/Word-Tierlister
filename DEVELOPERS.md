@@ -615,12 +615,21 @@ scores the rules against them, meaning by meaning. The answers only test and tun
 reads them.
 
 Once the first sample is answered (or while it is), `python tools/measure_rudeness.py next` (OB-11, active review)
-adds 300 more words (`--size`) to the end of the review file, picked to teach the rules most, none reviewed
-already: a meaning near the line (within a point of counting as rude, or of smearing the word), meanings whose
+refreshes the review file: the words answered so far stay first, as they were (Back still walks them), and the
+unanswered ones give way to 300 new words (`--size`), picked to teach the rules most, none answered already. Each
+group's share is weighted by how often the rules were wrong on the words it gave before, and one group follows your
+misses (words sharing a label or gloss word with the meanings you answered otherwise than the rules guessed). The
+others: a meaning near the line (within a point of counting as rude, or of smearing the word), meanings whose
 signals point to two kinds, candidate signals the rules never read (a Wiktionary topic, or a gloss word common in
 Wiktionary's own rude meanings, on a meaning found clean; a few words each, so each candidate gets tested), and
 common words with no sign at all, the only way to count what the rules miss. The review window goes on from the
-first word not answered; "Here because" says why each word was picked.
+first word not answered (an open review opens again on the new words); "Here because" says why each word was picked.
+
+Both can be run from the window too: tick Settings > Developer tools, and How words are dealt shows **Make review
+words** (runs `sample` the first time, then `next` to refresh it, in the background; it offers to fetch the Wiktionary entries
+first when they are missing; a toast says what it made) and **Tune the rules** (opens the tuner's window). They run
+the scripts in `tools/`, so only from the source. Reviews ask only about one-part words: no hyphenated or spaced
+entries, contractions kept (asked for, like the word list).
 
 To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
 `--review` file; `--entries` the compact download). It splits the answered words into 5 parts, tunes the numbers the
