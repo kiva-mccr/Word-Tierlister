@@ -228,11 +228,13 @@ zero = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and win.c
 assert win.chart.coords(legend)[1] > win.chart.coords(zero)[1] + 30   # (the legend under the plot, not over it)
 assert win.bar_text.cget("text") == "Done" and float(win.bar.cget("value")) == 100
 # the chart grows with the window
-size0 = win.chart.winfo_width(), win.chart.winfo_height()
+size0, win0 = (win.chart.winfo_width(), win.chart.winfo_height()), (root.winfo_width(), root.winfo_height())
 root.geometry(f"{root.winfo_width() + 200}x{root.winfo_height() + 120}"); pump(30)
 time.sleep(0.1); pump(10)
 after = win.chart.winfo_width(), win.chart.winfo_height()
-assert after[0] >= size0[0] + 150 and after[1] >= size0[1] + 80, (size0, after)
+grew = root.winfo_width() - win0[0], root.winfo_height() - win0[1]   # (a small screen can stop the window growing)
+assert grew[0] >= 150 and after[0] - size0[0] >= grew[0] - 2 and after[1] - size0[1] >= grew[1] - 2, \
+    (size0, after, grew)
 right = max(win.chart.coords(i)[0] for i in win.chart.find_all() if win.chart.type(i) == "text"
             and win.chart.itemcget(i, "text").startswith("average "))
 assert right > size0[0], (right, size0)                         # (drawn again at the new size)
