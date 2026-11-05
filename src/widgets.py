@@ -3438,6 +3438,7 @@ class StyledDialog:
     def __init__(self, parent, title, headline=None, intro=None, animator=None, wrap_chars=52):
         self.parent, self._anim, self._default = parent, animator, None
         self._when_closed = []
+        self._follow_job = None              # (rescale: follows the parent's moves for a moment)
         self.on_cancel = self.close
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(parent)
@@ -3587,8 +3588,30 @@ class StyledDialog:
                 pass
         place()
         self.win.after_idle(place)
+        # (and where the parent goes next, for a moment: a maximize re-fits inside its first <Configure>, F-50, and
+        # macOS moves the window back onto the screen after that; the dialog stayed centred on where it had been)
+        if self._follow_job is not None:
+            self.win.after_cancel(self._follow_job)
+        where = [None]
+        def follow(n):
+            self._follow_job = None
+            try:
+                now = (self.parent.winfo_rootx(), self.parent.winfo_rooty(), self.parent.winfo_width())
+            except tk.TclError:
+                return
+            if where[0] is not None and now != where[0]:
+                place()
+            where[0] = now
+            if n > 0 and self.alive():
+                self._follow_job = self.win.after(self.FOLLOW_EVERY_MS, follow, n - 1)
+        follow(self.FOLLOW_MS // self.FOLLOW_EVERY_MS)
+
+    FOLLOW_MS, FOLLOW_EVERY_MS = 1000, 50
 
     def close(self):
+        if self._follow_job is not None:
+            self.win.after_cancel(self._follow_job)
+            self._follow_job = None
         try:
             self.win.destroy()
         except tk.TclError:

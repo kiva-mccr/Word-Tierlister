@@ -358,6 +358,7 @@ sources.show_error = lambda *a, **kw: None
 S.ROOT = project()                                                 # (from source: no program beside it yet)
 root, app = window()
 app.offer_form = False
+app.FORM_OFFER_MS = 10 ** 7          # (its own retries never fire here: on a slow Mac one asked mid-test; driven by hand)
 app._startup(); pump(root)
 assert app.store.get_meta("offered_program") is None              # (off: --no-install, and the tests)
 for w in root.winfo_children():                                   # (the start's own question: anchor words)

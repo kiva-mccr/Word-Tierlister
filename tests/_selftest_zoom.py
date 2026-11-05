@@ -207,6 +207,13 @@ assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame or 
 #                                                                                   the screen it overhangs)
 maximize(False, "1000x700"); pump(4)
 assert not fits() and dlg.win.winfo_height() != grew and abs(dlg.win.winfo_height() - small) <= 2
+# the parent moving just after (macOS puts a maximized window back on the screen after the re-fit, F-50): it follows
+dlg.rescale(); root.update(); root.geometry("+120+90")
+end = time.time() + 5
+while abs(dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2 - (root.winfo_rootx() + root.winfo_width() // 2)) > 2 + frame \
+        and time.time() < end:
+    root.update(); time.sleep(0.01)
+assert abs(dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2 - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame, (dlg.win.winfo_rootx(), dlg.win.winfo_width(), root.winfo_rootx(), root.winfo_width(), usable_area(root))
 dlg.close()
 # the two zooms stay compatible (reported: the window opened with its contents bigger than when maximized, and
 # maximizing shrank them): the usual window never shows more than the maximized one would
