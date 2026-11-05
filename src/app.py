@@ -261,7 +261,7 @@ class App:
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<ButtonPress-1>", self._click_background, add="+")
         root.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.framesync = framesync.enable(root)    # (X11: a resized window shown only once drawn, F-53)
+        self.framesync = framesync.enable(root)    # (X11: no old picture in the corner of a new size, F-53)
         if self.framesync:
             self.framesync.set_background(PALETTE["bg"])
         self._update_options()
@@ -862,11 +862,11 @@ class App:
             self._fit_big_text()
         self._recenter()
 
-    SLIDE_MS = 260
+    SLIDE_MS = 250                 # (the page's contents easing to their place after a maximize: _slide_from_here)
 
     def _slide_from_here(self):
-        """Maximized or restored: the page's contents stay where they were on screen, then ease to their new place
-        (asked for: they snapped, as if the window had been in the top left)."""
+        """Maximized or restored (F-53, asked for: the contents snapped, as if the window had been in the top left):
+        the page's contents start where the old picture was left and ease in a straight line to their new place."""
         self.anim.finish("slide")            # (a slide still running ends at its place first)
         inner = self.place_inner if self.mode == "place" else self.pair_inner
         if not inner.winfo_ismapped():
@@ -911,12 +911,15 @@ class App:
         self._slide_job = root.after_idle(begin)
 
     def _centred_top(self, inner):
+        """Where `inner`'s top goes when centred (_recenter)."""
         band = self.status_band.winfo_height()
         ch = self.center.winfo_height()
         free = (ch - inner.winfo_reqheight()) / 2
+        # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
+        # the content shook by a pixel while the definitions pane slid against its top)
         top = int(free - max(0, min(band / 2, free)))
         limit = ch - inner.winfo_reqheight() - self._toast_room()
-        if limit >= 0:
+        if limit >= 0:                        # (centred low on a short page, it sat where messages show)
             top = min(top, limit)
         return top
 

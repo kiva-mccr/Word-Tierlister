@@ -88,7 +88,7 @@ flowchart TB
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
-        theme["theme"] ~~~ fonts["fonts"] ~~~ sizing["sizing"] ~~~ ui_style["ui_style"] ~~~ ui_motion["ui_motion"] ~~~ smooth["smooth"] ~~~ widgets["widgets"] ~~~ errors["errors"] ~~~ startup["startup"]
+        theme["theme"] ~~~ fonts["fonts"] ~~~ sizing["sizing"] ~~~ ui_style["ui_style"] ~~~ ui_motion["ui_motion"] ~~~ smooth["smooth"] ~~~ framesync["framesync"] ~~~ widgets["widgets"] ~~~ errors["errors"] ~~~ startup["startup"]
     end
     subgraph L2["words and saves (no tkinter)"]
         direction LR
@@ -113,7 +113,7 @@ note):
 | Module | Imports |
 |---|---|
 | `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, fullscreen, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
+| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, framesync, fullscreen, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
 | `sources` | constants, deps, errors, filepicker, fonts, problems, saves, standalone, startup, theme, widgets |
 | `syncdialog` | deps, errors, fonts, problems, saves, startup, syncfiles, syncthing_api, theme, widgets |
 | `browser` | constants, errors, fonts, keymap, sizing, smooth, store, theme, ui_motion, widgets |
@@ -129,6 +129,7 @@ note):
 | `errors` | constants, fonts, problems, theme, ui_style, widgets |
 | `ui_style` | fonts, theme |
 | `smooth` | fonts |
+| `framesync` | (the standard library only) |
 | `wordsource` | constants, obscene, problems, rudeness |
 | `saves`, `definitions` | constants |
 | `syncfiles` | store |
@@ -374,6 +375,7 @@ by this repository's workflow.
 | Colours | `src/theme.py` (`PALETTE`, `TIER_COLORS`, the dark look `DARK`, `contrast()`) |
 | Fonts and text sizes | `src/fonts.py` (`font(role)`) |
 | Window sizes, zoom, fitting the screen | `src/sizing.py`, `App._worst_size`, `App._fit_window`, `App._fill_pane`, `App.set_zoom` |
+| Maximizing and restoring (the page's contents slide to their place) | `App._slide_from_here`, `src/framesync.py` |
 | Rounded shapes and icons | `src/smooth.py` (`SmoothCanvas.round_rect`, `icon_image`) |
 | The tier chart and the progress shelf | `src/ui_chart.py` |
 | Full screen: the pause menu and a dialog's Back bar | `src/fullscreen.py` (App: `toggle_full_screen`, `_pause_pages`) |
@@ -458,6 +460,7 @@ found again, so switching between the two loses nothing.
 | `src/errors.py` | Friendly error dialog, plain messages and question dialogs (all on `StyledDialog`; tick-box choices can link to a web page), global error handlers, `run_guarded` (the whole program runs inside it). |
 | `src/sizing.py` | Screen/dpi-aware window sizing: usable area (xrandr on X11), `fit_size`, centring, dialog placement. |
 | `src/ui_motion.py` | Easing, colour blending and the `Animator` (animations run on the Tk event loop). |
+| `src/framesync.py` | X11 only: a maximized or resized window never shows its old picture in its top-left corner (F-53): the page's X window has centre gravity, and frame sync (`_NET_WM_SYNC_REQUEST`) is answered once a new size is drawn. Through Tk's own X connection (ctypes). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows); text whose letters reach past their boxes (Young Serif's j and f) is repainted whole (F-32). |
 | `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame; `dev_bubbles` puts `DevBubble`s, the developer tools' small pills, at the right of its headline), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |

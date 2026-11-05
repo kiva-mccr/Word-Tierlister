@@ -1,12 +1,14 @@
-"""Frame sync on X11 (_NET_WM_SYNC_REQUEST): the window manager shows a resized window only once it is drawn.
+"""X11 only: a resized window never shows its old picture in the top-left corner (F-53, asked for).
 
-Tk has none of its own, so on a maximize GNOME (XWayland too) showed the old picture in the new window's top-left
-corner for a frame or two (asked for: F-53). With this, the window manager asks before each resize; the window
-answers once the new size is laid out and drawn (`after_resize`), and until then the old picture stays as it was.
-
-Everything goes through Tk's own X connection (ctypes; Tk_Display is the first field of a Tk window), so the answer
-reaches the X server after the drawing it follows. Anywhere else (Windows, macOS, Wayland without XWayland, no
-XSync extension) `enable` does nothing and returns False.
+Until Tk lays out and draws a new size, the X server keeps the window's old picture, by default in its top-left
+corner: on a maximize it looked as if the window had been in the top left. Two things, both on Tk's own X
+connection (ctypes; Tk_Display is the first field of a Tk window, so each request follows Tk's drawing in order):
+- the page's X window gets centre gravity: the old picture is moved by half the change instead, so a window in the
+  middle of the screen keeps its picture where it was (App._slide_from_here then eases the contents from there),
+  and `after_resize` puts the page back in the window's corner once Tk has the new size;
+- frame sync (_NET_WM_SYNC_REQUEST): a window manager that asks first (mutter does only while an edge is dragged,
+  never for a maximize: its source, 46) shows a new size only once it is drawn.
+Anywhere else (Windows, macOS, no XSync extension, no libraries found) `enable` returns None and nothing changes.
 """
 import ctypes
 import ctypes.util
@@ -36,6 +38,8 @@ CW_BACK_PIXEL, CW_WIN_GRAVITY, CENTER_GRAVITY = 1 << 1, 1 << 5, 5
 
 
 class FrameSync:
+    """The window's part in it: made by `enable`."""
+
     def __init__(self, root, x11, xext, dpy, counter, wrapper):
         self.root, self.x11, self.xext, self.dpy, self.counter = root, x11, xext, dpy, counter
         self.wrapper = wrapper
@@ -64,6 +68,7 @@ class FrameSync:
             self._job = self.root.after_idle(self.answer)
 
     def answer(self):
+        """Drawn: tell the window manager (the counter at the value it asked for, its last + STEP)."""
         self._job = None
         if not self.asked:
             return
@@ -111,16 +116,13 @@ def enable(root):
         counter = xext.XSyncCreateCounter(dpy, _value(0))
         if not counter:
             return None
-        root.update_idletasks()
+        root.update_idletasks()                             # (the window made, not shown)
         wrapper = int(root.wm_frame(), 16)                  # (the window the window manager manages)
         data = (ctypes.c_ulong * 1)(counter)
         atom = x11.XInternAtom(dpy, b"_NET_WM_SYNC_REQUEST_COUNTER", 0)
         x11.XChangeProperty(dpy, wrapper, atom, 6, 32, 0, data, 1)     # (6: CARDINAL; 0: replace)
         x11.XChangeWindowAttributes.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p]
         x11.XMoveWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_int]
-        # Until Tk lays out a new size, the X server keeps the old picture: in the window's top-left corner, the
-        # way it is drawn by default (asked for: it looked as if the window had been there). Moved by half the
-        # change instead, a window in the middle of the screen keeps its picture where it was.
         attrs = _Attributes(win_gravity=CENTER_GRAVITY)
         x11.XChangeWindowAttributes(dpy, root.winfo_id(), CW_WIN_GRAVITY, ctypes.byref(attrs))
         sync = FrameSync(root, x11, xext, dpy, counter, wrapper)
