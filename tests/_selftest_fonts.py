@@ -14,7 +14,7 @@ assert F.pick_font_family(["segoe ui", "Quicksand"]) == "Quicksand"      # earli
 root = tk.Tk()
 fam = F.init_fonts(root)
 assert fam == F.family() == F.TEXT_FAMILY, fam                 # the bundled typefaces load (UI-73)
-assert F.display_family() == F.DISPLAY_FAMILY
+assert F._display == F.DISPLAY_FAMILY
 assert F.load_typefaces() is True
 assert len(F.typeface_files()) == 5                             # Young Serif + Atkinson Hyperlegible's four
 for role, (size, weight, face) in F.ROLES.items():

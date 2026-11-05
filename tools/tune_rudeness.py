@@ -829,7 +829,7 @@ class TuneWindow:
         self.points = {}                    # {part: [(round, test error)]}, ALL: train error
         self.avg = []                       # [(round, average test error)]
         self.tallies, self.guards, self.miss = {}, {}, []
-        self.best_round, self.guard_job, self.done, self.closed = None, None, False, False
+        self.best_round, self.done, self.closed = None, False, False
         bg = P["bg"]
         root.title("Tune the rules")
         root.configure(bg=bg)

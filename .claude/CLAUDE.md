@@ -20,8 +20,9 @@ top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
   on a headless Linux box they run under `xvfb-run` automatically.
 - Run pyflakes before finishing (re-exports in tierlist.py and a few test imports are known noise).
 - GitHub's test workflows (tests.yml, macos.yml) skip a push that changes only `.md` files, docs or images (asked for:
-  a waste of time there); anything touching code still runs them. Locally, for a text-only or removal change, run just
-  the tests that cover it.
+  a waste of time there); anything touching code still runs them. Pull requests get Linux + Windows (with a quick
+  check job: check_release static + pyflakes src tools); macOS runs on pushes to main, nightly and by hand only (F-51).
+  Locally, for a text-only or removal change, run just the tests that cover it.
 - Every new widget or behaviour gets a `tests/_selftest_*.py` (first line `import _paths`) and a line in
   `tests/run_tests.sh`.
 
@@ -195,7 +196,9 @@ F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the 
 slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
 text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
 still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
-FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
+F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
+for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11; CI quick check, macOS off pull
+requests). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
 (src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
 Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).

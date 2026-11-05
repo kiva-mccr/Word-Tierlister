@@ -3,7 +3,7 @@
 Anti-aliased rounded shapes for our canvases: soft-edged images over an invisible polygon (`SmoothCanvas.round_rect`), curves (`curve_image`) and small icons (`ICONS`).
 
 - **Uses:** `fonts`
-- **Used by:** `browser`, `fullscreen`, `tiercolours`, `ui_chart`, `widgets`
+- **Used by:** `app`, `browser`, `fullscreen`, `tiercolours`, `ui_chart`, `widgets`
 - **Tests:** `_selftest_filepicker`, `_selftest_smooth`, `_selftest_widgets`
 
 The module docstring has the details; this page is the map.
@@ -15,6 +15,7 @@ The module docstring has the details; this page is the map.
 - `coverage_mask`: For a polygon given relative to a w x h image: per row, runs of [count, fill coverage, outline coverage] (0..255).
 - `paint_with_shadow`: Like paint_mask, with a copy of the shape's fill in `shadow` colour, dx, dy pixels down-right, under it, all blended into `backdrop`: every pixel solid or clear.
 - `paint_mask`: RGBA rows from a coverage_mask, in these colours (either may be None).
+- `measuring`: `with smooth.measuring():` while only sizes matter (App._fit_size and _precheck_zoom try text sizes): the rounded shapes skip their painting, the most costly part of...
 - `SmoothCanvas`: A Canvas whose round_rect() shapes are drawn smooth, and whose text is repainted where its letters reach past their boxes (F-32: fonts.text_overhang).
   - methods: create_text, ink_box, round_rect, round_rect_coords, itemconfigure, itemcget, coords, move, delete, tag_raise, tag_lower, triangle_image, icon_image, ring_image, smooth_image
 - `arrow_image`: A small soft-edged triangle pointing up or down (w x h, see-through around it), filled with `fill` for `reveal` (0..1) of its height and `track` (a paler colour, like...
@@ -27,3 +28,5 @@ The module docstring has the details; this page is the map.
 - Text whose letters reach past the box Tk measures (fonts.text_overhang: Young Serif's j and f) gets an invisible guard rectangle over its whole reach, set again after every move, coords, text, font or state change and deleted with its text (F-32). Tk repaints only a text's box, so the rest stayed on screen; a shape made and dropped at once does not make Tk repaint (only one it has drawn), which is why the guard stays. Never give a guard the text's tags.
 - Never `create_polygon(..., smooth=True)` for rounded shapes, and never text symbols for icons.
 - Resize with `round_rect_coords`; a shape on the plain canvas colour is pre-blended, over other shapes its edge stays see-through.
+- Painting a mask is pure Python and was most of the time a window took to open (the cleanup review). `coverage_mask` works out only the pixels where something changes (the fill's edge, or the outline near) and adds the pixels between as one run; the nearest outline piece is worked out inline. `curve_rows` gives the pixels far from its line their colour at once. Each was checked byte for byte against the old code on random shapes: keep any change to them byte-identical (cached masks and tests compare pictures). Masks are kept for the whole program (`_MASKS`, shared by every window and a new look); photos per window.
+- While text sizes are tried (`App._fit_size`, `_precheck_zoom`) shapes are not painted: `with measuring():` remembers them and, with `paint=True`, paints each once at the size kept. Never paint a shape inside a loop that tries sizes.

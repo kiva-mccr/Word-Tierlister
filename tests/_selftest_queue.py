@@ -241,10 +241,22 @@ upper = big.db.execute("SELECT word FROM words WHERE tier=1 LIMIT 1").fetchone()
 lower = big.db.execute("SELECT word FROM words WHERE tier=2 LIMIT 1").fetchone()[0]
 assert big.record_comparison(lower, upper, "a", "boundary")["swapped"]        # (a boundary duel swaps tiers)
 assert big.tier_counts() == counted(big), (big.tier_counts(), counted(big))
-t = time.time()
-for _ in range(20):
-    big.place("w0000031", 3); big.stats()
-assert (time.time() - t) / 20 < 0.02, (time.time() - t) / 20              # a placement and the header's numbers
+def per_place():                            # a placement and the header's numbers, the best of 3 rounds of 20
+    best = None
+    for _ in range(3):
+        t = time.perf_counter()
+        for _ in range(20):
+            big.place("w0000031", 3); big.stats()
+        best = min(best or 1e9, (time.perf_counter() - t) / 20)
+    return best
+def per_commit():                           # what the disk alone costs a write (slow on GitHub's Windows machines)
+    t = time.perf_counter()
+    for _ in range(20):
+        big.set_meta("timing", "x")
+    return (time.perf_counter() - t) / 20
+place_s, commit_s = per_place(), per_commit()
+# (counting the tiers again cost 25 ms a placement: well over a write's own cost plus 15 ms on any machine)
+assert place_s < max(0.02, commit_s + 0.015), (place_s, commit_s)
 plan = " ".join(r[3] for r in big.db.execute("EXPLAIN QUERY PLAN SELECT * FROM words WHERE tier=2 AND rating>1500 "
                                              "ORDER BY rating LIMIT 80"))
 assert ("idx_words_tr" in plan or "idx_placed_order" in plan) and "TEMP B-TREE" not in plan, plan

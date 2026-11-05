@@ -19,7 +19,6 @@ The module docstring has the details; this page is the map.
 - `spec`: (size, weight, face) a role is built with: a display role's stand-in (Young Serif missing) is bold, as the words were before.
 - `scale_fonts`: Resize every role font to `factor` x its base size (1.0 = normal).
 - `family`: Name of the text font family chosen by init_fonts().
-- `display_family`: Name of the display font family (the words) chosen by init_fonts().
 - `font`: The shared Font object for a role.
 
 ## Rules and pitfalls (fixed before: keep them fixed)

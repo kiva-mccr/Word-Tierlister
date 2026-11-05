@@ -328,7 +328,9 @@ class RoundButton(SmoothCanvas):
         self.bind("<Motion>", lambda e: self._censor and self._hover and self.smear.hover(True, self._anim))
         self.bind("<ButtonPress-1>", self._on_press)
         self.bind("<ButtonRelease-1>", self._on_release)
-        self.bind("<Configure>", lambda e: self._draw())
+        # (drawn again only for a size it was not drawn for: a button shown at the size it asked for was drawn
+        # twice, once when made and again when laid out, the most costly part of opening a dialog)
+        self.bind("<Configure>", lambda e: (e.width, e.height) != self._drawn and self._draw())
 
     # ---- options ------------------------------------------------------------------------------
     def configure(self, cnf=None, **kw):
@@ -486,6 +488,7 @@ class RoundButton(SmoothCanvas):
         need_h = th + gap + hh + 2 * self._pady + DIP + 1 + lift
         super().configure(width=need_w, height=need_h)
         w, h = max(self.winfo_width(), need_w), max(self.winfo_height(), need_h)   # (1 x 1 before it is laid out)
+        self._drawn = (w, h)
         body_h = h - DIP - 1 - lift
         r = max(4, min(self._radius, body_h // 2))
         if lift:     # the shadow stays put; the body sits on it and rises off it on hover
@@ -976,6 +979,7 @@ class DropMenu:
     program closes it (watch_focus -> close_popups, UI-43); a click elsewhere in the window does too.
     """
     open_menus = set()                 # every DropMenu showing right now (close_popups closes them all)
+    PARK = -32000                      # X11: a closed menu waits mapped, out here, instead of hidden (park)
 
     def __init__(self, root, items, font=None):
         self.root, self.items, self.font = root, list(items), font
@@ -1062,6 +1066,31 @@ class DropMenu:
         win.bind("<Left>", lambda e: self.on_side and self.on_side(-1))
         win.bind("<Right>", lambda e: self.on_side and self.on_side(1))
         self._built = self._shape()
+        self._park(win)
+
+    def _parks(self):
+        """X11 only: a closed menu stays mapped far outside every screen instead of being hidden. A compositor (GNOME,
+        KDE, XWayland) keeps the picture of a mapped window, so opening it is a move and it shows at once, drawn;
+        a menu hidden and shown again was a new window each time, painted row by row (the user: menus slow to show).
+        Windows and macOS hide it as before (an off-screen window there can be shown on another monitor or
+        in the window switcher)."""
+        try:
+            return self.root.tk.call("tk", "windowingsystem") == "x11"
+        except tk.TclError:
+            return False
+
+    def _park(self, win):
+        if self._parks():
+            win.geometry(f"+{self.PARK}+{self.PARK}")
+            win.deiconify()
+
+    def parked(self):
+        """True while it waits closed but mapped off-screen (X11, _parks)."""
+        try:
+            return not self._shown and self.win is not None and self.win.winfo_viewable() and \
+                self.win.winfo_rootx() <= self.PARK // 2
+        except tk.TclError:
+            return False
 
     def _refresh_rows(self):
         """The kept rows take the current items (their functions) and check marks, none highlighted."""
@@ -1142,7 +1171,10 @@ class DropMenu:
         self._shown = False
         try:
             had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
-            self.win.withdraw()              # (kept for the next open)
+            if self._parks():                # (kept for the next open: mapped off-screen on X11, else hidden)
+                self.win.geometry(f"+{self.PARK}+{self.PARK}")
+            else:
+                self.win.withdraw()
             if had_focus:                    # forced: the window manager does not hand focus back from a
                 self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
         except (tk.TclError, KeyError):
@@ -2516,20 +2548,23 @@ class ShapeCard(SmoothCanvas):
         card = ShapeCard(parent, "exp", "Exponential", TIER_COLORS[1], on_pick=choose)
         card.set(spread=20000, chosen=True)       # redraw (live, as the spread is typed)
     """
-    def __init__(self, parent, shape, name, color, on_pick, font_=None, canvas_bg=None):
+    def __init__(self, parent, shape, name, color, on_pick, font_=None, canvas_bg=None, spread=None, chosen=False):
         super().__init__(parent, bd=0, highlightthickness=0, bg=canvas_bg or PALETTE["bg"], cursor="hand2")
         self.shape, self.name, self.color = shape, name, color
         self._font = font_ or font("body")
-        self.spread, self.chosen = 20000.0, False
+        self.spread, self.chosen = max(1.0, float(spread or 20000.0)), bool(chosen)
         self.bind("<Button-1>", lambda e: on_pick(shape))
         self._draw()
 
     def set(self, spread=None, chosen=None):
+        """Redraw for a new spread or choice; nothing to do when neither changed (the curve is costly to draw)."""
+        was = (self.spread, self.chosen)
         if spread is not None:
             self.spread = max(1.0, float(spread))
         if chosen is not None:
             self.chosen = bool(chosen)
-        self._draw()
+        if (self.spread, self.chosen) != was:
+            self._draw()
 
     def refresh(self):
         self._draw()

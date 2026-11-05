@@ -43,6 +43,7 @@ from review import RudeReview, describe_score, read_answers, read_review, score_
 from syncdialog import AutoSync, SyncDialog
 import standalone
 from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_factor, usable_area
+from smooth import measuring
 import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
@@ -825,12 +826,13 @@ class App:
             return
         kept = (self.font_scale, self.grow, self._applied_scale)
         try:
-            step = round(round(self.zoom * self.grow, 1) + self.ZOOM_STEP, 2)
-            while step <= self.ZOOM_MAX + 1e-9:
-                if not self._fits_at(step):
-                    self._remember_cap(step, key)
-                    break
-                step = round(step + self.ZOOM_STEP, 2)
+            with measuring():                  # (sizes only: the rounded shapes are painted once, below)
+                step = round(round(self.zoom * self.grow, 1) + self.ZOOM_STEP, 2)
+                while step <= self.ZOOM_MAX + 1e-9:
+                    if not self._fits_at(step):
+                        self._remember_cap(step, key)
+                        break
+                    step = round(step + self.ZOOM_STEP, 2)
         finally:
             self.font_scale, self.grow, self._applied_scale = kept
             scale_fonts(self._applied_scale)
@@ -1120,17 +1122,18 @@ class App:
                  for k in range(int((self.zoom - lowest) / self.FIT_STEP + 1e-6) + 1)]
         rescaled = False
         self.grow = 1.0                          # measured at the normal size; _apply_grow re-grows after
-        for size in [z for z in sizes if z <= start + 1e-9]:
-            self.font_scale = size / self.zoom
-            if self._applied_scale != size:      # re-scaling and redrawing everything is the slow part:
-                self._applied_scale = size       # skip it when the size is already right
-                rescaled = True
-                scale_fonts(size)
-                self._apply_wraps(area[2])
-                refresh_widgets(self.root)
-            cw, ch = self._worst_size()
-            if cw <= area[2] and ch <= area[3]:
-                break
+        with measuring(paint=True):              # (the rounded shapes are painted once, at the size kept)
+            for size in [z for z in sizes if z <= start + 1e-9]:
+                self.font_scale = size / self.zoom
+                if self._applied_scale != size:      # re-scaling and redrawing everything is the slow part:
+                    self._applied_scale = size       # skip it when the size is already right
+                    rescaled = True
+                    scale_fonts(size)
+                    self._apply_wraps(area[2])
+                    refresh_widgets(self.root)
+                cw, ch = self._worst_size()
+                if cw <= area[2] and ch <= area[3]:
+                    break
         self._fit_cache[key] = round(self.font_scale * self.zoom, 2)
         if rescaled:
             self._fit_big_text()               # the fonts changed even if the window size did not

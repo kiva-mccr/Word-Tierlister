@@ -123,7 +123,8 @@ class DealDialog:
         cards.grid(row=0, column=0, columnspan=4, sticky="w", pady=(10, 6))
         self.cards = {}
         for shape, name, colour in (("exp", "Exponential", TIER_COLORS[1]), ("gauss", "Gaussian", TIER_COLORS[4])):
-            self.cards[shape] = ShapeCard(cards, shape, name, colour, on_pick=self.shape_v.set)
+            self.cards[shape] = ShapeCard(cards, shape, name, colour, on_pick=self.shape_v.set,
+                                          spread=self._spread(), chosen=shape == self.shape_v.get())
             self.cards[shape].pack(side="left", padx=(0, 10))
         ttk.Label(sh, text="Spread:").grid(row=1, column=0, sticky="e", padx=(0, 8), pady=3)
         self.spread_e = ttk.Entry(sh, textvariable=self.spread_v, width=12)
@@ -149,18 +150,21 @@ class DealDialog:
         self._redraw()
         return f
 
+    def _spread(self):
+        """The spread typed in, or None while it is not a number above 0."""
+        try:
+            spread = float(self.spread_v.get().replace(",", ""))
+        except ValueError:
+            return None
+        return spread if spread > 0 else None
+
     def _redraw(self, *_):
         """The order buttons and shape cards follow the choices; the curves follow the spread as it is typed (an
         unreadable one keeps the last); the shuffle's settings show only for the shuffled order."""
         shuffled = self.order_v.get() == "shuffled"
         for key, b in self.order_btns.items():
             b.config(bg=PALETTE["select_bg"] if (key == "shuffled") == shuffled else PALETTE["surface"])
-        try:
-            spread = float(self.spread_v.get().replace(",", ""))
-        except ValueError:
-            spread = None
-        if spread is not None and spread <= 0:
-            spread = None
+        spread = self._spread()
         for shape, card in self.cards.items():
             card.set(spread=spread, chosen=shape == self.shape_v.get())
         if shuffled and not self.shuffle_f.winfo_manager():

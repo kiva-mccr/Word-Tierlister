@@ -283,7 +283,13 @@ try:
 except Exception as exc:
     print("no screenshots:", exc)
 
+bw.search_var.set("w0001")                                 # closed while the typing timer waits: the timer goes too
+assert bw._job
+pending = set(root.tk.splitlist(root.tk.call("after", "info")))
+assert bw._job in pending
+job = bw._job
 bw.close()
+assert job not in set(root.tk.splitlist(root.tk.call("after", "info")))
 
 # ---- empty states (UI-20): a friendly card instead of greyed-out cards
 app.mode_var.set("conflict"); app.on_mode_change(); pump(3)
