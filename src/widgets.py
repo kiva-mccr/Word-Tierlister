@@ -979,7 +979,6 @@ class DropMenu:
     program closes it (watch_focus -> close_popups, UI-43); a click elsewhere in the window does too.
     """
     open_menus = set()                 # every DropMenu showing right now (close_popups closes them all)
-    PARK = -32000                      # X11: a closed menu waits mapped, out here, instead of hidden (park)
 
     def __init__(self, root, items, font=None):
         self.root, self.items, self.font = root, list(items), font
@@ -1066,31 +1065,6 @@ class DropMenu:
         win.bind("<Left>", lambda e: self.on_side and self.on_side(-1))
         win.bind("<Right>", lambda e: self.on_side and self.on_side(1))
         self._built = self._shape()
-        self._park(win)
-
-    def _parks(self):
-        """X11 only: a closed menu stays mapped far outside every screen instead of being hidden. A compositor (GNOME,
-        KDE, XWayland) keeps the picture of a mapped window, so opening it is a move and it shows at once, drawn;
-        a menu hidden and shown again was a new window each time, painted row by row (the user: menus slow to show).
-        Windows and macOS hide it as before (an off-screen window there can be shown on another monitor or
-        in the window switcher)."""
-        try:
-            return self.root.tk.call("tk", "windowingsystem") == "x11"
-        except tk.TclError:
-            return False
-
-    def _park(self, win):
-        if self._parks():
-            win.geometry(f"+{self.PARK}+{self.PARK}")
-            win.deiconify()
-
-    def parked(self):
-        """True while it waits closed but mapped off-screen (X11, _parks)."""
-        try:
-            return not self._shown and self.win is not None and self.win.winfo_viewable() and \
-                self.win.winfo_rootx() <= self.PARK // 2
-        except tk.TclError:
-            return False
 
     def _refresh_rows(self):
         """The kept rows take the current items (their functions) and check marks, none highlighted."""
@@ -1171,10 +1145,7 @@ class DropMenu:
         self._shown = False
         try:
             had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
-            if self._parks():                # (kept for the next open: mapped off-screen on X11, else hidden)
-                self.win.geometry(f"+{self.PARK}+{self.PARK}")
-            else:
-                self.win.withdraw()
+            self.win.withdraw()              # (kept, hidden, for the next open; F-54: never parked off-screen)
             if had_focus:                    # forced: the window manager does not hand focus back from a
                 self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
         except (tk.TclError, KeyError):

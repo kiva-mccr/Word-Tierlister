@@ -2044,6 +2044,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
+# [x] F-54 Reported (Fedora, GNOME): sometimes a top menu did not open on a click; its button stayed lit after the
+#           pointer left, a second click unlit it and a third opened it. The program thought the menu open, but F-51's
+#           closed menu, parked mapped off-screen, was sometimes never moved back on screen by GNOME. Picked by the
+#           user: closed menus are hidden again everywhere (still built once and kept, F-49).
 # [x] F-53 Asked for after F-52: "could the objects stay in the same place they were before and then smoothly move
 #           to where they should be instead of snapping and it being like the window was in the top left". Shown as
 #           recordings first; then "it feels like it's doing a lil loop" (its first frames aimed at the old page) and
