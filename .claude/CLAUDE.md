@@ -33,7 +33,7 @@ pitfalls" are written by hand: add the rule or the bug there when you fix one. c
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
 constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> syncfiles -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> app -> tierlist.
+ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -199,6 +199,9 @@ text size per maximize, the stretch while maximizing is GNOME's own animation). 
 still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
 F-52 (still jarring: maximizing keeps the text size, the page only gets more room; UI-57's own zoom dropped; picked from
 recorded mock-ups after research: Tk has no frame sync).
+F-53 (asked for, approved from recordings: a maximize or restore slides the page's contents in a straight line from
+where the old picture was left, App._slide_from_here; src/framesync.py, X11 only: centre gravity, so the old picture is
+never left in the top-left corner, and frame sync for drags, the only resizes mutter syncs).
 F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
 for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11; CI quick check, macOS off pull
 requests). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
@@ -216,6 +219,8 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
 ## Known gaps
 - UI-73's private font loading works on Linux (fontconfig) and on the macOS runners (CoreText, T-18: it must run before
   the first Tk); the Windows loader (AddFontResourceEx, FR_PRIVATE) never ran; if it fails the old installed fonts stand in.
+- F-53's framesync (centre gravity, frame sync) was seen under openbox here, not recorded under GNOME (mutter on Xvfb
+  paints too rarely to record); Windows / macOS get the slide only, never seen there for a stale picture.
 - Z-1's monitor check (300 ms after the window stops moving) was only faked here (one Xvfb screen): confirm with
   two real monitors, and on Windows that a monitor with another scaling is noticed.
 - The pane's dip (F-23, F-27) is fixed (the user confirmed). A window that must grow for the pane can still show

@@ -42,6 +42,7 @@ from sources import UPDATED_FROM, SourceDialog
 from review import RudeReview, describe_score, read_answers, read_review, score_guesses
 from syncdialog import AutoSync, SyncDialog
 import standalone
+import framesync
 from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_factor, usable_area
 from smooth import measuring
 import theme
@@ -216,6 +217,11 @@ class App:
         self._veil_since = None   # while the window is still see-through after opening (open_window, _unveil)
         self._last_configure = 0.0
         self._size_now = None                 # (the window's size while a maximize re-fits: _on_root_configure)
+        self._last_size = None                # (the window's size before this <Configure>, and before maximizing:
+        self._normal_size = None              # _slide_from_here)
+        self._sliding = None                  # (the page's contents easing to their place, and the job that starts it)
+        self._slide_job = None
+        self.framesync = None                 # (framesync.enable, once the window is built)
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -255,6 +261,9 @@ class App:
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<ButtonPress-1>", self._click_background, add="+")
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.framesync = framesync.enable(root)    # (X11: no old picture in the corner of a new size, F-53)
+        if self.framesync:
+            self.framesync.set_background(PALETTE["bg"])
         self._update_options()
         self._layout_defs()
         self.refresh()
@@ -853,21 +862,74 @@ class App:
             self._fit_big_text()
         self._recenter()
 
+    SLIDE_MS = 250                 # (the page's contents easing to their place after a maximize: _slide_from_here)
+
+    def _slide_from_here(self):
+        """Maximized or restored (F-53, asked for: the contents snapped, as if the window had been in the top left):
+        the page's contents start where the old picture was left and ease in a straight line to their new place."""
+        self.anim.finish("slide")            # (a slide still running ends at its place first)
+        inner = self.place_inner if self.mode == "place" else self.pair_inner
+        if not inner.winfo_ismapped():
+            return
+        root = self.root
+        # It starts where the old picture was left while the window took its new size: moved by half the change
+        # (framesync's CENTER_GRAVITY; a window in the middle of the screen keeps its contents where they were).
+        # Its new size: maximized, the event's; restored, the size before maximizing (some window managers pass
+        # through the maximized width first).
+        was = self._last_size
+        if self._maximized:
+            self._normal_size = was
+            want = self._size_now
+        else:
+            want = self._normal_size
+        want = want or (root.winfo_width(), root.winfo_height())
+        dx, dy = ((want[0] - was[0]) // 2, (want[1] - was[1]) // 2) if was and self.framesync else (0, 0)
+        x0, y0 = inner.winfo_x() + dx, inner.winfo_y() + dy
+        self._sliding = inner
+        inner.place_configure(relx=0, x=x0, y=y0, anchor="nw")      # (drawn where it was first)
+
+        def done():
+            self._sliding = None
+            inner.place_configure(relx=0.5, x=0, anchor="n")
+            self._recenter()
+
+        def begin(tries=0):
+            # Eased in a straight line once the page has its new size (its first frames came before it, aimed at
+            # the old page, then turned: it looked like a loop). Both ends are fixed now.
+            self._slide_job = None
+            if self._sliding is not inner:
+                return
+            if ((root.winfo_width(), root.winfo_height()) != tuple(want)
+                    or inner.master.winfo_width() != want[0]) and tries < 15:
+                self._slide_job = root.after(16, begin, tries + 1)
+                return
+            tx, ty = (inner.master.winfo_width() - inner.winfo_reqwidth()) // 2, self._centred_top(inner)
+            self.anim.run("slide", self.SLIDE_MS, lambda t: inner.place_configure(
+                x=round(x0 + (tx - x0) * t), y=round(y0 + (ty - y0) * t)), done)
+        if self._slide_job:
+            root.after_cancel(self._slide_job)
+        self._slide_job = root.after_idle(begin)
+
+    def _centred_top(self, inner):
+        """Where `inner`'s top goes when centred (_recenter)."""
+        band = self.status_band.winfo_height()
+        ch = self.center.winfo_height()
+        free = (ch - inner.winfo_reqheight()) / 2
+        # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
+        # the content shook by a pixel while the definitions pane slid against its top)
+        top = int(free - max(0, min(band / 2, free)))
+        limit = ch - inner.winfo_reqheight() - self._toast_room()
+        if limit >= 0:                        # (centred low on a short page, it sat where messages show)
+            top = min(top, limit)
+        return top
+
     def _recenter(self):
         """Centre the content in the visible page (from the tab line down to the bottom bar), not just in the
         area under the status line: it moves up by half the status line's height, but only as far as the
         free space allows, so it never runs into the stats on a small window."""
-        band = self.status_band.winfo_height()
-        ch = self.center.winfo_height()
         for inner in (self.place_inner, self.pair_inner):
-            free = (ch - inner.winfo_reqheight()) / 2
-            # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
-            # the content shook by a pixel while the definitions pane slid against its top)
-            top = int(free - max(0, min(band / 2, free)))
-            limit = ch - inner.winfo_reqheight() - self._toast_room()
-            if limit >= 0:                        # (centred low on a short page, it sat where messages show)
-                top = min(top, limit)
-            inner.place_configure(y=top)
+            if inner is not self._sliding:      # (easing to its place after a maximize)
+                inner.place_configure(y=self._centred_top(inner))
 
     def _fit_big_text(self):
         """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
@@ -1171,6 +1233,9 @@ class App:
         if self._monitor_job:
             self.root.after_cancel(self._monitor_job)
         self._monitor_job = self.root.after(20 if veiled else self.MONITOR_PAUSE_MS, self._check_monitor)
+        if self.framesync:
+            self.framesync.after_resize()
+        self._last_size = (e.width, e.height)
 
     MONITOR_PAUSE_MS = 300
 
@@ -1186,6 +1251,8 @@ class App:
             return
         w, h = size or self._window_size()
         if flipped or self._maximized:       # (maximized or restored: the text keeps its size, the page its room)
+            if flipped:
+                self._slide_from_here()
             self._fit_big_text()
             self.root.after_idle(self._recenter)
             if fill:

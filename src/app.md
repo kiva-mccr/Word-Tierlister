@@ -2,9 +2,9 @@
 
 The main window (`App`): the header, the three placing views, the duel tabs, the chart and shelf, the definitions pane, the bottom bar, keys, zoom and window fitting, undo, and the background jobs it polls.
 
-- **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `fullscreen`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `smooth`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
+- **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `framesync`, `fullscreen`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `smooth`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_framesync`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- F-53: a maximize or restore slides the page's contents (`_slide_from_here`) from where the old picture was left (moved by half the change: framesync's centre gravity, X11 only) in a straight line to their place. The slide starts only once the window and the page have the new size (restored: the size before maximizing, `_normal_size`; some window managers pass through the maximized width first): its first frames aimed at the old page, then turned, and it looked like a loop. `_recenter` leaves a sliding `inner` alone.
 - `_apply_grow` does nothing once `reopening` is set: the shared fonts already belong to the new window and the old window's own are gone, so measuring its labels raised "named font font4 does not already exist" (seen on GitHub's Windows, a grow job left over from leaving full screen).
 - FS-2: full screen is `full_var` (meta full_screen); `_apply_full_screen` swaps the four menus for `menu_btn` and sets `StyledDialog.decorate` (the Back bar) only while it is on. Esc opens the pause menu through the keymap's "menu" action, so comparing's own Esc (stop) still wins. A new look picked in the pause menu opens it again on the same page (`take_over`). `sizing.is_maximized` counts full screen as maximized (its zoom).
 - `_follow_tuner` keeps reading the tuner's stdout after it says Done (its window stays open for Keep): a pipe nobody reads fills and freezes the tuner. The tuner's prints go through `say`, which never raises once the program has closed.

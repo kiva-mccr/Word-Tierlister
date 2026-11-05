@@ -2044,6 +2044,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
+# [x] F-53 Asked for after F-52: "could the objects stay in the same place they were before and then smoothly move
+#           to where they should be instead of snapping and it being like the window was in the top left". Shown as
+#           recordings first; then "it feels like it's doing a lil loop" (its first frames aimed at the old page) and
+#           "the old picture in the top left corner is what annoys me". A maximize or restore now slides the page's
+#           contents in a straight line from where the old picture was left to their place (App._slide_from_here,
+#           250 ms, once the page has its new size). src/framesync.py (X11): the page's X window has centre gravity,
+#           so until Tk draws the new size the old picture is moved by half the change, not left in the top-left
+#           corner (a window in the middle of the screen keeps it where it was), and frame sync is answered once a
+#           size is drawn (mutter 46 asks only while an edge is dragged: its source). Windows and macOS: the slide
+#           only. Approved ("That works!"; un-maximizing the same).
 # [x] F-52 Asked for after F-50 ("still jarring"; research: GTK / Qt keep the old picture until the new one is drawn
 #           (frame sync, which Tk lacks), and most programs give a bigger window more room, not bigger text). Chosen
 #           from four recorded mock-ups (now, a blank page colour, a fade, the text keeping its size): maximizing or
