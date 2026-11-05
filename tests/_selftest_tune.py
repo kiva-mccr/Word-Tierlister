@@ -117,6 +117,17 @@ tu2.stop()
 th.join(10)
 assert not th.is_alive() and tu2.round == 0
 
+# a few answers leave some parts empty: only the parts with words are tested and averaged (it once added None)
+few = {w: answers[w] for w in ("rude1", "med2", "word3")}
+d_few, s_few = T.prepare(entries, few, wn=None, log=lambda *a: None)
+assert len(T.tested_parts(d_few)) < T.PARTS
+events = queue.Queue()
+T.Tuning(d_few, s_few, events, rounds=2, workers=0).run()
+got = [events.get() for _ in range(events.qsize())]
+assert "error" not in [e[0] for e in got], [e for e in got if e[0] == "error"]
+assert all(set(e[2]) <= set(T.tested_parts(d_few)) | {T.ALL} for e in got if e[0] == "round")
+assert all(v is not None for e in got if e[0] == "round" for p, (_tr, v) in e[2].items() if p != T.ALL)
+
 # the guard: what the program's words would show
 g_now = T.guard(saved, start, data["base"])
 assert g_now["whole"] == 20 and g_now["sexual"] >= 20, g_now
