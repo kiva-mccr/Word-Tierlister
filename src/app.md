@@ -4,7 +4,7 @@ The main window (`App`): the header, the three placing views, the duel tabs, the
 
 - **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
+- **Tests:** `_selftest_backmenu`, `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -19,6 +19,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- FS-1: `header.can_return` is False while the window is being rebuilt in a new look (`reopening`): a dialog's menu must not come back on the window that is going; `take_over` copies `header.returning` and brings the menu back in the new window once it has settled.
 - A developer bubble that opens a window of its own (the review, the crash test) closes its dialog first: a StyledDialog holds the input (grab), so the review opened under it could not be clicked.
 - `_fit_big_text`: a duel text with a space shrinks to about a third and then wraps; one long word cannot wrap, so it shrinks as far as it must (7 pt at least): on a Mac pneumonoultramicroscopicsilicovolcanoconiosis ran past the window. The sizing test puts it in every duel.
 - A new look (`reopen_while_asked`) builds a second Tk while the old one is up; Tk's event loop runs while any main window is left, so `_drop_old` always destroys the old root, even when its `_shut` fails part-way (a window left over keeps the program from ending after the last one closes). The looks test traces each window built and closed. Tk's event loop forgets a quit asked before it starts: a new look asked again while the new window was still opening (`open_window` runs events; on a Mac long enough) waited for good, so `reopen_while_asked` builds again at once when `reopening` is already set and cancels the quit still waiting (`_quit_job`), or it would end the next window's loop.

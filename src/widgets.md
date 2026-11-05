@@ -4,7 +4,7 @@ The program's own widgets: buttons, the word card, tier pills, duel cards, the h
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`, `ui_style`
 - **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `review`, `shortcuts`, `sources`, `syncdialog`, `tiercolours`, `tune_rudeness`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_veil`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Tests:** `_selftest_backmenu`, `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_veil`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -29,7 +29,7 @@ The module docstring has the details; this page is the map.
 - `ChoiceButton`: A drop-down choice (UI-43): a soft button showing the current value and a little arrow; a click opens a DropMenu with the choices (a check mark on the current one).
   - methods: set_values, toggle, refresh
 - `HeaderMenus`: The row of header menu buttons (File, Edit, View, Settings) with their DropMenus (UI-10).
-  - methods: open_name, toggle, open_menu, close
+  - methods: open_name, toggle, open_menu, return_to, close
 - `Toast`: A small rounded message that fades in near the bottom of the page, stays a moment, and fades out (UI-11).
   - methods: cget, hurry, show, wiggle, fling, hide
 - `definition_tags`: The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of speech and examples in italics, senses indented.
@@ -61,12 +61,14 @@ The module docstring has the details; this page is the map.
 - `watch_focus`: When the whole program loses focus (another program came to the front), close its drop-downs (close_popups) and call on_lost().
 - `dialog_open`: True while one of our dialogs (StyledDialog: a question, a message, a settings page) is on screen.
 - `StyledDialog`: The shared dialog frame (UI-24): a bold headline, a muted line of explanation, a body to fill and a row of rounded buttons, the default one (what Enter presses) in...
-  - methods: dev_bubbles, text, button, make_default, clear_buttons, show, refit, rescale, close, alive
+  - methods: dev_bubbles, text, button, make_default, clear_buttons, show, refit, rescale, close, alive, when_closed
 - `refresh_widgets`: Re-measure every canvas widget of ours (RoundButton, WordCard, AnchorLadder, TabBar, the chart...) under `widget` after shared fonts were resized; a definitions...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
+
+- Back to the menu (FS-1): a HeaderMenus item that showed a StyledDialog (counted by `StyledDialog.shown`, the latest in `StyledDialog.last`) opens its menu again, the item lit, when that dialog's window is destroyed (`when_closed`, run after idle, never inside the destroy). Only StyledDialogs count, so Browse or a tick never bring the menu back. `return_to` gives up when another menu was opened meanwhile, another dialog is still open, or `can_return()` is False (App.reopen: the new window takes `returning` over in App.take_over).
 
 - `StyledDialog.show` veils the dialog while it draws (`ui_style.veil` / `unveil`, F-48): shown plainly it appeared as a heading alone, then labels, then the rest, over ~0.2 s.
 

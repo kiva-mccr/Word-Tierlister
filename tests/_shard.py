@@ -10,7 +10,7 @@ SECONDS = {
     "_selftest_ui": 96, "_selftest_zoom": 86, "_selftest_queue": 73, "_selftest_build": 63, "_selftest_smoke": 54,
     "_selftest_sources": 48, "_selftest_looks": 45, "_selftest_drawer": 34, "_selftest_startup": 34,
     "_selftest_dealing": 27, "_selftest_sizing": 26, "_selftest_ui2": 24, "_selftest_release": 21,
-    "_selftest_selfupdate": 19, "_selftest_nightly": 12, "_selftest_devtools": 4, "_selftest_freeze": 19, "_selftest_widgets2": 17, "_selftest_health": 17,
+    "_selftest_selfupdate": 19, "_selftest_nightly": 12, "_selftest_devtools": 4, "_selftest_freeze": 19, "_selftest_widgets2": 17, "_selftest_backmenu": 4, "_selftest_health": 17,
     "_selftest_lookup": 15, "_selftest_wikt": 15, "_selftest_shortcuts": 13, "_selftest_filepicker": 13,
     "_selftest_tabswitch": 13, "_selftest": 11, "_selftest_defsize": 11, "_selftest_rudeness": 6,
     "_selftest_obscene": 6, "_selftest_motion": 5, "_selftest_deps": 4, "_selftest_bundle": 4, "_selftest_tidy": 4,

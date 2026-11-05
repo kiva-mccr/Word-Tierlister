@@ -192,6 +192,8 @@ downloads removed; a Mac app keeps its save in Application Support and its sourc
 F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the main window until it settles). F-49 (reported:
 slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
 text size per maximize, the stretch while maximizing is GNOME's own animation).
+FS-1 (asked for: closing a dialog opened from a top menu brings that menu back, its item lit; HeaderMenus._run).
+FS-2 next (approved from mock-ups in full-screen/: full screen, a pause menu on Esc, pages with Back and a trail).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap

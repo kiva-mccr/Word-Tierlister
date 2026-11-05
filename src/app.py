@@ -452,6 +452,7 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
+        self.header.can_return = lambda: not self.reopening     # (FS-1: the new window brings the menu back)
         # the project's page, at the top right (UI-75: asked for); muted until hovered
         self.github = LinkButton(bar, "external", lambda: self.open_page(REPO_PAGE), note="The project on GitHub",
                                  bg=PALETTE["surface"], text="GitHub", font=font("body"))
@@ -2676,6 +2677,9 @@ class App:
         self.refresh()
         if old._browse_was_open:
             self.root.after(150, self.open_browser)
+        if old.header.returning is not None:     # (FS-1: a dialog from a menu brought the new look: its menu is back)
+            self.header.returning = old.header.returning
+            self.root.after(self.SETTLE_MS + 200, lambda: self.header.return_to(*old.header.returning))
         if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
             old.review.close()
             self.root.after(150, lambda: self.open_review(old.review_path))

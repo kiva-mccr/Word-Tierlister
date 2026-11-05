@@ -2035,6 +2035,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Now a maximize or restore re-fits at once (an idle job, not the 80 ms pause). Each menu (DropMenu) was
 #           built again at every open (40-190 ms there): now it is built once, kept hidden while closed, refreshed
 #           (check marks, the items' current functions) at each open, and made ahead while idle (HeaderMenus).
+# [x] FS-1 Asked for (the start of a full screen mode, FS-2): closing a pop-up opened from a top menu brings that menu
+#           back with the item it came from lit (Settings > Tier colours..., then Cancel: the Settings menu again).
+#           Any item that showed a StyledDialog does it (HeaderMenus._run, StyledDialog.when_closed); one that showed
+#           none (Undo, a tick, Browse: a window that stays) closes the menu as before. A dialog that rebuilds the window
+#           in a new look (Tier colours' Apply) brings it back in the new window (App.take_over). Picked from a mock-up.
+#           _selftest_backmenu.
+# [ ] FS-2 Asked for: a full screen mode (View > Full screen, F11; true full screen, no title bar), a little like a
+#           game: the top menus become one Menu button, Esc opens a pause menu over the page (Esc again closes it),
+#           its pages (File, Edit, View, Settings) slide in sideways with a Back button and a trail ("Menu > Settings >
+#           Tier colours"), arrows move a big highlight, Enter opens; dialogs keep their insides, bigger, with Back
+#           in place of Cancel. Picked from mock-ups (full-screen/ in the project files).
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data
