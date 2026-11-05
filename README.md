@@ -234,7 +234,8 @@ release's checksums before it is used; nightlies are built on your computer, so 
 
 **Developer tools**: tick Settings > Developer tools and a few small bubbles appear at the top right of some
 dialogs, for testing the program: in How words are dealt, reviewing the rude meanings by hand and scoring the rules;
-in Source & Updates, the nightly build, the log and a crash test (it shows the error dialog on purpose).
+in Source & Updates, the nightly build, the log and a crash test (it shows the error dialog on purpose). While one
+keeps running (making review words, tuning the rules) a ring round its dot shows how far it is; hover for the details.
 
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.

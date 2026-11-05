@@ -397,6 +397,14 @@ def evaluate(data, values, words_in):
     return error(t), t
 
 
+def say(line):
+    """A line for whoever started the tuner (the program's Tune the rules bubble reads them for its ring)."""
+    try:
+        print(line, flush=True)
+    except (OSError, ValueError, AttributeError):     # (no stdout, or nobody reading it any more)
+        pass
+
+
 def tune_round(data, values, steps, train, order):
     """One round of the search over `train`: every number a step up and down (in `order`), a change kept when it
     lowers the error, a step that helps neither way halved. Returns (values, steps, error on train)."""
@@ -669,6 +677,7 @@ class Tuning:
         self.data, self.saved, self.events, self.rounds, self.workers = data, saved, events, rounds, workers
         self.misses_path = misses_path
         self.start_values = dict(data["start"])
+        self.tested = tested_parts(data)    # (only parts with answered words: a few answers leave some empty)
         self.values = {part: dict(self.start_values) for part in range(PARTS + 1)}
         self.steps = {part: {p: STEP for p in self.start_values} for part in range(PARTS + 1)}
         self.history = []                   # [(round, {part: values}, average test error)]
@@ -691,9 +700,9 @@ class Tuning:
 
     def _run(self, ex):
         jobs = [ex.submit(_run_part, p, self.start_values, {k: 0.0 for k in self.start_values}, 0)
-                for p in range(PARTS)]
+                for p in self.tested]
         now = [j.result() for j in jobs]
-        avg = sum(r[4] for r in now) / PARTS
+        avg = sum(r[4] for r in now) / len(now)
         self.events.put(("round", 0, {r[0]: (r[3], r[4]) for r in now}, avg))
         self.events.put(("tally", "now", _sum_tallies(r[5] for r in now)))
         self.history.append((0, {p: dict(self.start_values) for p in range(PARTS + 1)}, avg))
@@ -704,16 +713,16 @@ class Tuning:
             self._go.wait()
             if self._stop:
                 return
-            jobs = [ex.submit(_run_part, p, self.values[p], self.steps[p], rnd) for p in range(PARTS + 1)]
+            jobs = [ex.submit(_run_part, p, self.values[p], self.steps[p], rnd) for p in self.tested + [ALL]]
             res = {r[0]: r for r in (j.result() for j in jobs)}
             for p, r in res.items():
                 self.values[p], self.steps[p] = r[1], r[2]
-            avg = sum(res[p][4] for p in range(PARTS)) / PARTS
+            avg = sum(res[p][4] for p in self.tested) / len(self.tested)
             self.round = rnd
             self.history.append((rnd, {p: dict(self.values[p]) for p in res}, avg))
             self.events.put(("round", rnd, {p: (res[p][3], res[p][4]) for p in res}, avg))
             if avg < self.best[1] - 1e-9:
-                self.best = (rnd, avg, dict(self.values[ALL]), _sum_tallies(res[p][5] for p in range(PARTS)))
+                self.best = (rnd, avg, dict(self.values[ALL]), _sum_tallies(res[p][5] for p in self.tested))
                 self.events.put(("best", rnd))
                 self.events.put(("tally", "best", self.best[3]))
                 self._misses(ex)
@@ -726,7 +735,7 @@ class Tuning:
         """The tested meanings the best round still gets wrong (each part's numbers at that round): an event, and
         all of them in the misses file."""
         scored = {}
-        for job in [ex.submit(_tested, part, self.values[part]) for part in range(PARTS)]:
+        for job in [ex.submit(_tested, part, self.values[part]) for part in self.tested]:
             scored.update(job.result()[1])
         found = misses(self.data, scored)
         self.events.put(("misses", found))
@@ -742,6 +751,11 @@ class Tuning:
     def stop(self):
         self._stop = True
         self._go.set()
+
+
+def tested_parts(data):
+    """The parts that hold at least one answered word (in order): only these are tested and averaged."""
+    return sorted({part_of(w) for w in data["answers"]})
 
 
 def _sum_tallies(tallies):
@@ -868,8 +882,16 @@ class TuneWindow:
         """The data is ready: start the search (a worker thread) and the guard's process."""
         self.data, self.saved = data, saved
         n = sum(len(p) for p, _w in data["answers"].values())
+        if not data["answers"]:
+            self.info.config(text="None of your answers matched a word in the entries: nothing to tune on yet.")
+            self.status.config(text="Nothing to tune")
+            self.pause_btn.set_enabled(False)
+            return
+        have = len(tested_parts(data))
         self.info.config(text=f"Your answers: {len(data['answers']):,} words, {n:,} meanings. Split into {PARTS} "
-                         f"parts: tuned on {PARTS - 1}, tested on the {PARTS}th, each part in turn.")
+                         f"parts: tuned on {PARTS - 1}, tested on the {PARTS}th, each part in turn."
+                         + (f" Only {have} of the {PARTS} parts have answered words yet, so the test is rough until "
+                            "you answer more." if have < PARTS else ""))
         self.tuning = Tuning(data, saved, self.events, self.rounds, workers,
                              os.path.join(os.path.dirname(os.path.abspath(self.answers_path)), MISSES_FILE))
         threading.Thread(target=self.tuning.run, daemon=True).start()
@@ -907,6 +929,7 @@ class TuneWindow:
                 self.points.setdefault(part, []).append((rnd, train if part == ALL else test))
             self.avg.append((rnd, avg))
             self.status.config(text=f"Round {rnd} of up to {self.rounds}" + ("  ·  paused" if self._paused() else ""))
+            say(f"Round {rnd} of up to {self.rounds}")
             self.draw()
         elif kind == "best":
             self.best_round = e[1]
@@ -922,6 +945,7 @@ class TuneWindow:
             self.guards[e[1]] = e[2]
             self.draw_guard()
         elif kind == "done":
+            say("Done")
             self.done = True
             self.pause_btn.set_enabled(False)
             self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: "

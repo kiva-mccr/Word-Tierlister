@@ -932,6 +932,18 @@ assert abs(bub["Log"].winfo_rooty() - head.winfo_rooty()) < head.winfo_height()
 bub["Log"].invoke(); bub["Nightly"].invoke()
 assert ran == ["log", "n"] and not lit.get() and not bub["Nightly"].lit()
 assert _W.StyledDialog(root, "t").dev_bubbles((("x", None),)) == {}             # (no headline: no bubbles)
+# a running tool's ring: lit while progress() says so, the ring drawn; the images are cached by their angles
+state = [None]
+run = _W.DevBubble(root, "Tune", lambda: ran.append("tune"), progress=lambda: state[0]); run.pack(); update(2)
+assert not run.running() and len(run.find_all())
+state[0] = (0.5, "Round 6 of up to 12"); update(8); time.sleep(0.15); update(8)
+assert run.running() and run.lit() and run.state[1] == "Round 6 of up to 12"
+run.invoke(); assert ran[-1] != "tune"                                           # (running: a click does nothing)
+assert run.ring_image(15, 2, 0, 90, "#8C72E0") is run.ring_image(15, 2, 0, 90, "#8C72E0")
+assert run.ring_image(15, 2, 0, 360, "#8C72E0").width() == 15
+state[0] = None; update(3); time.sleep(0.15); update(3)
+assert not run.running() and run._blink
+run.destroy(); update(2)                                                         # (its timers stop with it)
 dlg.close()
 root.destroy()
 print("WIDGETS2 OK")

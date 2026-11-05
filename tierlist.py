@@ -2102,6 +2102,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] DT-2 Reported: the nightly still showed to everyone whenever main was ahead (U-9's rule, left as it was). Now the
 #           nightly section shows only while Developer tools is on and the Nightly bubble is lit; otherwise main is
 #           not even asked for. _selftest_nightly, _selftest_devtools.
+# [x] DT-3 Asked for, picked from a mock-up: a running dev tool shows on its bubble. While Make review words or Tune
+#           the rules runs, its bubble is lit and a thin ring fills clockwise round the dot (the tuner's rounds: it
+#           prints "Round i of up to n" for the program to read), or a short arc goes round it (Make review words:
+#           it cannot tell how far); the hover note says how far (its step and last line); a click does nothing (one
+#           tuner at a time); at the end the whole ring blinks once. App.dev_progress, DevBubble(progress=),
+#           SmoothCanvas.ring_image, PALETTE["ring"]. Reduce motion: no spinning, no easing.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
