@@ -2,7 +2,7 @@
 
 The review of rude meanings by hand (OB-9, a developer option: `python tierlist.py --review-rude`): a window that goes through a review file word by word, the rules' guess filled in for each meaning, and saves the answers beside it on every change. The answers only test and tune the rules (`tools/measure_rudeness.py answers`); the program never reads them.
 
-- **Uses:** `constants`, `fonts`, `keymap`, `sizing`, `theme`, `ui_style`, `widgets`
+- **Uses:** `constants`, `fonts`, `keymap`, `obscene`, `sizing`, `theme`, `ui_style`, `widgets`
 - **Used by:** `app`, `tune_rudeness`
 - **Tests:** `_selftest_devtools`, `_selftest_review`
 
@@ -10,9 +10,9 @@ The module docstring has the details; this page is the map.
 
 ## Public API
 
-- `kind_colour`: A kind's pastel: a tier colour each (read now: they can be changed), Clean the plain neutral.
+- `kind_colour`: A kind's pastel: a tier colour each (read now: they can be changed), Not rude the plain neutral.
 - `read_review`: The review file's words, in order: [{"w", "why", "whole", "senses": [{"key", "pos", "labels", "gloss", "guess"}]}].
-- `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet.
+- `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet (or it was in the old six kinds: set aside, obscene.set_aside_old_answers).
 - `write_answers`: Write every answer to `path` (the review's words in its order, then any others: answers from an earlier, smaller review are kept), through a temporary file, so a...
 - `score_guesses`: The rules against the answers so far (the "Score the rules" bubble), from the review file alone: each answered meaning's answer against the rules' guess written into...
 - `describe_score`: score_guesses' numbers in words, for the message.

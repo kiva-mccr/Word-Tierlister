@@ -71,7 +71,7 @@ items = [{"w": "tail", "why": "", "whole": False, "senses": [
              {"key": "k1", "pos": "noun", "labels": [], "gloss": "The back end.", "guess": "clean"},
              {"key": "k2", "pos": "noun", "labels": ["slang"], "gloss": "Sex.", "guess": "sexual"}]},
          {"w": "idiot", "why": "", "whole": True, "senses": [
-             {"key": "k3", "pos": "noun", "labels": [], "gloss": "A fool.", "guess": "insult"}]}]
+             {"key": "k3", "pos": "noun", "labels": [], "gloss": "A fool.", "guess": "expletive"}]}]
 with open(path, "w", encoding="utf-8") as f:
     f.write("".join(json.dumps(it) + "\n" for it in items))
 rv = app.review_rude(d.dlg, ask=lambda start: path); pump(3)
@@ -83,14 +83,14 @@ d = app.edit_dealing(); pump(3)
 text = app.score_rules(d.dlg)
 assert "Nothing answered yet" in text and shown[-1][0] == "Score the rules"
 with open(review_answers_path(path), "w", encoding="utf-8") as f:
-    f.write(json.dumps({"w": "tail", "keys": ["k1", "k2"], "kinds": ["clean", "crude"], "whole": False}) + "\n")
-    f.write(json.dumps({"w": "idiot", "keys": ["k3"], "kinds": ["insult"], "whole": False}) + "\n")
+    f.write(json.dumps({"w": "tail", "keys": ["k1", "k2"], "kinds": ["clean", "slur"], "whole": False}) + "\n")
+    f.write(json.dumps({"w": "idiot", "keys": ["k3"], "kinds": ["expletive"], "whole": False}) + "\n")
 sc = R.score_guesses(R.read_review(path), R.read_answers(review_answers_path(path)))
 assert (sc["words"], sc["meanings"], sc["agree"], sc["whole"], sc["whole_agree"]) == (2, 3, 2, 2, 1), sc
-assert sc["kinds"]["insult"] == (1, 1, 1) and sc["kinds"]["sexual"] == (0, 1, 0) and sc["kinds"]["crude"] == (0, 0, 1)
+assert sc["kinds"]["expletive"] == (1, 1, 1) and sc["kinds"]["sexual"] == (0, 1, 0) and sc["kinds"]["slur"] == (0, 0, 1)
 text = app.score_rules(d.dlg)
-assert "2 words answered, 3 meanings" in text and "67%" in text and "Insult: 100% right, found 1 of 1" in text, text
-assert "Crude: - right, found 0 of 1" in text and "Clinical" not in text
+assert "2 words answered, 3 meanings" in text and "67%" in text and "Expletive: 100% right, found 1 of 1" in text, text
+assert "Slur: - right, found 0 of 1" in text and "Not rude" not in text
 d.dlg.close()
 
 # ---- Make review words and Tune the rules: the tools in the source folder (OB-10, OB-11) ----------------------------

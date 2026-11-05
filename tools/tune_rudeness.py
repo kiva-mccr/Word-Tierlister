@@ -14,8 +14,9 @@ How it works:
   * a round tries every number a step up and a step down (then JUMP steps), keeping a change when it lowers the
     error on the words tuned on (coordinate descent); a step that helps no way halves, so the search settles;
   * the error is 100% minus the average F1 of the kinds (Clean and each rude kind, meaning by meaning, as
-    rudeness.sense_kind gives them) and of smearing the whole word (rudeness.results): Clinical counts as much as
-    Clean, though most meanings are clean;
+    rudeness.sense_kind gives them) and of smearing the whole word (rudeness.results): Slur counts as much as
+    Clean, though most meanings are clean; the numbers tuned are the rules' own (obscene.RULE_KINDS), the kinds
+    answered the three shown (rudeness.fold);
   * the guard scores every word the program scores (rudeness.score_saved on the words with a sign of rudeness) with
     the rules now and with the best numbers: how many words each kind and smearing whole would cover; a kind more
     than doubling is marked, and Keep asks first;
@@ -68,10 +69,10 @@ FACTOR_RANGE = (0.25, 4.0)
 
 
 def _table_kinds(name):
-    """The kinds a table gives points to, in RUDE_KINDS' order."""
+    """The kinds a table gives points to, in RULE_KINDS' order (the rules' own kinds, before rudeness.fold)."""
     tables = _tables(name)
     have = {k for t in tables for k in t}
-    return [k for k in obscene.RUDE_KINDS if k in have]
+    return [k for k in obscene.RULE_KINDS if k in have]
 
 
 def _tables(name):
@@ -879,9 +880,7 @@ PART_LINE = "#A6D9BD"           # (the chart's own colours: a part's faint line,
 AVERAGE_LINE = "#5FBF8C"
 SHOWN_CHANGES = 6
 SHOWN_MISSES = 3
-GUARD_NAMES = (("whole", "Smeared whole"),) + tuple((k, n) for k, n in (
-    ("clinical", "Clinical"), ("crude", "Crude"), ("swear", "Swear word"), ("insult", "Insult"), ("sexual", "Sexual"),
-    ("slur", "Slur")))
+GUARD_NAMES = (("whole", "Smeared whole"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))
 
 
 def doubled(now, best):

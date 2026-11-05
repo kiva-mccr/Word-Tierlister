@@ -79,15 +79,12 @@ KIND_NOTES = {
     "obscene": ("Obscene words: words whose meanings are all rude (vulgar, offensive or derogatory words and "
                 "slurs). Tick it to choose which kinds of rude meaning come up."),
     # the kinds of rude meaning (obscene.RUDE_KINDS), under Obscene words (OB-5)
-    "clinical": "Clinical: the proper words for the body, sex and its waste (penis, urinate).",
-    "crude": "Crude: rude words for the body and its waste.",
-    "swear": "Swear words: words said to curse or swear.",
-    "insult": "Insults: words that call a person stupid or nasty (idiot, jerk, moron).",
-    "sexual": "Sexual: slang for sex and the parts of the body it uses.",
-    "slur": "Slurs: offensive words for a group of people.",
+    "expletive": "Expletives: strong language, swearing, harsh insults and crude words (shit, bastard, piss).",
+    "sexual": "Sexual: sex acts and slang for sex and the parts of the body it uses.",
+    "slur": "Slurs: words aimed at a group of people that could make someone feel bad.",
 }
-RUDE_NAMES = {"clinical": "clinical", "crude": "crude", "swear": "swear word", "insult": "insult", "sexual": "sexual",
-              "slur": "slur"}      # one word's kind, faintly above it on the card (after its parts of speech)
+# one word's kind, faintly above it on the card (after its parts of speech)
+RUDE_NAMES = {"expletive": "expletive", "sexual": "sexual", "slur": "slur"}
 POS_NAMES = (("noun", 1), ("verb", 2), ("adjective", 4), ("adverb", 8))   # on the card, in this order ("other" is
                                                                            # too vague to show: pronouns, numbers...)
 
@@ -101,8 +98,7 @@ def card_label(kinds, rude=None, compound=False):
     return " · ".join(parts + (["compound word"] if compound else []) + ([rude] if rude else []))
 
 
-RUDE_LABELS = {"clinical": "Clinical", "crude": "Crude", "swear": "Swear words", "insult": "Insults",
-               "sexual": "Sexual", "slur": "Slurs"}
+RUDE_LABELS = {"expletive": "Expletives", "sexual": "Sexual", "slur": "Slurs"}
 # what is said when censoring is turned on (asked for: it is not fully accurate): a line under the tick box in How
 # words are dealt, and the same words in a toast when it is turned on from View (U-2, asked for: one short text)
 CENSOR_CAVEAT_LINE = "picked out by rules: it may miss some, or smear an ordinary word"

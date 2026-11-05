@@ -48,15 +48,15 @@ assert "no sign at all" not in why
 why = M.next_reasons("zorby", words["zorby"], scored["zorby"], topics, lean)
 assert why["a candidate signal"][0] == 'a candidate signal: "zorbish" in the meaning'
 one = [rudeness.expand(sense("Something."))]
-why = M.next_reasons("x", one, [{"sexual": 3.2, "insult": 2.4}], {}, {})
-assert why["signals disagree"][:2] == ("signals disagree: sexual 3.2, insult 2.4", 0) and "near the line" in why
-why = M.next_reasons("x", one, [{"sexual": 3.2, "insult": 1.0}], {}, {})
+why = M.next_reasons("x", one, [{"sexual": 3.2, "expletive": 2.4}], {}, {})
+assert why["signals disagree"][:2] == ("signals disagree: sexual 3.2, expletive 2.4", 0) and "near the line" in why
+why = M.next_reasons("x", one, [{"sexual": 3.2, "expletive": 1.0}], {}, {})
 assert "signals disagree" not in why and why["near the line"][:2] == ("near the line: 3.2 points, 3 counts", 0)
-assert M.next_reasons("x", one, [{"crude": 5.0}], {}, {}) == {}            # (sure of it: nothing to learn)
+assert M.next_reasons("x", one, [{"expletive": 5.0}], {}, {}) == {}            # (sure of it: nothing to learn)
 why = M.next_reasons("table", words["table"], scored["table"], topics, lean)
 assert why == {"no sign at all": ("no sign at all (to count what the rules miss)", None)}, why
 assert "no sign at all" not in M.next_reasons("plain1", words["plain1"], scored["plain1"], topics, lean)  # (rare)
-assert "a candidate signal" not in M.next_reasons("x", words["rude1"], [{"insult": 4.0}], topics, lean)  # (found rude)
+assert "a candidate signal" not in M.next_reasons("x", words["rude1"], [{"expletive": 4.0}], topics, lean)  # (found rude)
 
 assert M.next_reasons("of", one, [{}], {}, {}) == {} == M.next_reasons("i", one, [{}], {}, {}) and M.next_reasons("an-", one, [{}], {}, {}) == {}   # (common,
 assert "no sign at all" not in M.next_reasons("one-way", one, [{}], {}, {})    # an affix, or a compound: one-part
@@ -91,8 +91,8 @@ done = [item("a", "near the line: 2.6 points, 3 counts", [("A zibbly fellow.", [
         item("b", "near the line: 3.1 points, 3 counts", [("A zibbly sort.", [], "clean")]),
         item("c", "no sign at all (to count what the rules miss)", [("A pot.", [], "clean")]),
         item("d", "the rules say sexual", [("Sex.", ["vulgar"], "sexual")])]        # (the first sample: no group)
-said = {"a": {"kinds": {"A zibbly fellow.": "insult"}, "whole": False},
-        "b": {"kinds": {"A zibbly sort.": "insult"}, "whole": False},
+said = {"a": {"kinds": {"A zibbly fellow.": "expletive"}, "whole": False},
+        "b": {"kinds": {"A zibbly sort.": "expletive"}, "whole": False},
         "c": {"kinds": {"A pot.": "clean"}, "whole": False}, "d": {"kinds": {"Sex.": "sexual"}, "whole": True}}
 assert M.group_of(done[0]["why"]) == "near the line" and M.group_of(done[3]["why"]) is None
 assert M.group_of("near the line for the whole word: 2.8 points, 3.5 smears it") == "near the line"
@@ -100,7 +100,7 @@ shares = M.group_shares(done, said)
 assert abs(sum(shares.values()) - 1) < 1e-9 and set(shares) == set(dict(M.NEXT_SHARES))
 base = dict(M.NEXT_SHARES)
 assert shares["near the line"] / base["near the line"] > shares["no sign at all"] / base["no sign at all"]   # (3/4
-assert abs(shares["no sign at all"] / shares["a candidate signal"] - (1 / 3) / (1 / 2) * 0.15 / 0.25) < 1e-9  # vs 1/3)
+assert abs(shares["no sign at all"] / shares["a candidate signal"] - (1 / 3) / (1 / 2) * 0.03 / 0.28) < 1e-9  # vs 1/3)
 signs = M.miss_signs(done, said)
 assert signs == {"zibbly": 1.0}, signs                         # (in two misses; "slang" and "fellow" in one only)
 zib = [rudeness.expand(sense("A box.")), rudeness.expand(sense("A zibbly person."))]

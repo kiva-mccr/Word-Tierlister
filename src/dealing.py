@@ -7,10 +7,10 @@ obscene ones. The same pieces make the three-step page shown on the first start.
 Order is "Most common first" (strictly by frequency) or "Mostly common, a little shuffled" with its shape cards
 (UI-41), spread, seed and compound strength. Which words: a tick box per kind (constants.KINDS) and one for
 obscene words (all of their meanings rude), with how many words each holds; ticking it opens a tick box per kind
-of rude meaning (OB-5: obscene.RUDE_KINDS, Clinical, Crude, Swear words and Insults ticked to start with). Unticked
+of rude meaning (OB-12: obscene.RUDE_KINDS, Expletives, Sexual and Slurs; Expletives ticked to start with). Unticked
 ones are left out of the queue, never deleted (Store.set_deal). Beside each kind is a small smear button (SmearToggle):
-smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7;
-Clinical and Insult too, plain to start with: OB-8). The kinds open while Obscene words or Censor obscene words is ticked.
+smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7; all
+three smeared to start with). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once. With Settings > Developer tools ticked, four bubbles at the top right: "Review rude meanings" (OB-9's
 review window, App.review_rude), "Score the rules" (the answers so far against the rules' guesses, App.score_rules),
@@ -204,7 +204,7 @@ class DealDialog:
             tick.grid(row=r, column=c, sticky="w", padx=(0, 18))
             count = ttk.Label(box, text=f"{counts[k]:,}", foreground=PALETTE["muted"])
             count.grid(row=r, column=c + 1, sticky="e", padx=(0, 8))
-            if k in self.smear_vs:           # (a censor button beside each kind; asked for: OB-7, OB-8)
+            if k in self.smear_vs:           # (a censor button beside each kind; asked for: OB-7)
                 self.smear_btns[k] = SmearToggle(box, self.smear_vs[k])      # (no hover note: asked for)
                 self.smear_btns[k].grid(row=r, column=c + 2, sticky="w", padx=(0, 32 if self.first else 20))
             note = KIND_NOTES[k]             # (only what the kind holds: asked for)
@@ -217,7 +217,8 @@ class DealDialog:
         for v in self.rude_vs.values():
             v.trace_add("write", lambda *_: self._mark_obscene())
         self._show_rude(refit=False)
-        note = "Point at a kind to see what it holds. Untick the rest to sort only obscene words."
+        note = ("Point at a kind to see what it holds. Medical words, mild name-calling and toilet words count as"
+                " ordinary words.")                                      # (OB-12, from the mock-up)
         reading = self.app.rude_read_note()
         if reading:
             note += (f" The rude meanings are being read from Wiktionary in the background ({reading}); until then"

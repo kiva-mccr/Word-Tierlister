@@ -36,20 +36,15 @@ assert [m["g"] for m in bitch] == ["A female dog.", "A malicious woman."] and bi
 
 # ---- scoring them: the kinds of each word's meanings, smeared whole or meaning by meaning ------------------
 found = find_rude(["bitch", "bitches", "penis", "bonk", "box", "shit"], kept, log=lambda *_: None)
-assert found["penis"][:4] == (B["clean"], False, [["The male organ.", "clinical"]], None), found["penis"]   # (only
-assert found["penis"][4] == B["clinical"]          # Clinical: an ordinary word, smeared whole only while Clinical is
-                                                   # censored too, OB-8; its meaning, kept with its kind, the same)
+assert found["penis"] == (B["clean"], False, [], None), found["penis"]      # the proper word: ordinary (OB-12)
 assert found["bonk"][0] == B["sexual"] and found["bonk"][1], found["bonk"]
-if rudeness.wordnet():                    # (WordNet knows "a malicious woman" for an insult: an ordinary word)
-    assert found["bitch"][:4] == (B["clean"], False, [["A malicious woman.", "insult"]], None), found["bitch"]   # (OB-8:
-                                                                    # its insult meaning kept, smeared only while Insult is)
-else:                                     # (without it the "vulgar" label outweighs "derogatory", which alone is only
-    assert found["bitch"][:4] == (B["clean"], False, [["A malicious woman.", "swear"]], None), found["bitch"]   # a suspect)
+assert found["bitch"] == (B["clean"], False, [["A malicious woman.", "expletive"]], None), found["bitch"]   # (vulgar:
+                                                                    # a harsh insult, an expletive, OB-12)
 assert found["bitches"][1] == found["bitch"][1]                                      # a form is smeared as its word
 assert "shit" not in found and "box" not in found                                    # (no meanings kept: clean)
 # without kept meanings (a save that has not read them yet) the hand-picked list and the earlier flags stand in
-assert find_rude(["box", "shit"], None, old=["box"]) == {"box": (B["swear"], True, [], "swear"),
-                                                          "shit": (B["swear"], True, [], "swear")}
+assert find_rude(["box", "shit"], None, old=["box"]) == {"box": (B["expletive"], True, [], "expletive"),
+                                                          "shit": (B["expletive"], True, [], "expletive")}
 
 # ---- the hand-picked list --------------------------------------------------------
 for w in ("fuck", "motherfuckers", "mother-fucker", "bullshit", "dipshit", "bitch", "bitchy", "bitches", "bitch's",
