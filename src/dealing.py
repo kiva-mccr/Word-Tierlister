@@ -92,7 +92,7 @@ class DealDialog:
                                                 ("Review rude meanings", lambda: app.review_rude(dlg)),
                                                 ("Score the rules", lambda: app.score_rules(dlg)),
                                                 ("Tune the rules", lambda: app.tune_rules(dlg), None,
-                                                 lambda: app.dev_progress("tune"))))
+                                                 lambda: app.dev_progress("tune"), app.show_tuner)))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------

@@ -136,6 +136,8 @@ def _follow_tuner(proc, job):
                 job["note"] = f"Round {m.group(1)} of up to {m.group(2)}"
             elif line.startswith("Done"):
                 job["over"] = True
+            elif line.startswith("Hidden"):       # (its close box while tuning: only hidden; show_tuner brings it back)
+                job["hidden"] = True
     except (OSError, ValueError):
         pass
     job["over"] = True
@@ -481,7 +483,6 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
-        self.header.can_return = lambda: not self.reopening     # (FS-1: the new window brings the menu back)
         # full screen (FS-2): the four menus become one Menu button, which opens the pause menu
         self.menu_btn = RoundButton(bar, "Menu", self.open_pause_menu, font=font("body"), padx=12, pady=5, radius=10,
                                     animator=self.anim, canvas_bg=PALETTE["surface"], flat=True)
@@ -1216,6 +1217,8 @@ class App:
         as the tallest view still fits it (Z-1), then fill the definitions pane. The minimum size stays the one
         measured at the normal size, so the window can always shrink back. `size`: the window's, just asked for."""
         self._grow_job = None
+        if self.reopening:                   # (the window is going: the shared fonts are the new window's now, and
+            return                           # its labels' old ones are gone, seen on Windows: "font4 does not exist")
         if not self._ref_size or self._follow_maximize():
             return
         w, h = size or self._window_size()
@@ -2353,10 +2356,27 @@ class App:
         job = getattr(self, "_tuner_job", None)
         if job is None:
             return None
-        if job.get("over") or job["proc"].poll() is not None:
+        if job["proc"].poll() is not None:
             self._tuner_job = None
             return None
-        return job.get("frac") or 0.0, job.get("note") or "The tuner is reading Wiktionary's entries"
+        if job.get("over"):                       # (done: its window may stay open for Keep; show_tuner still reaches it)
+            return None
+        note = job.get("note") or "The tuner is reading Wiktionary's entries"
+        return job.get("frac") or 0.0, note + ("  ·  click to bring its window back" if job.get("hidden") else "")
+
+    def show_tuner(self):
+        """Bring the tuner's window back (asked for: closed while it tunes, a click on its bubble opens it again; once
+        done, the next click shows the open window rather than starting another). True if a tuner was there."""
+        job = getattr(self, "_tuner_job", None)
+        if job is None or job["proc"].poll() is not None:
+            return False
+        try:
+            job["proc"].stdin.write("show\n")
+            job["proc"].stdin.flush()
+        except (OSError, ValueError, AttributeError):
+            return False
+        job["hidden"] = False
+        return True
 
     def make_review_words(self, dlg=None, ask=None, run=None):
         """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
@@ -2436,13 +2456,14 @@ class App:
             show_message("Tune the rules", "Wiktionary's entries are missing", "Make review words reads them "
                          "first (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
             return None
-        job = getattr(self, "_tuner_job", None)
-        if job is not None and not job.get("over") and job["proc"].poll() is None:
-            self.flash("The tuner is open already", kind="info")
+        if self.show_tuner():                     # (one tuner at a time: the open one is brought forward)
+            if dlg is not None:
+                dlg.close()
             return None
-        cmd = [sys.executable, tool, "--review", path, "--entries", entries]
+        cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"]
         proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
-                                                     stdout=subprocess.PIPE, text=True, bufsize=1)))(cmd)
+                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                                     bufsize=1)))(cmd)
         if getattr(proc, "stdout", None) is not None:      # (its rounds fill the bubble's ring: _follow_tuner)
             self._tuner_job = {"proc": proc, "frac": 0.0, "note": None}
             threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()
@@ -2854,9 +2875,6 @@ class App:
         if old.pause is not None and old.pause.is_open():     # (FS-2: a switch in the pause menu brought a new look)
             path = old.pause.trail()
             self.root.after(self.SETTLE_MS + 200, lambda: self.open_pause_menu(path))
-        if old.header.returning is not None:     # (FS-1: a dialog from a menu brought the new look: its menu is back)
-            self.header.returning = old.header.returning
-            self.root.after(self.SETTLE_MS + 200, lambda: self.header.return_to(*old.header.returning))
         if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
             old.review.close()
             self.root.after(150, lambda: self.open_review(old.review_path))

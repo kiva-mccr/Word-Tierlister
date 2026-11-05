@@ -2042,12 +2042,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Now a maximize or restore re-fits at once (an idle job, not the 80 ms pause). Each menu (DropMenu) was
 #           built again at every open (40-190 ms there): now it is built once, kept hidden while closed, refreshed
 #           (check marks, the items' current functions) at each open, and made ahead while idle (HeaderMenus).
-# [x] FS-1 Asked for (the start of a full screen mode, FS-2): closing a pop-up opened from a top menu brings that menu
-#           back with the item it came from lit (Settings > Tier colours..., then Cancel: the Settings menu again).
-#           Any item that showed a StyledDialog does it (HeaderMenus._run, StyledDialog.when_closed); one that showed
-#           none (Undo, a tick, Browse: a window that stays) closes the menu as before. A dialog that rebuilds the window
-#           in a new look (Tier colours' Apply) brings it back in the new window (App.take_over). Picked from a mock-up.
-#           _selftest_backmenu.
+# [-] FS-1 Dropped (the user, after it was built: "I do not mean the dropdowns"): closing a pop-up opened from a top
+#           menu reopened that drop-down with the item lit. The going back the user wanted is full screen's: a dialog
+#           opened from the pause menu goes back to its page (FS-2). The drop-downs close after an item as before.
 # [x] FS-2 Asked for: a full screen mode, a little like a game. View > Full screen or F11 (true full screen, no title
 #           bar; kept for the save; counts as maximized for its zoom). The four top menus become one Menu button, and
 #           Esc opens the pause menu over the page (src/fullscreen.py: a card on a lilac backdrop with faint tier-
@@ -2115,6 +2112,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           it cannot tell how far); the hover note says how far (its step and last line); a click does nothing (one
 #           tuner at a time); at the end the whole ring blinks once. App.dev_progress, DevBubble(progress=),
 #           SmoothCanvas.ring_image, PALETTE["ring"]. Reduce motion: no spinning, no easing.
+# [x] DT-4 Asked for: the tuner's window can be closed while it tunes and a click on the bubble opens it again. Started
+#           from the bubble (--from-program), the close box only hides it while it tunes (Discard stops it); a "show"
+#           line on its stdin brings it back (App.show_tuner: a click on the running bubble, DevBubble(on_running=), or
+#           on the plain one once done while its window is still open); done while hidden, it pops back up by itself
+#           (the user's pick); hidden when the program closes, it stops. The hover note says it can be brought back.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

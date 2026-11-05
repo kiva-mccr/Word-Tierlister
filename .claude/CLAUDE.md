@@ -166,7 +166,8 @@ dialog's top right, StyledDialog.dev_bubbles / widgets.DevBubble: How words are 
 Score the rules, Source & Updates has Nightly (a switch), Log and Crash test; a new dev tool gets a bubble there, the
 command kept). DT-2 (reported: the nightly showed to everyone while main was ahead; now only with Developer tools on and
 the Nightly bubble lit). DT-3 (a running dev tool's bubble: a ring round the dot fills, or an arc spins with no
-fraction; App.dev_progress feeds it; picked from a mock-up).
+fraction; App.dev_progress feeds it; picked from a mock-up). DT-4 (the tuner's close box hides it while it tunes; a
+click on its bubble brings it back, App.show_tuner over its stdin; done while hidden, it pops back up).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
@@ -195,7 +196,7 @@ slow top menus, built at every open: now built once and kept; a maximize re-fits
 text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
 still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
 text size per maximize, the stretch while maximizing is GNOME's own animation).
-FS-1 (asked for: closing a dialog opened from a top menu brings that menu back, its item lit; HeaderMenus._run).
+FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
 (src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
 Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).

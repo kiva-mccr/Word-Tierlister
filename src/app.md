@@ -4,7 +4,7 @@ The main window (`App`): the header, the three placing views, the duel tabs, the
 
 - **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `errors`, `filepicker`, `fonts`, `fullscreen`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
-- **Tests:** `_selftest_backmenu`, `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
+- **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -19,8 +19,8 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- `_apply_grow` does nothing once `reopening` is set: the shared fonts already belong to the new window and the old window's own are gone, so measuring its labels raised "named font font4 does not already exist" (seen on GitHub's Windows, a grow job left over from leaving full screen).
 - FS-2: full screen is `full_var` (meta full_screen); `_apply_full_screen` swaps the four menus for `menu_btn` and sets `StyledDialog.decorate` (the Back bar) only while it is on. Esc opens the pause menu through the keymap's "menu" action, so comparing's own Esc (stop) still wins. A new look picked in the pause menu opens it again on the same page (`take_over`). `sizing.is_maximized` counts full screen as maximized (its zoom).
-- FS-1: `header.can_return` is False while the window is being rebuilt in a new look (`reopening`): a dialog's menu must not come back on the window that is going; `take_over` copies `header.returning` and brings the menu back in the new window once it has settled.
   - methods: open_window, set_zoom, zoom_step, toggle_defs, toggle_motion, toggle_censor, censor_shown, censor_note, toggle_dev, toggle_auto, toast, flash, refresh, after_external_change, modes_with_work, apply_keys, place_word, skip_word, start_compare, cmp_answer, cmp_back, pair_answer, skip_pair, start_focus, clear_focus, start_lookup, lookup_word, on_mode_change, undo, shown, on_key_release, on_key, next_tab, get_def, wiktionary_link, open_wiktionary, open_page, look_up, rude_read_note, anchors, note_anchor_changes, open_browser, open_review, review_file, pick_review_file, review_rude, score_rules, dev_progress, make_review_words, tune_rules, open_log, crash_test, edit_anchors, parse_queue_settings, queue_unchanged, add_launcher, sync_devices, source_updates, edit_tier_colours, toggle_dark, edit_keys, edit_dealing, show_save_location, describe_merge, merge_file, import_progress, offer_merge, export, take_over, reopen, on_close
 
 ## Rules and pitfalls (fixed before: keep them fixed)

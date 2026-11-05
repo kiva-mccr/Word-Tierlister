@@ -173,16 +173,30 @@ assert results == {"full": 1, "trail": ["Menu", "View"], "bg": theme.DARK["bg"]}
 
 # ---- PauseMenu on its own: gaps are skipped by the arrows, Back on the first page closes it
 r = new_root(); r.geometry("600x500"); r.deiconify()
+
+
+def menu_key(menu, ks):
+    """A key straight to the menu: a second root made now is not the window Windows gives the keys to, so a key
+    generated on it never arrived there (GitHub's Windows); the window's own keys are checked above."""
+    menu._on_key(types.SimpleNamespace(keysym=ks)); pump(r, 2)
+
 done, ran = [], []
 pm = PauseMenu(r, {"Top": [("command", "One", lambda: ran.append(1)), ("gap",), ("page", "Sub", "Sub")],
                    "Sub": [("command", "Two", lambda: ran.append(2))]}, on_close=lambda: done.append(1))
 pm.open(); pump(r)
-press(pm.canvas, "Down"); assert pm.sel["Top"] == 2               # (over the gap)
-press(pm.canvas, "Down"); assert pm.sel["Top"] == 0               # (wrapping round)
-press(pm.canvas, "Return"); assert ran == [1] and pm.is_open()   # (a command: the menu stays)
+box = pm._rows[2][1]                                              # (the pointer still over "Sub" as the menu opens:
+mx, my = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2           # a motion may arrive, which must light nothing)
+pm._on_motion(types.SimpleNamespace(x=mx, y=my, x_root=mx + 1000, y_root=my))
+assert pm.sel["Top"] == 0
+menu_key(pm, "Down"); assert pm.sel["Top"] == 2               # (over the gap)
+menu_key(pm, "Down"); assert pm.sel["Top"] == 0               # (wrapping round)
+pm._on_motion(types.SimpleNamespace(x=mx, y=my, x_root=mx + 1010, y_root=my))
+assert pm.sel["Top"] == 2                                         # (a real move lights the row under it)
+menu_key(pm, "Up"); assert pm.sel["Top"] == 0
+menu_key(pm, "Return"); assert ran == [1] and pm.is_open()   # (a command: the menu stays)
 pm.open(["Sub"]); pump(r); assert pm.trail() == ["Top", "Sub"]   # (straight onto a page)
-press(pm.canvas, "BackSpace"); assert pm.trail() == ["Top"]
-press(pm.canvas, "Left"); assert not pm.is_open() and done == [1]
+menu_key(pm, "BackSpace"); assert pm.trail() == ["Top"]
+menu_key(pm, "Left"); assert not pm.is_open() and done == [1]
 r.destroy()
 if wm:
     wm.terminate()

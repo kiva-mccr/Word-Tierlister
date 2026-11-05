@@ -147,9 +147,6 @@ and Ctrl+Z brings it back.
 - **View > Reduce motion** turns the animations down.
 - **Settings > Anchor words** chooses the example word for each tier used when comparing.
 
-When you close a window you opened from one of the top menus, that menu opens again with the item you came from
-lit, so trying a few settings in a row takes one click each. Esc or a click elsewhere closes it.
-
 ## Keys
 
 All of these can be changed under Settings > Keyboard shortcuts.
@@ -236,6 +233,8 @@ release's checksums before it is used; nightlies are built on your computer, so 
 dialogs, for testing the program: in How words are dealt, reviewing the rude meanings by hand and scoring the rules;
 in Source & Updates, the nightly build, the log and a crash test (it shows the error dialog on purpose). While one
 keeps running (making review words, tuning the rules) a ring round its dot shows how far it is; hover for the details.
+Closing the tuner's window while it tunes only hides it: click its bubble to bring it back (it also comes back by
+itself when it finishes; Discard stops it).
 
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.
