@@ -397,6 +397,14 @@ def evaluate(data, values, words_in):
     return error(t), t
 
 
+def say(line):
+    """A line for whoever started the tuner (the program's Tune the rules bubble reads them for its ring)."""
+    try:
+        print(line, flush=True)
+    except (OSError, ValueError, AttributeError):     # (no stdout, or nobody reading it any more)
+        pass
+
+
 def tune_round(data, values, steps, train, order):
     """One round of the search over `train`: every number a step up and down (in `order`), a change kept when it
     lowers the error, a step that helps neither way halved. Returns (values, steps, error on train)."""
@@ -907,6 +915,7 @@ class TuneWindow:
                 self.points.setdefault(part, []).append((rnd, train if part == ALL else test))
             self.avg.append((rnd, avg))
             self.status.config(text=f"Round {rnd} of up to {self.rounds}" + ("  ·  paused" if self._paused() else ""))
+            say(f"Round {rnd} of up to {self.rounds}")
             self.draw()
         elif kind == "best":
             self.best_round = e[1]
@@ -922,6 +931,7 @@ class TuneWindow:
             self.guards[e[1]] = e[2]
             self.draw_guard()
         elif kind == "done":
+            say("Done")
             self.done = True
             self.pause_btn.set_enabled(False)
             self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: "

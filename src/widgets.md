@@ -38,7 +38,7 @@ The module docstring has the details; this page is the map.
 - `SmearToggle`: A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space / Return once it has focus) flips it: the censor button...
   - methods: toggle, refresh
 - `DevBubble`: A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for: dev tools reachable from the window, not only by command;...
-  - methods: invoke, lit, refresh
+  - methods: running, invoke, lit, refresh
 - `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
 - `word_at`: (start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning, an example or a form's line (LINK_TAGS), or None (a heading, a...
 - `smeared_label`: A small canvas showing `text` smeared (smear_items; wrapped at `width` pixels, 0: one line), for the places that are not our own canvases (the definition panes,...
@@ -66,6 +66,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- DevBubble's ring is drawn with `SmoothCanvas.ring_image` (a soft-edged annulus sector, cached by its angles: 3 degree steps, spin in 12), never Tk's jagged create_arc. Its timers live in `_jobs` and stop on <Destroy>; a click while running does nothing.
 - `StyledDialog.show` veils the dialog while it draws (`ui_style.veil` / `unveil`, F-48): shown plainly it appeared as a heading alone, then labels, then the rest, over ~0.2 s.
 
 - Developer bubbles (`StyledDialog.dev_bubbles`) are packed in the headline's own row, never placed over the dialog: a placed frame takes no room, so a narrow dialog ran its headline under them.

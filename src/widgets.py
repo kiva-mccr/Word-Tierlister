@@ -1636,23 +1636,113 @@ class DevBubble(SmoothCanvas):
     dev tools reachable from the window, not only by command; only while Settings > Developer tools is ticked).
     A click (or Space / Return once it has focus) runs `command`. With `variable` it is a switch, lit while True.
 
+    With `progress() -> None or (fraction or None, note)` it shows a tool that keeps running after the click (asked
+    for, picked from a mock-up): while it runs the bubble is lit and a thin ring fills clockwise around the dot
+    (a fraction), or a short arc goes round it (None: no way to tell how far); the hover note says how far it is;
+    a click does nothing. When it ends the whole ring blinks once and the bubble is plain again. It asks every
+    POLL_MS, so a dialog opened while the tool runs shows it too. Reduce motion: no spinning, no easing.
+
         DevBubble(parent, "Review rude meanings", app.review_rude)
         DevBubble(parent, "Nightly", toggle, variable=shown)
+        DevBubble(parent, "Tune the rules", app.tune_rules, progress=lambda: app.dev_progress("tune"))
     """
+    POLL_MS = 100
+    SPIN_MS = 40              # a frame of the spinning arc (and of the ring easing to a new fraction)
+    SPIN_STEP = 12            # degrees a frame: a turn in 1.2 s
+    SPIN_ARC = 100            # the arc's length while it cannot tell how far
+    BLINK_MS = 450            # the whole ring, once, when the tool ends
 
-    def __init__(self, parent, text, command, variable=None, font_=None, bg=None):
+    def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
         self.text, self.command, self.variable = text, command, variable
         self._font, self._bg, self._hover = font_ or font("small"), bg, False
+        self.progress, self._anim = progress, animator
+        self.state = None             # what progress() said last: None (idle) or (fraction or None, note)
+        self._shown = 0.0             # the fraction drawn (it eases to the real one)
+        self._spin = 0                # the arc's start while it cannot tell how far
+        self._blink = False           # the whole ring, a moment after the tool ended
+        self._jobs = {}
         for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
             self.bind(seq, lambda e: self.invoke())
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
+        self.bind("<Destroy>", lambda e: e.widget is self and self._stop_all(), add="+")
+        if progress is not None:
+            Tooltip(self, lambda e: self.state[1] if self.state else None)
+            self._poll()
         self._draw()
 
+    # ---- running tools ---------------------------------------------------------------------------------
+    def running(self):
+        return self.state is not None
+
+    def _still(self):
+        return self._anim is not None and getattr(self._anim, "reduce_motion", False)
+
+    def _later(self, name, ms, fn):
+        try:
+            self._jobs[name] = self.after(ms, fn)
+        except tk.TclError:
+            pass
+
+    def _stop_all(self):
+        for job in self._jobs.values():
+            try:
+                self.after_cancel(job)
+            except tk.TclError:
+                pass
+        self._jobs = {}
+
+    def _poll(self):
+        """Ask how the tool is doing; start the frames when it starts, blink once when it ends."""
+        try:
+            now = self.progress()
+        except Exception:                 # (a tool's own state must never break the dialog)
+            now = None
+        was = self.state
+        self.state = now
+        if now is not None and was is None:
+            self._shown = (now[0] or 0.0) if self._still() else 0.0
+            self._blink = False
+            self._frame()
+        elif now is None and was is not None:
+            self._blink = True
+            self._draw()
+            self._later("blink", self.BLINK_MS, self._end_blink)
+        elif now is not None and self._still():
+            self._shown = now[0] or 0.0
+            self._draw()
+        elif now is not None and "frame" not in self._jobs:       # (Reduce motion turned off while it runs)
+            self._frame()
+        self._later("poll", self.POLL_MS, self._poll)
+
+    def _end_blink(self):
+        self._blink = False
+        self._draw()
+
+    def _frame(self):
+        """One frame while the tool runs: the arc turns, the ring eases towards the fraction."""
+        self._jobs.pop("frame", None)
+        if self.state is None:
+            return
+        frac = self.state[0]
+        if not self._still():
+            if frac is None:
+                self._spin = (self._spin + self.SPIN_STEP) % 360
+            else:
+                self._shown += (frac - self._shown) * 0.25
+                if abs(frac - self._shown) < 0.004:
+                    self._shown = frac
+        self._draw()
+        if not self._still():
+            self._later("frame", self.SPIN_MS, self._frame)
+
+    # ---- clicks and drawing --------------------------------------------------------------------------------
     def invoke(self):
+        if self.running():                # (asked for: a click on a running tool does nothing; the note says how far)
+            return
         if self.variable is not None:
             self.variable.set(not self.variable.get())
             self._draw()
@@ -1660,7 +1750,7 @@ class DevBubble(SmoothCanvas):
             self.command()
 
     def lit(self):
-        return self.variable is not None and bool(self.variable.get())
+        return self.running() or (self.variable is not None and bool(self.variable.get()))
 
     def _set_hover(self, on):
         self._hover = on
@@ -1668,19 +1758,35 @@ class DevBubble(SmoothCanvas):
 
     def _draw(self):
         self.delete("all")
-        f, on = self._font, self.lit()
+        f, on = self._font, self.lit() or self._blink
         line = f.metrics("linespace")
         h = line + 6
         dot = max(4, line // 3)
-        pad = h // 2
-        w = pad + dot + dot + f.measure(self.text) + pad
+        ring = (h - 6) | 1 if self.progress is not None else dot      # (odd: the dot sits in its middle)
+        pad = h // 2 - (ring - dot) // 2
+        w = pad + ring + dot + f.measure(self.text) + h // 2
         super().configure(width=w + 2, height=h + 2)
         fill = PALETTE["select_bg"] if on or self._hover else PALETTE["surface"]
         edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
         self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
         y = 1 + h / 2
-        self.round_rect(1 + pad, y - dot / 2, 1 + pad + dot, y + dot / 2, dot, fill=PALETTE["accent"])
-        self.create_text(1 + pad + 2 * dot, y, text=self.text, font=f, anchor="w",
+        cx = 1 + pad + ring / 2
+        self.round_rect(cx - dot / 2, y - dot / 2, cx + dot / 2, y + dot / 2, dot, fill=PALETTE["accent"])
+        if self.state is not None or self._blink:
+            thick = max(2, round(ring / 8))
+            x0, y0 = round(cx - ring / 2), round(y - ring / 2)
+            self.create_image(x0, y0, anchor="nw", image=self.ring_image(ring, thick, 0, 360, PALETTE["surface"]))
+            frac = None if self.state is None else self.state[0]
+            if self._blink:
+                start, extent = 0, 360
+            elif frac is None:
+                start, extent = self._spin, self.SPIN_ARC
+            else:
+                start, extent = 0, int(round(self._shown * 120)) * 3          # (3 degree steps: a few images)
+            if extent > 0:
+                self.create_image(x0, y0, anchor="nw",
+                                  image=self.ring_image(ring, thick, start, min(360, extent), PALETTE["ring"]))
+        self.create_text(1 + pad + ring + dot, y, text=self.text, font=f, anchor="w",
                          fill=PALETTE["text"] if on or self._hover else PALETTE["muted"])
 
     def refresh(self):
@@ -3303,15 +3409,16 @@ class StyledDialog:
 
     def dev_bubbles(self, items):
         """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
-        (text, command) or (text, command, variable) for a switch. Returns the bubbles, by their text."""
+        (text, command), (text, command, variable) for a switch, or (text, command, None, progress) for a tool that
+        keeps running (its ring). Returns the bubbles, by their text."""
         out = {}
         if self.head_row is None or not items:
             return out
         row = tk.Frame(self.head_row, bg=PALETTE["bg"])
         row.pack(side="right", anchor="n", padx=(24, 0))
         for item in items:
-            text, command, variable = (tuple(item) + (None,))[:3]
-            b = DevBubble(row, text, command, variable=variable)
+            text, command, variable, progress = (tuple(item) + (None, None))[:4]
+            b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim)
             b.pack(side="left", padx=(6 if out else 0, 0))
             out[text] = b
         return out

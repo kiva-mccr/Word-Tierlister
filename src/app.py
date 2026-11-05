@@ -105,17 +105,39 @@ def reopen_while_asked(app, store, defs, new_root):
     return app
 
 
-def _run_tools(cmds, cwd):
+def _run_tools(cmds, cwd, on_line=None):
     """Run each command in turn (a worker thread: no Tk here): (the exit code, the last line it printed), stopping
-    at the first that fails."""
+    at the first that fails. `on_line(step, steps, line)`: each line as it is printed (the bubble's hover note)."""
     code, last = 0, ""
-    for cmd in cmds:
-        r = subprocess.run(cmd, cwd=cwd, env=standalone.clean_env(), capture_output=True, text=True)
-        lines = [x for x in (r.stdout + r.stderr).splitlines() if x.strip()]
-        code, last = r.returncode, (lines[-1].strip() if lines else "")
+    for i, cmd in enumerate(cmds):
+        p = subprocess.Popen(cmd, cwd=cwd, env=standalone.clean_env(), stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, text=True, bufsize=1)
+        last = ""
+        for line in p.stdout:
+            if line.strip():
+                last = line.strip()
+                if on_line:
+                    on_line(i + 1, len(cmds), last)
+        code = p.wait()
         if code:
             break
     return code, last
+
+
+def _follow_tuner(proc, job):
+    """Read the tuner's printed rounds into `job` (a worker thread: no Tk here): over once it says it is done
+    (its window may stay open for Keep; what it prints later is still read, so its pipe never fills) or closes."""
+    try:
+        for line in proc.stdout:
+            m = re.match(r"Round (\d+) of up to (\d+)", line.strip())
+            if m and not job.get("over"):
+                job["frac"] = int(m.group(1)) / max(1, int(m.group(2)))
+                job["note"] = f"Round {m.group(1)} of up to {m.group(2)}"
+            elif line.startswith("Done"):
+                job["over"] = True
+    except (OSError, ValueError):
+        pass
+    job["over"] = True
 
 
 class App:
@@ -2284,6 +2306,21 @@ class App:
                      parent=parent)
         return None
 
+    def dev_progress(self, name):
+        """How a developer tool that keeps running is doing, for its bubble's ring: None (not running) or
+        (fraction or None, the hover note). "review words": Make review words (no fraction: it cannot tell how far;
+        the note is its step and last line); "tune": the tuner's rounds, until it is done or closed."""
+        if name == "review words":
+            job = getattr(self, "_tool_job", None)
+            return None if job is None else (None, job.get("note") or "Making review words")
+        job = getattr(self, "_tuner_job", None)
+        if job is None:
+            return None
+        if job.get("over") or job["proc"].poll() is not None:
+            self._tuner_job = None
+            return None
+        return job.get("frac") or 0.0, job.get("note") or "The tuner is reading Wiktionary's entries"
+
     def make_review_words(self, dlg=None, ask=None, run=None):
         """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
         next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (the answered
@@ -2313,11 +2350,14 @@ class App:
                     [sys.executable, tool, "next", "--review", path])
         self.store.set_meta("review_file", os.path.abspath(path))
         self.flash(f"Making {'1,500' if first else '300 new'} review words: a few minutes", kind="info", ms=5000)
-        self._tool_job = {"done": None, "path": path}
+        self._tool_job = {"done": None, "path": path, "note": None}
         job = self._tool_job
 
+        def line(step, steps, text):
+            job["note"] = (f"Step {step} of {steps}: " if steps > 1 else "") + text
+
         def work():
-            job["done"] = (run or _run_tools)(cmds, self.TOOLS_ROOT)
+            job["done"] = run(cmds, self.TOOLS_ROOT) if run else _run_tools(cmds, self.TOOLS_ROOT, line)
         if run:
             work()
         else:
@@ -2359,8 +2399,16 @@ class App:
             show_message("Tune the rules", "Wiktionary's entries are missing", "Make review words reads them "
                          "first (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
             return None
+        job = getattr(self, "_tuner_job", None)
+        if job is not None and not job.get("over") and job["proc"].poll() is None:
+            self.flash("The tuner is open already", kind="info")
+            return None
         cmd = [sys.executable, tool, "--review", path, "--entries", entries]
-        (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env())))(cmd)
+        proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
+                                                     stdout=subprocess.PIPE, text=True, bufsize=1)))(cmd)
+        if getattr(proc, "stdout", None) is not None:      # (its rounds fill the bubble's ring: _follow_tuner)
+            self._tuner_job = {"proc": proc, "frac": 0.0, "note": None}
+            threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()
         if dlg is not None:
             dlg.close()
         self.flash("The tuner is opening: it reads Wiktionary's entries first (about a minute)", kind="info", ms=5000)

@@ -689,6 +689,22 @@ class SmoothCanvas(tk.Canvas):
             return _photo(self, size, size, paint_mask(rows, _rgb(fill), None))
         return _cached(self, key, make)
 
+    def ring_image(self, size, width, start, extent, fill):
+        """A soft-edged ring, or a piece of one (an annulus sector), size x size pixels and `width` thick, in `fill`,
+        see-through around it: from `start` degrees (0 at the top) clockwise over `extent` degrees (360: whole).
+        The progress ring of a running developer tool (DevBubble); kept in the cache, so callers round the angles."""
+        key = ("photo", "ring", size, width, start, extent, fill)
+
+        def make():
+            c, r_out = size / 2.0, size / 2.0 - 0.5
+            r_in = max(0.5, r_out - width)
+            n = max(2, int(extent / 6) + 1)
+            arc = [math.radians(start + extent * i / (n - 1)) for i in range(n)]
+            poly = ([(c + r_out * math.sin(a), c - r_out * math.cos(a)) for a in arc]
+                    + [(c + r_in * math.sin(a), c - r_in * math.cos(a)) for a in reversed(arc)])
+            return _photo(self, size, size, paint_mask(coverage_mask(poly, size, size, 0), _rgb(fill), None))
+        return _cached(self, key, make)
+
     def smooth_image(self, tag_or_id):
         """The image item drawn for a round_rect (tests), or None."""
         rr = self._rr_items(tag_or_id)

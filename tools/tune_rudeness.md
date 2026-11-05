@@ -23,6 +23,7 @@ The module docstring has the details; this page is the map.
 - `tally`: {class: [tp, fp, fn]} over `words_in`: each kind meaning by meaning, and "whole" (smearing the word).
 - `error`: 100% minus the average F1 of the classes answered at least once (tally).
 - `evaluate`: The error and tally of `values` over `words_in`.
+- `say`: A line for whoever started the tuner (the program's Tune the rules bubble reads them for its ring).
 - `tune_round`: One round of the search over `train`: every number a step up and down (in `order`), a change kept when it lowers the error, a step that helps neither way halved.
 - `Inline`: A stand-in for ProcessPoolExecutor that runs each job at once, in this process (tests; --workers 0).
   - methods: submit, shutdown
