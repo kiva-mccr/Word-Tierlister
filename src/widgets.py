@@ -985,7 +985,6 @@ class DropMenu:
         self._rows, self._active, self._on_close = [], None, None
         self._prev_focus = ""
         self.on_side = None              # called with -1 / +1 for Left / Right (HeaderMenus: the next menu)
-        self.on_invoke = None            # called with (label, run) in place of run() (HeaderMenus: back to the menu)
 
     @staticmethod
     def labels(items):
@@ -1079,18 +1078,14 @@ class DropMenu:
                 parts[0].configure(text=mark)
         self._highlight(None)
 
-    def open(self, x, y, on_close=None, active=None):
-        """Show the menu with its top-left corner at screen position (x, y); `active`: the label of the row to light
-        (the one a closed pop-up was opened from: HeaderMenus.return_to)."""
+    def open(self, x, y, on_close=None):
+        """Show the menu with its top-left corner at screen position (x, y)."""
         self.close()
         self._on_close = on_close
         self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
         self.prepare()
         win = self.win
         self._refresh_rows()
-        for i, (_row, _parts, it) in enumerate(self._rows):
-            if it[1] == active:
-                self._highlight(i)
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -1124,13 +1119,6 @@ class DropMenu:
         """Run row `i` (0 = first clickable item) and close the menu."""
         _row, _parts, it = self._rows[i]
         self.close()
-        if self.on_invoke:
-            self.on_invoke(it[1], lambda: self._run(it))
-        else:
-            self._run(it)
-
-    @staticmethod
-    def _run(it):
         if it[0] == "check":
             var, command = it[2], (it[3] if len(it) > 3 else None)
             var.set(not var.get())
@@ -1216,9 +1204,6 @@ class HeaderMenus(tk.Frame):
     Clicking a button opens its menu under it (clicking again closes it); while one menu is open,
     hovering another button switches to that menu, like a desktop menu bar, and so do Left / Right.
     open_menu(name) opens one from the keyboard (Alt+F and friends, F10).
-    An item that opens a dialog (a StyledDialog: shown while it ran) brings its menu back when that dialog closes,
-    the item lit (FS-1, asked for): `returning` is (menu, label) while that waits; `can_return()` False (the window
-    is being rebuilt in a new look) leaves it set for the new window to take over (App.take_over).
     """
 
     def __init__(self, parent, menus, font=None, animator=None, bg=None):
@@ -1226,8 +1211,6 @@ class HeaderMenus(tk.Frame):
         super().__init__(parent, bg=bg)
         self.menus, self.buttons, self.drops = dict(menus), {}, {}
         self._open = None
-        self.returning = None            # (menu, label): a dialog opened from that item is open (FS-1)
-        self.can_return = lambda: True
         for name, items in menus:
             b = RoundButton(self, name, lambda n=name: self.toggle(n), font=font, padx=12, pady=5, radius=10,
                             animator=animator, canvas_bg=bg, flat=True)
@@ -1236,7 +1219,6 @@ class HeaderMenus(tk.Frame):
             self.buttons[name] = b
             self.drops[name] = DropMenu(self.winfo_toplevel(), items, font)
             self.drops[name].on_side = lambda d, n=name: self._side(n, d)
-            self.drops[name].on_invoke = lambda label, run, n=name: self._run(n, label, run)
         top = self.winfo_toplevel()
         top.bind("<ButtonPress-1>", self._click_outside, add="+")
         self._top_geo = None
@@ -1282,41 +1264,13 @@ class HeaderMenus(tk.Frame):
         else:
             self.open_menu(name)
 
-    def open_menu(self, name, active=None):
+    def open_menu(self, name):
         self.close()
-        self.returning = None
         b = self.buttons[name]
         self._open, self._top_geo = name, self._top_geometry()
         b.set_selected(True)
         self.drops[name].open(b.winfo_rootx(), b.winfo_rooty() + b.winfo_height() + 2,
-                              on_close=lambda n=name: self._closed(n), active=active)
-
-    def _run(self, name, label, run):
-        """Run the item `label` of menu `name`; if it showed a dialog, the menu comes back once that closes (a dialog
-        that waited closed already: at once)."""
-        shown = StyledDialog.shown
-        run()
-        if StyledDialog.shown == shown:
-            return
-        self.returning = (name, label)
-        dlg = StyledDialog.last
-        if dlg is not None and dlg.alive():
-            dlg.when_closed(lambda: self.return_to(name, label))
-        else:
-            self.after_idle(lambda: self.return_to(name, label))
-
-    def return_to(self, name, label):
-        """Open menu `name` again with `label` lit, unless something else happened meanwhile (another menu was
-        opened, the window is going or another dialog is still open over it)."""
-        if self.returning != (name, label) or not self.can_return():
-            return
-        try:
-            if not self.winfo_viewable() or dialog_open(self.winfo_toplevel()):
-                self.returning = None
-                return
-        except tk.TclError:
-            return
-        self.open_menu(name, active=label)
+                              on_close=lambda n=name: self._closed(n))
 
     def _closed(self, name):
         if self._open == name:
@@ -3476,8 +3430,6 @@ class StyledDialog:
     far left instead, like "Show details"). Escape and the close box call on_cancel (default: close).
     """
 
-    shown = 0          # how many were shown, and the latest (HeaderMenus: did a menu item open one?)
-    last = None
     decorate = None    # full screen (FS-2): called with the dialog just before it shows (App._dialog_bar: Back)
 
     def __init__(self, parent, title, headline=None, intro=None, animator=None, wrap_chars=52):
@@ -3581,8 +3533,6 @@ class StyledDialog:
     def show(self, wait=False):
         """Size to the contents, centre over the parent, then appear there; take the input (and with wait, block
         until closed)."""
-        StyledDialog.shown += 1
-        StyledDialog.last = self
         if StyledDialog.decorate is not None and not getattr(self, "_decorated", False):
             self._decorated = True
             StyledDialog.decorate(self)
@@ -3652,8 +3602,6 @@ class StyledDialog:
 
     def _closed(self):
         calls, self._when_closed = self._when_closed, []
-        if StyledDialog.last is self:
-            StyledDialog.last = None
         for cb in calls:              # (after the destroy has finished: the menu is not built inside it)
             try:
                 self.parent.after_idle(cb)

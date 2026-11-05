@@ -195,7 +195,7 @@ slow top menus, built at every open: now built once and kept; a maximize re-fits
 text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
 still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
 text size per maximize, the stretch while maximizing is GNOME's own animation).
-FS-1 (asked for: closing a dialog opened from a top menu brings that menu back, its item lit; HeaderMenus._run).
+FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
 (src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
 Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).
