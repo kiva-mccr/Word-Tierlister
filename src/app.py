@@ -42,6 +42,7 @@ from sources import UPDATED_FROM, SourceDialog
 from review import RudeReview, describe_score, read_answers, read_review, score_guesses
 from syncdialog import AutoSync, SyncDialog
 import standalone
+import framesync
 from sizing import center_geometry, fit_size, is_maximized, monitor_box, ui_factor, usable_area
 from smooth import measuring
 import theme
@@ -216,10 +217,11 @@ class App:
         self._veil_since = None   # while the window is still see-through after opening (open_window, _unveil)
         self._last_configure = 0.0
         self._size_now = None                 # (the window's size while a maximize re-fits: _on_root_configure)
-        self._root_at = None                  # (where the window's page and its frame were on screen, once it
-        self._normal_at = None                # settled; before maximizing: _slide_from_here)
+        self._last_size = None                # (the window's size before this <Configure>, and before maximizing:
+        self._normal_size = None              # _slide_from_here)
         self._sliding = None                  # (the page's contents easing to their place, and the job that starts it)
         self._slide_job = None
+        self.framesync = None                 # (framesync.enable, once the window is built)
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -259,6 +261,9 @@ class App:
         watch_focus(root)                          # switching to another program closes open drop-downs (UI-43)
         root.bind("<ButtonPress-1>", self._click_background, add="+")
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.framesync = framesync.enable(root)    # (X11: a resized window shown only once drawn, F-53)
+        if self.framesync:
+            self.framesync.set_background(PALETTE["bg"])
         self._update_options()
         self._layout_defs()
         self.refresh()
@@ -715,9 +720,6 @@ class App:
         self._monitor_job = None
         if self.shut or not self.root.winfo_exists():
             return
-        fx, fy = (int(v) for v in self.root.geometry().replace("-", "+-").split("+")[1:3])
-        self._root_at = (self.root.winfo_rootx(), self.root.winfo_rooty(), fx, fy,    # (settled: _slide_from_here)
-                         self.root.winfo_width(), self.root.winfo_height())
         now = self._monitor_id()
         if now == self._monitor:
             return
@@ -870,24 +872,20 @@ class App:
         if not inner.winfo_ismapped():
             return
         root = self.root
-        at = self._root_at or (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx(), root.winfo_rooty(),
-                               root.winfo_width(), root.winfo_height())
-        sx, sy = inner.winfo_x() + at[0], inner.winfo_y() + at[1]   # (where it was on screen)
-        # Where the page will be: window managers move a window in steps after its new size, so Tk's own position
-        # is late. Maximized: the frame at the monitor's corner; restored: back where it was before maximizing.
-        if self._maximized:
-            self._normal_at = at
-            mx, my = monitor_box(root)[:2]
-            now = (mx + at[0] - at[2], my + at[1] - at[3])
-        else:
-            now = self._normal_at or at
-        self._sliding = inner
-
+        # It starts where the old picture was left while the window took its new size: moved by half the change
+        # (framesync's CENTER_GRAVITY; a window in the middle of the screen keeps its contents where they were).
         # Its new size: maximized, the event's; restored, the size before maximizing (some window managers pass
         # through the maximized width first).
-        want = (self._size_now if self._maximized else self._normal_at[4:6] if self._normal_at else None) or (
-            root.winfo_width(), root.winfo_height())
-        x0, y0 = sx - now[0], sy - now[1]    # (where it was, seen from the page now: may start partly outside it)
+        was = self._last_size
+        if self._maximized:
+            self._normal_size = was
+            want = self._size_now
+        else:
+            want = self._normal_size
+        want = want or (root.winfo_width(), root.winfo_height())
+        dx, dy = ((want[0] - was[0]) // 2, (want[1] - was[1]) // 2) if was and self.framesync else (0, 0)
+        x0, y0 = inner.winfo_x() + dx, inner.winfo_y() + dy
+        self._sliding = inner
         inner.place_configure(relx=0, x=x0, y=y0, anchor="nw")      # (drawn where it was first)
 
         def done():
@@ -1232,6 +1230,9 @@ class App:
         if self._monitor_job:
             self.root.after_cancel(self._monitor_job)
         self._monitor_job = self.root.after(20 if veiled else self.MONITOR_PAUSE_MS, self._check_monitor)
+        if self.framesync:
+            self.framesync.after_resize()
+        self._last_size = (e.width, e.height)
 
     MONITOR_PAUSE_MS = 300
 
