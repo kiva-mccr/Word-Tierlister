@@ -192,6 +192,8 @@ standalone.removable / TOP_FILES (a new top-level file must be added there); bui
 downloads removed; a Mac app keeps its save in Application Support and its source in Documents, open -n).
 F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the main window until it settles). F-49 (reported:
 slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
+text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
+still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
 text size per maximize, the stretch while maximizing is GNOME's own animation).
 FS-1 (asked for: closing a dialog opened from a top menu brings that menu back, its item lit; HeaderMenus._run).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu

@@ -631,6 +631,14 @@ dlg.close(); update(); assert not dlg.alive()
 # ---- WordCard's size never depends on the word (reported: the buttons moved / flashed when sorting fast)
 wc_font = tkfont.Font(root=root, family="TkDefaultFont", size=40, weight="bold")
 wc = WordCard(root, wc_font, small, wraplength=600); wc.pack(); wc.set("ox", "rank #1"); update()
+# the same wrap again (a re-fit sets it every time) never redraws; a new one does (F-50)
+draws = []
+real_draw = wc._draw
+wc._draw = lambda: (draws.append(1), real_draw())
+wc.configure(wraplength=600); plain.configure(wraplength=plain.cget("wraplength"))
+assert not draws
+wc.configure(wraplength=500); assert draws == [1]
+wc.configure(wraplength=600); del wc._draw; update()
 size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
 assert size[0] % 2 == 0                                                                   # even: centring never wobbles
 for word, sub in (("incomprehensibilities", "rank #2"), ("a", ""), ("well-to-do", "rank #3 - compound word"),

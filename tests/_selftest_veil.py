@@ -40,6 +40,7 @@ def wait_for(win, cond, s=5.0):
 class FakeEvent:
     def __init__(self, widget):
         self.widget = widget
+        self.width, self.height = widget.winfo_width(), widget.winfo_height()
 
 
 root = tk.Tk(); root.withdraw()
@@ -61,15 +62,19 @@ app._on_root_configure(FakeEvent(root))
 assert app._veil_since is None
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)
 
-# just maximized or restored: the re-fit runs at once (an idle job), not after the 80 ms pause (asked for)
-real_max = A.is_maximized
+# just maximized or restored: the re-fit runs at once, inside the event, see-through meanwhile and shown once drawn
+# (asked for: the window showed the old page at its new size, then the page half drawn); the event's size is used
+real_max, real_grow = A.is_maximized, app._apply_grow
+seen = []
 try:
     A.is_maximized = lambda w: not app._maximized
-    app._on_root_configure(FakeEvent(root))
-    assert root.tk.splitlist(root.tk.call("after", "info", app._grow_job))[1] == "idle"
+    app._apply_grow = lambda: seen.append((alpha(root), app._window_size()))
+    ev = FakeEvent(root); ev.width, ev.height = 1234, 567
+    app._on_root_configure(ev)
 finally:
-    A.is_maximized = real_max
-root.after_cancel(app._grow_job); app._grow_job = None
+    A.is_maximized, app._apply_grow = real_max, real_grow
+assert seen == [(0.0, (1234, 567))] and not app._grow_job and app._size_now is None, seen
+assert wait_for(root, lambda: alpha(root) == 1.0), "not shown again after a maximize"
 app._on_root_configure(FakeEvent(root))                                # (an ordinary resize still waits)
 assert root.tk.splitlist(root.tk.call("after", "info", app._grow_job))[1] == "timer"
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)

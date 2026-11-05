@@ -2029,6 +2029,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           setup window and the review window are drawn see-through and shown in one go (ui_style.veil / unveil /
 #           show_drawn); they appeared piece by piece over ~0.2 s, and the setup window in the top-left corner first.
 #           Browse and the drop-downs already appeared complete.
+# [x] F-50 Reported after F-49: maximizing still stepped back and forth. Recorded frame by frame: the text changes once,
+#           but the re-fit and redraw take ~0.2 s, and meanwhile the window showed the old page in a corner of its new
+#           size, then the page half drawn, then the new one (restoring the same, the other way). Chosen from three
+#           (see-through, faster, both): both. A maximize or restore re-fits inside its <Configure> (before Tk draws
+#           the new size; its size from the event) with the window see-through, shown once drawn (ui_style.unveil);
+#           setting a button's or the card's wrap to the one it has no longer redraws it (small: the redraw is spread
+#           over many widgets).
 # [x] F-49 Reported after F-48: the top menus opened slowly, and maximizing still looked like a resize test. A timing
 #           check on the user's PC (Fedora, GNOME on Wayland) showed one text size per maximize: the stepping is
 #           GNOME's own animation stretching the old picture; then the full-size window kept the old text ~0.3 s.
