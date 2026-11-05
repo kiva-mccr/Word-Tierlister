@@ -216,6 +216,9 @@ class App:
         self._veil_since = None   # while the window is still see-through after opening (open_window, _unveil)
         self._last_configure = 0.0
         self._size_now = None                 # (the window's size while a maximize re-fits: _on_root_configure)
+        self._root_at = None                  # (where the window's page and its frame were on screen, once it
+        self._normal_at = None                # settled; before maximizing: _slide_from_here)
+        self._sliding = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -711,6 +714,8 @@ class App:
         self._monitor_job = None
         if self.shut or not self.root.winfo_exists():
             return
+        fx, fy = (int(v) for v in self.root.geometry().replace("-", "+-").split("+")[1:3])
+        self._root_at = (self.root.winfo_rootx(), self.root.winfo_rooty(), fx, fy)   # (settled: _slide_from_here)
         now = self._monitor_id()
         if now == self._monitor:
             return
@@ -853,21 +858,62 @@ class App:
             self._fit_big_text()
         self._recenter()
 
+    SLIDE_MS = 260
+
+    def _slide_from_here(self):
+        """Maximized or restored: the page's contents stay where they were on screen, then ease to their new place
+        (asked for: they snapped, as if the window had been in the top left)."""
+        inner = self.place_inner if self.mode == "place" else self.pair_inner
+        if not inner.winfo_ismapped():
+            return
+        root = self.root
+        at = self._root_at or (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx(), root.winfo_rooty())
+        sx, sy = inner.winfo_x() + at[0], inner.winfo_y() + at[1]   # (where it was on screen)
+        # Where the page will be: window managers move a window in steps after its new size, so Tk's own position
+        # is late. Maximized: the frame at the monitor's corner; restored: back where it was before maximizing.
+        if self._maximized:
+            self._normal_at = at
+            mx, my = monitor_box(root)[:2]
+            now = (mx + at[0] - at[2], my + at[1] - at[3])
+        else:
+            now = self._normal_at or at
+        self._sliding = inner
+
+        def start(page_w):           # (where it was, seen from the page now; kept inside it)
+            return max(0, min(sx - now[0], page_w - inner.winfo_reqwidth())), max(0, sy - now[1])
+
+        def frame(t):
+            page_w = inner.master.winfo_width()
+            x0, y0 = start(page_w)
+            tx, ty = (page_w - inner.winfo_reqwidth()) // 2, self._centred_top(inner)
+            inner.place_configure(x=round(x0 + (tx - x0) * t), y=round(y0 + (ty - y0) * t))
+
+        x0, y0 = start((self._size_now or (inner.master.winfo_width(),))[0])
+        inner.place_configure(relx=0, x=x0, y=y0, anchor="nw")      # (drawn where it was first)
+
+        def done():
+            self._sliding = None
+            inner.place_configure(relx=0.5, x=0, anchor="n")
+            self._recenter()
+        self.anim.run("slide", self.SLIDE_MS, frame, done)
+
+    def _centred_top(self, inner):
+        band = self.status_band.winfo_height()
+        ch = self.center.winfo_height()
+        free = (ch - inner.winfo_reqheight()) / 2
+        top = int(free - max(0, min(band / 2, free)))
+        limit = ch - inner.winfo_reqheight() - self._toast_room()
+        if limit >= 0:
+            top = min(top, limit)
+        return top
+
     def _recenter(self):
         """Centre the content in the visible page (from the tab line down to the bottom bar), not just in the
         area under the status line: it moves up by half the status line's height, but only as far as the
         free space allows, so it never runs into the stats on a small window."""
-        band = self.status_band.winfo_height()
-        ch = self.center.winfo_height()
         for inner in (self.place_inner, self.pair_inner):
-            free = (ch - inner.winfo_reqheight()) / 2
-            # (its top, in whole pixels: centred by Tk with our offset on top, the two roundings took turns and
-            # the content shook by a pixel while the definitions pane slid against its top)
-            top = int(free - max(0, min(band / 2, free)))
-            limit = ch - inner.winfo_reqheight() - self._toast_room()
-            if limit >= 0:                        # (centred low on a short page, it sat where messages show)
-                top = min(top, limit)
-            inner.place_configure(y=top)
+            if inner is not self._sliding:      # (easing to its place after a maximize)
+                inner.place_configure(y=self._centred_top(inner))
 
     def _fit_big_text(self):
         """Set the big words' fonts to their full size, and shrink the duel's so a long pair still fits on a line
@@ -1186,6 +1232,8 @@ class App:
             return
         w, h = size or self._window_size()
         if flipped or self._maximized:       # (maximized or restored: the text keeps its size, the page its room)
+            if flipped:
+                self._slide_from_here()
             self._fit_big_text()
             self.root.after_idle(self._recenter)
             if fill:
