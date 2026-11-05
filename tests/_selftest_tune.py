@@ -180,6 +180,27 @@ def pump(n=5):
 
 pump()
 assert "Reading" in win.info.cget("text") and not win.keep_btn.enabled
+# the bar while the entries are read: moving until a share is known, then the share and (in time) the time left
+assert str(win.bar.cget("mode")) == "indeterminate" and win.bar_text.cget("text").startswith(T.READING)
+win.events.put(("progress", T.READING, 0.1)); pump(10)
+assert str(win.bar.cget("mode")) == "determinate" and float(win.bar.cget("value")) == 10.0
+assert "10%" in win.bar_text.cget("text"), win.bar_text.cget("text")
+win.eta.samples = [(time.time() - 10, 0.0), (time.time() - 5, 5.0), (time.time(), 10.0)]
+win.events.put(("progress", T.READING, 0.12)); pump(10)
+assert " left" in win.bar_text.cget("text"), win.bar_text.cget("text")
+win.events.put(("progress", T.MATCHING, None)); pump(10)
+assert str(win.bar.cget("mode")) == "indeterminate" and win.bar_text.cget("text").startswith(T.MATCHING)
+# a round's bar: each part's numbers tried (6 jobs, 3 of them halfway: a quarter), then the time left
+win.events.put(("begin", 3, 6))
+for part in range(3):
+    win.events.put(("step", 3, part, 10, 20))
+win.events.put(("step", 2, 4, 20, 20))                            # (a late step of the round before: left out)
+pump(10)
+assert str(win.bar.cget("mode")) == "determinate" and abs(float(win.bar.cget("value")) - 25) < 1e-6
+assert win.bar_text.cget("text").startswith("Round 3 of up to 6: 25%"), win.bar_text.cget("text")
+win.round_eta.samples = [(time.time() - 10, 5.0), (time.time() - 5, 15.0), (time.time(), 25.0)]
+win.show_bar()
+assert "in this round" in win.bar_text.cget("text"), win.bar_text.cget("text")
 # started by the program's bubble (--from-program): the close box only hides it while it tunes; "show" brings it back,
 # and it comes back by itself when it is done (asked for)
 import io
@@ -198,8 +219,25 @@ for _ in range(400):
 assert win.done and win.best_round and "Your answers: " in win.info.cget("text")
 assert not win.hidden and root.state() == "normal"                # (done while hidden: back, for Keep)
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
-assert any(t.startswith("error (average of the 5 parts)") for t in texts)
-assert any(t.startswith("each of the 5 parts") for t in texts) and "the rules as they are now" in texts
+assert any(t.startswith("error: the average of the 5 parts") for t in texts)
+assert any(t.startswith("each part, tested") for t in texts) and "the rules as they are now" in texts
+assert "error (lower is better)" in texts                         # (the vertical axis, asked for)
+legend = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and
+          win.chart.itemcget(i, "text") == "the rules as they are now"][0]
+zero = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and win.chart.itemcget(i, "text") == "0%"][0]
+assert win.chart.coords(legend)[1] > win.chart.coords(zero)[1] + 30   # (the legend under the plot, not over it)
+assert win.bar_text.cget("text") == "Done" and float(win.bar.cget("value")) == 100
+# the chart grows with the window
+size0, win0 = (win.chart.winfo_width(), win.chart.winfo_height()), (root.winfo_width(), root.winfo_height())
+root.geometry(f"{root.winfo_width() + 200}x{root.winfo_height() + 120}"); pump(30)
+time.sleep(0.1); pump(10)
+after = win.chart.winfo_width(), win.chart.winfo_height()
+grew = root.winfo_width() - win0[0], root.winfo_height() - win0[1]   # (a small screen can stop the window growing)
+assert grew[0] >= 150 and after[0] - size0[0] >= grew[0] - 2 and after[1] - size0[1] >= grew[1] - 2, \
+    (size0, after, grew)
+right = max(win.chart.coords(i)[0] for i in win.chart.find_all() if win.chart.type(i) == "text"
+            and win.chart.itemcget(i, "text").startswith("average "))
+assert right > size0[0], (right, size0)                         # (drawn again at the new size)
 assert any(t.startswith("now ") for t in texts) and any(t.startswith("average ") for t in texts)
 assert f"best: round {win.best_round}" in texts
 lines = [i for i in win.chart.find_all() if win.chart.type(i) == "line" and len(win.chart.coords(i)) > 4]

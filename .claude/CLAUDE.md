@@ -177,7 +177,8 @@ OB-9 (asked for: review rude meanings by hand to test the rules: `tools/measure_
 still rules only: the program never reads the answers).
 OB-10 (asked for: tune the rules' numbers against those answers: `python tools/tune_rudeness.py`, a window: 5 parts,
 each tested on numbers tuned without it, the error round by round, a guard over the program's words, the meanings still
-wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups).
+wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups; then a bar for the
+reading and each round, the entries read in a process of their own (the window froze), a chart that follows the window's size).
 OB-11 (asked for: active review: `tools/measure_rudeness.py next` refreshes the review file: answered words stay first,
 the rest replaced by 300 new ones, groups weighted by where the rules were wrong, plus like your misses; near the line, signals disagreeing, candidate signals mined from Wiktionary's own rude labels, common words
 with no sign at all; each group spread over what its words share; one-part words only, contractions kept). Developer

@@ -643,7 +643,9 @@ and of smearing the whole word, on the words held back. A guard counts what ever
 with the best numbers (a kind more than doubling is marked, and Keep asks first), and the meanings still wrong are
 listed (all of them in `rude_tune_misses.txt` beside the answers: ideas for new rules, since no number fixes those).
 Keep writes the best numbers into `src/rudeness.py` and bumps `RUDENESS_VERSION`; read the diff, run the tests and
-commit. It is still rules only: nothing in the program reads the answers.
+commit. It is still rules only: nothing in the program reads the answers. A bar under the answers line shows the
+reading (share and time left) and then each round (parts done, time left). The entries are read in a process of their
+own and the helper processes run at a lower priority, so the window stays smooth; the chart grows with the window.
 
 ```mermaid
 flowchart TB
