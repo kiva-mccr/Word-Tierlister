@@ -63,7 +63,7 @@ class TierColoursDialog:
         line = font("body").metrics("linespace")
         # the tier pills, one canvas: a click picks the tier to edit, which wears a ring
         head = font("head")
-        self._pill_h = ph = int(head.metrics("linespace") * 1.5)
+        ph = int(head.metrics("linespace") * 1.5)
         self._pill_w = pw = max(ph, head.measure("W") + head.metrics("linespace"))
         self._gap = gap = 10
         self.pills = SmoothCanvas(dlg.body, bd=0, highlightthickness=0, bg=bg, cursor="hand2",

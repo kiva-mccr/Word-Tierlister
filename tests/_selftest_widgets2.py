@@ -205,9 +205,11 @@ assert dm.win.winfo_rootx() + dm.win.winfo_width() <= dm.win.winfo_screenwidth()
 dm.win.event_generate("<Escape>"); update()
 assert not dm.is_open() and closed == [1]
 # made once and kept (asked for: menus opened slowly, each open built its window again): the same window comes back,
-# hidden while closed, with the items' current functions and check marks; other items make it again
+# hidden while closed (on X11 parked: mapped far off-screen, so a compositor keeps its picture and it shows at once),
+# with the items' current functions and check marks; other items make it again
 kept = dm.win
-assert kept.winfo_exists() and not kept.winfo_viewable()
+assert kept.winfo_exists() and (dm.parked() if dm._parks() else not kept.winfo_viewable())
+assert dm._parks() == (root.tk.call("tk", "windowingsystem") == "x11")
 chk.set(False)
 dm.items = [("command", "Export...", lambda: ran.append("export2"), None)] + items[1:]
 dm.open(50, 60); update()
@@ -220,6 +222,7 @@ assert dm.win is not kept and not kept.winfo_exists() and len(dm._rows) == 4
 dm.close(); dm.items = items
 dm.prepare(); prepared = dm.win; dm.open(50, 60); update()
 assert dm.win is prepared and dm.is_open()                     # (prepare: built ahead, hidden, for a quick open)
+assert not dm.parked() and dm.win.winfo_rootx() >= 0          # (open: moved back from where it was parked)
 dm.close(); update()
 
 hm = HeaderMenus(root, [("File", items), ("Edit", items[3:])], small, animator=anim); hm.pack(side="top"); update()

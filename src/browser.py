@@ -197,6 +197,13 @@ class Browser:
                                      "loaded": self.loaded, "view": self.tree.yview()[0]}
         except tk.TclError:
             pass
+        for job in (self._job, self._scale_job):     # (a timer left waiting fired into the closed window: an error)
+            if job:
+                try:
+                    self.win.after_cancel(job)
+                except tk.TclError:
+                    pass
+        self._job = self._scale_job = None
         self.win.destroy()
 
     def _restore(self, state):

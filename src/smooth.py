@@ -19,7 +19,7 @@ bottom-right, bottom-left): bars are round on top and square at the bottom.
 
     curve_image(...) does the same for the area under a curve and its line (the queue dialog's shapes), and
     gradient_image(...) for a pill-shaped bar that runs through colours (Tier colours' H / S / V bars).
-Images are cached per window (the same shape in the same colours is drawn once).
+Images are cached per window (the same shape in the same colours is drawn once), masks for the whole program.
 """
 import base64
 import math
@@ -187,6 +187,8 @@ def coverage_mask(poly, w, h, line_width):
     reach = half + 1.0
     if line_width > 0:
         for (ax, ay), (bx, by) in edges:
+            dx, dy = bx - ax, by - ay
+            seg = (ax, ay, dx, dy, dx * dx + dy * dy)
             lo, hi = int(max(0, min(ay, by) - reach)), int(min(h - 1, max(ay, by) + reach))
             for j in range(lo, hi + 1):
                 cy = j + 0.5
@@ -197,24 +199,52 @@ def coverage_mask(poly, w, h, line_width):
                     t2 = max(0.0, min(1.0, (cy + reach - ay) / (by - ay)))
                     xa, xb = sorted((ax + t1 * (bx - ax), ax + t2 * (bx - ax)))
                 for i in range(max(0, int(xa - reach)), min(w - 1, int(xb + reach)) + 1):
-                    near[j].setdefault(i, []).append((ax, ay, bx, by))
+                    near[j].setdefault(i, []).append(seg)
     rows = []
     for j in range(h):
         runs, cov, cur = [], 0.0, None
         nj, aj = near[j], acc[j]
-        for i in range(w):
+        # only the pixels where something changes (the fill's coverage, or the outline is near) are worked out;
+        # between them each pixel is the one before it again, so those are added as one run
+        events = sorted(set(nj).union([i for i in range(w) if aj[i]]))
+        last, qa = 0, 0
+        for i in events:
+            if i > last:
+                if (qa, 0) == cur:
+                    runs[-1][0] += i - last
+                else:
+                    runs.append([i - last, qa, 0])
+                    cur = (qa, 0)
+            last = i + 1
             cov += aj[i]
             qa = int(_clamp01(cov) * 255 + 0.5)
             qo = 0
-            if i in nj:
+            segs = nj.get(i)
+            if segs:                                  # (the nearest piece's distance, worked out inline: hot)
                 px, py = i + 0.5, j + 0.5
-                d = min(_seg_dist(px, py, *seg) for seg in nj[i])
-                qo = int(_clamp01(half + 0.5 - d) * 255 + 0.5)
+                best = math.inf
+                for ax, ay, dx, dy, ll in segs:
+                    ex, ey = px - ax, py - ay
+                    if ll:
+                        t = (ex * dx + ey * dy) / ll
+                        if t > 1.0:
+                            ex, ey = ex - dx, ey - dy
+                        elif t > 0.0:
+                            ex, ey = ex - t * dx, ey - t * dy
+                    d2 = ex * ex + ey * ey
+                    if d2 < best:
+                        best = d2
+                qo = int(_clamp01(half + 0.5 - math.sqrt(best)) * 255 + 0.5)
             if (qa, qo) == cur:
                 runs[-1][0] += 1
             else:
                 runs.append([1, qa, qo])
                 cur = (qa, qo)
+        if w > last:
+            if (qa, 0) == cur:
+                runs[-1][0] += w - last
+            else:
+                runs.append([w - last, qa, 0])
         rows.append(runs)
     return rows
 
@@ -251,13 +281,6 @@ def _stretched_mask(x1, y1, x2, y2, radii, width, pad):
         j = int(y1 + top + 3)                      # a row in the straight part of the sides
         rows = rows[:j] + [rows[j]] * ky + rows[j:]
     return rows
-
-
-def _seg_dist(px, py, ax, ay, bx, by):
-    dx, dy = bx - ax, by - ay
-    ll = dx * dx + dy * dy
-    t = 0.0 if ll == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / ll))
-    return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
 
 def _runs_at(runs, start, width):
@@ -335,7 +358,13 @@ def _photo(master, w, h, rows):
     return tk.PhotoImage(master=master, data=base64.b64encode(_png(w, h, rows)))
 
 
+_MASKS = {}             # every shape's coverage mask, for the whole program: masks are plain data (no Tk), so a
+                        # dialog, a new look (a new Tk) or a zoom back to an earlier size reuses them
+
+
 def _cache(canvas, kind):
+    if kind == "mask":
+        return _MASKS
     root = canvas._root()
     stores = getattr(root, "_smooth_cache", None)
     if stores is None:
@@ -344,8 +373,9 @@ def _cache(canvas, kind):
 
 
 def _cached(canvas, key, make):
-    """Per window and per kind (key[0]: masks, which are cheap to keep, and images, kept fewer), the oldest
-    quarter dropped when full (an image still on screen stays alive through its canvas)."""
+    """Per kind (key[0]): masks, which are cheap to keep, for the whole program; images per window (a PhotoImage
+    belongs to one Tk), kept fewer. The oldest quarter is dropped when full (an image still on screen stays alive
+    through its canvas)."""
     store = _cache(canvas, key[0])
     value = store.get(key)
     if value is None:
@@ -355,6 +385,38 @@ def _cached(canvas, key, make):
                 del store[k]
         value = store[key] = make()
     return value
+
+
+_measuring = [0]        # > 0 while sizes are only measured (measuring()): shapes are not painted
+_unpainted = {}         # (canvas, item) -> None: shapes skipped meanwhile, painted when it ends (paint=True)
+
+
+class measuring:
+    """`with smooth.measuring():` while only sizes matter (App._fit_size and _precheck_zoom try text sizes): the
+    rounded shapes skip their painting, the most costly part of a refresh. With paint=True the shapes still there
+    at the end are painted then, once, at their final size; otherwise at the next refresh (their last painted look
+    is forgotten, so that refresh paints them even at the same size)."""
+
+    def __init__(self, paint=False):
+        self.paint = paint
+
+    def __enter__(self):
+        _measuring[0] += 1
+        return self
+
+    def __exit__(self, *exc):
+        _measuring[0] -= 1
+        if _measuring[0] == 0:
+            todo = list(_unpainted)
+            _unpainted.clear()
+            if self.paint:
+                for canvas, item in todo:
+                    try:
+                        if item in canvas._rr and canvas.winfo_exists():
+                            canvas._render(item)
+                    except tk.TclError:
+                        pass
+        return False
 
 
 # ---------------------------------------------------------------- the canvas
@@ -463,6 +525,10 @@ class SmoothCanvas(tk.Canvas):
         # colours snapped to steps of 4 (invisible): a fade or a hover tint then reuses the same few images
         fill, outline = _snap(_rgb(rec["fill"])), _snap(_rgb(rec["outline"]))
         sig = (x1, y1, x2, y2, rec["radii"], fill, outline, rec["width"], rec["state"])
+        if _measuring[0]:
+            rec["sig"] = None                          # (painted when measuring ends, or at the next refresh)
+            _unpainted[(self, item)] = None
+            return
         if not force and rec.get("sig") == sig:
             return                                     # nothing changed (a redraw of the rest of the canvas)
         rec["sig"] = sig
@@ -836,16 +902,33 @@ def curve_rows(w, h, ys, fill, line, line_width):
     fractional) at the left edge of column i (w + 1 values). The area's top edge and the line are soft."""
     fill_c, line_c = _rgb(fill), _rgb(line)
     half = line_width / 2.0
+    reach = half + 0.5 if line_c else 0.0            # (a pixel farther than this from the curve shows no line)
+    full = _pixel(fill_c, line_c, 1.0 if fill_c else 0.0, 0.0)
+    empty = _pixel(fill_c, line_c, 0.0, 0.0)
+    # most pixels lie well above or below the curve: plain, without the sums (the queue dialog's two curves took
+    # 150 ms to draw). Below a column's [lo, hi] by more than `far` (the line's reach measured square to a steep
+    # piece is longer), a pixel is all fill; above it, all empty.
+    cols = []
+    for i in range(w):
+        ya, yb = ys[i], ys[i + 1]
+        lo, hi = (ya, yb) if ya <= yb else (yb, ya)
+        cols.append((lo, hi, 0.5 + reach * math.sqrt(1.0 + (hi - lo) ** 2)))
     rows = []
     for j in range(h):
         py = j + 0.5
         row = bytearray()
         for i in range(w):
+            lo, hi, far = cols[i]
+            if py - hi >= far:
+                row += full
+                continue
+            if lo - py >= far:
+                row += empty
+                continue
             ya, yb = ys[i], ys[i + 1]
             ym = (ya + yb) / 2.0
             slope = yb - ya
             # the area: the share of this pixel below the curve (exact for a straight piece of curve)
-            lo, hi = min(ya, yb), max(ya, yb)
             if py - 0.5 >= hi:
                 a_fill = 1.0
             elif py + 0.5 <= lo:

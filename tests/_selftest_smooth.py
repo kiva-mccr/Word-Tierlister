@@ -138,5 +138,34 @@ assert img.get(61, 8) == cols[60] and img.get(101, 8) == cols[100]              
 bg = tuple(v // 257 for v in cv.winfo_rgb(cv.cget("bg")))
 assert img.get(0, 0) == bg and img.get(121, 15) == bg                               # (corners outside: the backdrop)
 assert img.get(61, 0) != cols[60] and img.get(61, 1) != cols[60]                    # (a soft hairline edge on top)
+# measuring (App._fit_size): shapes made or resized while sizes are tried are painted once, after, at the last size
+calls = []
+real = SM._stretched_mask
+SM._stretched_mask = lambda *a: calls.append(a[:4]) or real(*a)
+try:
+    with SM.measuring(paint=True):
+        m = cv.round_rect(5, 5, 77, 31, 9, fill="#C9E4FF", tags="mz")
+        for x2 in (90, 103, 117):
+            cv.round_rect_coords("mz", 5, 5, x2, 31, r=9)
+        assert calls == [] and cv.smooth_image("mz") is None                         # nothing painted yet
+    assert len(calls) == 1 and cv.smooth_image("mz") is not None                     # once, at the size kept
+    assert cv.bbox(cv.smooth_image("mz"))[2] >= 116
+    calls.clear()
+    with SM.measuring():                                                             # (paint=False: painted later,
+        cv.round_rect_coords("mz", 5, 5, 60, 31, r=9)                               #  when drawn again)
+    assert calls == []
+    cv.round_rect_coords("mz", 5, 5, 61, 31, r=9); assert len(calls) == 1
+finally:
+    SM._stretched_mask = real
+# the mask's fast path (only the pixels where something changes): every row still covers the whole width
+import random as _rnd
+_rnd.seed(5)
+for _ in range(20):
+    w, h = _rnd.randint(8, 90), _rnd.randint(8, 50)
+    pts = SM.control_points(1, 1, w - 1, h - 1, (_rnd.uniform(0, min(w, h) / 2 - 1),) * 4)
+    rows = SM.coverage_mask(SM._straighten(SM.smooth_outline(pts, 6)), w, h, _rnd.choice([0, 1, 2]))
+    assert all(sum(r[0] for r in runs) == w for runs in rows)
+    mid = [v for r in rows[h // 2] for v in [r[1]] * r[0]]
+    assert mid[w // 2] == 255 and mid[0] < 255          # filled in the middle, soft or clear at the edge
 root.destroy()
 print("SMOOTH OK")

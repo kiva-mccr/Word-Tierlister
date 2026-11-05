@@ -218,11 +218,6 @@ def family():
     return _family
 
 
-def display_family():
-    """Name of the display font family (the words) chosen by init_fonts()."""
-    return _display
-
-
 def font(role):
     """The shared Font object for a role. init_fonts(root) must have been called."""
     return _fonts[role]

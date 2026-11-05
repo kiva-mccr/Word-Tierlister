@@ -4,7 +4,8 @@
 # 2 for Linux, 3 for Windows (slower). The build test makes and starts the program there too (PyInstaller). The smoke
 # test's screenshots are downloads of the run (Actions > Test on Linux and Windows > the run > Artifacts). Started by
 # hand (Run workflow), by a pull request that touches the code, and by a push to main; a newer push to a pull request
-# cancels its older run.
+# cancels its older run. A quick check runs first (about a minute: check_release's static checks, stale notes beside
+# the code, the layering, pyflakes over src and tools), so a slip of that kind shows long before the window tests end.
 name: Test on Linux and Windows
 
 on:
@@ -23,6 +24,20 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  quick:
+    name: quick check (notes, layers, pyflakes)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pyflakes
+        run: python -m pip install -q pyflakes && python -m pyflakes src tools
+      - name: Release checks (no tests)
+        run: python tools/check_release.py
+
   test:
     strategy:
       fail-fast: false

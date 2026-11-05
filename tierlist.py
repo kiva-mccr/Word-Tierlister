@@ -2029,6 +2029,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           setup window and the review window are drawn see-through and shown in one go (ui_style.veil / unveil /
 #           show_drawn); they appeared piece by piece over ~0.2 s, and the setup window in the top-left corner first.
 #           Browse and the drop-downs already appeared complete.
+# [x] F-51 Asked for: a cleanup (why the program feels slow, orphans, docs, are the pull request tests useful). The
+#           user named the slow parts: windows drawing and the top menus. Measured: a key press, a placement, an undo
+#           take 15-50 ms even on a million words; a window's time is mostly painting rounded shapes in Python. Now
+#           masks are worked out only where something changes (about 2x faster, the same pixels), kept for the whole
+#           program, and never painted for the text sizes a fit only tries (smooth.measuring); buttons and the shape
+#           cards no longer draw twice. On Linux (X11, XWayland) a closed menu waits mapped off-screen, so opening it
+#           is a move of a picture the compositor kept. Browse cancels its timers on close. CI: a quick check job
+#           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
+#           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
+#           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
 # [x] F-50 Reported after F-49: maximizing still stepped back and forth. Recorded frame by frame: the text changes once,
 #           but the re-fit and redraw take ~0.2 s, and meanwhile the window showed the old page in a corner of its new
 #           size, then the page half drawn, then the new one (restoring the same, the other way). Chosen from three

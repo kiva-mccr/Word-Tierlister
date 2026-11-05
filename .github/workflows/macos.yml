@@ -7,14 +7,15 @@
 # The tests are split over several machines per Mac, run at the same time (SHARD=k/n, tests/_shard.py): 2 for Apple
 # Silicon, 3 for the slower Intel Mac, 5 in all (a free account runs at most 5 macOS jobs at once). The pictures and
 # the built app are downloads of the run (Actions > Test on macOS > the run > Artifacts). Started by hand (Run
-# workflow), by a pull request that touches the code, and by a push to main; a newer push to a pull request cancels
-# its older run.
+# workflow), by a push to main that touches the code, and once a night (GitHub's Mac images change too). Not on pull
+# requests: a Mac run takes 20-30 minutes and failed mostly on timing checks, so every pull request waited on it;
+# Linux and Windows still test each pull request.
 name: Test on macOS
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths: ["**.py", "src/**", "tests/**", "requirements.txt", ".github/workflows/macos.yml", "!**.md"]
+  schedule:
+    - cron: "17 3 * * *"
   push:
     branches: [main]
     paths: ["**.py", "src/**", "tests/**", "requirements.txt", ".github/workflows/macos.yml", "!**.md"]

@@ -143,7 +143,8 @@ release.set()
 t_end = time.time() + 30
 while qd.alive() and time.time() < t_end:
     pump(2, 0.05)
-assert not qd.alive() and not app.busy and s.queue_settings()["seed"] == 424242 and s.version > v0
+assert not qd.alive() and not app.busy and s.queue_settings()["seed"] == 424242 and s.version > v0, \
+    (qd.alive(), app.busy, s.queue_settings(), s.version, v0, labels(qd) if qd.alive() else None)
 assert app.toast.cget("text") == "Queue reshuffled"
 s.reshuffle = real_reshuffle
 ad = app.edit_anchors(); pump(3)
@@ -283,7 +284,13 @@ try:
 except Exception as exc:
     print("no screenshots:", exc)
 
+bw.search_var.set("w0001")                                 # closed while the typing timer waits: the timer goes too
+assert bw._job
+pending = set(root.tk.splitlist(root.tk.call("after", "info")))
+assert bw._job in pending
+job = bw._job
 bw.close()
+assert job not in set(root.tk.splitlist(root.tk.call("after", "info")))
 
 # ---- empty states (UI-20): a friendly card instead of greyed-out cards
 app.mode_var.set("conflict"); app.on_mode_change(); pump(3)
