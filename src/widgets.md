@@ -25,7 +25,7 @@ The module docstring has the details; this page is the map.
 - `TabBar`: Folder-style tabs over a page (UI-10): a hairline runs the full width under the tabs, and the chosen tab is drawn in the page colour with its sides and rounded top...
   - methods: tab_x, set, show_only, get, refresh
 - `DropMenu`: A styled drop-down menu (UI-10): a borderless window with roomy rows, the pastel highlight, check marks and shortcut hints, used by the header's File / Edit / View /...
-  - methods: labels, is_open, prepare, parked, open, invoke, close
+  - methods: labels, is_open, prepare, open, invoke, close
 - `ChoiceButton`: A drop-down choice (UI-43): a soft button showing the current value and a little arrow; a click opens a DropMenu with the choices (a check mark on the current one).
   - methods: set_values, toggle, refresh
 - `HeaderMenus`: The row of header menu buttons (File, Edit, View, Settings) with their DropMenus (UI-10).
@@ -67,7 +67,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
-- On X11 a closed DropMenu waits mapped far off-screen (`PARK`, `_parks`, `parked`) instead of hidden, so a compositor (GNOME, XWayland) keeps its picture and opening is a move, not a new window painted row by row (the user: menus slow to show). Windows and macOS still hide it. Never treat `winfo_viewable` as "open": use `is_open`.
+- A closed DropMenu is hidden (withdrawn) everywhere, never parked mapped off-screen (F-54, reported: on GNOME the move back on screen was sometimes lost, so the menu never showed while its button stayed lit, and the next click "closed" it). Use `is_open` for "open".
 - A RoundButton draws on <Configure> only when its size changed (`_drawn`): every new button was drawn twice. A ShapeCard redraws on `set` only when its spread or choice changed.
 
 - `StyledDialog.decorate` (FS-2) is called once with each dialog just before it shows: full screen's Back bar. Only App sets it.
