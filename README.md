@@ -140,8 +140,15 @@ and Ctrl+Z brings it back.
   bigger and its contents grow with it. Each monitor remembers its own zoom, and the maximized window one of its
   own. Switching tabs, comparing or opening the definitions never resizes the window or its text: the definitions
   pane takes whatever room is left.
+- **View > Full screen** (or **F11**) fills the whole screen, a little like a game. The top menus become one
+  **Menu** button, and **Esc** opens the menu over the page: move with the arrow keys, open with Enter, and each
+  page and window has a **Back** button with the path to it ("Menu › Settings › Tier colours"). Esc goes back a
+  step, and from the menu's first page back to your words.
 - **View > Reduce motion** turns the animations down.
 - **Settings > Anchor words** chooses the example word for each tier used when comparing.
+
+When you close a window you opened from one of the top menus, that menu opens again with the item you came from
+lit, so trying a few settings in a row takes one click each. Esc or a click elsewhere closes it.
 
 ## Keys
 
@@ -153,6 +160,8 @@ All of these can be changed under Settings > Keyboard shortcuts.
 | | **D** | Show or hide the definition |
 | | **Tab** / **Shift+Tab** | Next / previous tab |
 | | **Ctrl +** / **Ctrl -** / **Ctrl 0** | Zoom in / out / actual size |
+| | **F11** | Full screen on or off |
+| | **Esc** | The menu, in full screen (Esc again closes it) |
 | Placing | **1** to **6** | Place in S, A, B, C, D or F |
 | | **Space** | Compare to anchors |
 | | **U** or **?** | Don't know, later |

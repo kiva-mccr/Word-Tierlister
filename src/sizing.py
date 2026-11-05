@@ -207,9 +207,10 @@ def usable_area(root):
 
 def is_maximized(win):
     """True while `win` is maximized: its state is "zoomed" on Windows and macOS; on Linux the window manager says
-    so through the -zoomed attribute (Tk keeps it up to date; the state stays "normal" there)."""
+    so through the -zoomed attribute (Tk keeps it up to date; the state stays "normal" there). Full screen (FS-2)
+    counts as maximized: it shows the maximized window's zoom."""
     try:
-        if win.state() == "zoomed":
+        if win.state() == "zoomed" or bool(int(win.attributes("-fullscreen"))):
             return True
     except Exception:                        # (a window being destroyed)
         return False
