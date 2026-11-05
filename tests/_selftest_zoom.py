@@ -135,7 +135,7 @@ app.open_browser(); pump(6)
 assert app.browsers[0].zoom == 2
 app.browsers[0].close(); app.on_close()
 
-# F-51 (asked for, replacing UI-57's zoom of its own for the maximized window): maximizing or restoring keeps the text
+# F-52 (asked for, replacing UI-57's zoom of its own for the maximized window): maximizing or restoring keeps the text
 # the size it shows; the page only gets more room (the re-fit at a new text size took ~0.2 s and jarred). (A real
 # maximize under a window manager: recorded under openbox; here the state is faked.)
 A.usable_area = lambda r: (0, 0, 1900, 1040)

@@ -227,7 +227,7 @@ class App:
         self._monitor = self._monitor_id()   # the monitor the window is on: each keeps its own zooms (Z-1)
         self._monitor_job = None
         self.zoom = self._zoom_meta("zoom")
-        self._maximized = False   # the window maximized: its text keeps the size it had (F-51, asked for)
+        self._maximized = False   # the window maximized: its text keeps the size it had (F-52, asked for)
         self._chart_ready = False
         self._settled_ready = False
 
@@ -719,7 +719,7 @@ class App:
 
     def _note_maximize(self):
         """Note whether the window is maximized; True if it was just maximized or restored. Its text keeps the size
-        it shows either way (F-51, asked for: most programs give a bigger window more room, not bigger text; the
+        it shows either way (F-52, asked for: most programs give a bigger window more room, not bigger text; the
         re-fit at a new text size took ~0.2 s and every way of hiding it still jarred). UI-57's separate zoom for
         the maximized window is gone."""
         m = is_maximized(self.root)
@@ -1157,7 +1157,7 @@ class App:
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
         if is_maximized(self.root) != self._maximized:
-            # Just maximized or restored: the text keeps its size (F-51), so only the page's room changes: laid out
+            # Just maximized or restored: the text keeps its size (F-52), so only the page's room changes: laid out
             # now, inside this event, before Tk draws the new size (F-49: an idle job came after Tk's own redraw).
             # The size comes from the event: reading it with update_idletasks would draw.
             self._grow_job = None

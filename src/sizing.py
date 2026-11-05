@@ -10,7 +10,7 @@ Three questions this module answers:
     * How big is "one unit" of UI?    ui_factor(root): 1.0 at the classic 96 dpi; larger on high-dpi
       screens where Tk's point-based fonts are bigger but pixel sizes written in code are not.
     * Where does a window go?         fit_size / center_geometry / place_dialog.
-    * Is it maximized?                is_maximized(win) (the main window keeps its text size then, F-51).
+    * Is it maximized?                is_maximized(win) (the main window keeps its text size then, F-52).
 
 Layers that call this: App (main window), Browser, StartupWindow and the dialogs. Everything that
 reads the screen goes through usable_area(), so tests can pretend to have a different screen.

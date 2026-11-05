@@ -518,7 +518,7 @@ missing or out of date, and also checks that each module imports only from the l
   `App._check_monitor`). What fits the screen is measured once for the worst case, every view at once with the
   definitions pane at its shortest (`App._worst_size`, `App._fit_window`, Z-1): a tab, the pane or a comparison never
   resizes the window or its text; the pane fills the room the view leaves (`App._fill_pane`). Maximizing or
-  restoring keeps the text the size it shows and only lays the page out in its new room (`App._note_maximize`, F-51,
+  restoring keeps the text the size it shows and only lays the page out in its new room (`App._note_maximize`, F-52,
   which replaced UI-57's separate zoom for the maximized window). A zoom in past what
   fits is refused with a "no" shake of its message, never tried on screen: the limits are found while the window is
   still hidden as it opens and kept for each screen (`App._precheck_zoom`, F-30); no fit starts above them, so

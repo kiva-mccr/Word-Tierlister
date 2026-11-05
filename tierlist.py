@@ -1330,7 +1330,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           any smaller font). It only grows from word to word (shrinking for each short one would make the
 #           page jump on every word) and is back to 9 lines when the pane is closed. A window grown past the
 #           screen's edge is now moved back onto it (it grew downward from where it opened).
-# [x] UI-57 (Replaced by F-51, asked for.) A zoom for the maximized window (asked for: "when maximized ... the zoom it last had while maximized,
+# [x] UI-57 (Replaced by F-52, asked for.) A zoom for the maximized window (asked for: "when maximized ... the zoom it last had while maximized,
 #           and vice versa", so every window size keeps its own relative size). The main window keeps two zooms:
 #           "zoom_max" for it maximized, "zoom" for any other size; a zoom chosen while maximized is kept as the
 #           first, and maximizing or restoring brings back the one kept for that state (App._follow_maximize,
@@ -1766,7 +1766,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 # [x] UI-68 Asked for: Browse's sort arrow pointed up for S to F; it now points the way the values grow (down for S..F,
 #           a..z and commonest first; up for the highest rating or most duels first; a second click turns it round),
 #           and the Sort drop-down says "Tier" instead of "Default" (the order the Tier column sorts in).
-# [x] UI-69 (Moot since F-51: one zoom.) Reported (Fedora): the window opened with its contents bigger than allowed, and maximizing then made them
+# [x] UI-69 (Moot since F-52: one zoom.) Reported (Fedora): the window opened with its contents bigger than allowed, and maximizing then made them
 #           smaller. The two zooms (UI-57: one for the window maximized, one for any other size) were kept apart and
 #           nothing kept them compatible: a usual zoom of 150% with 100% kept for maximized opened at 150%, then
 #           maximizing showed 100% (reproduced under openbox). Now the usual window never shows more than the
@@ -2044,7 +2044,7 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
-# [x] F-51 Asked for after F-50 ("still jarring"; research: GTK / Qt keep the old picture until the new one is drawn
+# [x] F-52 Asked for after F-50 ("still jarring"; research: GTK / Qt keep the old picture until the new one is drawn
 #           (frame sync, which Tk lacks), and most programs give a bigger window more room, not bigger text). Chosen
 #           from four recorded mock-ups (now, a blank page colour, a fade, the text keeping its size): maximizing or
 #           restoring keeps the text the size it shows; the page only gets more room (App._note_maximize; a re-fit

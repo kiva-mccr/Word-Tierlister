@@ -63,7 +63,7 @@ assert app._veil_since is None
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)
 
 # just maximized or restored: the page is laid out at once, inside the event, with the event's size (F-49); its text
-# keeps its size (F-51), so it is never made see-through for it
+# keeps its size (F-52), so it is never made see-through for it
 real_max, real_grow = A.is_maximized, app._apply_grow
 seen = []
 try:
