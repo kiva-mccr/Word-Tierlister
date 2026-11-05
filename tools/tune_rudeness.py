@@ -517,7 +517,15 @@ def pool(data, workers, progress=None):
         ex = Inline(data)
         _data["_progress"] = progress
         return ex
-    return ProcessPoolExecutor(max_workers=workers, initializer=_start, initargs=(data, progress))
+    return ProcessPoolExecutor(max_workers=workers, mp_context=_spawning(), initializer=_start,
+                               initargs=(data, progress))
+
+
+def _spawning():
+    """Every helper process is spawned, never forked: a fork copies the window's process with its threads mid-way
+    (the stdin listener holds sys.stdin's lock, and the fork's start-up closes sys.stdin: it hung there for good)."""
+    import multiprocessing
+    return multiprocessing.get_context("spawn")
 
 
 # ---- the data -------------------------------------------------------------------------------------------------------
@@ -815,8 +823,7 @@ class Tuning:
 
 
 def _mp_queue():
-    import multiprocessing
-    return multiprocessing.Queue()
+    return _spawning().Queue()
 
 
 def _relay(source, events):
@@ -1208,25 +1215,31 @@ class TuneWindow:
         legend = ((AVERAGE_LINE, None, 3, f"error: the average of the {PARTS} parts (100% minus the average F1)"),
                   (PART_LINE, None, 2, "each part, tested on numbers tuned without it"),
                   (P["muted"], (4, 4), 1, "the rules as they are now"))
-        widths = [56 + font("small").measure(t) for *_k, t in legend]
+        small = font("small")                          # (every margin measured: the text's size varies by screen)
+        line = small.metrics("linespace")
+        axis = 6 + line + 8                                     # (the vertical axis's name, then its numbers)
+        left = axis + small.measure("100%") + 10
+        right = 16 + small.measure("average 100.0%")
+        widths = [56 + small.measure(t) for *_k, t in legend]
         rows, used = 1, 0                                       # (the legend wraps when the chart is narrow)
         for wd in widths:
-            if used and used + wd > w - 80:
+            if used and used + wd > w - left - 10:
                 rows, used = rows + 1, 0
             used += wd
-        left, right, top, bottom = 70, 130, 14, 42 + 18 * rows
+        top, bottom = 14, 6 + 2 * line + 10 + (line + 4) * rows
         start = self.avg[0][1] if self.avg else 25.0
         hi = max(10, 5 * (int(max([start] + [e for pts in self.points.values() for _r, e in pts]) / 5) + 1))
         x = lambda r: left + r / max(1, self.rounds) * (w - left - right)     # noqa: E731
         y = lambda v: top + (hi - v) / hi * (h - top - bottom)                 # noqa: E731
         for v in range(0, hi + 1, 5 if hi <= 40 else 10):
             c.create_line(left, y(v), w - right, y(v), fill=P["border"])
-            c.create_text(left - 8, y(v), text=f"{v}%", anchor="e", font=font("small"), fill=P["muted"])
+            c.create_text(left - 8, y(v), text=f"{v}%", anchor="e", font=small, fill=P["muted"])
         tick = 10 if self.rounds > 30 else 5
         for r in range(0, self.rounds + 1, tick):
-            c.create_text(x(r), h - bottom + 14, text=str(r), font=font("small"), fill=P["muted"])
-        c.create_text((left + w - right) / 2, h - bottom + 32, text="round", font=font("small"), fill=P["muted"])
-        c.create_text(18, (top + h - bottom) / 2, text="error (lower is better)", angle=90, font=font("small"),
+            c.create_text(x(r), h - bottom + 6, text=str(r), anchor="n", font=small, fill=P["muted"])
+        c.create_text((left + w - right) / 2, h - bottom + 6 + line, text="round", anchor="n", font=small,
+                      fill=P["muted"])
+        c.create_text(6 + line / 2, (top + h - bottom) / 2, text="error (lower is better)", angle=90, font=small,
                       fill=P["muted"])
         if not self.avg:
             c.create_text((left + w - right) / 2, h / 2, text="The first round starts once the words are read.",
@@ -1249,10 +1262,10 @@ class TuneWindow:
             c.create_line(x(self.best_round), top, x(self.best_round), h - bottom, fill=P["muted"], dash=(2, 3))
             c.create_text(x(self.best_round) + 4, top + 8, text=f"best: round {self.best_round}", anchor="w",
                           font=font("small"), fill=P["muted"])
-        lx, ly = left, h - bottom + 50                # the legend (every line named): under the plot
+        lx, ly = left, h - bottom + 6 + 2 * line + 10 + line / 2    # the legend (every line named): under the plot
         for (col, dash, wd, text), width in zip(legend, widths):
             if lx > left and lx + width > w - 10:
-                lx, ly = left, ly + 18
+                lx, ly = left, ly + line + 4
             c.create_line(lx, ly, lx + 24, ly, fill=col, width=wd, dash=dash)
             item = c.create_text(lx + 32, ly, text=text, anchor="w", font=font("small"), fill=P["text"])
             lx = c.bbox(item)[2] + 24
@@ -1461,7 +1474,8 @@ def pool_for_guard(saved, workers=1):
                 _guard.pop("_fast").__exit__(None, None, None)
                 _guard.clear()
         return Here()
-    return ProcessPoolExecutor(max_workers=workers, initializer=_start_guard, initargs=(saved,))
+    return ProcessPoolExecutor(max_workers=workers, mp_context=_spawning(), initializer=_start_guard,
+                               initargs=(saved,))
 
 
 def main(argv=None):
@@ -1504,8 +1518,7 @@ def main(argv=None):
 def load(entries, answers, events, workers):
     """Read the entries in a process of its own (reading them in the window's process froze it for seconds at a
     time); its progress and its result come back as the window's events ("log", "progress", "ready", "error")."""
-    import multiprocessing
-    ctx = multiprocessing.get_context("spawn")    # (never a fork of a process that runs Tk)
+    ctx = _spawning()                             # (never a fork of a process that runs Tk)
     out = ctx.Queue()
     ctx.Process(target=_load_job, args=(entries, answers, out), daemon=True).start()
 

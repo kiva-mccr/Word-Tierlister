@@ -104,6 +104,12 @@ with open(os.path.join(folder, T.MISSES_FILE), encoding="utf-8") as f:
 for p, (lo, hi) in data["bounds"].items():
     assert lo <= tu.best[2][p] <= hi, p
 
+# the helper processes are spawned, never forked (reported: started by the program, a fork hung at round 0 for good:
+# the stdin listener held sys.stdin's lock while the fork's start-up closed sys.stdin)
+for ex in (T.pool(data, 1), T.pool_for_guard(saved, 1)):
+    assert ex._mp_context.get_start_method() == "spawn"
+    ex.shutdown(wait=False)
+
 # pause and stop between rounds
 events = queue.Queue()
 tu2 = T.Tuning(data, saved, events, rounds=50, workers=0)
@@ -222,6 +228,29 @@ texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.char
 assert any(t.startswith("error: the average of the 5 parts") for t in texts)
 assert any(t.startswith("each part, tested") for t in texts) and "the rules as they are now" in texts
 assert "error (lower is better)" in texts                         # (the vertical axis, asked for)
+
+
+def no_overlap():
+    """The axis's name clear of its numbers, the numbers clear of the plot, the round numbers clear of "round"."""
+    c = win.chart
+    items = {i: c.itemcget(i, "text") for i in c.find_all() if c.type(i) == "text"}
+    name = [i for i, t in items.items() if t == "error (lower is better)"][0]
+    nums = [i for i, t in items.items() if t.endswith("%") and t[:-1].isdigit()]
+    assert all(c.bbox(name)[2] <= c.bbox(i)[0] for i in nums), (c.bbox(name), [c.bbox(i) for i in nums])
+    rnd = [i for i, t in items.items() if t == "round"][0]
+    ticks = [i for i, t in items.items() if t.isdigit()]
+    assert all(c.bbox(i)[3] <= c.bbox(rnd)[1] + 1 for i in ticks)
+
+
+no_overlap()
+import fonts as _fonts
+small_font = _fonts.font("small")
+small_size = small_font.cget("size")
+small_font.configure(size=int(small_size * 1.6) if small_size > 0 else int(small_size * 1.6))   # (a bigger text size)
+win.draw(); pump(5)
+no_overlap()                                                      # (reported: they overlapped at the user's size)
+small_font.configure(size=small_size)
+win.draw(); pump(5)
 legend = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and
           win.chart.itemcget(i, "text") == "the rules as they are now"][0]
 zero = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and win.chart.itemcget(i, "text") == "0%"][0]
