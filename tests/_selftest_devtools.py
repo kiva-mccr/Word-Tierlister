@@ -124,6 +124,76 @@ assert started == [cmd] and cmd[1:] == [os.path.join(src_root, "tools", "tune_ru
                                         "--entries", os.path.join(src_root, "rudeness_entries.jsonl")]
 assert not d.dlg.alive()                                             # (the tuner is a window of its own)
 
+# ---- the rings: a running tool's progress, read by its bubble (asked for, picked from a mock-up) -------------------
+import threading
+assert app.dev_progress("review words") is None and app.dev_progress("tune") is None
+
+
+class FakeTuner:                   # (prints its rounds on a pipe the test writes into)
+    def __init__(self):
+        self.lines, self.more, self.code = [], threading.Event(), None
+        self.stdout = self
+
+    def __iter__(self):
+        while True:
+            self.more.wait(5)
+            self.more.clear()
+            while self.lines:
+                line = self.lines.pop(0)
+                if line is None:
+                    return
+                yield line
+
+    def say(self, line):
+        self.lines.append(line); self.more.set(); time.sleep(0.05)
+
+    def poll(self):
+        return self.code
+
+
+tuner = FakeTuner()
+d = app.edit_dealing(); pump(3)
+ring = d.bubbles["Tune the rules"]
+assert not ring.running() and ring.progress is not None and d.bubbles["Score the rules"].progress is None
+assert app.tune_rules(d.dlg, start=lambda c: tuner) and app.dev_progress("tune") == (0.0, "The tuner is reading "
+                                                                                       "Wiktionary's entries")
+d = app.edit_dealing(); pump(3)                                     # (opened while it runs: it shows at once)
+ring = d.bubbles["Tune the rules"]
+tuner.say("Round 3 of up to 12\n")
+assert app.dev_progress("tune") == (0.25, "Round 3 of up to 12")
+for _ in range(30):
+    pump(1)
+assert ring.running() and ring.lit() and ring.state == (0.25, "Round 3 of up to 12")
+assert abs(ring._shown - 0.25) < 0.01, ring._shown                  # (eased there)
+calls = []
+ring.command = lambda: calls.append(1)
+ring.invoke(); assert not calls                                     # (a click on a running tool does nothing)
+assert app.tune_rules(d.dlg, start=lambda c: calls.append(c)) is None and not calls    # (one tuner at a time)
+tuner.say("Done\n")
+assert app.dev_progress("tune") is None
+pump(4)
+assert not ring.running() and ring._blink                           # (the whole ring blinks once)
+for _ in range(40):
+    pump(1)
+assert not ring._blink and not ring.lit()
+ring.invoke(); assert calls == [1]                                  # (plain again: a click runs it)
+tuner.lines.append(None); tuner.more.set()
+# Make review words: no fraction (an arc goes round), its last line in the hover note
+app._tool_job = None
+job = {"done": None, "path": fresh, "note": "Step 1 of 2: 400,000 entries read"}
+app._tool_job = job
+assert app.dev_progress("review words") == (None, "Step 1 of 2: 400,000 entries read")
+mk = d.bubbles["Make review words"]
+pump(6)
+assert mk.running() and mk.state[0] is None
+spin = mk._spin; pump(4); assert mk._spin == spin                   # (reduce motion: it stays still)
+app.anim.reduce_motion = False
+pump(4); spin = mk._spin; pump(4); assert mk._spin != spin          # (the arc turns)
+app.anim.reduce_motion = True
+job["done"] = (0, "300 new words to review"); app._watch_tool(job)
+assert app.dev_progress("review words") is None
+d.dlg.close()
+
 # ---- Source & Updates: Nightly (a switch), Log, Crash test ----------------------------------------------------------
 proj = tempfile.mkdtemp()
 for name, text in (("tierlist.py", "x = 1\n"), ("src/a.py", "a = 1\n")):

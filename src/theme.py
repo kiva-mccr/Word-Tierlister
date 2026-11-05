@@ -13,6 +13,7 @@ LIGHT = {
     "disabled": "#A9A5B5",   # greyed-out button text
     "border":   "#E6DFEA",   # hairlines
     "accent":   "#B8A4F4",   # lilac accent: focus rings, selected states
+    "ring":     "#8C72E0",   # a running developer tool's progress ring (DevBubble): reads on the lilac fill
     "accent_text": "#3D3A4B",
     "select_bg": "#DCD2FA",  # selected row / pressed fill
     "shadow":   "#E9E2E6",   # offset shape under cards
@@ -43,6 +44,7 @@ DARK = {
     "disabled": "#746C78",
     "border":   "#3F3946",
     "accent":   "#C2B0D2",
+    "ring":     "#DCCBEA",
     "accent_text": "#F1EADF",
     "select_bg": "#4A4150",
     "shadow":   "#17151B",
