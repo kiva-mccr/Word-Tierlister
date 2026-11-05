@@ -72,8 +72,8 @@ ui_motion, smooth, widgets, errors, startup -> ui_chart, fullscreen, browser, fi
   comparing, a duel with its drop-down, the pane at 3 lines open or not) and runs only on a zoom, maximize, another
   monitor or a resize by hand; a tab, the pane, a comparison or a definition only refill the pane
   (`App._fill_pane`). Never re-fit for a layout change. Measure minimum sizes at grow 1. Main and Browse zooms are
-  separate and saved; each monitor keeps its own (meta `monitor_zooms`); the main window keeps another for when
-  it is maximized (UI-57: `zoom_max`, brought back on maximize / restore), never below the usual one (UI-69).
+  separate and saved; each monitor keeps its own (meta `monitor_zooms`). Maximizing or restoring keeps the text the
+  size it shows (F-52, asked for: UI-57's zoom for the maximized window is gone; never re-fit text for it).
 - Test speed on a big save (300k-1M words) for anything run per duel or per refresh (`tools/speed_check.py`
   under xvfb-run: a 1M save, dense and sparse; under ~40 ms an action, ~200 ms a Browse sort): a query that sorts a
   whole tier is ~100 ms there, and nothing may build lists that grow with the square of a tier. Read the
@@ -197,6 +197,8 @@ F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the 
 slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
 text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
 still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
+F-52 (still jarring: maximizing keeps the text size, the page only gets more room; UI-57's own zoom dropped; picked from
+recorded mock-ups after research: Tk has no frame sync).
 F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
 for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11; CI quick check, macOS off pull
 requests). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
