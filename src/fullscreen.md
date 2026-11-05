@@ -23,4 +23,4 @@ The module docstring has the details; this page is the map.
 - `canvas.lift()` on a Canvas raises items (it is tag_raise), not the widget: the widget is raised with Tk's own `raise`.
 - Tk has no see-through widgets: the backdrop is a tint of the page, not the page dimmed (UI-74, UI-32).
 - `dialog_bar` drops the title bar with overrideredirect except on macOS, where such a window gets no keys.
-- The pointer lights a row only once it has really moved: the first `<Motion>` after opening just notes where it is (Windows sends one when the menu appears under a still pointer, which lit that row and broke the arrows' order on GitHub's Windows).
+- The pointer lights a row only once it has really moved: the first `<Motion>` after opening just notes where it is (a window appearing under a still pointer can get one, which would light the row under it).

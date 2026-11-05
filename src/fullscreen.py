@@ -173,8 +173,8 @@ class PauseMenu:
         return None
 
     def _on_motion(self, e):
-        """The pointer lights the row it moves onto. The first motion only notes where it is: Windows sends one
-        when the menu appears under a still pointer, which lit that row (seen on GitHub's Windows)."""
+        """The pointer lights the row it moves onto. The first motion only notes where it is: a menu appearing
+        under a still pointer can get one, which would light the row under it instead of the one the keys left."""
         if self._pointer is None or self._pointer == (e.x_root, e.y_root):
             self._pointer = (e.x_root, e.y_root)
             return
