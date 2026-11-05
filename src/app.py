@@ -211,6 +211,7 @@ class App:
         self._grow_job = None
         self._veil_since = None   # while the window is still see-through after opening (open_window, _unveil)
         self._last_configure = 0.0
+        self._size_now = None                 # (the window's size while a maximize re-fits: _on_root_configure)
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -1002,6 +1003,8 @@ class App:
 
     def _window_size(self):
         """(width, height) of the window, or the size just asked for while it has not shown it yet."""
+        if self._size_now:                    # (inside a <Configure> that re-fits at once: its size, undrawn)
+            return self._size_now
         r = self.root
         r.update_idletasks()
         if r.winfo_ismapped() and r.winfo_height() > 1:
@@ -1175,9 +1178,22 @@ class App:
         veiled = self._veil_since is not None      # (just opened, still see-through: _unveil waits for these)
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
-        if is_maximized(self.root) != self._maximized:      # (just maximized or restored: re-fit at once, not after
-            self._grow_job = self.root.after_idle(self._apply_grow)   # the 80 ms pause, asked for: the new size
-        else:                                                         # showed the old text a moment too long)
+        if is_maximized(self.root) != self._maximized:
+            # Just maximized or restored: re-fit now, inside this event, before Tk draws the page at its new size
+            # (asked for, F-49: an idle job came after Tk's own redraw, so the new size first showed the old text,
+            # then half-laid-out steps). The size comes from the event: reading it with update_idletasks would draw.
+            # It is see-through meanwhile and shown once drawn (asked for: the re-fit and redraw take ~0.2 s, and the
+            # window showed the old page in a corner of the new size, then the page half drawn, then the new one).
+            self._grow_job = None
+            self._size_now = (e.width, e.height)
+            hide = not veiled and veil(self.root)
+            try:
+                self._apply_grow()
+            finally:
+                self._size_now = None
+                if hide:
+                    unveil(self.root)
+        else:
             self._grow_job = self.root.after(20 if veiled else 80, self._apply_grow)
         if self._monitor_job:
             self.root.after_cancel(self._monitor_job)

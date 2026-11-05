@@ -335,6 +335,8 @@ class RoundButton(SmoothCanvas):
         """Label-style options (text, hint, font, wraplength, bg, fg) plus the normal Canvas ones."""
         kw = dict(cnf or {}, **kw)
         mine = {k: kw.pop(k) for k in _CUSTOM if k in kw}
+        if mine.get("wraplength", None) == self._wrap:    # (the same wrap: no redraw; a re-fit sets it every time)
+            del mine["wraplength"]
         if kw:
             super().configure(**kw)
         if mine:
@@ -2917,8 +2919,10 @@ class WordCard(SmoothCanvas):
     def configure(self, cnf=None, **kw):
         kw = dict(cnf or {}, **kw)
         if "wraplength" in kw:
-            self._wrap = kw.pop("wraplength")
-            self._draw()
+            wrap = kw.pop("wraplength")
+            if wrap != self._wrap:            # (a re-fit sets it every time: only a new width redraws)
+                self._wrap = wrap
+                self._draw()
         if kw:
             super().configure(**kw)
 
