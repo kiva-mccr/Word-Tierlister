@@ -143,7 +143,8 @@ release.set()
 t_end = time.time() + 30
 while qd.alive() and time.time() < t_end:
     pump(2, 0.05)
-assert not qd.alive() and not app.busy and s.queue_settings()["seed"] == 424242 and s.version > v0
+assert not qd.alive() and not app.busy and s.queue_settings()["seed"] == 424242 and s.version > v0, \
+    (qd.alive(), app.busy, s.queue_settings(), s.version, v0, labels(qd) if qd.alive() else None)
 assert app.toast.cget("text") == "Queue reshuffled"
 s.reshuffle = real_reshuffle
 ad = app.edit_anchors(); pump(3)

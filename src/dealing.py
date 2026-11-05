@@ -19,7 +19,6 @@ review window, App.review_rude), "Score the rules" (the answers so far against t
 """
 import gc
 import random
-import sqlite3
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -374,8 +373,8 @@ class DealDialog:
                     self.store.set_deal(**deal)
                 if cfg is not None:
                     self.store.reshuffle(**cfg)
-            except (sqlite3.Error, OSError, ValueError) as exc:
-                result["error"] = str(exc)
+            except Exception as exc:                 # (any failure: a crash of the worker said "reshuffled")
+                result["error"] = str(exc) or type(exc).__name__
         worker = threading.Thread(target=work, daemon=True)
         worker.start()
 

@@ -166,7 +166,7 @@ class Ran:
 paths_out = "Configuration file:\n\t/home/u/.local/state/syncthing/config.xml\n\nDevice private key:\n\t/x\n"
 assert st.config_path("st", run=lambda *a, **k: Ran(paths_out)) == "/home/u/.local/state/syncthing/config.xml"
 assert st.config_path("st", run=lambda *a, **k: Ran(""), platform="linux", env={}, home="/h") \
-    == "/h/.local/state/syncthing/config.xml"
+    == os.path.join("/h", ".local", "state", "syncthing", "config.xml")    # (backslashes on Windows)
 assert st.version("st", run=lambda *a, **k: Ran('syncthing v1.27.2-ds4 "Gold Grasshopper"')) == (1, 27, 2)
 cfg = os.path.join(TMP, "config.xml")
 open(cfg, "w").write('<configuration><gui tls="false"><address>0.0.0.0:8384</address><apikey>KEY</apikey></gui>'
