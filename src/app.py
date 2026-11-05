@@ -483,7 +483,6 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
-        self.header.can_return = lambda: not self.reopening     # (FS-1: the new window brings the menu back)
         # full screen (FS-2): the four menus become one Menu button, which opens the pause menu
         self.menu_btn = RoundButton(bar, "Menu", self.open_pause_menu, font=font("body"), padx=12, pady=5, radius=10,
                                     animator=self.anim, canvas_bg=PALETTE["surface"], flat=True)
@@ -1218,6 +1217,8 @@ class App:
         as the tallest view still fits it (Z-1), then fill the definitions pane. The minimum size stays the one
         measured at the normal size, so the window can always shrink back. `size`: the window's, just asked for."""
         self._grow_job = None
+        if self.reopening:                   # (the window is going: the shared fonts are the new window's now, and
+            return                           # its labels' old ones are gone, seen on Windows: "font4 does not exist")
         if not self._ref_size or self._follow_maximize():
             return
         w, h = size or self._window_size()
@@ -2874,9 +2875,6 @@ class App:
         if old.pause is not None and old.pause.is_open():     # (FS-2: a switch in the pause menu brought a new look)
             path = old.pause.trail()
             self.root.after(self.SETTLE_MS + 200, lambda: self.open_pause_menu(path))
-        if old.header.returning is not None:     # (FS-1: a dialog from a menu brought the new look: its menu is back)
-            self.header.returning = old.header.returning
-            self.root.after(self.SETTLE_MS + 200, lambda: self.header.return_to(*old.header.returning))
         if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
             old.review.close()
             self.root.after(150, lambda: self.open_review(old.review_path))

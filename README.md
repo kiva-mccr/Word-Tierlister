@@ -147,9 +147,6 @@ and Ctrl+Z brings it back.
 - **View > Reduce motion** turns the animations down.
 - **Settings > Anchor words** chooses the example word for each tier used when comparing.
 
-When you close a window you opened from one of the top menus, that menu opens again with the item you came from
-lit, so trying a few settings in a row takes one click each. Esc or a click elsewhere closes it.
-
 ## Keys
 
 All of these can be changed under Settings > Keyboard shortcuts.

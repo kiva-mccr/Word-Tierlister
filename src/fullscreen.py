@@ -72,6 +72,7 @@ class PauseMenu:
             c.bind("<Motion>", self._on_motion)
             c.bind("<ButtonRelease-1>", self._on_click)
         self.path = path
+        self._pointer = None                   # (where the pointer was: a menu opening under it must not light a row)
         self.canvas.tk.call("raise", self.canvas._w)     # (a Canvas's own lift() raises items, not the widget)
         self.canvas.focus_set()
         self._draw()
@@ -84,6 +85,7 @@ class PauseMenu:
         except tk.TclError:
             pass
         self.canvas, self._rows = None, []
+        self._pointer = None
         if self.anim:
             self.anim.finish("pause_slide")
             self.anim.finish("pause_pop")
@@ -171,6 +173,12 @@ class PauseMenu:
         return None
 
     def _on_motion(self, e):
+        """The pointer lights the row it moves onto. The first motion only notes where it is: a menu appearing
+        under a still pointer can get one, which would light the row under it instead of the one the keys left."""
+        if self._pointer is None or self._pointer == (e.x_root, e.y_root):
+            self._pointer = (e.x_root, e.y_root)
+            return
+        self._pointer = (e.x_root, e.y_root)
         i = self._row_at(e.x, e.y)
         if i is not None and i != self.sel.get(self.path[-1]):
             self._light(i)
@@ -186,6 +194,7 @@ class PauseMenu:
 
     # -- drawing
     _back_box = None
+    _pointer = None
 
     def _metrics(self):
         f = font("title")
