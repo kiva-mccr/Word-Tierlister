@@ -824,6 +824,7 @@ class TuneWindow:
         self.tk, self.font, self.P = tk, font, P
         self.root, self.answers_path, self.rounds, self.source = root, answers_path, rounds, source
         self.events = queue.Queue()
+        self.from_program = False                 # (started by the program's bubble: its close box only hides it)
         self.tuning = self.data = None
         self.points = {}                    # {part: [(round, test error)]}, ALL: train error
         self.avg = []                       # [(round, average test error)]
@@ -873,9 +874,10 @@ class TuneWindow:
                  "before committing.", font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w", pady=(12, 0))
         self.keep_btn.set_enabled(False)
         self.pause_btn.set_enabled(False)
-        root.protocol("WM_DELETE_WINDOW", self.discard)
+        self.hidden = self.failed = False
+        root.protocol("WM_DELETE_WINDOW", self.close_box)
         self.draw()
-        root.after(150, self._poll)
+        self._poll_job = root.after(150, self._poll)
 
     # ---- events from the work ---------------------------------------------------------------------------------
     def start(self, data, saved, workers, guard_workers=1):
@@ -910,11 +912,12 @@ class TuneWindow:
         if self.closed:
             return
         try:
-            while True:
+            while not self.closed:
                 self.handle(self.events.get_nowait())
         except queue.Empty:
             pass
-        self.root.after(150, self._poll)
+        if not self.closed:                       # (an event can close it: "gone" while hidden)
+            self._poll_job = self.root.after(150, self._poll)
 
     def handle(self, e):
         """One event from the search, the guard or the start (see Tuning)."""
@@ -944,16 +947,54 @@ class TuneWindow:
         elif kind == "guard":
             self.guards[e[1]] = e[2]
             self.draw_guard()
+        elif kind == "show":
+            self.show_again()
+        elif kind == "gone":                      # (the program closed: a hidden tuner would be out of reach)
+            if self.hidden:
+                self.discard()
         elif kind == "done":
             say("Done")
+            if self.hidden:                       # (finished while hidden: back, for Keep or Discard)
+                self.show_again()
             self.done = True
             self.pause_btn.set_enabled(False)
             self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: "
                                + ("settled" if e[1] == "settled" else "the last round"))
             self.check_best()
         elif kind == "error":
+            self.failed = True
+            if self.hidden:
+                self.show_again()
             self.status.config(text="Stopped: an error")
             self.note.config(text=e[1], fg=self.P["bad"][1])
+
+    # ---- started by the program's Tune the rules bubble (--from-program) -----------------------------------------
+    def listen(self, stream):
+        """Lines from the program (a worker thread: no Tk here): "show" brings the window back; the end of the stream
+        (the program closed) is an event too."""
+        try:
+            for line in stream:
+                if line.strip() == "show":
+                    self.events.put(("show",))
+        except (OSError, ValueError):
+            pass
+        self.events.put(("gone",))
+
+    def close_box(self):
+        """The window's close box: while the tuning still runs (asked for), only hidden, and the program's bubble brings
+        it back; Discard stops it. Started by hand, or once done, it closes as Discard does."""
+        if self.from_program and not (self.done or self.failed or self.closed):
+            self.hidden = True
+            self.root.withdraw()
+            say("Hidden")
+            return
+        self.discard()
+
+    def show_again(self):
+        self.hidden = False
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
 
     def _paused(self):
         return self.tuning is not None and not self.tuning._go.is_set()
@@ -1173,6 +1214,10 @@ class TuneWindow:
 
     def close(self):
         self.closed = True
+        try:
+            self.root.after_cancel(self._poll_job)
+        except (self.tk.TclError, AttributeError, ValueError):
+            pass
         if self.tuning:
             self.tuning.stop()
         gp = getattr(self, "guard_pool", None)
@@ -1219,6 +1264,9 @@ def main(argv=None):
     ap.add_argument("--entries", default=os.path.join(ROOT, "rudeness_entries.jsonl"),
                     help="the compact Wiktionary entries (python tools/measure_rudeness.py fetch)")
     ap.add_argument("--rounds", type=int, default=60, help="rounds at most")
+    ap.add_argument("--from-program", action="store_true",
+                    help="(the program's Tune the rules bubble) the close box hides the window while tuning runs; "
+                         "a \"show\" line on stdin brings it back")
     ap.add_argument("--workers", type=int, default=min(PARTS + 1, os.cpu_count() or 1),
                     help="processes tuning the parts (0: this one)")
     args = ap.parse_args(argv)
@@ -1236,6 +1284,9 @@ def main(argv=None):
     init_fonts(root)
     set_icon(root)
     win = TuneWindow(root, answers_path, args.rounds, os.path.join(ROOT, "src", "rudeness.py"))
+    if args.from_program and sys.stdin is not None:
+        win.from_program = True
+        threading.Thread(target=win.listen, args=(sys.stdin,), daemon=True).start()
 
     def load():
         from wordfreq import zipf_frequency

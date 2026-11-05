@@ -121,7 +121,7 @@ assert app.tune_rules(d.dlg, start=started.append) is None and shown[-1][1] == "
 open(review_answers_path(fresh), "w").write("")
 cmd = app.tune_rules(d.dlg, start=started.append)
 assert started == [cmd] and cmd[1:] == [os.path.join(src_root, "tools", "tune_rudeness.py"), "--review", fresh,
-                                        "--entries", os.path.join(src_root, "rudeness_entries.jsonl")]
+                                        "--entries", os.path.join(src_root, "rudeness_entries.jsonl"), "--from-program"]
 assert not d.dlg.alive()                                             # (the tuner is a window of its own)
 
 # ---- the rings: a running tool's progress, read by its bubble (asked for, picked from a mock-up) -------------------
@@ -131,8 +131,14 @@ assert app.dev_progress("review words") is None and app.dev_progress("tune") is 
 
 class FakeTuner:                   # (prints its rounds on a pipe the test writes into)
     def __init__(self):
-        self.lines, self.more, self.code = [], threading.Event(), None
-        self.stdout = self
+        self.lines, self.more, self.code, self.sent = [], threading.Event(), None, []
+        self.stdout = self.stdin = self
+
+    def write(self, text):         # (the program's lines to it: "show")
+        self.sent.append(text)
+
+    def flush(self):
+        pass
 
     def __iter__(self):
         while True:
@@ -167,8 +173,17 @@ assert ring.running() and ring.lit() and ring.state == (0.25, "Round 3 of up to 
 assert abs(ring._shown - 0.25) < 0.01, ring._shown                  # (eased there)
 calls = []
 ring.command = lambda: calls.append(1)
-ring.invoke(); assert not calls                                     # (a click on a running tool does nothing)
+ring.invoke(); assert not calls and tuner.sent == ["show\n"]         # (running: a click brings its window back)
+tuner.say("Hidden\n")                                              # (its close box while tuning: only hidden)
+assert app.dev_progress("tune")[1] == "Round 3 of up to 12  ·  click to bring its window back"
+ring.on_running(); assert tuner.sent == ["show\n"] * 2 and app.dev_progress("tune")[1] == "Round 3 of up to 12"
 assert app.tune_rules(d.dlg, start=lambda c: calls.append(c)) is None and not calls    # (one tuner at a time)
+assert tuner.sent == ["show\n"] * 3 and not d.dlg.alive()          # (shown instead, the dialog out of its way)
+d = app.edit_dealing(); pump(3)
+ring = d.bubbles["Tune the rules"]
+for _ in range(10):
+    pump(1)
+ring.command = lambda: calls.append(1)
 tuner.say("Done\n")
 assert app.dev_progress("tune") is None
 pump(4)
@@ -177,7 +192,9 @@ for _ in range(40):
     pump(1)
 assert not ring._blink and not ring.lit()
 ring.invoke(); assert calls == [1]                                  # (plain again: a click runs it)
-tuner.lines.append(None); tuner.more.set()
+assert app.show_tuner() and tuner.sent[-1] == "show\n"              # (done, still open for Keep: it is reached)
+tuner.code = 0; tuner.lines.append(None); tuner.more.set()
+assert app.dev_progress("tune") is None and app._tuner_job is None and not app.show_tuner()   # (closed: gone)
 # Make review words: no fraction (an arc goes round), its last line in the hover note
 app._tool_job = None
 job = {"done": None, "path": fresh, "note": "Step 1 of 2: 400,000 entries read"}

@@ -627,7 +627,7 @@ first word not answered (an open review opens again on the new words); "Here bec
 
 Both can be run from the window too: tick Settings > Developer tools, and How words are dealt shows **Make review
 words** (runs `sample` the first time, then `next` to refresh it, in the background; it offers to fetch the Wiktionary entries
-first when they are missing; a toast says what it made) and **Tune the rules** (opens the tuner's window). They run
+first when they are missing; a toast says what it made) and **Tune the rules** (opens the tuner's window; closing it while it tunes only hides it, and a click on the bubble, whose ring shows the rounds, brings it back). They run
 the scripts in `tools/`, so only from the source. Reviews ask only about one-part words: no hyphenated or spaced
 entries, contractions kept (asked for, like the word list).
 
