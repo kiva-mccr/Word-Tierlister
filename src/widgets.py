@@ -977,7 +977,9 @@ class DropMenu:
 
     def __init__(self, root, items, font=None):
         self.root, self.items, self.font = root, list(items), font
-        self.win = None
+        self.win = None                  # built once and kept (hidden while closed): rebuilt only for other items
+        self._built = None               # what the kept window was built for (_shape)
+        self._shown = False
         self._rows, self._active, self._on_close = [], None, None
         self._prev_focus = ""
         self.on_side = None              # called with -1 / +1 for Left / Right (HeaderMenus: the next menu)
@@ -988,13 +990,37 @@ class DropMenu:
         return [it[1] for it in items if it[0] in ("command", "check", "radio")]
 
     def is_open(self):
-        return self.win is not None
+        return self._shown
 
-    def open(self, x, y, on_close=None):
-        """Show the menu with its top-left corner at screen position (x, y)."""
-        self.close()
-        self._on_close = on_close
-        self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
+    def _shape(self):
+        """What the rows look like apart from their check marks: the kept window is reused while this holds (the
+        items' functions may be new ones: App.apply_keys makes the list again)."""
+        out = []
+        for it in self.items:
+            if it[0] == "separator":
+                out.append(("separator",))
+            else:
+                out.append((it[0], it[1], it[3] if it[0] == "command" and len(it) > 3 else None))
+        return tuple(out)
+
+    def prepare(self):
+        """Build the window now, hidden, so the first open is quick too (HeaderMenus does it while idle)."""
+        if self._shown:
+            return
+        try:
+            if self.win is None or self._built != self._shape() or not self.win.winfo_exists():
+                self._build()
+        except tk.TclError:
+            pass
+
+    def _build(self):
+        """Make the (hidden) window and its rows for the items (asked for: menus opened slowly, 40-190 ms each time,
+        when each open made its window again: now it is made once and kept)."""
+        if self.win is not None:
+            try:
+                self.win.destroy()
+            except tk.TclError:
+                pass
         win = self.win = tk.Toplevel(self.root, bg=PALETTE["border"])
         win.withdraw()
         win.overrideredirect(True)
@@ -1006,16 +1032,11 @@ class DropMenu:
             if it[0] == "separator":
                 tk.Frame(body, height=1, bg=PALETTE["border"]).pack(fill="x", padx=8, pady=5)
                 continue
-            kind, label, target = it[0], it[1], it[2]
+            kind, label = it[0], it[1]
             extra = it[3] if len(it) > 3 else None
             row = tk.Frame(body, bg=PALETTE["surface"], cursor="hand2")
             row.pack(fill="x")
-            mark = ""
-            if kind == "check":
-                mark = "\u2713" if target.get() else ""
-            elif kind == "radio":
-                mark = "\u2713" if target.get() == extra else ""
-            parts = [tk.Label(row, text=mark, width=2, bg=PALETTE["surface"], fg=PALETTE["accent_text"],
+            parts = [tk.Label(row, text="", width=2, bg=PALETTE["surface"], fg=PALETTE["accent_text"],
                               font=self.font, anchor="w"),
                      tk.Label(row, text=label, bg=PALETTE["surface"], fg=PALETTE["text"], font=self.font,
                               anchor="w", padx=4, pady=5)]
@@ -1038,6 +1059,31 @@ class DropMenu:
         win.bind("<Return>", lambda e: self._active is not None and self.invoke(self._active))
         win.bind("<Left>", lambda e: self.on_side and self.on_side(-1))
         win.bind("<Right>", lambda e: self.on_side and self.on_side(1))
+        self._built = self._shape()
+
+    def _refresh_rows(self):
+        """The kept rows take the current items (their functions) and check marks, none highlighted."""
+        clickable = [it for it in self.items if it[0] != "separator"]
+        self._rows = [(row, parts, it) for (row, parts, _old), it in zip(self._rows, clickable)]
+        for row, parts, it in self._rows:
+            kind, target = it[0], it[2]
+            mark = ""
+            if kind == "check":
+                mark = "\u2713" if target.get() else ""
+            elif kind == "radio":
+                mark = "\u2713" if target.get() == it[3] else ""
+            if parts[0].cget("text") != mark:
+                parts[0].configure(text=mark)
+        self._highlight(None)
+
+    def open(self, x, y, on_close=None):
+        """Show the menu with its top-left corner at screen position (x, y)."""
+        self.close()
+        self._on_close = on_close
+        self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
+        self.prepare()
+        win = self.win
+        self._refresh_rows()
         win.update_idletasks()
         # keep it on screen
         w, h = win.winfo_reqwidth(), win.winfo_reqheight()
@@ -1045,6 +1091,7 @@ class DropMenu:
         win.geometry(f"+{x}+{y}")
         win.deiconify()
         win.lift()
+        self._shown = True
         DropMenu.open_menus.add(self)
         try:
             win.focus_force()
@@ -1055,8 +1102,9 @@ class DropMenu:
         self._active = i
         for j, (row, parts, _it) in enumerate(self._rows):
             bg = PALETTE["select_bg"] if j == i else PALETTE["surface"]
-            for w in [row] + parts:
-                w.configure(bg=bg)
+            if row.cget("bg") != bg:
+                for w in [row] + parts:
+                    w.configure(bg=bg)
 
     def _step(self, d):
         if not self._rows:
@@ -1087,19 +1135,20 @@ class DropMenu:
         keys keep working (closing with Escape used to leave no focus at all); not when the program has
         lost the focus to another one."""
         DropMenu.open_menus.discard(self)
-        if self.win is not None:
-            try:
-                had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
-                self.win.destroy()
-                if had_focus:                # forced: the window manager does not hand focus back from a
-                    self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
-            except (tk.TclError, KeyError):
-                pass
-            self.win = None
-            self._rows, self._active = [], None
-            cb, self._on_close = self._on_close, None
-            if cb:
-                cb()
+        if not self._shown:
+            return
+        self._shown = False
+        try:
+            had_focus = str(self.win.tk.call("focus")).startswith(str(self.win))
+            self.win.withdraw()              # (kept for the next open)
+            if had_focus:                    # forced: the window manager does not hand focus back from a
+                self.root.nametowidget(self._prev_focus or ".").focus_force()   # borderless window
+        except (tk.TclError, KeyError):
+            pass
+        self._active = None
+        cb, self._on_close = self._on_close, None
+        if cb:
+            cb()
 
 
 class ChoiceButton(RoundButton):
@@ -1173,6 +1222,18 @@ class HeaderMenus(tk.Frame):
         self._top_geo = None
         top.bind("<Configure>", lambda e: e.widget is top and self._top_configured(), add="+")
         top.bind("<Unmap>", lambda e: e.widget is top and self.close(), add="+")
+        self._to_prepare = list(self.drops)
+        self.after(self.PREPARE_MS, self._prepare_next)
+
+    PREPARE_MS, PREPARE_GAP_MS = 1500, 250   # the menus are built hidden, one at a time, once the window is up
+
+    def _prepare_next(self):
+        """Build the next menu's window ahead of its first open (DropMenu.prepare), one every PREPARE_GAP_MS."""
+        if not self._to_prepare or not self.winfo_exists():
+            return
+        self.drops[self._to_prepare.pop(0)].prepare()
+        if self._to_prepare:
+            self.after(self.PREPARE_GAP_MS, self._prepare_next)
 
     def _top_geometry(self):
         top = self.winfo_toplevel()

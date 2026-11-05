@@ -61,6 +61,19 @@ app._on_root_configure(FakeEvent(root))
 assert app._veil_since is None
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)
 
+# just maximized or restored: the re-fit runs at once (an idle job), not after the 80 ms pause (asked for)
+real_max = A.is_maximized
+try:
+    A.is_maximized = lambda w: not app._maximized
+    app._on_root_configure(FakeEvent(root))
+    assert root.tk.splitlist(root.tk.call("after", "info", app._grow_job))[1] == "idle"
+finally:
+    A.is_maximized = real_max
+root.after_cancel(app._grow_job); app._grow_job = None
+app._on_root_configure(FakeEvent(root))                                # (an ordinary resize still waits)
+assert root.tk.splitlist(root.tk.call("after", "info", app._grow_job))[1] == "timer"
+wait_for(root, lambda: not app._grow_job and not app._monitor_job)
+
 # never see-through for long, even if the window keeps moving
 app._veil_since = time.time() - A.App.VEIL_MAX_MS / 1000
 app._last_configure = time.time()
