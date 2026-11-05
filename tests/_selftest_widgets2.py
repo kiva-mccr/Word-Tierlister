@@ -204,6 +204,23 @@ dm.open(10 ** 5, 10 ** 5, on_close=lambda: closed.append(1)); update()          
 assert dm.win.winfo_rootx() + dm.win.winfo_width() <= dm.win.winfo_screenwidth()
 dm.win.event_generate("<Escape>"); update()
 assert not dm.is_open() and closed == [1]
+# made once and kept (asked for: menus opened slowly, each open built its window again): the same window comes back,
+# hidden while closed, with the items' current functions and check marks; other items make it again
+kept = dm.win
+assert kept.winfo_exists() and not kept.winfo_viewable()
+chk.set(False)
+dm.items = [("command", "Export...", lambda: ran.append("export2"), None)] + items[1:]
+dm.open(50, 60); update()
+assert dm.win is kept and dm._rows[1][1][0].cget("text") == "" and dm._rows[0][0].cget("bg") == PALETTE["surface"]
+dm.invoke(0); update()
+assert ran[-1] == "export2" and not dm.is_open()
+dm.items = items + [("command", "More", lambda: None, None)]
+dm.open(50, 60); update()
+assert dm.win is not kept and not kept.winfo_exists() and len(dm._rows) == 4
+dm.close(); dm.items = items
+dm.prepare(); prepared = dm.win; dm.open(50, 60); update()
+assert dm.win is prepared and dm.is_open()                     # (prepare: built ahead, hidden, for a quick open)
+dm.close(); update()
 
 hm = HeaderMenus(root, [("File", items), ("Edit", items[3:])], small, animator=anim); hm.pack(side="top"); update()
 fb, eb = hm.buttons["File"], hm.buttons["Edit"]

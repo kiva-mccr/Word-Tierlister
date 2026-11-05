@@ -1139,7 +1139,10 @@ class App:
         veiled = self._veil_since is not None      # (just opened, still see-through: _unveil waits for these)
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
-        self._grow_job = self.root.after(20 if veiled else 80, self._apply_grow)
+        if is_maximized(self.root) != self._maximized:      # (just maximized or restored: re-fit at once, not after
+            self._grow_job = self.root.after_idle(self._apply_grow)   # the 80 ms pause, asked for: the new size
+        else:                                                         # showed the old text a moment too long)
+            self._grow_job = self.root.after(20 if veiled else 80, self._apply_grow)
         if self._monitor_job:
             self.root.after_cancel(self._monitor_job)
         self._monitor_job = self.root.after(20 if veiled else self.MONITOR_PAUSE_MS, self._check_monitor)
