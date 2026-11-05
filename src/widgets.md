@@ -3,8 +3,8 @@
 The program's own widgets: buttons, the word card, tier pills, duel cards, the header menus and drop-downs, toasts, dialog frame, the definitions pane, smeared (censored) words and more. New widgets go here.
 
 - **Uses:** `constants`, `definitions`, `fonts`, `rudeness`, `sizing`, `smooth`, `theme`, `ui_motion`, `ui_style`
-- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `review`, `shortcuts`, `sources`, `syncdialog`, `tiercolours`, `tune_rudeness`
-- **Tests:** `_selftest_backmenu`, `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_veil`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
+- **Used by:** `app`, `browser`, `dealing`, `errors`, `filepicker`, `fullscreen`, `review`, `shortcuts`, `sources`, `syncdialog`, `tiercolours`, `tune_rudeness`
+- **Tests:** `_selftest_backmenu`, `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_freeze`, `_selftest_fullscreen`, `_selftest_motion`, `_selftest_release`, `_selftest_sizing`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_veil`, `_selftest_widgets`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 
@@ -68,6 +68,7 @@ The module docstring has the details; this page is the map.
 
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
 
+- `StyledDialog.decorate` (FS-2) is called once with each dialog just before it shows: full screen's Back bar. Only App sets it.
 - Back to the menu (FS-1): a HeaderMenus item that showed a StyledDialog (counted by `StyledDialog.shown`, the latest in `StyledDialog.last`) opens its menu again, the item lit, when that dialog's window is destroyed (`when_closed`, run after idle, never inside the destroy). Only StyledDialogs count, so Browse or a tick never bring the menu back. `return_to` gives up when another menu was opened meanwhile, another dialog is still open, or `can_return()` is False (App.reopen: the new window takes `returning` over in App.take_over).
 
 - `StyledDialog.show` veils the dialog while it draws (`ui_style.veil` / `unveil`, F-48): shown plainly it appeared as a heading alone, then labels, then the rest, over ~0.2 s.

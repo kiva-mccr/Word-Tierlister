@@ -84,7 +84,7 @@ flowchart TB
     end
     subgraph L4["windows and views"]
         direction LR
-        ui_chart["ui_chart"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"]
+        ui_chart["ui_chart"] ~~~ fullscreen["fullscreen"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"]
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
@@ -113,7 +113,7 @@ note):
 | Module | Imports |
 |---|---|
 | `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
+| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, fullscreen, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
 | `sources` | constants, deps, errors, filepicker, fonts, problems, saves, standalone, startup, theme, widgets |
 | `syncdialog` | deps, errors, fonts, problems, saves, startup, syncfiles, syncthing_api, theme, widgets |
 | `browser` | constants, errors, fonts, keymap, sizing, smooth, store, theme, ui_motion, widgets |
@@ -123,6 +123,7 @@ note):
 | `shortcuts` | fonts, keymap, sizing, theme, widgets |
 | `review` | constants, fonts, keymap, sizing, theme, ui_style, widgets |
 | `ui_chart` | constants, smooth, theme, ui_motion |
+| `fullscreen` | fonts, keymap, smooth, theme, ui_motion, widgets |
 | `widgets` | constants, definitions, fonts, rudeness, sizing, smooth, theme, ui_motion |
 | `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme, ui_style |
 | `errors` | constants, fonts, problems, theme, ui_style, widgets |
@@ -375,6 +376,7 @@ by this repository's workflow.
 | Window sizes, zoom, fitting the screen | `src/sizing.py`, `App._worst_size`, `App._fit_window`, `App._fill_pane`, `App.set_zoom` |
 | Rounded shapes and icons | `src/smooth.py` (`SmoothCanvas.round_rect`, `icon_image`) |
 | The tier chart and the progress shelf | `src/ui_chart.py` |
+| Full screen: the pause menu and a dialog's Back bar | `src/fullscreen.py` (App: `toggle_full_screen`, `_pause_pages`) |
 | The word list: download, parsing, frequencies | `src/wordsource.py` |
 | What counts as rude | `src/rudeness.py` (bump `RUDENESS_VERSION`), `src/obscene.py` |
 | Definitions | `src/definitions.py` |
@@ -460,6 +462,7 @@ found again, so switching between the two loses nothing.
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows); text whose letters reach past their boxes (Young Serif's j and f) is repainted whole (F-32). |
 | `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`; a menu item that showed a dialog brings its menu back when the dialog closes, FS-1), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame; `dev_bubbles` puts `DevBubble`s, the developer tools' small pills, at the right of its headline), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (every spine one width, UI-79; a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
+| `src/fullscreen.py` | Full screen (FS-2): `PauseMenu`, the menu Esc opens over the whole window (pages made from the top menus, Back and a trail, rows that slide in and pop), and `dialog_bar`, the Back bar and trail a dialog wears there in place of Cancel and its title bar. |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5, and beside each kind a small smear button to censor it or not, OB-7, OB-8) and Censor obscene words; on the first start the same in three steps. |
 | `src/review.py` | The review of rude meanings by hand (OB-9, developers: How words are dealt's bubble or `--review-rude`): word by word, the rules' guess filled in for each meaning; the answers go beside the review file and only test the rules (`tools/measure_rudeness.py answers`; `score_guesses` for the bubble, against the file's own guesses). |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
@@ -486,7 +489,7 @@ found again, so switching between the two loses nothing.
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
 Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `browser`, `filepicker`, `shortcuts`, `dealing`, `sources` -> `app` -> `tierlist`. A file only imports from files
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `fullscreen`, `browser`, `filepicker`, `shortcuts`, `dealing`, `sources` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Notes beside the code

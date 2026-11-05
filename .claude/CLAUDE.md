@@ -32,7 +32,7 @@ pitfalls" are written by hand: add the rule or the bug there when you fix one. c
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
 constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> syncfiles -> theme, fonts, sizing, ui_style,
-ui_motion, smooth, widgets, errors, startup -> ui_chart, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> app -> tierlist.
+ui_motion, smooth, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter.
@@ -193,7 +193,9 @@ F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the 
 slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
 text size per maximize, the stretch while maximizing is GNOME's own animation).
 FS-1 (asked for: closing a dialog opened from a top menu brings that menu back, its item lit; HeaderMenus._run).
-FS-2 next (approved from mock-ups in full-screen/: full screen, a pause menu on Esc, pages with Back and a trail).
+FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
+(src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
+Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).
 Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
 and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
 Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap

@@ -118,7 +118,7 @@ def check_docs(problems):
 # one inner list are equals (none imports another). Only UI modules (from "theme" on) import tkinter.
 LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["syncthing_api"], ["keymap"], ["bundle"],
           ["standalone"], ["store"], ["wordsource", "saves", "definitions"], ["syncfiles"], ["theme"], ["fonts"],
-          ["sizing"], ["ui_style"], ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart"],
+          ["sizing"], ["ui_style"], ["ui_motion"], ["smooth"], ["widgets"], ["errors"], ["startup"], ["ui_chart", "fullscreen"],
           ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog", "review"], ["dealing"], ["sources"], ["app"]]
 
 

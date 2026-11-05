@@ -3368,6 +3368,7 @@ class StyledDialog:
 
     shown = 0          # how many were shown, and the latest (HeaderMenus: did a menu item open one?)
     last = None
+    decorate = None    # full screen (FS-2): called with the dialog just before it shows (App._dialog_bar: Back)
 
     def __init__(self, parent, title, headline=None, intro=None, animator=None, wrap_chars=52):
         self.parent, self._anim, self._default = parent, animator, None
@@ -3471,6 +3472,9 @@ class StyledDialog:
         until closed)."""
         StyledDialog.shown += 1
         StyledDialog.last = self
+        if StyledDialog.decorate is not None and not getattr(self, "_decorated", False):
+            self._decorated = True
+            StyledDialog.decorate(self)
         place_dialog(self.win, self.parent)
         veil(self.win)                   # drawn while see-through: it appears complete, not piece by piece
         self.win.deiconify()

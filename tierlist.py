@@ -2041,11 +2041,17 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           none (Undo, a tick, Browse: a window that stays) closes the menu as before. A dialog that rebuilds the window
 #           in a new look (Tier colours' Apply) brings it back in the new window (App.take_over). Picked from a mock-up.
 #           _selftest_backmenu.
-# [ ] FS-2 Asked for: a full screen mode (View > Full screen, F11; true full screen, no title bar), a little like a
-#           game: the top menus become one Menu button, Esc opens a pause menu over the page (Esc again closes it),
-#           its pages (File, Edit, View, Settings) slide in sideways with a Back button and a trail ("Menu > Settings >
-#           Tier colours"), arrows move a big highlight, Enter opens; dialogs keep their insides, bigger, with Back
-#           in place of Cancel. Picked from mock-ups (full-screen/ in the project files).
+# [x] FS-2 Asked for: a full screen mode, a little like a game. View > Full screen or F11 (true full screen, no title
+#           bar; kept for the save; counts as maximized for its zoom). The four top menus become one Menu button, and
+#           Esc opens the pause menu over the page (src/fullscreen.py: a card on a lilac backdrop with faint tier-
+#           coloured rounds; Tk has no see-through widgets, so the page is not shown dimmed). Its pages are made from
+#           the top menus: arrows move a big highlight that pops a little, Enter / Right open, pages slide in sideways,
+#           each with Back and a trail ("Menu > Settings"); switches flip in place. Esc goes back a page, and on the
+#           first page closes the menu (asked for: "until you hit Escape again"); while comparing Esc still stops
+#           comparing first. A dialog opened there wears Back and the trail at its top in place of Cancel and its
+#           title bar (kept on macOS), and closing it is Back to the page it came from. A new look picked there
+#           (Dark mode) opens the menu again on the same page. Picked from mock-ups (full-screen/ in the project
+#           files). _selftest_fullscreen.
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data
