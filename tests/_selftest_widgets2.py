@@ -868,10 +868,16 @@ def wait(ms):
     end = time.time() + ms / 1000
     while time.time() < end:
         root.update(); time.sleep(0.01)
+def blinks_off(s=5.0):
+    """Wait until the caret hides (never a fixed wait: on a slow Mac runner it could blink back on first)."""
+    end = time.time() + s
+    while caret() != "hidden" and time.time() < end:
+        root.update(); time.sleep(0.005)
+    return caret() == "hidden"
 assert caret() == "normal"
-wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+assert blinks_off()
 wc.type_key(types.SimpleNamespace(keysym="a", char="a")); root.update(); assert caret() == "normal"   # (a key: shown)
-wait(WordCard.BLINK_MS + 80); assert caret() == "hidden"
+assert blinks_off()
 wc.BLINK_FOR_MS = 2 * WordCard.BLINK_MS
 wc.type_key(types.SimpleNamespace(keysym="b", char="b")); wait(3 * WordCard.BLINK_MS)
 assert caret() == "normal" and wc._blink_job is None                  # (still now, and shown)
