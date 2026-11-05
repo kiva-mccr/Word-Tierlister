@@ -1215,6 +1215,8 @@ class App:
         as the tallest view still fits it (Z-1), then fill the definitions pane. The minimum size stays the one
         measured at the normal size, so the window can always shrink back. `size`: the window's, just asked for."""
         self._grow_job = None
+        if self.reopening:                   # (the window is going: the shared fonts are the new window's now, and
+            return                           # its labels' old ones are gone, seen on Windows: "font4 does not exist")
         if not self._ref_size or self._follow_maximize():
             return
         w, h = size or self._window_size()

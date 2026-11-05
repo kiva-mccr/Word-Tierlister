@@ -177,8 +177,15 @@ done, ran = [], []
 pm = PauseMenu(r, {"Top": [("command", "One", lambda: ran.append(1)), ("gap",), ("page", "Sub", "Sub")],
                    "Sub": [("command", "Two", lambda: ran.append(2))]}, on_close=lambda: done.append(1))
 pm.open(); pump(r)
+box = pm._rows[2][1]                                              # (the pointer still over "Sub" as the menu opens:
+mx, my = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2           # Windows sends a motion, which must light nothing)
+pm._on_motion(types.SimpleNamespace(x=mx, y=my, x_root=mx + 1000, y_root=my))
+assert pm.sel["Top"] == 0
 press(pm.canvas, "Down"); assert pm.sel["Top"] == 2               # (over the gap)
 press(pm.canvas, "Down"); assert pm.sel["Top"] == 0               # (wrapping round)
+pm._on_motion(types.SimpleNamespace(x=mx, y=my, x_root=mx + 1010, y_root=my))
+assert pm.sel["Top"] == 2                                         # (a real move lights the row under it)
+press(pm.canvas, "Up"); assert pm.sel["Top"] == 0
 press(pm.canvas, "Return"); assert ran == [1] and pm.is_open()   # (a command: the menu stays)
 pm.open(["Sub"]); pump(r); assert pm.trail() == ["Top", "Sub"]   # (straight onto a page)
 press(pm.canvas, "BackSpace"); assert pm.trail() == ["Top"]
