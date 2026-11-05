@@ -12,8 +12,10 @@ ones are left out of the queue, never deleted (Store.set_deal). Beside each kind
 smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7;
 Clinical and Insult too, plain to start with: OB-8). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
-applies at once. With Settings > Developer tools ticked, two bubbles at the top right: "Review rude meanings" (OB-9's
-review window, App.review_rude) and "Score the rules" (the answers so far against the rules' guesses, App.score_rules).
+applies at once. With Settings > Developer tools ticked, four bubbles at the top right: "Review rude meanings" (OB-9's
+review window, App.review_rude), "Score the rules" (the answers so far against the rules' guesses, App.score_rules),
+"Make review words" (tools/measure_rudeness.py sample, then next: App.make_review_words) and "Tune the rules"
+(tools/tune_rudeness.py's window: App.tune_rules).
 """
 import gc
 import random
@@ -85,8 +87,10 @@ class DealDialog:
             dlg.button("Cancel", dlg.close)
             dlg.button("Apply", self.apply, default=True)
             if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
-                self.bubbles = dlg.dev_bubbles((("Review rude meanings", lambda: app.review_rude(dlg)),
-                                                ("Score the rules", lambda: app.score_rules(dlg))))
+                self.bubbles = dlg.dev_bubbles((("Make review words", lambda: app.make_review_words(dlg)),
+                                                ("Review rude meanings", lambda: app.review_rude(dlg)),
+                                                ("Score the rules", lambda: app.score_rules(dlg)),
+                                                ("Tune the rules", lambda: app.tune_rules(dlg))))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------

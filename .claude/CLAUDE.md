@@ -175,6 +175,11 @@ still rules only: the program never reads the answers).
 OB-10 (asked for: tune the rules' numbers against those answers: `python tools/tune_rudeness.py`, a window: 5 parts,
 each tested on numbers tuned without it, the error round by round, a guard over the program's words, the meanings still
 wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups).
+OB-11 (asked for: active review: `tools/measure_rudeness.py next` refreshes the review file: answered words stay first,
+the rest replaced by 300 new ones, groups weighted by where the rules were wrong, plus like your misses; near the line, signals disagreeing, candidate signals mined from Wiktionary's own rude labels, common words
+with no sign at all; each group spread over what its words share; one-part words only, contractions kept). Developer
+tools bubbles in How words are dealt: Make review words (sample, then next, in the background) and Tune the rules
+(the tuner's window); both run tools/ from the source.
 Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes the window or its text; the
 definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
 now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,

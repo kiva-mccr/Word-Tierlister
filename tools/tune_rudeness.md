@@ -4,7 +4,7 @@ Tunes the numbers the rudeness rules already have (OB-10; a developer tool) agai
 
 - **Uses:** `constants`, `errors`, `fonts`, `measure_rudeness`, `obscene`, `review`, `rudeness`, `theme`, `ui_motion`, `ui_style`, `widgets`
 - **Used by:** nothing (run directly)
-- **Tests:** `_selftest_tune`
+- **Tests:** `_selftest_devtools`, `_selftest_tune`
 
 The module docstring has the details; this page is the map.
 
