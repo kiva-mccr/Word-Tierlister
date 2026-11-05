@@ -29,30 +29,44 @@ def pump(win, ms):
         win.update(); time.sleep(0.01)
 
 
+def wait_for(win, cond, s=5.0):
+    """Run the event loop until cond() holds, for at most `s` seconds (Mac runners are slow: never a fixed wait)."""
+    end = time.time() + s
+    while not cond() and time.time() < end:
+        win.update(); time.sleep(0.01)
+    return cond()
+
+
+class FakeEvent:
+    def __init__(self, widget):
+        self.widget = widget
+
+
 root = tk.Tk(); root.withdraw()
 T.init_fonts(root); T.apply_ttk_style(root)
 app = A.App(root, s, T.Definitions(s))
 app._startup = lambda: None
 app.open_window()
 assert app._veil_since is not None and alpha(root) == 0.0            # still see-through: it may yet be resized
-# the window manager resizes it just after it shows (GNOME maximizes a window that nearly fills the screen):
-# it stays see-through until that has settled
-root.geometry(f"{root.winfo_width() + 40}x{root.winfo_height() + 20}")
-pump(root, 60)
-assert alpha(root) == 0.0, "unveiled while it was still being resized"
-pump(root, A.App.SETTLE_MS + 400)
-assert app._veil_since is None and alpha(root) == 1.0 and not app._grow_job and not app._monitor_job
+# the window manager resizes it just after it shows (GNOME maximizes a window that nearly fills the screen): while
+# that is still going on, it stays see-through (driven by hand, not by the clock: Mac runners are slow)
+app._on_root_configure(FakeEvent(root))
+assert app._grow_job and app._monitor_job                             # (hurried while see-through: 20 ms each)
+app._unveil()
+assert app._veil_since is not None and alpha(root) == 0.0, "unveiled while it was still being resized"
+assert wait_for(root, lambda: app._veil_since is None and alpha(root) == 1.0), "never unveiled"
+assert not app._grow_job and not app._monitor_job
 # a Configure after that waits the usual 80 / 300 ms again (only while see-through are they hurried)
-app._on_root_configure(type("E", (), {"widget": root})())
+app._on_root_configure(FakeEvent(root))
 assert app._veil_since is None
-pump(root, 200)
+wait_for(root, lambda: not app._grow_job and not app._monitor_job)
 
 # never see-through for long, even if the window keeps moving
 app._veil_since = time.time() - A.App.VEIL_MAX_MS / 1000
 app._last_configure = time.time()
 root.attributes("-alpha", 0.0)
-app._unveil(); pump(root, 100)
-assert alpha(root) == 1.0 and app._veil_since is None
+app._unveil()
+assert app._veil_since is None and wait_for(root, lambda: alpha(root) == 1.0)
 
 # a fit never tries a size above the screen's limit (found hidden, _precheck_zoom): maximizing to a zoom kept for it
 # that this screen cannot fit showed every size from that zoom down
@@ -74,24 +88,37 @@ d = StyledDialog(root, "Test", "A heading", "Some words " * 20)
 d.button("OK", d.close, default=True)
 d.show()
 assert alpha(d.win) == 0.0 and d.win.winfo_viewable()
-pump(root, 150)
-assert alpha(d.win) == 1.0
+assert wait_for(root, lambda: alpha(d.win) == 1.0)
 d.close()
 
 # the setup window shows where it belongs, not first in the corner (it is placed while withdrawn)
 maps = []
 root.bind_all("<Map>", lambda e: isinstance(e.widget, tk.Toplevel) and maps.append(e.widget.geometry()), add="+")
 w = startup.StartupWindow(root, "Setting up", lambda: None)
-pump(root, 150)
+assert wait_for(root, lambda: maps and alpha(w.win) == 1.0)
 assert maps and maps[0].split("+")[1:] == w.win.geometry().split("+")[1:], (maps, w.win.geometry())
-assert alpha(w.win) == 1.0
 w.close()
 
-# unveil gives up waiting for a window that never shows, and never runs the event loop itself
-t = tk.Toplevel(root); t.withdraw()
-ui_style.veil(t); ui_style.unveil(t, wait_ms=50)
-pump(root, 150)
-assert alpha(t) == 1.0
-t.destroy()
+
+# unveil gives up waiting for a window that never shows, and never runs the event loop itself (a stand-in window
+# with its own timer list: macOS cannot report the alpha of a window it never showed)
+class NeverShown:
+    def __init__(self):
+        self.alpha, self.timers, self.updates = 0.0, [], 0
+    def winfo_exists(self): return True
+    def winfo_viewable(self): return False
+    def update_idletasks(self): self.updates += 1
+    def update(self): raise AssertionError("unveil ran the event loop")
+    def after(self, ms, fn): self.timers.append(fn)
+    def attributes(self, name, value): self.alpha = value
+
+
+t = NeverShown()
+ui_style.unveil(t, wait_ms=50)
+for _ in range(20):                       # (each timer runs in turn; 5 looks, 10 ms apart, then the 30 ms one)
+    if not t.timers:
+        break
+    t.timers.pop(0)()
+assert t.alpha == 1.0 and t.updates == 1 and not t.timers
 app.on_close()
 print("veil self-test passed")
