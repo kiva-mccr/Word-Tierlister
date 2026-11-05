@@ -250,4 +250,21 @@ assert fold({"crude": 4.0, "insult": 3.0}, {}) == {}                            
 assert fold({"crude": 4.0, "swear": 2.0}, {"tags": ["vulgar"]}) == {"expletive": 4.0}   # the best of them, harsh
 assert fold({"swear": 3.5, "sexual": 3.0, "slur": 1.0}, {}) == {"expletive": 3.5, "sexual": 3.0, "slur": 1.0}
 assert got["skull-fuck"][3] == "sexual" and got["boys"][3] is None                   # (not smeared whole: none)
+# OB-12 (the user's choice from the real data): a word mostly used rudely is smeared whole though its first meaning
+# is ordinary: at least 3 firmly rude meanings, half of its meanings or more ("dick"); one or two of a few ("gash"),
+# a hedged label, or one among many ("cock") is not
+from rudeness import mostly_rude
+def senses_of(*pairs):
+    return [{"glosses": [g], "tags": list(t)} for g, t in pairs]
+dick = senses_of(("A male person.", ()), ("A penis.", ("vulgar",)), ("A contemptible man.", ("vulgar",)),
+                 ("To have sex with.", ("vulgar",)), ("Nothing at all.", ()))
+assert mostly_rude(dick, ["clean", "sexual", "expletive", "sexual", "clean"], C)
+assert not mostly_rude(dick, ["clean", "sexual", "expletive", "sexual", "clean"], {"slur"})      # (not censored)
+assert not mostly_rude(dick[:3] + senses_of(*[("A tap.", ())] * 4), ["clean", "sexual", "expletive"] + ["clean"] * 4, C)
+hedged = senses_of(("A cut.", ()), *[("The vagina.", ("sometimes", "vulgar"))] * 3)
+assert not mostly_rude(hedged, ["clean", "sexual", "sexual", "sexual"], C)
+W2 = {"dick": json.dumps([compact(x, "noun") for x in dick]),
+      "dicks": json.dumps([compact({"glosses": ["plural of dick"], "form_of": [{"word": "dick"}]}, "noun")])}
+got = score_saved(W2, C)
+assert got["dick"][1] and got["dicks"][1], got                                       # (its plural follows)
 print("RUDENESS OK")

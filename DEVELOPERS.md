@@ -696,6 +696,7 @@ The smaller rules, each with the example that made it:
 | Rule | Example |
 |---|---|
 | The proper word is never rude; a crude word or an insult is an expletive only when vulgar or offensive | "penis", "poop", "idiot" are ordinary; "shit", "bastard" are not |
+| A word mostly used rudely is smeared whole, whatever its first meaning: 3 or more firmly rude meanings, half of them or more | "dick", "bitch", "balls"; not "cock" (1 of 34) or "gash" |
 | A hedged label never smears a word whole | "what the hell" is only mildly vulgar |
 | A hyphenated word with a rude part makes its slang meanings as rude | "piss-taker"; "doo-wop" has no slang meaning |
 | Words a definition only gives as examples do not count | "such as slime or semen" |

@@ -641,7 +641,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "15"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "16"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["expletive"], True, [], "expletive")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters
@@ -756,11 +756,26 @@ def results(word, senses, scored, censored, common=False):
         whole = word_points([p if strongly_labelled(s, firm=True) or (is_form(s) and not _hedge(s)) else {}
                              for s, p in zip(senses, scored)], censored) >= WHOLE_MIN     # the hell" is mildly vulgar;
                                                                                           # a form is its word's)
+    whole = whole or mostly_rude(senses, kinds, censored)
     if whole:                                 # a meaning that only refers back to the word ("skull-fuck: an instance
         main = next((k for k in kinds if k in censored), None)       # of skull-fucking") is as rude as the word
         kinds = [main if k == "clean" and _refers_to(gloss_of(s), word) else k for s, k in zip(senses, kinds)]
     smeared = [[gloss_of(s)[:GLOSS_KEY], k] for s, k in zip(senses, kinds) if k in censored]
     return bits, whole, smeared, main_kind(scored, censored)
+
+
+MOSTLY_MIN = 3             # a word with at least this many firmly rude meanings ...
+MOSTLY_SHARE = 0.5         # ... making up at least this share of its meanings is smeared whole, whatever its first
+
+
+def mostly_rude(senses, kinds, censored):
+    """True for a word mostly used rudely though its first meaning is ordinary (OB-12, the user's choice from the
+    real data: "dick", "bitch", "faggot", "balls"; a word with one or two rude meanings among a few, "coconut",
+    "gash", is not): at least MOSTLY_MIN of its real meanings (not forms) are of a `censored` kind and firmly
+    labelled (strongly_labelled, no hedge), and they are at least MOSTLY_SHARE of them. "cock" (1 of 34) is not."""
+    real = [k for s, k in zip(senses, kinds) if not is_form(s)]
+    firm = sum(1 for s, k in zip(senses, kinds) if not is_form(s) and k in censored and strongly_labelled(s, firm=True))
+    return firm >= MOSTLY_MIN and firm >= MOSTLY_SHARE * len(real)
 
 
 def main_kind(scored, censored):

@@ -800,6 +800,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Expletive, Sexual, Slur); answers in the old kinds are set aside (the user: start from scratch).
 #           Then (asked for): measure_rudeness next asks about few words the rules are sure are clean ("no sign at
 #           all" 3%, sample's "found clean" a twentieth), so the time goes on the unclear ones.
+#           Then (asked for, picked from three versions tried on the real data): a word mostly used rudely is
+#           smeared whole whatever its first meaning (rudeness.mostly_rude: 3 or more firmly rude meanings, half of
+#           its meanings or more): dick, bitch, faggot, balls, pussy and 10 more, 81 words with their forms; "cock"
+#           (1 of 34) is not; "roger" (3 of 5) is. RUDENESS_VERSION 16.
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
