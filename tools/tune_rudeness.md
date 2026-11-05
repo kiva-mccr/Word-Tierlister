@@ -54,6 +54,8 @@ The module docstring has the details; this page is the map.
 
 - Started from the program (--from-program), the close box only hides the window while it tunes (`close_box`); `listen` turns stdin's "show" lines into events and its end into "gone" (a hidden tuner then stops). `close` cancels the pending `_poll`: one firing after the window was destroyed printed Tcl errors.
 - Never test a word on numbers tuned with it: the 5 parts (`part_of`, fixed by the word's letters) each tune on the other 4; Keep takes the run on every word at the round the tests liked best.
+- Every helper process is spawned (`_spawning`), never forked: started by the program (--from-program), the stdin listener thread holds sys.stdin's lock, and a forked child's start-up closes sys.stdin, so the tuning processes hung before round 0 ended (reported).
+- The chart's margins are measured from the small font (the axis name, the widest number, the legend's rows): fixed margins overlapped at the user's text size (reported).
 - Never read the entries in the window's process (`load` starts a spawned process: reading 3 GB of JSON beside Tk froze the window for up to 2.5 s at a time, longer as the heap grew). The helper processes call `lower_priority`; `Inline` (tests, --workers 0) runs in the window's process and must not.
 - The chart is drawn at the canvas's real size (`draw` reads winfo_width / height) and again 60 ms after a resize pauses; its legend is one line under the plot. Stop the moving bar (`_still`) before the window is destroyed, or Tk's progressbar timer complains.
 - A few answers leave some parts with no words: only `tested_parts` are run, averaged and summed (averaging every part once added a missing test error, a TypeError under the graph).
