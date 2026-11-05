@@ -2029,6 +2029,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           setup window and the review window are drawn see-through and shown in one go (ui_style.veil / unveil /
 #           show_drawn); they appeared piece by piece over ~0.2 s, and the setup window in the top-left corner first.
 #           Browse and the drop-downs already appeared complete.
+# [x] F-49 Reported after F-48: the top menus opened slowly, and maximizing still looked like a resize test. A timing
+#           check on the user's PC (Fedora, GNOME on Wayland) showed one text size per maximize: the stepping is
+#           GNOME's own animation stretching the old picture; then the full-size window kept the old text ~0.3 s.
+#           Now a maximize or restore re-fits at once (an idle job, not the 80 ms pause). Each menu (DropMenu) was
+#           built again at every open (40-190 ms there): now it is built once, kept hidden while closed, refreshed
+#           (check marks, the items' current functions) at each open, and made ahead while idle (HeaderMenus).
 # [x] U-8  Asked for: the program is called Word Tierlister everywhere (it was Word Tier List): window titles,
 #           dialogs, the program's files (word-tierlister, word-tierlister.exe, "Word Tierlister.app"), the release's
 #           downloads (word-tierlister-linux / -windows.exe / -macos.zip), the launcher, Start menu shortcut, data

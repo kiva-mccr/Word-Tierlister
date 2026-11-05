@@ -25,7 +25,7 @@ The module docstring has the details; this page is the map.
 - `TabBar`: Folder-style tabs over a page (UI-10): a hairline runs the full width under the tabs, and the chosen tab is drawn in the page colour with its sides and rounded top...
   - methods: tab_x, set, show_only, get, refresh
 - `DropMenu`: A styled drop-down menu (UI-10): a borderless window with roomy rows, the pastel highlight, check marks and shortcut hints, used by the header's File / Edit / View /...
-  - methods: labels, is_open, open, invoke, close
+  - methods: labels, is_open, prepare, open, invoke, close
 - `ChoiceButton`: A drop-down choice (UI-43): a soft button showing the current value and a little arrow; a click opens a DropMenu with the choices (a check mark on the current one).
   - methods: set_values, toggle, refresh
 - `HeaderMenus`: The row of header menu buttons (File, Edit, View, Settings) with their DropMenus (UI-10).

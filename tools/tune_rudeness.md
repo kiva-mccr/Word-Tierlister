@@ -40,6 +40,7 @@ The module docstring has the details; this page is the map.
 - `read_answers`: The answers file's {word: {"kinds": {meaning key: kind}, "whole": bool}} (measure_rudeness.read_answers).
 - `Tuning`: The search: every part's rounds in the processes, one round at a time; events go to `events` (a queue) as ("round", n, {part: (train error, test error)}, average test...
   - methods: run, pause, resume, stop
+- `tested_parts`: The parts that hold at least one answered word (in order): only these are tested and averaged.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
 - `doubled`: The guard's names that cover more than DOUBLED times the words they do now (from none: any).
 - `TuneWindow`: The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed, the guard, the meanings still wrong; Pause, Discard, Keep...
@@ -50,6 +51,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Never test a word on numbers tuned with it: the 5 parts (`part_of`, fixed by the word's letters) each tune on the other 4; Keep takes the run on every word at the round the tests liked best.
+- A few answers leave some parts with no words: only `tested_parts` are run, averaged and summed (averaging every part once added a missing test error, a TypeError under the graph).
 - `fast()` must give exactly the rules' own scores (the self-test compares it with `rudeness.score_words` under odd numbers): what it remembers never depends on the numbers, a meaning that scores nothing scores nothing whatever they are, and a meaning's points are remembered for the values of the numbers it was seen to hang on. A new number or table in rudeness.py: add it to PARAMS (`params`, `apply`, `write_back`, `check`) or it stays as it is.
 - `rudeness._signals` keeps WordNet's points once worked out: inside `fast()` they are read from the table each time (a tuned WORDNET_POINTS was ignored otherwise).
 - The error moves in jumps (a small step often changes no meaning's kind): a step that helps neither way is tried JUMP times as far before it halves.
