@@ -49,6 +49,7 @@ from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style, unveil, veil
 from filepicker import ask_export, ask_import, browse, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
+from fullscreen import PauseMenu, dialog_bar
 from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
                      Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
 
@@ -240,6 +241,8 @@ class App:
         self.dev_var = tk.BooleanVar(value=self.dev_tools)
         self.censor_var = tk.BooleanVar(value=store.deal_settings()["censor"])
         self.dark_var = tk.BooleanVar(value=store.get_meta("dark_mode") == "1")
+        self.full_var = tk.BooleanVar(value=store.get_meta("full_screen") == "1")     # (FS-2)
+        self.pause = None             # the full screen menu (fullscreen.PauseMenu) while it is open
         self.anim = Animator(root, reduce_motion=self.reduce_motion)
         self.mode_var = tk.StringVar(value=self.mode)
         self.filter_var = tk.StringVar()
@@ -273,6 +276,8 @@ class App:
         r.update_idletasks()
         veil(r)
         self._veil_since = time.time()
+        if self.full_var.get():
+            self._apply_full_screen()
         r.deiconify()
         r.update()                                  # (mapped, exposed and every widget drawn)
         r.after(self.SETTLE_MS, self._unveil)
@@ -453,7 +458,8 @@ class App:
                       ("check", "Show definitions", self.defs_var, lambda: self.toggle_defs(self.defs_var.get())),
                       ("check", "Reduce motion", self.motion_var, self.toggle_motion),
                       ("check", "Censor obscene words", self.censor_var, self.toggle_censor),
-                      ("check", "Dark mode", self.dark_var, self.toggle_dark)]),
+                      ("check", "Dark mode", self.dark_var, self.toggle_dark),
+                      ("check", "Full screen", self.full_var, self.toggle_full_screen)]),
             ("Settings", [("command", "Anchor words...", self.edit_anchors, None),
                           ("command", "How words are dealt...", self.edit_dealing, None),
                           ("command", "Keyboard shortcuts...", self.edit_keys, None),
@@ -475,6 +481,10 @@ class App:
         bar.pack(side="top", fill="x")
         self.header = HeaderMenus(bar, self._menu_items(), font("body"), animator=self.anim)
         self.header.pack(side="left")
+        self.header.can_return = lambda: not self.reopening     # (FS-1: the new window brings the menu back)
+        # full screen (FS-2): the four menus become one Menu button, which opens the pause menu
+        self.menu_btn = RoundButton(bar, "Menu", self.open_pause_menu, font=font("body"), padx=12, pady=5, radius=10,
+                                    animator=self.anim, canvas_bg=PALETTE["surface"], flat=True)
         # the project's page, at the top right (UI-75: asked for); muted until hovered
         self.github = LinkButton(bar, "external", lambda: self.open_page(REPO_PAGE), note="The project on GitHub",
                                  bg=PALETTE["surface"], text="GitHub", font=font("body"))
@@ -1469,6 +1479,8 @@ class App:
             h = f"{keys('stop')} stop comparing" if self.keys.keys_of("stop") else ""
         else:                                    # (the Compare button that shows Space is hidden meanwhile)
             h = f"{keys('undo')} undo" if self.keys.keys_of("undo") else ""
+            if self.full_var.get() and self.keys.keys_of("menu"):
+                h = f"{keys('menu')} menu" + ("   \u00b7   " if h else "") + h
             if len(self.mode_switch.visible) > 1 and self.keys.keys_of("next_tab"):
                 h += ("   \u00b7   " if h else "") + f"{keys('next_tab')} next tab"
         self.hint_lbl.config(text=h)
@@ -2005,7 +2017,13 @@ class App:
         tab = action in ("next_tab", "prev_tab") or e.keysym in ("Tab", "ISO_Left_Tab")
         if action is None:
             return "break" if tab else None        # (no focus traversal in the main window)
+        if action == "menu":                       # (Esc: the pause menu, only in full screen; FS-2)
+            if self.full_var.get():
+                self.open_pause_menu()
+                return "break"
+            return None
         everywhere = {"next_tab": lambda: self.next_tab(1), "prev_tab": lambda: self.next_tab(-1),
+                      "full_screen": self.flip_full_screen,
                       "defs": self.toggle_defs, "undo": self.undo, "zoom_in": lambda: self.zoom_step(1),
                       "zoom_out": lambda: self.zoom_step(-1), "zoom_reset": lambda: self.set_zoom(1.0)}
         if action in everywhere:
@@ -2566,6 +2584,99 @@ class App:
         """Settings > Tier colours... (UI-61)."""
         return TierColoursDialog(self)
 
+    # ---- FS-2: full screen ------------------------------------------------------------------------------------
+    def toggle_full_screen(self):
+        """View > Full screen (FS-2, asked for; also its key, F11): the window fills the screen, no title bar; the
+        top menus become one Menu button and Esc opens the pause menu. Saved for this save."""
+        self.store.set_meta("full_screen", "1" if self.full_var.get() else "0")
+        self._apply_full_screen()
+        if self.full_var.get():
+            keys = self.keys.display("full_screen")
+            self.flash("Full screen" + (f"  \u00b7  {keys[0]} to leave" if keys else ""), ms=2500)
+
+    def flip_full_screen(self):
+        self.full_var.set(not self.full_var.get())
+        self.toggle_full_screen()
+
+    def _apply_full_screen(self):
+        on = self.full_var.get()
+        try:
+            self.root.attributes("-fullscreen", on)
+        except tk.TclError:
+            pass
+        if on:
+            self.header.close()
+            self.header.pack_forget()
+            self.menu_btn.pack(side="left", before=self.github)
+            StyledDialog.decorate = self._dialog_bar
+        else:
+            self.close_pause_menu()
+            self.menu_btn.pack_forget()
+            self.header.pack(side="left", before=self.github)
+            if StyledDialog.decorate == self._dialog_bar:
+                StyledDialog.decorate = None
+        self._hint()
+
+    def _pause_pages(self):
+        """The pause menu's pages: its own first page, then one per top menu, made from the same items."""
+        pages = {"Menu": [("command", "Resume", self.close_pause_menu)]}
+        for name, items in self._menu_items():
+            pages["Menu"].append(("page", name, name))
+            rows = []
+            for it in items:
+                if it[0] == "separator":
+                    rows.append(("gap",))
+                elif it[1] != "Full screen":
+                    rows.append(it[:3] if it[0] == "command" else it[:4])
+            while rows and rows[-1][0] == "gap":
+                rows.pop()
+            pages[name] = rows
+        pages["Menu"] += [("gap",), ("command", "Leave full screen", self.flip_full_screen),
+                          ("command", "Quit", self.on_close)]
+        return pages
+
+    def open_pause_menu(self, path=None):
+        """The full screen menu (FS-2): over the whole page; Esc on its first page closes it again."""
+        if not self.full_var.get() or self.shut:
+            return
+        self.header.close()
+        if self.pause is None or not self.pause.is_open():
+            self.pause = PauseMenu(self.root, self._pause_pages(), anim=self.anim, on_close=self._pause_closed,
+                                   extra_keys=self._pause_key)
+        self.pause.open(path)
+
+    def close_pause_menu(self):
+        if self.pause is not None:
+            self.pause.close()
+
+    def _pause_closed(self):
+        try:
+            self.root.focus_set()
+        except tk.TclError:
+            pass
+
+    def _pause_key(self, e):
+        """A key the pause menu does not use itself: only Full screen's own key works there (it leaves)."""
+        spec = spec_of(e, self._ws)
+        if spec is not None and spec in self.keys.keys_of("full_screen"):
+            self.flip_full_screen()
+
+    def _dialog_bar(self, dlg):
+        """Full screen: a dialog gets Back (its Cancel) and the trail to it: the pause menu's pages, the dialogs
+        open under it, then its own title."""
+        trail = self.pause.trail() if self.pause is not None and self.pause.is_open() else []
+        for w in self.root.winfo_children():
+            d = getattr(w, "dialog", None)
+            if d is not None and d is not dlg and d.alive() and w.winfo_viewable():
+                trail.append(w.title())
+        dialog_bar(dlg, trail + [dlg.win.title()], lambda: dlg.on_cancel())
+        dlg.when_closed(self._pause_refocus)
+
+    def _pause_refocus(self):
+        """A dialog over the pause menu closed: the menu's keys work again (it is Back to the menu)."""
+        if self.pause is not None and self.pause.is_open() and not dialog_open(self.root):
+            self.pause.canvas.focus_force()
+
     def toggle_dark(self):
         """View > Dark mode (UI-62, not the default): saved, and the window reopens in it."""
         self.store.set_meta("dark_mode", "1" if self.dark_var.get() else "0")
@@ -2740,6 +2851,12 @@ class App:
         self.refresh()
         if old._browse_was_open:
             self.root.after(150, self.open_browser)
+        if old.pause is not None and old.pause.is_open():     # (FS-2: a switch in the pause menu brought a new look)
+            path = old.pause.trail()
+            self.root.after(self.SETTLE_MS + 200, lambda: self.open_pause_menu(path))
+        if old.header.returning is not None:     # (FS-1: a dialog from a menu brought the new look: its menu is back)
+            self.header.returning = old.header.returning
+            self.root.after(self.SETTLE_MS + 200, lambda: self.header.return_to(*old.header.returning))
         if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
             old.review.close()
             self.root.after(150, lambda: self.open_review(old.review_path))

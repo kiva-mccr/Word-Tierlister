@@ -29,6 +29,8 @@ ACTIONS = (
     ("zoom_in", "all", "Zoom in", ["Ctrl+plus", "Ctrl+equal"]),
     ("zoom_out", "all", "Zoom out", ["Ctrl+minus"]),
     ("zoom_reset", "all", "Actual size", ["Ctrl+0"]),
+    ("full_screen", "all", "Full screen", ["F11"]),
+    ("menu", "all", "Menu (in full screen)", ["Escape"]),
     ("place", "place", "Place in S … F", ["1"]),
     ("compare", "place", "Compare to anchors", ["space"]),
     ("later", "place", "Don't know / later", ["u", "question"]),
