@@ -2115,6 +2115,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           it cannot tell how far); the hover note says how far (its step and last line); a click does nothing (one
 #           tuner at a time); at the end the whole ring blinks once. App.dev_progress, DevBubble(progress=),
 #           SmoothCanvas.ring_image, PALETTE["ring"]. Reduce motion: no spinning, no easing.
+# [x] DT-4 Asked for: the tuner's window can be closed while it tunes and a click on the bubble opens it again. Started
+#           from the bubble (--from-program), the close box only hides it while it tunes (Discard stops it); a "show"
+#           line on its stdin brings it back (App.show_tuner: a click on the running bubble, DevBubble(on_running=), or
+#           on the plain one once done while its window is still open); done while hidden, it pops back up by itself
+#           (the user's pick); hidden when the program closes, it stops. The hover note says it can be brought back.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

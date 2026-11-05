@@ -166,7 +166,8 @@ dialog's top right, StyledDialog.dev_bubbles / widgets.DevBubble: How words are 
 Score the rules, Source & Updates has Nightly (a switch), Log and Crash test; a new dev tool gets a bubble there, the
 command kept). DT-2 (reported: the nightly showed to everyone while main was ahead; now only with Developer tools on and
 the Nightly bubble lit). DT-3 (a running dev tool's bubble: a ring round the dot fills, or an arc spins with no
-fraction; App.dev_progress feeds it; picked from a mock-up).
+fraction; App.dev_progress feeds it; picked from a mock-up). DT-4 (the tuner's close box hides it while it tunes; a
+click on its bubble brings it back, App.show_tuner over its stdin; done while hidden, it pops back up).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).

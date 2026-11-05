@@ -1748,7 +1748,7 @@ class DevBubble(SmoothCanvas):
     With `progress() -> None or (fraction or None, note)` it shows a tool that keeps running after the click (asked
     for, picked from a mock-up): while it runs the bubble is lit and a thin ring fills clockwise around the dot
     (a fraction), or a short arc goes round it (None: no way to tell how far); the hover note says how far it is;
-    a click does nothing. When it ends the whole ring blinks once and the bubble is plain again. It asks every
+    a click runs `on_running` (the tuner: its window back, asked for), or does nothing without one. When it ends the whole ring blinks once and the bubble is plain again. It asks every
     POLL_MS, so a dialog opened while the tool runs shows it too. Reduce motion: no spinning, no easing.
 
         DevBubble(parent, "Review rude meanings", app.review_rude)
@@ -1761,13 +1761,14 @@ class DevBubble(SmoothCanvas):
     SPIN_ARC = 100            # the arc's length while it cannot tell how far
     BLINK_MS = 450            # the whole ring, once, when the tool ends
 
-    def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None):
+    def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None,
+                 on_running=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
         self.text, self.command, self.variable = text, command, variable
         self._font, self._bg, self._hover = font_ or font("small"), bg, False
-        self.progress, self._anim = progress, animator
+        self.progress, self._anim, self.on_running = progress, animator, on_running
         self.state = None             # what progress() said last: None (idle) or (fraction or None, note)
         self._shown = 0.0             # the fraction drawn (it eases to the real one)
         self._spin = 0                # the arc's start while it cannot tell how far
@@ -1850,7 +1851,9 @@ class DevBubble(SmoothCanvas):
 
     # ---- clicks and drawing --------------------------------------------------------------------------------
     def invoke(self):
-        if self.running():                # (asked for: a click on a running tool does nothing; the note says how far)
+        if self.running():                # (a running tool: its window back if it has one, else nothing)
+            if self.on_running:
+                self.on_running()
             return
         if self.variable is not None:
             self.variable.set(not self.variable.get())
@@ -3526,16 +3529,17 @@ class StyledDialog:
 
     def dev_bubbles(self, items):
         """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
-        (text, command), (text, command, variable) for a switch, or (text, command, None, progress) for a tool that
-        keeps running (its ring). Returns the bubbles, by their text."""
+        (text, command), (text, command, variable) for a switch, or (text, command, None, progress[, on_running]) for
+        a tool that keeps running (its ring; on_running: what a click does meanwhile). Returns the bubbles, by text."""
         out = {}
         if self.head_row is None or not items:
             return out
         row = tk.Frame(self.head_row, bg=PALETTE["bg"])
         row.pack(side="right", anchor="n", padx=(24, 0))
         for item in items:
-            text, command, variable, progress = (tuple(item) + (None, None))[:4]
-            b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim)
+            text, command, variable, progress, on_running = (tuple(item) + (None,) * 3)[:5]
+            b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim,
+                          on_running=on_running)
             b.pack(side="left", padx=(6 if out else 0, 0))
             out[text] = b
         return out

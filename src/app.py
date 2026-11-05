@@ -136,6 +136,8 @@ def _follow_tuner(proc, job):
                 job["note"] = f"Round {m.group(1)} of up to {m.group(2)}"
             elif line.startswith("Done"):
                 job["over"] = True
+            elif line.startswith("Hidden"):       # (its close box while tuning: only hidden; show_tuner brings it back)
+                job["hidden"] = True
     except (OSError, ValueError):
         pass
     job["over"] = True
@@ -2353,10 +2355,27 @@ class App:
         job = getattr(self, "_tuner_job", None)
         if job is None:
             return None
-        if job.get("over") or job["proc"].poll() is not None:
+        if job["proc"].poll() is not None:
             self._tuner_job = None
             return None
-        return job.get("frac") or 0.0, job.get("note") or "The tuner is reading Wiktionary's entries"
+        if job.get("over"):                       # (done: its window may stay open for Keep; show_tuner still reaches it)
+            return None
+        note = job.get("note") or "The tuner is reading Wiktionary's entries"
+        return job.get("frac") or 0.0, note + ("  ·  click to bring its window back" if job.get("hidden") else "")
+
+    def show_tuner(self):
+        """Bring the tuner's window back (asked for: closed while it tunes, a click on its bubble opens it again; once
+        done, the next click shows the open window rather than starting another). True if a tuner was there."""
+        job = getattr(self, "_tuner_job", None)
+        if job is None or job["proc"].poll() is not None:
+            return False
+        try:
+            job["proc"].stdin.write("show\n")
+            job["proc"].stdin.flush()
+        except (OSError, ValueError, AttributeError):
+            return False
+        job["hidden"] = False
+        return True
 
     def make_review_words(self, dlg=None, ask=None, run=None):
         """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
@@ -2436,13 +2455,14 @@ class App:
             show_message("Tune the rules", "Wiktionary's entries are missing", "Make review words reads them "
                          "first (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
             return None
-        job = getattr(self, "_tuner_job", None)
-        if job is not None and not job.get("over") and job["proc"].poll() is None:
-            self.flash("The tuner is open already", kind="info")
+        if self.show_tuner():                     # (one tuner at a time: the open one is brought forward)
+            if dlg is not None:
+                dlg.close()
             return None
-        cmd = [sys.executable, tool, "--review", path, "--entries", entries]
+        cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"]
         proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
-                                                     stdout=subprocess.PIPE, text=True, bufsize=1)))(cmd)
+                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                                     bufsize=1)))(cmd)
         if getattr(proc, "stdout", None) is not None:      # (its rounds fill the bubble's ring: _follow_tuner)
             self._tuner_job = {"proc": proc, "frac": 0.0, "note": None}
             threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()
