@@ -30,6 +30,13 @@ def pump(n=6):
         root.update(); time.sleep(0.02)
 
 
+def wait_for(ok, secs=5.0):
+    end = time.monotonic() + secs
+    while not ok():
+        assert time.monotonic() < end
+        pump(1)
+
+
 pump()
 # ---- the switch: in the Settings menu, off to start with, saved -------------------------------------------------
 settings = dict(app._menu_items())["Settings"]
@@ -188,9 +195,7 @@ tuner.say("Done\n")
 assert app.dev_progress("tune") is None
 pump(4)
 assert not ring.running() and ring._blink                           # (the whole ring blinks once)
-for _ in range(40):
-    pump(1)
-assert not ring._blink and not ring.lit()
+wait_for(lambda: not ring._blink and not ring.lit())                # (slow runners: by time, not by a count)
 ring.invoke(); assert calls == [1]                                  # (plain again: a click runs it)
 assert app.show_tuner() and tuner.sent[-1] == "show\n"              # (done, still open for Keep: it is reached)
 tuner.code = 0; tuner.lines.append(None); tuner.more.set()
