@@ -180,12 +180,23 @@ def pump(n=5):
 
 pump()
 assert "Reading" in win.info.cget("text") and not win.keep_btn.enabled
+# started by the program's bubble (--from-program): the close box only hides it while it tunes; "show" brings it back,
+# and it comes back by itself when it is done (asked for)
+import io
+win.from_program = True
+win.close_box(); pump()
+assert win.hidden and root.state() == "withdrawn" and not win.closed
+win.listen(io.StringIO("show\n")); pump(20)                     # (then the stream ends: nothing while it shows)
+assert not win.hidden and root.state() == "normal" and not win.closed
+win.close_box(); pump()
+assert win.hidden
 win.events.put(("ready", data, saved, 0, 0))
 for _ in range(400):
     pump(1)
     if win.done and "best" in win.guards and win.guards.get("best") is not None:
         break
 assert win.done and win.best_round and "Your answers: " in win.info.cget("text")
+assert not win.hidden and root.state() == "normal"                # (done while hidden: back, for Keep)
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
 assert any(t.startswith("error (average of the 5 parts)") for t in texts)
 assert any(t.startswith("each of the 5 parts") for t in texts) and "the rules as they are now" in texts
@@ -214,4 +225,16 @@ assert told and told[-1][1] == "Written into src/rudeness.py"
 assert open(src, encoding="utf-8").read() != before
 errors.ask_yes_no, errors.show_message = errors_ask, errors_show
 assert win.closed
+# hidden, then the program closes (its end of the pipe): a tuner out of reach stops
+root = tk.Tk(); init_fonts(root)
+w2 = T.TuneWindow(root, os.path.join(folder, "answers.jsonl"), 6, src)
+w2.from_program = True
+w2.close_box(); w2.listen(io.StringIO(""))
+for _ in range(40):
+    try:
+        root.update()
+    except tk.TclError:
+        break
+    time.sleep(0.02)
+assert w2.closed
 print("tune self-test passed")
