@@ -183,11 +183,11 @@ os.environ.pop("XDG_CONFIG_HOME", None)
 no_service = lambda cmd, **k: Ran("syncthing v1.27.2", 1 if cmd[0] == "systemctl" else 0)
 p = st.start_at_login("/usr/bin/syncthing", platform="linux", home=home, run=no_service)
 text = open(p).read()
-assert p.endswith("autostart/syncthing-start.desktop") and "Exec=env STNODEFAULTFOLDER=1 /usr/bin/syncthing serve " \
+assert p.replace(os.sep, "/").endswith("autostart/syncthing-start.desktop") and "Exec=env STNODEFAULTFOLDER=1 /usr/bin/syncthing serve " \
     "--no-browser" in text
 assert st.start_at_login("/usr/bin/syncthing", platform="linux", home=home, run=no_service) is None
 p = st.start_at_login("/opt/st/syncthing", platform="darwin", home=home, run=no_service)
-assert p.endswith("LaunchAgents/net.syncthing.wordtierlister.plist") and "<string>serve</string>" in open(p).read()
+assert p.replace(os.sep, "/").endswith("LaunchAgents/net.syncthing.wordtierlister.plist") and "<string>serve</string>" in open(p).read()
 # connect(): not running -> started once, then reached
 calls = {"start": 0}
 open(cfg, "w").write('<configuration><gui><address>127.0.0.1:9</address><apikey>K</apikey></gui></configuration>')
