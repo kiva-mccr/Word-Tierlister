@@ -37,6 +37,7 @@ import queue
 import re
 import sys
 import threading
+import time
 from concurrent.futures import ProcessPoolExecutor
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
@@ -298,13 +299,17 @@ def fast(wn_matches=None, wn_names=None, words=None, poses=None, data=None):
         _dead.clear()
 
 
-def wordnet_tables(words, poses, wn):
-    """(wn_matches, wn_names) for fast(): each meaning's WordNet match, and what each matched meaning is."""
+def wordnet_tables(words, poses, wn, progress=None):
+    """(wn_matches, wn_names) for fast(): each meaning's WordNet match, and what each matched meaning is;
+    progress(share of the words done) now and then."""
     matches, names = {}, {}
     if wn is None:
         return matches, names
     wanted = set(rudeness.WORDNET_POINTS)
-    for w, senses in words.items():
+    step = max(1, len(words) // 200)
+    for i, (w, senses) in enumerate(words.items()):
+        if progress and i % step == 0:
+            progress(i / max(1, len(words)))
         for s, pos in zip(senses, poses.get(w, [""] * len(senses))):
             gloss = rudeness.gloss_of(s)
             syn = rudeness.wordnet_match(w, gloss, pos, wn)
@@ -405,12 +410,15 @@ def say(line):
         pass
 
 
-def tune_round(data, values, steps, train, order):
+def tune_round(data, values, steps, train, order, progress=None):
     """One round of the search over `train`: every number a step up and down (in `order`), a change kept when it
-    lowers the error, a step that helps neither way halved. Returns (values, steps, error on train)."""
+    lowers the error, a step that helps neither way halved; progress(numbers tried, of) after each number. Returns
+    (values, steps, error on train)."""
     values, steps = dict(values), dict(steps)
     best, _t = evaluate(data, values, train)
-    for p in order:
+    for i, p in enumerate(order, 1):
+        if progress:
+            progress(i - 1, len(order))
         if steps[p] < MIN_STEP:
             continue
         lo, hi = data["bounds"][p]
@@ -425,6 +433,8 @@ def tune_round(data, values, steps, train, order):
                 best, values[p], moved = err, v, True
                 break
         steps[p] = steps[p] if moved else steps[p] / 2
+    if progress:
+        progress(len(order), len(order))
     apply(values, data["base"])
     return values, steps, best
 
@@ -433,8 +443,27 @@ def tune_round(data, values, steps, train, order):
 _data = {}
 
 
-def _start(data):
-    """A tuning process's start: keep the data, make scoring fast for good."""
+def lower_priority():
+    """This process yields to the window (and to the rest of the computer): the tuner's helper processes call it."""
+    try:
+        if hasattr(os, "nice"):
+            os.nice(10)
+        elif sys.platform == "win32":
+            import ctypes
+            ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)  # below normal
+    except (OSError, AttributeError):
+        pass
+
+
+def _start(data, progress=None):
+    """A tuning process's start: at a lower priority, then _keep; `progress` (a queue) hears each number tried."""
+    lower_priority()
+    _keep(data)
+    _data["_progress"] = progress
+
+
+def _keep(data):
+    """Keep the data, make scoring fast for good (a tuning process, or this one for Inline)."""
     _data.update(data)
     _data["_fast"] = fast(data["wn_matches"], data["wn_names"], _data["words"], _data["poses"], _data)
     _data["_fast"].__enter__()
@@ -447,7 +476,9 @@ def _run_part(part, values, steps, rnd):
     train = [w for w in words if part == ALL or part_of(w) != part]
     test = [] if part == ALL else [w for w in words if part_of(w) == part]
     order = sorted(values, key=lambda p: hashlib.md5(f"{p}{rnd}{part}".encode()).hexdigest())
-    values, steps, train_err = tune_round(_data, values, steps, train, order)
+    out = _data.get("_progress")
+    tell = (lambda i, n: out.put(("step", rnd, part, i, n))) if out is not None else None
+    values, steps, train_err = tune_round(_data, values, steps, train, order, tell)
     test_err, t = evaluate(_data, values, test) if test else (None, None)
     return part, values, steps, train_err, test_err, t
 
@@ -462,7 +493,7 @@ def _tested(part, values):
 class Inline:
     """A stand-in for ProcessPoolExecutor that runs each job at once, in this process (tests; --workers 0)."""
     def __init__(self, data):
-        _start(data)
+        _keep(data)
 
     def submit(self, fn, *args):
         class Done:
@@ -479,21 +510,29 @@ class Inline:
         _data.clear()
 
 
-def pool(data, workers):
-    """Where the parts are tuned: `workers` processes, or this one (0)."""
+def pool(data, workers, progress=None):
+    """Where the parts are tuned: `workers` processes, or this one (0); each number tried is put on `progress` (a
+    multiprocessing queue for processes)."""
     if workers == 0:
-        return Inline(data)
-    return ProcessPoolExecutor(max_workers=workers, initializer=_start, initargs=(data,))
+        ex = Inline(data)
+        _data["_progress"] = progress
+        return ex
+    return ProcessPoolExecutor(max_workers=workers, initializer=_start, initargs=(data, progress))
 
 
 # ---- the data -------------------------------------------------------------------------------------------------------
-def read_compact(path):
-    """{word: [compact sense]} from the compact entries (measure_rudeness fetch)."""
+def read_compact(path, progress=None):
+    """{word: [compact sense]} from the compact entries (measure_rudeness fetch); progress(share read) now and then."""
     out = {}
-    with open(path, encoding="utf-8") as f:
+    size, done, shown = max(1, os.path.getsize(path)), 0, 0.0
+    with open(path, "rb") as f:
         for line in f:
             e = json.loads(line)
             out.setdefault(e["w"], []).extend(e["senses"])
+            done += len(line)
+            if progress and done / size - shown >= 0.005:
+                shown = done / size
+                progress(shown)
     return out
 
 
@@ -508,10 +547,17 @@ def program_words(compacts):
     return {w: json.dumps(cs, separators=(",", ":")) for w, cs in kept.items()}
 
 
-def prepare(entries, answers, wn=None, zipf=None, log=print):
-    """(data for the tuning, the program's words for the guard) from the compact entries and the answers."""
+READING, LINKING, MATCHING = "Reading the Wiktionary entries", "Linking words to their families", "Matching to WordNet"
+
+
+def prepare(entries, answers, wn=None, zipf=None, log=print, progress=None):
+    """(data for the tuning, the program's words for the guard) from the compact entries and the answers;
+    progress(step, share done or None) for the window's bar."""
+    progress = progress or (lambda step, share: None)
     log("Reading the Wiktionary entries ...")
-    compacts = read_compact(entries)
+    progress(READING, 0.0)
+    compacts = read_compact(entries, lambda share: progress(READING, share))
+    progress(LINKING, None)
     words = {w: [rudeness.expand(c) for c in cs] for w, cs in compacts.items()}
     poses = {w: [c.get("pos", "") for c in cs] for w, cs in compacts.items()}
     family = rudeness.families({w: [p for c in cs for p in c.get("e", ())] for w, cs in compacts.items()},
@@ -521,7 +567,7 @@ def prepare(entries, answers, wn=None, zipf=None, log=print):
     words = {w: words[w] for w in need}
     poses = {w: poses[w] for w in need}
     log(f"Matching {len(words):,} words' meanings to WordNet ..." if wn else "WordNet is not installed: without it")
-    wn_matches, wn_names = wordnet_tables(words, poses, wn)
+    wn_matches, wn_names = wordnet_tables(words, poses, wn, lambda share: progress(MATCHING, share))
     zipf = zipf or (lambda w: 0.0)
     values, base = snapshot()
     data = {"words": words, "poses": poses, "family": {w: tuple(family.get(w, ())) for w in need},
@@ -690,18 +736,23 @@ class Tuning:
     def run(self):
         """The search (a worker thread: never touches tkinter)."""
         try:
-            ex = pool(self.data, self.workers)
+            steps = self.events if self.workers == 0 else _mp_queue()
+            if steps is not self.events:          # (the processes' steps, passed on to the window)
+                threading.Thread(target=_relay, args=(steps, self.events), daemon=True).start()
+            ex = pool(self.data, self.workers, steps)
             try:
                 self._run(ex)
             finally:
                 ex.shutdown(wait=True, cancel_futures=True)
+                if steps is not self.events:
+                    steps.put(None)
         except Exception as e:              # (the window says so)
             self.events.put(("error", f"{type(e).__name__}: {e}"))
 
     def _run(self, ex):
         jobs = [ex.submit(_run_part, p, self.start_values, {k: 0.0 for k in self.start_values}, 0)
                 for p in self.tested]
-        now = [j.result() for j in jobs]
+        now = self._results(0, jobs)
         avg = sum(r[4] for r in now) / len(now)
         self.events.put(("round", 0, {r[0]: (r[3], r[4]) for r in now}, avg))
         self.events.put(("tally", "now", _sum_tallies(r[5] for r in now)))
@@ -714,7 +765,7 @@ class Tuning:
             if self._stop:
                 return
             jobs = [ex.submit(_run_part, p, self.values[p], self.steps[p], rnd) for p in self.tested + [ALL]]
-            res = {r[0]: r for r in (j.result() for j in jobs)}
+            res = {r[0]: r for r in self._results(rnd, jobs)}
             for p, r in res.items():
                 self.values[p], self.steps[p] = r[1], r[2]
             avg = sum(res[p][4] for p in self.tested) / len(self.tested)
@@ -730,6 +781,16 @@ class Tuning:
                 self.events.put(("done", "settled"))
                 return
         self.events.put(("done", "rounds"))
+
+    def _results(self, rnd, jobs):
+        """The jobs' results in order: ("begin", round, jobs), then each one an event for the window's bar ("part",
+        round, done, of)."""
+        self.events.put(("begin", rnd, len(jobs)))
+        out = []
+        for j in jobs:
+            out.append(j.result())
+            self.events.put(("part", rnd, len(out), len(jobs)))
+        return out
 
     def _misses(self, ex):
         """The tested meanings the best round still gets wrong (each part's numbers at that round): an event, and
@@ -751,6 +812,17 @@ class Tuning:
     def stop(self):
         self._stop = True
         self._go.set()
+
+
+def _mp_queue():
+    import multiprocessing
+    return multiprocessing.Queue()
+
+
+def _relay(source, events):
+    """Pass the tuning processes' steps on to the window's events, until None."""
+    for e in iter(source.get, None):
+        events.put(e)
 
 
 def tested_parts(data):
@@ -781,6 +853,7 @@ _guard = {}
 def _start_guard(saved):
     """The guard's process: the program's words, WordNet's matches for them worked out once."""
     from wordfreq import zipf_frequency
+    lower_priority()
     words = {w: [rudeness.expand(c) for c in json.loads(t)] for w, t in saved.items()}
     poses = {w: [c.get("pos", "") for c in json.loads(t)] for w, t in saved.items()}
     wn = rudeness.wordnet()
@@ -813,7 +886,8 @@ class TuneWindow:
     """The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed,
     the guard, the meanings still wrong; Pause, Discard, Keep the best numbers."""
 
-    CHART = (720, 270)
+    CHART = (960, 400)                      # (the most it starts at; it grows with the window)
+    TICK_MS = 1000                          # the bar's time left counts down this often
 
     def __init__(self, root, answers_path, rounds, source):
         import tkinter as tk
@@ -843,14 +917,30 @@ class TuneWindow:
         self.status.pack(side="right")
         tk.Label(box, text="Rules only: it changes the numbers in rudeness.py; the program never reads your answers.",
                  font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w")
-        self.info = tk.Label(box, font=font("body"), bg=bg, fg=P["text"], text="Reading the Wiktionary entries ...")
-        self.info.pack(anchor="w", pady=(12, 6))
-        w, h = self.CHART
+        self.info = tk.Label(box, font=font("body"), bg=bg, fg=P["text"], text="Reading the Wiktionary entries ...",
+                             justify="left", anchor="w")
+        self.info.pack(fill="x", pady=(12, 6))
+        from tkinter import ttk
+        style = ttk.Style(root)
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+        style.configure("Tune.Horizontal.TProgressbar", background=P["accent"], troughcolor=P["surface2"],
+                        bordercolor=P["surface2"], lightcolor=P["accent"], darkcolor=P["accent"], thickness=10)
+        self.bar = ttk.Progressbar(box, maximum=100, mode="determinate", style="Tune.Horizontal.TProgressbar")
+        self.bar.pack(fill="x")
+        self.bar_text = tk.Label(box, font=font("small"), bg=bg, fg=P["muted"], anchor="w")
+        self.bar_text.pack(fill="x", pady=(3, 10))
+        self.eta, self.step, self.share = None, None, None      # (the reading's bar: its step and share done)
+        self.round_started = None                               # (a round's bar: when it began, each part's share)
+        self.bar_round, self.tried, self.round_eta = 0, {}, None
+        self.parts = (0, 0)
+        w, h = self.chart_size(root)
+        self.bottom = tk.Frame(box, bg=bg)                      # (packed first at the bottom: the chart takes the rest)
         self.chart = tk.Canvas(box, width=w, height=h, bg=P["surface"], highlightthickness=1,
                                highlightbackground=P["border"])
-        self.chart.pack()
-        self.note = tk.Label(box, font=font("small"), bg=bg, fg=P["muted"], wraplength=w, justify="left")
+        self.note = tk.Label(self.bottom, font=font("small"), bg=bg, fg=P["muted"], wraplength=w, justify="left")
         self.note.pack(anchor="w", pady=(6, 0))
+        box = self.bottom
         cols = tk.Frame(box, bg=bg)
         cols.pack(fill="x", pady=(14, 0))
         self.kinds_box = tk.Frame(cols, bg=bg)
@@ -872,12 +962,90 @@ class TuneWindow:
         RoundButton(nav, "Discard", self.discard, bg=P["surface"], **kw).pack(side="right", padx=(0, 8))
         tk.Label(box, text="Keep writes the numbers into src/rudeness.py (and bumps RUDENESS_VERSION); review the diff "
                  "before committing.", font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w", pady=(12, 0))
+        self.bottom.pack(side="bottom", fill="x")
+        self.chart.pack(fill="both", expand=True)
+        self._resize_job = None
+        self.chart.bind("<Configure>", self._resized)
         self.keep_btn.set_enabled(False)
         self.pause_btn.set_enabled(False)
         self.hidden = self.failed = False
         root.protocol("WM_DELETE_WINDOW", self.close_box)
+        self.show_bar()
         self.draw()
         self._poll_job = root.after(150, self._poll)
+        self._tick_job = root.after(self.TICK_MS, self._tick)
+
+    @classmethod
+    def chart_size(cls, root):
+        """The chart's starting size: CHART, smaller on a small screen (the rest of the window needs about 560 px)."""
+        w, h = cls.CHART
+        return max(560, min(w, root.winfo_screenwidth() - 140)), max(220, min(h, root.winfo_screenheight() - 600))
+
+    def _resized(self, _e=None):
+        """The chart follows the window's size: drawn again once the resizing pauses (not at every step of a drag)."""
+        if self._resize_job:
+            self.root.after_cancel(self._resize_job)
+        self._resize_job = self.root.after(60, self._redraw)
+
+    def _redraw(self):
+        self._resize_job = None
+        self.note.config(wraplength=max(300, self.chart.winfo_width()))
+        self.draw()
+
+    # ---- the bar: reading the entries, then each round ----------------------------------------------------------
+    def show_bar(self):
+        """The bar and its line from what is known: the reading's step and share, or the round's parts done."""
+        import startup
+        now = time.time()
+        if self.round_started is None:                          # (reading the entries)
+            if self.share is None:
+                self.bar.config(mode="indeterminate")
+                self.bar.start(15) if not getattr(self, "_moving", False) else None
+                self._moving = True
+                self.bar_text.config(text=f"{self.step or READING} ...")
+                return
+            self._still()
+            self.bar.config(value=100 * self.share)
+            left = self.eta.remaining(now) if self.eta else None
+            self.bar_text.config(text=f"{self.step}: {self.share:.0%}" + (
+                f"  ·  {startup.format_eta(left)}" if left is not None else "  ·  working out the time left"))
+            return
+        self._still()
+        (done, of), rnd = self.parts, self.bar_round
+        if self.done or self.failed:
+            self.bar.config(value=100 if self.done else self.bar.cget("value"))
+            self.bar_text.config(text="Done" if self.done else "")
+            return
+        share = self.round_share()
+        self.bar.config(value=100 * share)
+        if done == of and self._paused():
+            self.bar_text.config(text=f"Paused after round {rnd}")
+            return
+        left = self.round_eta.remaining(now) if done < of else None
+        what = "Scoring the rules as they are" if rnd == 0 else f"Round {rnd} of up to {self.rounds}"
+        self.bar_text.config(text=f"{what}: {share:.0%}" + (f"  ·  {startup.format_eta(left)} in this round" if left
+                                                             is not None else "  ·  working out the time left"
+                                                             if done < of else "")
+                             + ("  (it stops early once nothing improves)" if rnd == 1 else ""))
+
+    def round_share(self):
+        """How much of this round is done: each part's numbers tried (a part done counts whole)."""
+        done, of = self.parts
+        if not of:
+            return 0.0
+        return max(done / of, min(1.0, sum(self.tried.values()) / of))
+
+    def _still(self):
+        if getattr(self, "_moving", False):
+            self.bar.stop()
+            self.bar.config(mode="determinate")
+            self._moving = False
+
+    def _tick(self):
+        if self.closed:
+            return
+        self.show_bar()
+        self._tick_job = self.root.after(self.TICK_MS, self._tick)
 
     # ---- events from the work ---------------------------------------------------------------------------------
     def start(self, data, saved, workers, guard_workers=1):
@@ -924,6 +1092,30 @@ class TuneWindow:
         kind = e[0]
         if kind == "log":
             self.info.config(text=e[1])
+        elif kind == "progress":
+            if e[1] != self.step:
+                self.eta = None
+            self.step, self.share = e[1], e[2]
+            if e[2] is not None:
+                import startup
+                self.eta = self.eta or startup.EtaTracker()
+                self.eta.add(100 * e[2], time.time())
+            self.show_bar()
+        elif kind == "begin":                                   # (a round's parts start)
+            import startup
+            self.bar_round, self.round_started, self.parts, self.tried = e[1], time.time(), (0, e[2]), {}
+            self.round_eta = startup.EtaTracker()
+            if e[1]:
+                self.status.config(text=f"Round {e[1]} of up to {self.rounds}")
+            self.show_bar()
+        elif kind == "step":                                    # (a part tried another number: "step", rnd, part, i, n)
+            if e[1] == self.bar_round and self.round_eta is not None:
+                self.tried[e[2]] = e[3] / max(1, e[4])
+                self.round_eta.add(self.round_share() * 100, time.time())
+                self.show_bar()
+        elif kind == "part":
+            self.parts = (e[2], e[3])
+            self.show_bar()
         elif kind == "ready":
             self.start(*e[1:])
         elif kind == "round":
@@ -961,6 +1153,7 @@ class TuneWindow:
             self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: "
                                + ("settled" if e[1] == "settled" else "the last round"))
             self.check_best()
+            self.show_bar()
         elif kind == "error":
             self.failed = True
             if self.hidden:
@@ -1009,8 +1202,19 @@ class TuneWindow:
     def draw(self):
         c, P, font = self.chart, self.P, self.font
         c.delete("all")
-        w, h = self.CHART
-        left, right, top, bottom = 52, 150, 14, 34
+        w, h = c.winfo_width(), c.winfo_height()
+        if w < 50 or h < 50:                                    # (not laid out yet)
+            w, h = int(c.cget("width")), int(c.cget("height"))
+        legend = ((AVERAGE_LINE, None, 3, f"error: the average of the {PARTS} parts (100% minus the average F1)"),
+                  (PART_LINE, None, 2, "each part, tested on numbers tuned without it"),
+                  (P["muted"], (4, 4), 1, "the rules as they are now"))
+        widths = [56 + font("small").measure(t) for *_k, t in legend]
+        rows, used = 1, 0                                       # (the legend wraps when the chart is narrow)
+        for wd in widths:
+            if used and used + wd > w - 80:
+                rows, used = rows + 1, 0
+            used += wd
+        left, right, top, bottom = 70, 130, 14, 42 + 18 * rows
         start = self.avg[0][1] if self.avg else 25.0
         hi = max(10, 5 * (int(max([start] + [e for pts in self.points.values() for _r, e in pts]) / 5) + 1))
         x = lambda r: left + r / max(1, self.rounds) * (w - left - right)     # noqa: E731
@@ -1021,7 +1225,9 @@ class TuneWindow:
         tick = 10 if self.rounds > 30 else 5
         for r in range(0, self.rounds + 1, tick):
             c.create_text(x(r), h - bottom + 14, text=str(r), font=font("small"), fill=P["muted"])
-        c.create_text((left + w - right) / 2, h - 8, text="round", font=font("small"), fill=P["muted"])
+        c.create_text((left + w - right) / 2, h - bottom + 32, text="round", font=font("small"), fill=P["muted"])
+        c.create_text(18, (top + h - bottom) / 2, text="error (lower is better)", angle=90, font=font("small"),
+                      fill=P["muted"])
         if not self.avg:
             c.create_text((left + w - right) / 2, h / 2, text="The first round starts once the words are read.",
                           font=font("small"), fill=P["muted"])
@@ -1043,16 +1249,13 @@ class TuneWindow:
             c.create_line(x(self.best_round), top, x(self.best_round), h - bottom, fill=P["muted"], dash=(2, 3))
             c.create_text(x(self.best_round) + 4, top + 8, text=f"best: round {self.best_round}", anchor="w",
                           font=font("small"), fill=P["muted"])
-        low = e < hi / 2                              # the legend (every line named), away from the lines
-        lx, ly = left + 14, (top + 30 if low else h - bottom - 58)
-        c.create_rectangle(lx - 8, ly - 12, lx + 430, ly + 48, fill=P["surface"], outline=P["border"])
-        for i, (col, dash, wd, text) in enumerate((
-                (AVERAGE_LINE, None, 3, f"error (average of the {PARTS} parts): 100% minus the average F1"),
-                (PART_LINE, None, 2, f"each of the {PARTS} parts, tested on numbers tuned without it"),
-                (P["muted"], (4, 4), 1, "the rules as they are now"))):
-            yy = ly + 18 * i
-            c.create_line(lx, yy, lx + 24, yy, fill=col, width=wd, dash=dash)
-            c.create_text(lx + 32, yy, text=text, anchor="w", font=font("small"), fill=P["text"])
+        lx, ly = left, h - bottom + 50                # the legend (every line named): under the plot
+        for (col, dash, wd, text), width in zip(legend, widths):
+            if lx > left and lx + width > w - 10:
+                lx, ly = left, ly + 18
+            c.create_line(lx, ly, lx + 24, ly, fill=col, width=wd, dash=dash)
+            item = c.create_text(lx + 32, ly, text=text, anchor="w", font=font("small"), fill=P["text"])
+            lx = c.bbox(item)[2] + 24
         self.draw_note()
         self.draw_changes()
 
@@ -1215,9 +1418,14 @@ class TuneWindow:
     def close(self):
         self.closed = True
         try:
-            self.root.after_cancel(self._poll_job)
-        except (self.tk.TclError, AttributeError, ValueError):
+            self._still()                                       # (a moving bar's own timer, or Tk complains later)
+        except self.tk.TclError:
             pass
+        for job in (self._poll_job, self._tick_job, self._resize_job):
+            try:
+                self.root.after_cancel(job) if job else None
+            except (self.tk.TclError, AttributeError, ValueError):
+                pass
         if self.tuning:
             self.tuning.stop()
         gp = getattr(self, "guard_pool", None)
@@ -1288,17 +1496,39 @@ def main(argv=None):
         win.from_program = True
         threading.Thread(target=win.listen, args=(sys.stdin,), daemon=True).start()
 
-    def load():
-        from wordfreq import zipf_frequency
-        try:
-            data, saved = prepare(args.entries, answers, rudeness.wordnet(), lambda w: zipf_frequency(w, "en"),
-                                  log=lambda t: win.events.put(("log", t)))
-            win.events.put(("ready", data, saved, args.workers))
-        except Exception as e:
-            win.events.put(("error", f"{type(e).__name__}: {e}"))
-    threading.Thread(target=load, daemon=True).start()
+    load(args.entries, answers, win.events, args.workers)
     root.mainloop()
     return 0
+
+
+def load(entries, answers, events, workers):
+    """Read the entries in a process of its own (reading them in the window's process froze it for seconds at a
+    time); its progress and its result come back as the window's events ("log", "progress", "ready", "error")."""
+    import multiprocessing
+    ctx = multiprocessing.get_context("spawn")    # (never a fork of a process that runs Tk)
+    out = ctx.Queue()
+    ctx.Process(target=_load_job, args=(entries, answers, out), daemon=True).start()
+
+    def relay():
+        while True:
+            e = out.get()
+            events.put(e + (workers,) if e[0] == "ready" else e)
+            if e[0] in ("ready", "error"):
+                return
+    threading.Thread(target=relay, daemon=True).start()
+
+
+def _load_job(entries, answers, out):
+    """The reading process: prepare(), at a lower priority, everything it says sent back on `out`."""
+    lower_priority()
+    try:
+        from wordfreq import zipf_frequency
+        data, saved = prepare(entries, answers, rudeness.wordnet(), lambda w: zipf_frequency(w, "en"),
+                              log=lambda t: out.put(("log", t)), progress=lambda step, share: out.put(
+                                  ("progress", step, share)))
+        out.put(("ready", data, saved))
+    except Exception as e:
+        out.put(("error", f"{type(e).__name__}: {e}"))
 
 
 if __name__ == "__main__":

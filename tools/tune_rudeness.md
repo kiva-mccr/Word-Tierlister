@@ -2,7 +2,7 @@
 
 Tunes the numbers the rudeness rules already have (OB-10; a developer tool) against the answers of the review by hand (OB-9), in a window: the error round by round on words held back, each kind before and after, the numbers changed, a guard over every word the program scores, the meanings still wrong; Keep writes the numbers into `src/rudeness.py`. Rules only stays: the program never reads the answers.
 
-- **Uses:** `constants`, `errors`, `fonts`, `measure_rudeness`, `obscene`, `review`, `rudeness`, `theme`, `ui_motion`, `ui_style`, `widgets`
+- **Uses:** `constants`, `errors`, `fonts`, `measure_rudeness`, `obscene`, `review`, `rudeness`, `startup`, `theme`, `ui_motion`, `ui_style`, `widgets`
 - **Used by:** nothing (run directly)
 - **Tests:** `_selftest_devtools`, `_selftest_tune`
 
@@ -15,7 +15,7 @@ The module docstring has the details; this page is the map.
 - `apply`: Put `values` into the rules (rudeness's globals and tables, changed in place).
 - `bounds`: The range a number may move in.
 - `fast`: Score fast inside: rudeness's patterns remember their answers, a definition's words are worked out once, and WordNet is read from `wn_matches` ({(word, gloss, pos):...
-- `wordnet_tables`: (wn_matches, wn_names) for fast(): each meaning's WordNet match, and what each matched meaning is.
+- `wordnet_tables`: (wn_matches, wn_names) for fast(): each meaning's WordNet match, and what each matched meaning is; progress(share of the words done) now and then.
 - `scope`: The words the two passes read for `targets` (measure_rudeness.scope, plus the words they are forms of and the parts of hyphenated ones).
 - `score_targets`: {word: [{kind: points}]} for `targets` (both passes), from `data`'s words.
 - `answer_pairs`: {word: ([(meaning index, kind answered)], whole answered)} for the answers whose meanings are found.
@@ -24,13 +24,14 @@ The module docstring has the details; this page is the map.
 - `error`: 100% minus the average F1 of the classes answered at least once (tally).
 - `evaluate`: The error and tally of `values` over `words_in`.
 - `say`: A line for whoever started the tuner (the program's Tune the rules bubble reads them for its ring).
-- `tune_round`: One round of the search over `train`: every number a step up and down (in `order`), a change kept when it lowers the error, a step that helps neither way halved.
+- `tune_round`: One round of the search over `train`: every number a step up and down (in `order`), a change kept when it lowers the error, a step that helps neither way halved;...
+- `lower_priority`: This process yields to the window (and to the rest of the computer): the tuner's helper processes call it.
 - `Inline`: A stand-in for ProcessPoolExecutor that runs each job at once, in this process (tests; --workers 0).
   - methods: submit, shutdown
-- `pool`: Where the parts are tuned: `workers` processes, or this one (0).
-- `read_compact`: {word: [compact sense]} from the compact entries (measure_rudeness fetch).
+- `pool`: Where the parts are tuned: `workers` processes, or this one (0); each number tried is put on `progress` (a multiprocessing queue for processes).
+- `read_compact`: {word: [compact sense]} from the compact entries (measure_rudeness fetch); progress(share read) now and then.
 - `program_words`: {word: compact senses as JSON text}: the words the program keeps and scores (wordsource.RudeCollector: any sign of rudeness, or only a form of such a word).
-- `prepare`: (data for the tuning, the program's words for the guard) from the compact entries and the answers.
+- `prepare`: (data for the tuning, the program's words for the guard) from the compact entries and the answers; progress(step, share done or None) for the window's bar.
 - `guard`: {"whole": words smeared whole, kind: words with a meaning of that kind}: what the program would show with `values` (rudeness.score_saved over its words).
 - `write_back`: Write `values` into rudeness.py at `path` (each number where it stands, comments kept) and bump RUDENESS_VERSION; the file is read back to check every number landed.
 - `check`: Run the new rudeness.py's text on its own and check each number reads as `values` say (to 2 decimals).
@@ -44,14 +45,17 @@ The module docstring has the details; this page is the map.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
 - `doubled`: The guard's names that cover more than DOUBLED times the words they do now (from none: any).
 - `TuneWindow`: The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed, the guard, the meanings still wrong; Pause, Discard, Keep...
-  - methods: start, handle, listen, close_box, show_again, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
+  - methods: chart_size, show_bar, round_share, start, handle, listen, close_box, show_again, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
 - `pool_for_guard`: The guard's process (or this one: 0).
 - `main`: The command line: the window (it reads the entries and starts the search itself).
+- `load`: Read the entries in a process of its own (reading them in the window's process froze it for seconds at a time); its progress and its result come back as the window's...
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Started from the program (--from-program), the close box only hides the window while it tunes (`close_box`); `listen` turns stdin's "show" lines into events and its end into "gone" (a hidden tuner then stops). `close` cancels the pending `_poll`: one firing after the window was destroyed printed Tcl errors.
 - Never test a word on numbers tuned with it: the 5 parts (`part_of`, fixed by the word's letters) each tune on the other 4; Keep takes the run on every word at the round the tests liked best.
+- Never read the entries in the window's process (`load` starts a spawned process: reading 3 GB of JSON beside Tk froze the window for up to 2.5 s at a time, longer as the heap grew). The helper processes call `lower_priority`; `Inline` (tests, --workers 0) runs in the window's process and must not.
+- The chart is drawn at the canvas's real size (`draw` reads winfo_width / height) and again 60 ms after a resize pauses; its legend is one line under the plot. Stop the moving bar (`_still`) before the window is destroyed, or Tk's progressbar timer complains.
 - A few answers leave some parts with no words: only `tested_parts` are run, averaged and summed (averaging every part once added a missing test error, a TypeError under the graph).
 - `fast()` must give exactly the rules' own scores (the self-test compares it with `rudeness.score_words` under odd numbers): what it remembers never depends on the numbers, a meaning that scores nothing scores nothing whatever they are, and a meaning's points are remembered for the values of the numbers it was seen to hang on. A new number or table in rudeness.py: add it to PARAMS (`params`, `apply`, `write_back`, `check`) or it stays as it is.
 - `rudeness._signals` keeps WordNet's points once worked out: inside `fast()` they are read from the table each time (a tuned WORDNET_POINTS was ignored otherwise).

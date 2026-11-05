@@ -771,6 +771,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           than doubling, the meanings still wrong are listed (rude_tune_misses.txt), and Keep writes the numbers
 #           tuned on every answered word at the best round into src/rudeness.py (RUDENESS_VERSION bumped).
 #           _selftest_tune.py.
+#           Then (asked for: a loading bar, "super laggy", "the graph is constricted"; mock-ups agreed): a bar under
+#           the answers line (reading the entries: share and time left; then each round: parts done and time left),
+#           the entries read in a process of their own (reading them in the window's froze it for seconds), the
+#           helper processes at a lower priority, and a chart that fills the window and follows its size, its legend
+#           one line under the plot and its vertical axis named.
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
