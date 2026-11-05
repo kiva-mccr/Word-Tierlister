@@ -218,7 +218,8 @@ class App:
         self._size_now = None                 # (the window's size while a maximize re-fits: _on_root_configure)
         self._root_at = None                  # (where the window's page and its frame were on screen, once it
         self._normal_at = None                # settled; before maximizing: _slide_from_here)
-        self._sliding = None
+        self._sliding = None                  # (the page's contents easing to their place, and the job that starts it)
+        self._slide_job = None
         self.busy = False         # True while a worker thread writes the save (the queue reshuffle)
         self.autosync = AutoSync(self)   # SY-1: the other devices' progress folded in, this device's written out
         self._fade_duel = False   # the next pair fades in (a switch between duel tabs: on_mode_change)
@@ -715,7 +716,8 @@ class App:
         if self.shut or not self.root.winfo_exists():
             return
         fx, fy = (int(v) for v in self.root.geometry().replace("-", "+-").split("+")[1:3])
-        self._root_at = (self.root.winfo_rootx(), self.root.winfo_rooty(), fx, fy)   # (settled: _slide_from_here)
+        self._root_at = (self.root.winfo_rootx(), self.root.winfo_rooty(), fx, fy,    # (settled: _slide_from_here)
+                         self.root.winfo_width(), self.root.winfo_height())
         now = self._monitor_id()
         if now == self._monitor:
             return
@@ -863,11 +865,13 @@ class App:
     def _slide_from_here(self):
         """Maximized or restored: the page's contents stay where they were on screen, then ease to their new place
         (asked for: they snapped, as if the window had been in the top left)."""
+        self.anim.finish("slide")            # (a slide still running ends at its place first)
         inner = self.place_inner if self.mode == "place" else self.pair_inner
         if not inner.winfo_ismapped():
             return
         root = self.root
-        at = self._root_at or (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx(), root.winfo_rooty())
+        at = self._root_at or (root.winfo_rootx(), root.winfo_rooty(), root.winfo_rootx(), root.winfo_rooty(),
+                               root.winfo_width(), root.winfo_height())
         sx, sy = inner.winfo_x() + at[0], inner.winfo_y() + at[1]   # (where it was on screen)
         # Where the page will be: window managers move a window in steps after its new size, so Tk's own position
         # is late. Maximized: the frame at the monitor's corner; restored: back where it was before maximizing.
@@ -879,23 +883,34 @@ class App:
             now = self._normal_at or at
         self._sliding = inner
 
-        def start(page_w):           # (where it was, seen from the page now; kept inside it)
-            return max(0, min(sx - now[0], page_w - inner.winfo_reqwidth())), max(0, sy - now[1])
-
-        def frame(t):
-            page_w = inner.master.winfo_width()
-            x0, y0 = start(page_w)
-            tx, ty = (page_w - inner.winfo_reqwidth()) // 2, self._centred_top(inner)
-            inner.place_configure(x=round(x0 + (tx - x0) * t), y=round(y0 + (ty - y0) * t))
-
-        x0, y0 = start((self._size_now or (inner.master.winfo_width(),))[0])
+        # Its new size: maximized, the event's; restored, the size before maximizing (some window managers pass
+        # through the maximized width first).
+        want = (self._size_now if self._maximized else self._normal_at[4:6] if self._normal_at else None) or (
+            root.winfo_width(), root.winfo_height())
+        x0, y0 = sx - now[0], sy - now[1]    # (where it was, seen from the page now: may start partly outside it)
         inner.place_configure(relx=0, x=x0, y=y0, anchor="nw")      # (drawn where it was first)
 
         def done():
             self._sliding = None
             inner.place_configure(relx=0.5, x=0, anchor="n")
             self._recenter()
-        self.anim.run("slide", self.SLIDE_MS, frame, done)
+
+        def begin(tries=0):
+            # Eased in a straight line once the page has its new size (its first frames came before it, aimed at
+            # the old page, then turned: it looked like a loop). Both ends are fixed now.
+            self._slide_job = None
+            if self._sliding is not inner:
+                return
+            if ((root.winfo_width(), root.winfo_height()) != tuple(want)
+                    or inner.master.winfo_width() != want[0]) and tries < 15:
+                self._slide_job = root.after(16, begin, tries + 1)
+                return
+            tx, ty = (inner.master.winfo_width() - inner.winfo_reqwidth()) // 2, self._centred_top(inner)
+            self.anim.run("slide", self.SLIDE_MS, lambda t: inner.place_configure(
+                x=round(x0 + (tx - x0) * t), y=round(y0 + (ty - y0) * t)), done)
+        if self._slide_job:
+            root.after_cancel(self._slide_job)
+        self._slide_job = root.after_idle(begin)
 
     def _centred_top(self, inner):
         band = self.status_band.winfo_height()
