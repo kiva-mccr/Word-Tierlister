@@ -44,7 +44,7 @@ The module docstring has the details; this page is the map.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
 - `doubled`: The guard's names that cover more than DOUBLED times the words they do now (from none: any).
 - `TuneWindow`: The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed, the guard, the meanings still wrong; Pause, Discard, Keep...
-  - methods: start, handle, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
+  - methods: start, handle, listen, close_box, show_again, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
 - `pool_for_guard`: The guard's process (or this one: 0).
 - `main`: The command line: the window (it reads the entries and starts the search itself).
 
