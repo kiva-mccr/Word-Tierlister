@@ -227,11 +227,7 @@ class App:
         self._monitor = self._monitor_id()   # the monitor the window is on: each keeps its own zooms (Z-1)
         self._monitor_job = None
         self.zoom = self._zoom_meta("zoom")
-        kept_max = self._max_zoom()
-        if kept_max is not None and self.zoom > kept_max:    # (never bigger than when maximized: _keep_compatible)
-            self.zoom = kept_max
-            self._set_zoom_meta("zoom", self.zoom)
-        self._maximized = False   # the window maximized: it shows the zoom kept for that ("zoom_max", UI-57)
+        self._maximized = False   # the window maximized: its text keeps the size it had (F-51, asked for)
         self._chart_ready = False
         self._settled_ready = False
 
@@ -672,14 +668,12 @@ class App:
             self._apply_zoom(old)
             self._refuse_zoom()
             return "break"
-        key = self._zoom_key()
-        self._set_zoom_meta(key, z)
-        self._keep_compatible(key, z)
+        self._set_zoom_meta("zoom", z)
         self._say_zoom(z)
         return "break"
 
     # ---- each monitor's own zooms (Z-1, asked for: remembered per monitor) ------------------------------------
-    MONITOR_ZOOMS = "monitor_zooms"          # meta: {"x,y,wxh": {"zoom": z, "zoom_max": z}}
+    MONITOR_ZOOMS = "monitor_zooms"          # meta: {"x,y,wxh": {"zoom": z}} (an older "zoom_max" there is unused)
 
     def _monitor_id(self):
         """The monitor the window is on (the pointer's before it shows), as a key: its place and size."""
@@ -694,16 +688,14 @@ class App:
         return {k: v for k, v in saved.items() if isinstance(v, dict)} if isinstance(saved, dict) else {}
 
     def _zoom_meta(self, key):
-        """The zoom kept under `key` ("zoom", or "zoom_max" for the window maximized) for the monitor the window is
-        on; a monitor with none of its own starts from the last one chosen anywhere ("zoom_max": None before any)."""
+        """The zoom kept under `key` ("zoom") for the monitor the window is on; a monitor with none of its own starts
+        from the last one chosen anywhere."""
         own = self._monitor_zooms().get(self._monitor, {}).get(key)
         if own is not None:
             try:
                 return round(min(self.ZOOM_MAX, max(self.ZOOM_MIN, float(own))), 2)
             except (TypeError, ValueError):
                 pass
-        if key == "zoom_max" and self.store.get_meta("zoom_max") is None:
-            return None
         return self.store.meta_number(key, 1.0, lo=self.ZOOM_MIN, hi=self.ZOOM_MAX)
 
     def _set_zoom_meta(self, key, z):
@@ -723,42 +715,18 @@ class App:
         if now == self._monitor:
             return
         self._monitor = now
-        z = self._zoom_meta("zoom_max") if is_maximized(self.root) else None
-        self._apply_zoom(z if z is not None else self._zoom_meta("zoom"))
+        self._apply_zoom(self._zoom_meta("zoom"))
 
-    def _max_zoom(self):
-        """The zoom kept for the window maximized (UI-57), or None before one is chosen there."""
-        return self._zoom_meta("zoom_max")
-
-    def _keep_compatible(self, key, z):
-        """The two zooms (UI-57) stay compatible (reported: the window opened with its contents bigger than when
-        maximized, so maximizing shrank them): the window at any other size never shows more than maximized. A zoom
-        chosen for the usual window above the maximized one raises that too; one chosen maximized below the usual
-        one lowers that too."""
-        if key == "zoom":
-            kept = self._max_zoom()
-            if kept is not None and z > kept:
-                self._set_zoom_meta("zoom_max", z)
-        elif z < self._zoom_meta("zoom"):
-            self._set_zoom_meta("zoom", z)
-
-    def _zoom_key(self):
-        """Where the zoom is kept: one for the window maximized, one for it at any other size (UI-57: each comes
-        back as it was left when the window is maximized or restored again, even after a restart)."""
-        return "zoom_max" if is_maximized(self.root) else "zoom"
-
-    def _follow_maximize(self):
-        """The window was just maximized or restored: show the zoom kept for that (UI-57; restored: the usual zoom,
-        100% until one is chosen). Maximized before any zoom was chosen there, the contents simply grow with it
-        (UI-25). True if the zoom changed."""
+    def _note_maximize(self):
+        """Note whether the window is maximized; True if it was just maximized or restored. Its text keeps the size
+        it shows either way (F-51, asked for: most programs give a bigger window more room, not bigger text; the
+        re-fit at a new text size took ~0.2 s and every way of hiding it still jarred). UI-57's separate zoom for
+        the maximized window is gone."""
         m = is_maximized(self.root)
         if m == self._maximized:
             return False
         self._maximized = m
-        if m and self._max_zoom() is None:
-            return False
-        self._apply_zoom(self._zoom_meta("zoom_max" if m else "zoom"))
-        return True                           # (always: the window's new size is the one that zoom is shown in)
+        return True
 
     def _say_zoom(self, z):
         """'Zoom 130%' on a white card, every time a zoom key is pressed, even when nothing changed (M-6)."""
@@ -1177,10 +1145,6 @@ class App:
         (or what the contents need, if more), then in proportion, in steps of GROW_STEP, up to GROW_MAX."""
         rw, rh = self._ref_size
         g = math.floor(min(w / rw, h / rh) / self.GROW_STEP + 1e-6) * self.GROW_STEP
-        kept = None if is_maximized(self.root) else self._max_zoom()
-        if kept is not None:                  # (a big window, not maximized, never shows more than maximized does)
-            shown = self.font_scale * self.zoom
-            g = min(g, math.floor(kept / shown / self.GROW_STEP + 1e-6) * self.GROW_STEP)
         return round(max(1.0, min(self.GROW_MAX, g)), 2)
 
     def _on_root_configure(self, e):
@@ -1193,20 +1157,15 @@ class App:
         if self._grow_job:
             self.root.after_cancel(self._grow_job)
         if is_maximized(self.root) != self._maximized:
-            # Just maximized or restored: re-fit now, inside this event, before Tk draws the page at its new size
-            # (asked for, F-49: an idle job came after Tk's own redraw, so the new size first showed the old text,
-            # then half-laid-out steps). The size comes from the event: reading it with update_idletasks would draw.
-            # It is see-through meanwhile and shown once drawn (asked for: the re-fit and redraw take ~0.2 s, and the
-            # window showed the old page in a corner of the new size, then the page half drawn, then the new one).
+            # Just maximized or restored: the text keeps its size (F-51), so only the page's room changes: laid out
+            # now, inside this event, before Tk draws the new size (F-49: an idle job came after Tk's own redraw).
+            # The size comes from the event: reading it with update_idletasks would draw.
             self._grow_job = None
             self._size_now = (e.width, e.height)
-            hide = not veiled and veil(self.root)
             try:
                 self._apply_grow()
             finally:
                 self._size_now = None
-                if hide:
-                    unveil(self.root)
         else:
             self._grow_job = self.root.after(20 if veiled else 80, self._apply_grow)
         if self._monitor_job:
@@ -1222,9 +1181,16 @@ class App:
         self._grow_job = None
         if self.reopening:                   # (the window is going: the shared fonts are the new window's now, and
             return                           # its labels' old ones are gone, seen on Windows: "font4 does not exist")
-        if not self._ref_size or self._follow_maximize():
+        flipped = self._note_maximize()
+        if not self._ref_size:
             return
         w, h = size or self._window_size()
+        if flipped or self._maximized:       # (maximized or restored: the text keeps its size, the page its room)
+            self._fit_big_text()
+            self.root.after_idle(self._recenter)
+            if fill:
+                self._fill_pane(height=h if size else None)
+            return
         g, was_grown, tried = self._grow_for(w, h), self.grow > 1, False
         while g > 1.0:
             tried = True

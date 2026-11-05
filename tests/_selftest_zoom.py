@@ -135,44 +135,38 @@ app.open_browser(); pump(6)
 assert app.browsers[0].zoom == 2
 app.browsers[0].close(); app.on_close()
 
-# UI-57 (asked for): the maximized window keeps a zoom of its own; maximizing or restoring brings back the one kept
-# for it (the first maximize, before any is kept there, grows as UI-25 does); a zoom out of a grown window is a step
-# down from what shows, not "as big as fits" (reported while testing it). (A real maximize under a window manager:
-# checked by hand under openbox; here the state is faked.)
+# F-51 (asked for, replacing UI-57's zoom of its own for the maximized window): maximizing or restoring keeps the text
+# the size it shows; the page only gets more room (the re-fit at a new text size took ~0.2 s and jarred). (A real
+# maximize under a window manager: recorded under openbox; here the state is faked.)
 A.usable_area = lambda r: (0, 0, 1900, 1040)
 s = T.Store(db); s.set_meta("zoom", "1.0"); s.db.execute("DELETE FROM meta WHERE key IN ('zoom_max', 'monitor_zooms')")
 s.db.commit()
 root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
 state = {"max": False}
 A.is_maximized = lambda w: state["max"]
+shown = lambda: round(app.font_scale * app.zoom * app.grow, 2)
 def maximize(on, size):
     state["max"] = on; root.geometry(size); pump(4); app._apply_grow(); pump(4)
+# a bigger window by hand still grows its contents (UI-25); maximizing it keeps that size, restoring too
+root.geometry("1880x1020"); pump(4); app._apply_grow(); pump(4)
+assert app.grow > 1, (app.grow, app._ref_size, app._window_size(), app._maximized, state)
+before = (shown(), body())
+maximize(True, "1880x1020"); assert (shown(), body()) == before
+maximize(False, "1880x1020"); assert (shown(), body()) == before
+root.geometry("1000x700"); pump(4); app._apply_grow(); pump(4)
+assert app.grow == 1
+before = (shown(), body())
 maximize(True, "1880x1020")
-assert app.zoom == 1.0 and app.grow > 1                              # nothing kept yet: it grows
-shown = round(app.zoom * app.grow, 1)
-app.zoom_step(-1); pump(3)
-assert app.zoom == round(shown - 0.1, 1) and app.grow == 1 and app.toast.cget("text") != app.ZOOM_FULL
-z_max = app.zoom
-assert s.get_meta("zoom_max") == str(z_max) and s.get_meta("zoom") == "1.0"      # kept for the maximized window
+assert (shown(), body()) == before and app.zoom == 1.0              # the same text, more room
+app.zoom_step(-1); pump(3)                                           # a zoom while maximized is the one zoom
+assert app.zoom == 0.9 and s.get_meta("zoom") == "0.9" and s.get_meta("zoom_max") is None
+before = (shown(), body())
 maximize(False, "1000x700")
-assert app.zoom == 1.0                                                # restored: its own zoom again
-app.zoom_step(-1); pump(3)                                           # (below the maximized one: kept apart)
-z_normal = app.zoom
-assert s.get_meta("zoom") == str(z_normal) and s.get_meta("zoom_max") == str(z_max)
-maximize(True, "1880x1020")
-assert app.zoom == z_max and app.grow == 1                            # shown as it was left, not grown
-maximize(False, "1000x700")
-assert app.zoom == z_normal
-# a dialog open while the window is maximized (reported: its text grew with the zoom inside a window that kept its
-# size, and was cut off; restoring put it right): it follows the new size, re-wrapped, fitted and centred again
+assert (shown(), body()) == before                                   # restored: still the same text
+# a dialog open while the zoom changes (reported: its text grew inside a window that kept its size, and was cut
+# off): it follows the new size, re-wrapped, fitted and centred again
 from widgets import StyledDialog
 from sizing import usable_area
-maximize(True, "1880x1020")
-for _ in range(4):
-    app.zoom_step(1); pump(3)
-z_big = app.zoom
-maximize(False, "1000x700")
-assert app.zoom == z_normal < z_big
 long = ("It builds Word Tierlister into one program for this computer, next to tierlist.py (a minute or two), then "
         "reopens as the program with the same save; Python is no longer needed to run it.")
 dlg = StyledDialog(root, "Source & Updates", "Make this a standalone program?", long, animator=app.anim)
@@ -193,50 +187,32 @@ def fits():
     return out
 assert not fits(), fits()
 small = dlg.win.winfo_height()
-maximize(True, "1880x1020"); pump(4)
-assert app.zoom == z_big
+for _ in range(3):
+    app.zoom_step(1); pump(3)
 assert not fits(), fits()                                            # (it was cut off here)
 grew = dlg.win.winfo_height()
+assert grew > small
 area = usable_area(dlg.win)
 assert dlg.win.winfo_height() <= area[3] and dlg.win.winfo_width() <= area[2]     # still on the screen
-cx = dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2
-edge = dlg.win.winfo_rootx() + dlg.win.winfo_width() >= area[0] + area[2] - 1 or dlg.win.winfo_rootx() <= area[0] + 1
 frame = dlg.win.winfo_rootx() - dlg.win.winfo_x()                   # (Windows: placed by its frame, ~8 px border)
-assert abs(cx - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame or edge, \
-    (cx, root.winfo_rootx(), root.winfo_width(), dlg.win.winfo_rootx(), dlg.win.winfo_width(), area)  # centred (or kept on
-#                                                                                   the screen it overhangs)
-maximize(False, "1000x700"); pump(4)
-assert not fits() and dlg.win.winfo_height() != grew and abs(dlg.win.winfo_height() - small) <= 2
-# the parent moving just after (macOS puts a maximized window back on the screen after the re-fit, F-50): it follows
+def centred():                                                      # (or kept on the screen it overhangs)
+    a = usable_area(dlg.win)
+    edge = dlg.win.winfo_rootx() + dlg.win.winfo_width() >= a[0] + a[2] - 1 - frame or dlg.win.winfo_rootx() <= a[0] + 1 + frame
+    return edge or abs(dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2 -
+                       (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame
+def settle(cond, secs=5):
+    end = time.time() + secs
+    while not cond() and time.time() < end:
+        root.update(); time.sleep(0.01)
+    return cond()
+assert settle(centred), (dlg.win.winfo_rootx(), dlg.win.winfo_width(), root.winfo_rootx(), root.winfo_width())
+# the parent moving just after (macOS puts a window back on the screen after a re-fit): it follows
 dlg.rescale(); root.update(); root.geometry("+120+90")
-end = time.time() + 5
-while abs(dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2 - (root.winfo_rootx() + root.winfo_width() // 2)) > 2 + frame \
-        and time.time() < end:
-    root.update(); time.sleep(0.01)
-assert abs(dlg.win.winfo_rootx() + dlg.win.winfo_width() // 2 - (root.winfo_rootx() + root.winfo_width() // 2)) <= 2 + frame, (dlg.win.winfo_rootx(), dlg.win.winfo_width(), root.winfo_rootx(), root.winfo_width(), usable_area(root))
+assert settle(centred), (dlg.win.winfo_rootx(), dlg.win.winfo_width(), root.winfo_rootx(), root.winfo_width())
+for _ in range(3):
+    app.zoom_step(-1); pump(3)
+assert not fits() and abs(dlg.win.winfo_height() - small) <= 2
 dlg.close()
-# the two zooms stay compatible (reported: the window opened with its contents bigger than when maximized, and
-# maximizing shrank them): the usual window never shows more than the maximized one would
-shown = lambda: round(app.font_scale * app.zoom * app.grow, 2)
-assert not A.is_maximized(root)
-app.set_zoom(s.meta_number("zoom_max", 1.0) + 0.2); pump(3)                  # usual zoom above the maximized one:
-assert s.meta_number("zoom_max", 1.0) == s.meta_number("zoom", 1.0) == app.zoom      # that rises with it
-maximize(True, "1880x1020")
-app.set_zoom(round(app.zoom - 0.3, 1)); pump(3)                                # maximized zoom below the usual one:
-assert s.meta_number("zoom", 1.0) == s.meta_number("zoom_max", 1.0) == app.zoom      # that comes down with it
-big = shown()
-maximize(False, "1000x700")
-assert shown() <= big + 1e-9
-# a big window that is not maximized grows its contents (UI-25), but never past what the maximized one shows
-root.geometry("1880x1000"); pump(4); app._apply_grow(); pump(4)
-assert not A.is_maximized(root) and shown() <= s.meta_number("zoom_max", 1.0) + 1e-9, (shown(), s.get_meta("zoom_max"))
-app.on_close()
-# a save whose usual zoom is above the maximized one (as left by earlier versions): it opens at the maximized one
-s = T.Store(db); s.set_meta("zoom", "1.5"); s.set_meta("zoom_max", "1.0"); s.set_meta("monitor_zooms", "{}")
-root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
-assert app.zoom == 1.0 and s.get_meta("zoom") == "1.0" and shown() <= 1.0
-maximize(True, "1880x1020")
-assert app.zoom == 1.0 and shown() >= 1.0 - 1e-9                              # maximizing never shrinks it
 app.on_close()
 
 # Z-1 (asked for): each monitor keeps its own zooms; the window that stops on another monitor shows that one's at once
@@ -246,7 +222,7 @@ where = {"m": "left"}
 A.monitor_box = lambda r: screens[where["m"]]
 A.usable_area = lambda r: (screens[where["m"]][0], 0, screens[where["m"]][2], screens[where["m"]][3] - 40)
 state["max"] = False
-s = T.Store(db); s.set_meta("monitor_zooms", "{}"); s.set_meta("zoom", "1.0"); s.set_meta("zoom_max", "1.2")
+s = T.Store(db); s.set_meta("monitor_zooms", "{}"); s.set_meta("zoom", "1.0")
 root = tk.Tk(); app = A.App(root, s, T.Definitions(s)); pump(10)
 app.set_zoom(1.2); pump(3)
 assert app.zoom == 1.2

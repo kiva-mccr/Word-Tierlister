@@ -62,8 +62,8 @@ app._on_root_configure(FakeEvent(root))
 assert app._veil_since is None
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)
 
-# just maximized or restored: the re-fit runs at once, inside the event, see-through meanwhile and shown once drawn
-# (asked for: the window showed the old page at its new size, then the page half drawn); the event's size is used
+# just maximized or restored: the page is laid out at once, inside the event, with the event's size (F-49); its text
+# keeps its size (F-51), so it is never made see-through for it
 real_max, real_grow = A.is_maximized, app._apply_grow
 seen = []
 try:
@@ -73,8 +73,7 @@ try:
     app._on_root_configure(ev)
 finally:
     A.is_maximized, app._apply_grow = real_max, real_grow
-assert seen == [(0.0, (1234, 567))] and not app._grow_job and app._size_now is None, seen
-assert wait_for(root, lambda: alpha(root) == 1.0), "not shown again after a maximize"
+assert seen == [(1.0, (1234, 567))] and not app._grow_job and app._size_now is None, seen
 app._on_root_configure(FakeEvent(root))                                # (an ordinary resize still waits)
 assert root.tk.splitlist(root.tk.call("after", "info", app._grow_job))[1] == "timer"
 wait_for(root, lambda: not app._grow_job and not app._monitor_job)

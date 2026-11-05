@@ -137,8 +137,8 @@ and Ctrl+Z brings it back.
   code. It warns you if a colour would make the tier's letter hard to read.
 - **Settings > Keyboard shortcuts**: every key can be changed. Click an action, press the new key.
 - **View > Zoom** (or **Ctrl +** / **Ctrl -** / **Ctrl 0**) makes everything bigger or smaller. Make the window
-  bigger and its contents grow with it. Each monitor remembers its own zoom, and the maximized window one of its
-  own. Switching tabs, comparing or opening the definitions never resizes the window or its text: the definitions
+  bigger by hand and its contents grow with it; maximizing or restoring it keeps the text the size it is and only
+  gives the page more room. Each monitor remembers its own zoom. Switching tabs, comparing or opening the definitions never resizes the window or its text: the definitions
   pane takes whatever room is left.
 - **View > Full screen** (or **F11**) fills the whole screen, a little like a game. The top menus become one
   **Menu** button, and **Esc** opens the menu over the page: move with the arrow keys, open with Enter, and each
