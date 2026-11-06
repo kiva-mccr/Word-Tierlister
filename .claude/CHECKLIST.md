@@ -39,7 +39,7 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
 - [ ] Errors still read well: bad `--db` path, missing wordfreq, disconnected internet during download.
 
 ## 5. Docs and hand-over
-- [ ] Roadmap (comment block in `tierlist.py`): step ticked `[x]` with what was actually built, notes for
+- [ ] Roadmap (`ROADMAP.md`): step ticked `[x]` with what was actually built, notes for
       later steps updated, no stale names (renamed functions, test files).
 - [ ] DEVELOPERS.md: file map, layers, graphs, any new command-line option. README.md: any new feature a user
       sees, in plain words (a new screen: a screenshot in docs/images).

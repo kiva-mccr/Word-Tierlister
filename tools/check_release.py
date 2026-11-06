@@ -106,7 +106,7 @@ def check_docs(problems):
         if _name(f).startswith("_selftest") and _name(f)[:-3] not in runner:
             problems.append(f"{f} is not run by tests/run_tests.sh")
     for need in (".claude/CLAUDE.md", ".claude/CHECKLIST.md", "tierlist.py", "requirements.txt", "README.md",
-                 "DEVELOPERS.md"):
+                 "DEVELOPERS.md", "ROADMAP.md"):
         if not os.path.exists(os.path.join(HERE, need)):
             problems.append(f"{need} is missing")
     for f in _files_in(""):

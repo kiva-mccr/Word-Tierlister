@@ -1,6 +1,6 @@
 """Motion engine for Word Tierlister (UI-4): easing, colour blending and a tiny animator.
 
-Rules every animation here follows (they are the promises in the roadmap guardrails):
+Rules every animation here follows (they are the promises in ROADMAP.md's guardrails):
     * short: callers pass <= 250 ms, with ease-out so things settle gently;
     * never blocks input: starting a new animation under the same key jumps the running one to its end;
       pressing a key (App.on_key calls hurry_all) makes every running one speed out of the way within

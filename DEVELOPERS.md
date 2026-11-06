@@ -21,7 +21,7 @@ python tools/check_release.py --tests   # the checks to pass before handing work
 
 tkinter ships with Python (Debian / Ubuntu: `sudo apt install python3-tk`). Window tests need a display; on a
 headless Linux box they run under `xvfb-run` by themselves. The roadmap (every step, its status and the decisions
-behind it) is the big comment block at the top of `tierlist.py`; `.claude/CLAUDE.md` holds the conventions.
+behind it) is `ROADMAP.md`; `.claude/CLAUDE.md` holds the conventions.
 
 ## The big picture
 
@@ -437,7 +437,8 @@ found again, so switching between the two loses nothing.
 
 | File | Job |
 |---|---|
-| `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
+| `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. |
+| `ROADMAP.md` | The roadmap: every step, what was asked and built, and the decisions. |
 | `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
 | `src/obscene.py` | The kinds of rude meaning (Expletive, Sexual, Slur; OB-12), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
 | `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards the rules' own six kinds (Clinical, Crude, Swear, Insult, Sexual, Slur), folded into the three shown (`fold`), from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |

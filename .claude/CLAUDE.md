@@ -5,8 +5,8 @@ A tkinter app that tier-lists (S/A/B/C/D/F) every English word. Words come from 
 (at the top, next to the user's save); modules in `src/`, self-tests in `tests/`, `tools/check_release.py`,
 and this file plus CHECKLIST.md in `.claude/` (R-1). Never move tierlist.py into a sub-folder.
 README.md is the user-facing introduction (screenshots in docs/images); DEVELOPERS.md is the developer
-guide (code graphs, the file map, options, tests, builds); the roadmap (steps, status, decisions) is the big comment block at the
-top of `tierlist.py`. Tick `[x]` there as steps land and keep the IDs stable.
+guide (code graphs, the file map, options, tests, builds); the roadmap (steps, status, decisions) is ROADMAP.md (moved out of
+`tierlist.py`, asked for). Tick `[x]` there as steps land and keep the IDs stable.
 
 ## Run and test
 - Install: `pip install -r requirements.txt` (wordfreq required; nltk optional). tkinter ships with Python
@@ -136,8 +136,8 @@ missed). Keep README.md and DEVELOPERS.md current in the same commit as the chan
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Every step's story (what was asked, what was built, what the user picked) is in the roadmap at the top of
-`tierlist.py`: search it for the ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it here.
+Every step's story (what was asked, what was built, what the user picked) is in ROADMAP.md: search it for the
+ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it here.
 - Next: the release (Actions > Build programs > Run workflow on main, "Publish as a release" ticked; a session cannot
   push tags, T-17).
 - Dropped: UI-21 (next-up peek), UI-74 (film grain), UI-32 (moving background): Tk has no see-through widgets and the

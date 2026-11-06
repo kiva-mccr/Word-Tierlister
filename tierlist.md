@@ -1,6 +1,6 @@
 # `tierlist.py`
 
-The program's entry point and its roadmap. `main()` parses the options, finds or makes the save, gets packages and the word list ready behind the progress window, then opens the main window. The big comment block at the top is the roadmap: every step, its status and the decisions behind it. It also re-exports the main classes so tests can `import tierlist as T`.
+The program's entry point. `main()` parses the options, finds or makes the save, gets packages and the word list ready behind the progress window, then opens the main window. The roadmap is ROADMAP.md beside it (moved out of this file). It also re-exports the main classes so tests can `import tierlist as T`.
 
 - **Uses:** `app`, `browser`, `constants`, `definitions`, `deps`, `errors`, `fonts`, `problems`, `saves`, `sizing`, `sources`, `standalone`, `startup`, `store`, `theme`, `ui_style`, `wordsource`
 - **Used by:** `layout_trace`, `stress_ui`
@@ -17,7 +17,7 @@ The module docstring has the details; this page is the map.
 - Never move it into a sub-folder: your save, `tierlist.log` and exports sit next to it (R-1).
 - It adds `src/` to the import path itself; nothing else should edit `sys.path` at run time.
 - The window is built hidden and shown complete (`App.open_window`, F-1); never `deiconify()` before `App(...)`.
-- Roadmap IDs are stable: tick `[x]` and add notes under a step, never renumber.
+- Roadmap IDs (ROADMAP.md) are stable: tick `[x]` and add notes under a step, never renumber.
 - The re-exports at the top are why pyflakes reports "imported but unused" here; that is known noise.
 
 ## Changing it
