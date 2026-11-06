@@ -242,6 +242,8 @@ assert win.done and win.best_round and "Your answers: " in win.info.cget("text")
 assert not win.hidden and root.state() == "normal"                # (done while hidden: back, for Keep)
 assert (root.winfo_width(), root.winfo_height()) == opened, (opened, root.winfo_width(), root.winfo_height())
 assert win.wait and win.noise and "Noise ±" in win.note.cget("text")
+assert win.span() == 6                                          # (the rounds axis: never past the rounds it may run)
+assert win.kinds_box.winfo_manager() == "pack" and win.guard_box.master is win.kinds_box.master   # (side by side)
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
 assert any(t.startswith("error: the average of the 5 parts") for t in texts)
 assert any(t.startswith("each part, tested") for t in texts) and "the rules as they are now" in texts
