@@ -780,6 +780,9 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           round's results show at once ("sweep"); the stop allows for noise (the parts' standard error, a band on
 #           the chart): a real gain beats the last by more than it, and the wait grows with it (3 rounds, one more
 #           per 0.5 points, 15 at most); Keep takes the earliest round within the noise of the lowest (picked).
+#           Then (reported: the chart super squished on a 1200 px screen; approved from a mock-up): kinds, numbers
+#           changed and the guard side by side, the chart the height the rest leaves, the rounds axis to the rounds
+#           run plus those it may still wait, the % numbers thinned on a short chart.
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds

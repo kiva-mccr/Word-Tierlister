@@ -926,7 +926,7 @@ def _run_guard(values, base):
 # ---- the window ----------------------------------------------------------------------------------------------------
 PART_LINE = "#A6D9BD"           # (the chart's own colours: a part's faint line, the average's)
 AVERAGE_LINE = "#5FBF8C"
-SHOWN_CHANGES = 6
+SHOWN_CHANGES = 4
 SHOWN_MISSES = 3
 GUARD_NAMES = (("whole", "Smeared whole"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))
 
@@ -940,7 +940,9 @@ class TuneWindow:
     """The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed,
     the guard, the meanings still wrong; Pause, Discard, Keep the best numbers."""
 
-    CHART = (960, 400)                      # (the most it starts at; it grows with the window)
+    CHART = (960, 520)                      # (the most it starts at; it grows with the window)
+    CHART_MIN = 260                         # (the least: a smaller screen cuts the window instead)
+    SCREEN_KEPT = 110                       # (the screen's height kept for title bars and panels)
     TICK_MS = 1000                          # the bar's time left counts down this often
 
     def __init__(self, root, answers_path, rounds, source):
@@ -997,30 +999,30 @@ class TuneWindow:
                              anchor="nw", height=2)
         self.note.pack(fill="x", pady=(6, 0))
         box = self.bottom
-        cols = tk.Frame(box, bg=bg)
-        cols.pack(fill="x", pady=(14, 0))
+        cols = tk.Frame(box, bg=bg)                 # (side by side, asked for: rows under rows squished the chart)
+        cols.pack(fill="x", pady=(10, 0))
         self.kinds_box = tk.Frame(cols, bg=bg)
         self.kinds_box.pack(side="left", anchor="n")
         self.changes_box = tk.Frame(cols, bg=bg)
-        self.changes_box.pack(side="right", anchor="n")
-        self.guard_box = tk.Frame(box, bg=P["surface"], highlightthickness=1, highlightbackground=P["border"],
-                                  padx=12, pady=8)
-        self.guard_box.pack(fill="x", pady=(16, 0))
+        self.changes_box.pack(side="left", anchor="n", padx=(32, 0))
+        self.guard_box = tk.Frame(cols, bg=P["surface"], highlightthickness=1, highlightbackground=P["border"],
+                                  padx=12, pady=6)
+        self.guard_box.pack(side="right", anchor="n", padx=(24, 0))
         self.miss_box = tk.Frame(box, bg=bg)
-        self.miss_box.pack(fill="x", pady=(12, 0))
+        self.miss_box.pack(fill="x", pady=(10, 0))
         self._build_slots()                     # (every row there from the start, empty: filled in place, asked for)
         for fill in (self.draw_kinds, self.draw_changes, self.draw_guard, self.draw_misses):
             fill()
         nav = tk.Frame(box, bg=bg)
-        nav.pack(fill="x", pady=(18, 0))
+        nav.pack(fill="x", pady=(12, 0))
         kw = dict(font=font("body"), padx=16, pady=6, radius=12, animator=anim)
         self.pause_btn = RoundButton(nav, "Pause", self.pause, bg=P["surface"], **kw)
         self.pause_btn.pack(side="left")
         self.keep_btn = RoundButton(nav, "Keep the best numbers", self.keep, bg=P["select_bg"], **kw)
         self.keep_btn.pack(side="right")
         RoundButton(nav, "Discard", self.discard, bg=P["surface"], **kw).pack(side="right", padx=(0, 8))
-        tk.Label(box, text="Keep writes the numbers into src/rudeness.py (and bumps RUDENESS_VERSION); review the diff "
-                 "before committing.", font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w", pady=(12, 0))
+        tk.Label(nav, text="Keep writes the numbers into src/rudeness.py and bumps RUDENESS_VERSION: review the diff "
+                 "before committing.", font=font("small"), bg=bg, fg=P["muted"]).pack(side="left", padx=(16, 0))
         self.bottom.pack(side="bottom", fill="x")
         self.chart.pack(fill="both", expand=True)
         self._resize_job = None
@@ -1029,7 +1031,11 @@ class TuneWindow:
         self.pause_btn.set_enabled(False)
         self.hidden = self.failed = False
         root.protocol("WM_DELETE_WINDOW", self.close_box)
-        root.update_idletasks()                 # (its size set once: a longer line later never makes it jump)
+        root.update_idletasks()                 # (the chart gets the room the rest leaves on this screen, then the
+        rest = root.winfo_reqheight() - self.chart.winfo_reqheight()   # size is set once: a longer line never
+        room = root.winfo_screenheight() - self.SCREEN_KEPT - rest       # makes it jump)
+        self.chart.config(height=max(self.CHART_MIN, min(h, room)))
+        root.update_idletasks()
         root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")
         self.show_bar()
         self.draw()
@@ -1038,9 +1044,9 @@ class TuneWindow:
 
     @classmethod
     def chart_size(cls, root):
-        """The chart's starting size: CHART, smaller on a small screen (the rest of the window needs about 560 px)."""
+        """The chart's starting width: CHART's, narrower on a small screen (its height: what the rest leaves)."""
         w, h = cls.CHART
-        return max(560, min(w, root.winfo_screenwidth() - 140)), max(220, min(h, root.winfo_screenheight() - 600))
+        return max(560, min(w, root.winfo_screenwidth() - 140)), h
 
     def _resized(self, _e=None):
         """The chart follows the window's size: drawn again once the resizing pauses (not at every step of a drag)."""
@@ -1202,6 +1208,7 @@ class TuneWindow:
                 "settled": "settled", "steady": "no real gain for a while"}.get(e[1], "the last round"))
             self.check_best()
             self.show_bar()
+            self.draw()                           # (the rounds axis closes up to the last round)
         elif kind == "error":
             self.failed = True
             if self.hidden:
@@ -1296,13 +1303,16 @@ class TuneWindow:
         top, bottom = 14, 6 + 2 * line + 10 + (line + 4) * rows
         start = self.avg[0][1] if self.avg else 25.0
         hi = max(10, 5 * (int(max([start] + [e for pts in self.points.values() for _r, e in pts]) / 5) + 1))
-        x = lambda r: left + r / max(1, self.rounds) * (w - left - right)     # noqa: E731
+        span = self.span()
+        x = lambda r: left + r / max(1, span) * (w - left - right)            # noqa: E731
         y = lambda v: top + (hi - v) / hi * (h - top - bottom)                 # noqa: E731
-        for v in range(0, hi + 1, 5 if hi <= 40 else 10):
+        plot = max(1, h - top - bottom)             # (numbers at least 1.8 lines apart: a short chart has fewer)
+        every = next((v for v in (5, 10, 20, 25, 50) if plot * v / hi >= 1.8 * line), 50)
+        for v in range(0, hi + 1, every):
             c.create_line(left, y(v), w - right, y(v), fill=P["border"])
             c.create_text(left - 8, y(v), text=f"{v}%", anchor="e", font=small, fill=P["muted"])
-        tick = 10 if self.rounds > 30 else 5
-        for r in range(0, self.rounds + 1, tick):
+        tick = next(t for t in (1, 2, 5, 10, 20, 50) if span / t <= 10)
+        for r in range(0, span + 1, tick):
             c.create_text(x(r), h - bottom + 6, text=str(r), anchor="n", font=small, fill=P["muted"])
         c.create_text((left + w - right) / 2, h - bottom + 6 + line, text="round", anchor="n", font=small,
                       fill=P["muted"])
@@ -1343,6 +1353,16 @@ class TuneWindow:
             lx = c.bbox(item)[2] + 24
         self.draw_note()
         self.draw_changes()
+
+    def span(self):
+        """The rounds the chart shows: those run so far and as many as the search may still run before it stops
+        (asked for: always the most rounds squished the lines into the left), in fives, ten at least."""
+        if not self.avg:
+            return min(self.rounds, 20)
+        last = self.avg[-1][0]
+        since, wait = self.wait or (0, PATIENCE)
+        ahead = 0 if self.done else max(1, wait - since)
+        return min(self.rounds, max(10, 5 * math.ceil((last + ahead) / 5)))
 
     def draw_note(self):
         stop = ""
@@ -1399,15 +1419,16 @@ class TuneWindow:
         self.changes_more.grid(row=SHOWN_CHANGES + 1, column=0, sticky="w")
         box = self.guard_box
         self.guard_title = lab(box, colour=P["muted"], back=card, text="Guard: the words the program scores")
-        self.guard_title.grid(row=0, column=0, columnspan=8, sticky="w")
+        self.guard_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 2))
         self.guard_cells = {}
-        for i, (k, name) in enumerate(GUARD_NAMES):
-            lab(box, colour=P["muted"], back=card, text=name).grid(row=1, column=2 * i, sticky="w", padx=(0, 6))
-            cell = lab(box, "body", back=card, text=self.BLANK, width=18, anchor="w")
-            cell.grid(row=1, column=2 * i + 1, sticky="w", padx=(0, 6))
+        for i, (k, name) in enumerate(GUARD_NAMES, 1):
+            lab(box, colour=P["muted"], back=card, text=name).grid(row=i, column=0, sticky="w", padx=(0, 10))
+            cell = lab(box, "body", back=card, text=self.BLANK, width=20, anchor="w")
+            cell.grid(row=i, column=1, sticky="w")
             self.guard_cells[k] = cell
-        self.guard_foot = lab(box, colour=P["muted"], back=card, text="")
-        self.guard_foot.grid(row=3, column=0, columnspan=8, sticky="w", pady=(4, 0))
+        self.guard_foot = lab(box, colour=P["muted"], back=card, text="", justify="left", anchor="nw", width=44,
+                              height=2, wraplength=font("small").measure("0") * 42)   # (one size, whatever it says)
+        self.guard_foot.grid(row=len(GUARD_NAMES) + 1, column=0, columnspan=2, sticky="w", pady=(2, 0))
         box = self.miss_box
         self.miss_title = lab(box, colour=P["muted"], text="Still wrong after tuning (no number can fix these: ideas "
                               "for new rules)")
@@ -1450,8 +1471,7 @@ class TuneWindow:
         now, best = self.guards.get("now"), self.guards.get("best")
         n = len(self.saved) if self.data else 0
         self.guard_title.config(text="Guard: the words the program scores" if not n else
-                                f"Guard: across all {n:,} words the program scores"
-                                + (", with the best numbers" if best else ""))
+                                f"Guard: all {n:,} words the program scores")
         marked = doubled(now, best) if now and best else []
         for k, cell in self.guard_cells.items():
             if now is None:
@@ -1464,7 +1484,8 @@ class TuneWindow:
                 text = f"{now[k]:,}"
             cell.config(text=text, fg=P["bad"][1] if k in marked else P["text"])
         self.guard_foot.config(text="Counted with the rules as they are, shown with round 0." if now is None else
-                               "A kind more than doubling is marked: Keep asks first." if best else
+                               "Now → with the best numbers. A kind more than doubling is marked: Keep asks first."
+                               if best else
                                "Counted again with the best numbers when the search pauses or ends."
                                if self.best_round is None or "best_round" not in self.guards else
                                "Counting with the best numbers ...")
