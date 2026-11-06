@@ -2170,6 +2170,14 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   thrown away) or the review words being made (_run_tools keeps the running process; its half-written
   file removed, App._drop_partial). Tools start in a process group of their own (_OWN_GROUP) and
   app.stop_tree stops the group (taskkill /T on Windows). _selftest_devtools.py.
+- [x] **DT-8** Asked for: "a search bar to the review tab ... like the search icon" (picked A from mock-ups in project
+  files review-search/: a magnifier at the word's top left, mirroring the Wiktionary icon). The magnifier or `/`
+  (keymap review_find) types over the word like the card's look-up (UI-51); review.find_words lists the file's words
+  that start with it, then those that hold it (FIND_SHOWN, as many as fit), each with "answered" and the kinds given
+  or "not answered yet"; Up / Down / Enter or a click go to one, Escape or the magnifier again go back. Enter on a
+  found word returns to where the search started (RudeReview.return_to, "Back to ..." on the Next button); Back walks
+  the file from the found word and forgets the return. Only words in the review file are found (the defaults
+  suggested; Kiva picked only the look). _selftest_review.py.
 - [x] **F-36** Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
   Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
   a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

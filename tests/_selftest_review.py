@@ -156,6 +156,56 @@ rv = app.open_review(empty); pump(3)
 assert rv.item is None and "Nothing to review" in rv.word.cget("text") and "measure_rudeness" in rv.why.cget("text")
 rv.close(); pump(1)
 assert R.kind_colour("clean") and R.kind_colour("slur") == T.TIER_COLORS[3]
+
+# finding a word (asked for): the magnifier or / types over the word; matches drop down with their answers; Enter goes
+# to one, and Enter there returns to the word the search started from
+assert R.find_words(["tail", "idiot", "shitload", "Tailor"], "TAI") == ["tail", "Tailor"]
+assert R.find_words(["tail", "detail", "tails"], "tail") == ["tail", "tails", "detail"]     # (starts first, then holds)
+assert R.find_words(["a" * n for n in range(1, 20)], "a", limit=3) == ["a", "aa", "aaa"] and R.find_words(["a"], " ") == []
+assert R.answer_kinds({"kinds": ["clean", "slur", "expletive"]}) == ["expletive", "slur"]
+assert R.answer_kinds({"kinds": ["clean"]}) == ["clean"]
+
+
+def typed(rv, text):
+    for ch in text:
+        rv.on_key(types.SimpleNamespace(keysym=ch, char=ch, state=0, keycode=None))
+
+
+rv = app.open_review(path); pump(3)
+assert rv.item["w"] == "idiot"
+assert rv.find_link.winfo_ismapped() and rv.find_link.winfo_rootx() < rv.word.winfo_rootx()    # (left of the word)
+assert rv._find_note() == "Find a word (/)"
+assert key(rv, "slash") == "break" and rv.typing and "type a word" in rv.word.cget("text")
+assert not rv.drop.winfo_ismapped()
+typed(rv, "ShI"); pump(2)
+assert rv.found == ["shitload"] and rv.drop.winfo_ismapped() and rv.word.cget("text").startswith("ShI")
+before = list(rv.kinds)
+typed(rv, "1"); assert rv.typing and rv.kinds == before   # (keys type while searching: "1" answers nothing)
+key(rv, "BackSpace"); pump(1); assert rv.typed == "ShI"   # (took the 1 off)
+typed(rv, "zz"); pump(2)
+assert rv.found == [] and rv.drop.winfo_ismapped()        # ("No word in the review matches")
+for _ in range(5):
+    key(rv, "BackSpace")
+assert rv.typed == ""
+typed(rv, "i"); pump(2)
+assert rv.found == ["idiot", "tail", "shitload"]          # (idiot starts with it, the others hold it)
+key(rv, "Down"); key(rv, "Down"); key(rv, "Down"); assert rv.found_sel == 0     # (wraps round)
+key(rv, "Up"); assert rv.found_sel == 2
+key(rv, "Escape"); pump(2)
+assert not rv.typing and rv.word.cget("text") == "idiot" and not rv.drop.winfo_ismapped() and rv.return_to is None
+key(rv, "slash"); typed(rv, "tai"); key(rv, "Return"); pump(2)
+assert rv.item["w"] == "tail" and not rv.typing and rv.return_to == 1 and rv.next_btn.cget("text") == "Back to idiot"
+key(rv, "3"); key(rv, "Return"); pump(2)                  # (answered, then back where the search started)
+assert rv.item["w"] == "idiot" and saved()[0]["kinds"][0] == "sexual" and rv.next_btn.cget("text") == "Next word"
+rv.start_find(); assert rv.typing
+rv.start_find(); pump(1); assert not rv.typing and rv.word.cget("text") == "idiot"   # (the magnifier again: back)
+rv.start_find(); typed(rv, "shit"); pump(2)
+rv.drop.winfo_children()[0].event_generate("<Button-1>"); pump(2)      # (a click on a word found)
+assert rv.item["w"] == "shitload" and rv.return_to == 1
+key(rv, "BackSpace"); pump(2)                             # (Back walks the file again and forgets the return)
+assert rv.item["w"] == "idiot" and rv.return_to is None
+rv.go_to("tail"); rv.go_to("idiot"); assert rv.return_to is None      # (found its way back: nothing to return to)
+rv.close(); pump(1)
 # DT-6: the strip of earlier tunes (the tuner's history beside the answers; kept: its best error, else today's)
 with open(os.path.join(os.path.dirname(answers), R.HISTORY_FILE), "w", encoding="utf-8") as f:
     f.write(json.dumps({"words": 50, "start": 34.0, "best": 29.0, "kept": True}) + "\n")

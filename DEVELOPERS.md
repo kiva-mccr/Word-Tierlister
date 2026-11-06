@@ -634,7 +634,9 @@ the review on it; `--review-rude` asks for one instead and remembers it. A windo
 and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 4 set the selected meaning's
 kind (Not rude, Expletive, Sexual, Slur), S says whether the whole word should be smeared,
 the small icon at the word's top right opens its Wiktionary page (shown only while online), Enter goes to the next word and Backspace goes back
-one word in the file. These keys can be changed in Keyboard shortcuts, which shows
+one word in the file. The magnifier at the word's top left (or `/`) finds a word in the file: type over the word, the
+words that start with it (then those that hold it) drop down with their answers, and Enter or a click goes to one;
+Enter there returns to the word you were on (the Next button says "Back to ..."). These keys can be changed in Keyboard shortcuts, which shows
 them only while the review is open. The answers are saved on every change (a kind, the whole word), to `rude_review_answers.jsonl` beside
 the review file. Starting again carries on where you stopped. `python tools/measure_rudeness.py answers --show 40`
 scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never

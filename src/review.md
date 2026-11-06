@@ -2,7 +2,7 @@
 
 The review of rude meanings by hand (OB-9, a developer option: `python tierlist.py --review-rude`): a window that goes through a review file word by word, the rules' guess filled in for each meaning, and saves the answers beside it on every change. The answers only test and tune the rules (`tools/measure_rudeness.py answers`); the program never reads them.
 
-- **Uses:** `buttons`, `constants`, `drawer`, `fonts`, `keymap`, `obscene`, `sizing`, `theme`, `ui_style`
+- **Uses:** `buttons`, `constants`, `drawer`, `fonts`, `keymap`, `obscene`, `popups`, `sizing`, `theme`, `ui_style`
 - **Used by:** `app`, `devtools`, `tune_rudeness`
 - **Tests:** `_selftest_review`
 
@@ -14,9 +14,11 @@ The module docstring has the details; this page is the map.
 - `read_review`: The review file's words, in order: [{"w", "why", "whole", "senses": [{"key", "pos", "labels", "gloss", "guess"}]}].
 - `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet (or it was in the old six kinds: set aside, obscene.set_aside_old_answers).
 - `read_history`: The earlier tunes beside the answers file, oldest first: [{"words", "start", "best", "kept", ...}] (the tuner's history file: "start" / "best" are tested errors in %,...
+- `find_words`: The words of `order` (the file's, commonest first) that start with `typed`, then those that only hold it, at most `limit`; case is ignored.
+- `answer_kinds`: The kinds an answer gave its meanings, rude ones in KINDS order, or ["clean"] when none is rude.
 - `write_answers`: Write every answer to `path` (the review's words in its order, then any others: answers from an earlier, smaller review are kept), through a temporary file, so a...
 - `RudeReview`: The review window (see the module's note).
-  - methods: item, strip_marks, select, set_kind, toggle_whole, next_word, back, open_wiktionary, show_online, apply_keys, on_key, alive, close
+  - methods: item, strip_marks, select, set_kind, toggle_whole, next_word, back, open_wiktionary, show_online, start_find, end_find, find_key, go_to, apply_keys, on_key, alive, close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
@@ -40,6 +42,10 @@ The module docstring has the details; this page is the map.
   and on Enter, so Back, quitting or a crash never loses a change (saving only on Enter lost a change before Back:
   reported).
 - A new look (App.reopen) closes the review and App.take_over opens it again on the new window.
+- DT-8: while finding a word every key types (on_key hands it to find_key first): "1" or "s" never answer then.
+  The drop-down is placed over the window (never packed), so it never changes the window's size; it lists only as
+  many words as fit below the word. Enter on a found word returns to where the search started; Back forgets that, so
+  Back then Enter still walks the file straight.
 
 ## Changing it
 
