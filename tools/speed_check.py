@@ -22,6 +22,13 @@ os.environ.setdefault("WORD_TIERLISTER_OFFLINE", "1")      # (a throwaway save: 
 ACTION_MS, BROWSE_MS = 40, 200
 
 
+def kinds(rnd):
+    """A word's words.kinds bits (constants.KINDS), drawn about as often as Wiktionary's words have them."""
+    k = (1 if rnd.random() < 0.6 else 0) | (2 if rnd.random() < 0.15 else 0) | (4 if rnd.random() < 0.18 else 0) | \
+        (8 if rnd.random() < 0.03 else 0)
+    return k | 16 if not k or rnd.random() < 0.05 else k
+
+
 def build(n, placed, folder):
     """A save of `n` words with `placed` of them in random tiers (ratings and duel counts spread out)."""
     from store import Store
@@ -33,6 +40,10 @@ def build(n, placed, folder):
     s.db.executemany("UPDATE words SET tier=?, rating=?, games=? WHERE word=?",
                      [(rnd.randrange(6), 1500 + rnd.random() * 400, rnd.randrange(20), w)
                       for w in words[6:6 + placed]])
+    # kinds of words about as Wiktionary has them: a noun or two in three, adverbs rare (3%), the slow case for
+    # Browse's kind filters before they were found by kind (F-57)
+    s.db.executemany("UPDATE words SET kinds=? WHERE rowid=?",
+                     [(kinds(rnd), i) for i in range(1, n + 1)])
     s.db.commit()
     s.set_meta("dealt_asked", "1")
     s._forget_tallies()
@@ -79,7 +90,7 @@ def check(n, placed, folder, slow):
     app.open_browser()
     root.update()
     bw = app.browsers[0]
-    for show in ("All placed", "Unplaced", "Nouns", "Obscene words"):
+    for show in ("All placed", "Unplaced", "Nouns", "Adverbs", "Obscene words"):
         bw.filter_var.set(show)
         for sort in s.SORTS:
             timed(f"Browse: {show}, {sort}", lambda: (bw.sort_by(sort), root.update()), BROWSE_MS, slow, n=2)

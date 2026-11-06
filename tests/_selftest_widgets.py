@@ -5,7 +5,9 @@ import tkinter.font as tkfont
 from tkinter import ttk
 from theme import PALETTE
 from ui_motion import Animator, lerp_color
-from widgets import RoundButton, WordCard, refresh_widgets
+from buttons import RoundButton
+from cards import WordCard
+from widgets import refresh_widgets
 
 root = tk.Tk()
 clicks = []

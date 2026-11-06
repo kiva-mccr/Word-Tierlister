@@ -2,8 +2,8 @@
 
 Choosing files for Import and Export in the app's own style on Linux (UI-42); Windows and macOS keep their system dialogs (`use_themed`).
 
-- **Uses:** `errors`, `fonts`, `saves`, `store`, `theme`, `widgets`
-- **Used by:** `app`, `sources`
+- **Uses:** `buttons`, `cards`, `dialogs`, `errors`, `fonts`, `saves`, `store`, `theme`
+- **Used by:** `app`, `devtools`, `sources`
 - **Tests:** `_selftest_filepicker`
 
 The module docstring has the details; this page is the map.

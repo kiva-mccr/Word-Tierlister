@@ -77,7 +77,7 @@ assert "KeyError" in open(log).read()                                           
 root = tk.Tk(); root.withdraw()
 from fonts import init_fonts
 from ui_style import apply_ttk_style
-from widgets import RoundButton
+from buttons import RoundButton
 init_fonts(root); apply_ttk_style(root)
 shown.clear()
 log2 = os.path.join(tmp, "h.log")

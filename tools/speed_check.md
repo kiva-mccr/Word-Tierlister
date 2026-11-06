@@ -10,6 +10,7 @@ The module docstring has the details; this page is the map.
 
 ## Public API
 
+- `kinds`: A word's words.kinds bits (constants.KINDS), drawn about as often as Wiktionary's words have them.
 - `build`: A save of `n` words with `placed` of them in random tiers (ratings and duel counts spread out).
 - `timed`: (no docstring)
 - `check`: (no docstring)

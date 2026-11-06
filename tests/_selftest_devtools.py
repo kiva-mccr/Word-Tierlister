@@ -10,10 +10,11 @@ os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home f
 import tkinter as tk
 import tierlist as T
 import app as A
+import devtools as DT
 import sources
 import standalone as S
 from constants import VERSION, review_answers_path
-from widgets import DevBubble
+from buttons import DevBubble
 from theme import PALETTE
 
 WORDS = [f"w{i:04d}" for i in range(40)]
@@ -22,7 +23,7 @@ s = T.Store(os.path.join(folder, "dev.db")); s.insert_words(WORDS); s.set_anchor
 root = tk.Tk(); app = T.App(root, s, T.Definitions(s))
 app.anim.reduce_motion = True
 shown = []
-A.show_message = lambda *a, **kw: shown.append(a)
+A.show_message = DT.show_message = lambda *a, **kw: shown.append(a)
 
 
 def pump(n=6):
@@ -101,28 +102,28 @@ x_bub = d.bubbles["Review words"].winfo_rootx()
 assert x_bub > x_head + d.dlg.head_row.winfo_children()[0].winfo_width(), "the bubble sits right of the headline"
 # the review itself: no review file next to the save asks; no answer, nothing opens and the dialog stays
 asked = []
-assert app.review_rude(d.dlg, ask=lambda start: asked.append(start)) is None
+assert app.devtools.review_rude(d.dlg, ask=lambda start: asked.append(start)) is None
 assert asked == [folder] and d.dlg.alive() and app.review is None
 path = os.path.join(tempfile.mkdtemp(), "mine.jsonl")
 items = [{"w": "tail", "why": "", "whole": False, "senses": [
              {"key": "k1", "pos": "noun", "labels": [], "gloss": "The back end.", "guess": "clean"}]}]
 with open(path, "w", encoding="utf-8") as f:
     f.write("".join(json.dumps(it) + "\n" for it in items))
-rv = app.review_rude(d.dlg, ask=lambda start: path); pump(3)
+rv = app.devtools.review_rude(d.dlg, ask=lambda start: path); pump(3)
 assert rv is app.review and rv.alive() and not d.dlg.alive()       # (the dialog closed: it held the input)
-assert s.get_meta("review_file") == path and app.review_file() == path       # remembered: not asked again
+assert s.get_meta("review_file") == path and app.devtools.review_file() == path       # remembered: not asked again
 rv.win.destroy(); app.review = None
 d = app.edit_dealing(); pump(3)
-rv = app.review_words(d.dlg); pump(3)                               # (a review file: the left half opens it)
+rv = app.devtools.review_words(d.dlg); pump(3)                               # (a review file: the left half opens it)
 assert rv is app.review and rv.alive() and not d.dlg.alive()
 rv.win.destroy(); app.review = None
 
 # ---- the tools in the source folder (OB-10, OB-11) ------------------------------------------------------------------
 src_root = tempfile.mkdtemp()
-app.TOOLS_ROOT = src_root
+app.devtools.root = src_root
 d = app.edit_dealing(); pump(3)
-assert app.make_review_words(d.dlg) is None and shown[-1][1] == "Only from the source"    # (no tools/ there)
-assert app.tune_reroll(d.dlg) is None and shown[-1][1] == "Only from the source"
+assert app.devtools.make_review_words(d.dlg) is None and shown[-1][1] == "Only from the source"    # (no tools/ there)
+assert app.devtools.tune_reroll(d.dlg) is None and shown[-1][1] == "Only from the source"
 os.makedirs(os.path.join(src_root, "tools"))
 for name in ("measure_rudeness.py", "tune_rudeness.py"):
     open(os.path.join(src_root, "tools", name), "w").write("")
@@ -130,36 +131,36 @@ mr = os.path.join(src_root, "tools", "measure_rudeness.py")
 asked, ran = [], []
 fresh = os.path.join(folder, "rude_review.jsonl")                    # (no review file yet: sample makes one here)
 s.set_meta("review_file", "")
-assert app.review_words(d.dlg, ask=lambda: asked.append(1) or False) is None and asked    # (no entries: asked)
+assert app.devtools.review_words(d.dlg, ask=lambda: asked.append(1) or False) is None and asked    # (no entries: asked)
 # no review file: the left half makes the first review words, then opens the review on them
-cmds = app.review_words(d.dlg, ask=lambda: True, run=lambda c, cwd: ran.append((c, cwd)) or open(fresh, "w").close() or (0, "Wrote 1,500"))
+cmds = app.devtools.review_words(d.dlg, ask=lambda: True, run=lambda c, cwd: ran.append((c, cwd)) or open(fresh, "w").close() or (0, "Wrote 1,500"))
 assert [c[1:] for c in cmds] == [[mr, "fetch"], [mr, "sample", "--out", fresh]] and ran[0][1] == src_root
 pump(3)
-assert app._tool_job is None and s.get_meta("review_file") == fresh and toast() == "Wrote 1,500"
+assert app.devtools.tool is None and s.get_meta("review_file") == fresh and toast() == "Wrote 1,500"
 assert app.review is not None and app.review_path == fresh            # (opened on them)
 app.review.close(); app.review = None
 open(os.path.join(src_root, "rudeness_entries.jsonl"), "w").write("")
-cmds = app.make_review_words(d.dlg, run=lambda c, cwd: (1, "MemoryError"))
+cmds = app.devtools.make_review_words(d.dlg, run=lambda c, cwd: (1, "MemoryError"))
 assert [c[1:] for c in cmds] == [[mr, "next", "--review", fresh]]   # (entries there, a review file: 300 more)
 pump(3)
-assert app._tool_job is None and toast() == "Making review words failed: MemoryError"
+assert app.devtools.tool is None and toast() == "Making review words failed: MemoryError"
 before = app.open_review(fresh)                                     # (an open review: opened again on the new words)
-app.make_review_words(None, run=lambda c, cwd: (0, "300 new words to review"))
+app.devtools.make_review_words(None, run=lambda c, cwd: (0, "300 new words to review"))
 pump(3)
 assert app.review is not None and app.review is not before and app.review.alive() and not before.alive()
 app.review.close()
 d = app.edit_dealing(); pump(3)
 started = []
-assert app.tune_reroll(d.dlg, start=started.append) is None and shown[-1][1] == "Nothing answered yet"
+assert app.devtools.tune_reroll(d.dlg, start=started.append) is None and shown[-1][1] == "Nothing answered yet"
 open(review_answers_path(fresh), "w").write("")
-cmd = app.tune_rules(d.dlg, start=started.append)
+cmd = app.devtools.tune_rules(d.dlg, start=started.append)
 assert started == [cmd] and cmd[1:] == [os.path.join(src_root, "tools", "tune_rudeness.py"), "--review", fresh,
                                         "--entries", os.path.join(src_root, "rudeness_entries.jsonl"), "--from-program"]
 assert not d.dlg.alive()                                             # (the tuner is a window of its own)
 
 # ---- Tune & reroll: the tuner's rounds in the ring, then new review words (asked for: in sequence) ---------------
 import threading
-assert app.dev_progress("review") is None
+assert app.devtools.progress("review") is None
 
 
 class FakeTuner:                   # (prints its rounds on a pipe the test writes into)
@@ -202,68 +203,68 @@ tuner = FakeTuner()
 d = app.edit_dealing(); pump(3)
 ring = d.bubbles["Review words"]
 assert not ring.running() and ring.progress is not None
-assert app.tune_reroll(d.dlg, start=lambda c: tuner, run=reroll)
-assert app.dev_progress("review") == (0.0, "Step 1 of 2: The tuner is reading Wiktionary's entries",
+assert app.devtools.tune_reroll(d.dlg, start=lambda c: tuner, run=reroll)
+assert app.devtools.progress("review") == (0.0, "Step 1 of 2: The tuner is reading Wiktionary's entries",
                                       "Tuning · step 1 of 2")
 d = app.edit_dealing(); pump(3)                                     # (opened while it runs: it shows at once)
 ring = d.bubbles["Review words"]
 tuner.say("Round 3 of up to 12\n")
-assert app.dev_progress("review") == (0.25, "Step 1 of 2: Round 3 of up to 12", "Tuning · step 1 of 2")
+assert app.devtools.progress("review") == (0.25, "Step 1 of 2: Round 3 of up to 12", "Tuning · step 1 of 2")
 for _ in range(30):
     pump(1)
 assert ring.running() and ring.lit() and ring.state[0] == 0.25 and ring._second_text() == "Tuning · step 1 of 2"
 assert abs(ring._shown - 0.25) < 0.01, ring._shown                  # (eased there)
 ring.invoke("second"); assert tuner.sent == ["show\n"] and not d.dlg.alive()   # (running: its window back)
 tuner.say("Hidden\n")                                              # (its close box while tuning: only hidden)
-assert app.dev_progress("review")[1].endswith("click Tune & reroll to bring its window back")
-assert app.tune_reroll(None, start=lambda c: 1 / 0) is None and tuner.sent == ["show\n"] * 2    # (one tuner at a time)
-assert not app.dev_progress("review")[1].endswith("back")
+assert app.devtools.progress("review")[1].endswith("click Tune & reroll to bring its window back")
+assert app.devtools.tune_reroll(None, start=lambda c: 1 / 0) is None and tuner.sent == ["show\n"] * 2    # (one tuner at a time)
+assert not app.devtools.progress("review")[1].endswith("back")
 d = app.edit_dealing(); pump(3)
 ring = d.bubbles["Review words"]
 tuner.say("Done\n")
-assert app.dev_progress("review") == (1.0, "Step 1 of 2: tuned; Keep or Discard in the tuner's window",
+assert app.devtools.progress("review") == (1.0, "Step 1 of 2: tuned; Keep or Discard in the tuner's window",
                                       "Keep or Discard · step 1 of 2")
 wait_for(lambda: toast() == "The tuner is done: Keep or Discard its numbers in its window")
-assert app.show_tuner() and tuner.sent[-1] == "show\n"              # (done, still open for Keep: it is reached)
+assert app.devtools.show_tuner() and tuner.sent[-1] == "show\n"              # (done, still open for Keep: it is reached)
 assert not rerolled
 tuner.end(0)                                                         # (Keep or Discard: its window closed)
 wait_for(lambda: rerolled)
 assert [c[1:] for c in rerolled[0]] == [[mr, "next", "--review", fresh]]
 wait_for(lambda: toast() == "Tune & reroll is done: 300 new words to review")
-assert app._tuner_job is None and app._tool_job is None and not app.show_tuner()
+assert app.devtools.tuner is None and app.devtools.tool is None and not app.devtools.show_tuner()
 wait_for(lambda: not ring.running() and not ring._blink and not ring.lit())   # (it blinked once; slow runners: by time)
 # a tuner closed before it was done (Discard while tuning): no reroll; a tuner that failed says so
 for code, said in ((0, None), (1, "The tuner stopped before it was done")):
     t2, rerolled = FakeTuner(), []
-    assert app.tune_reroll(None, start=lambda c: t2, run=reroll)
+    assert app.devtools.tune_reroll(None, start=lambda c: t2, run=reroll)
     before = toast()                                                 # ("The tuner is opening")
     t2.say("Round 1 of up to 12\n"); t2.end(code)
     for _ in range(25):
         pump(1)
-    assert not rerolled and app._tuner_job is None and toast() == (said or before)
+    assert not rerolled and app.devtools.tuner is None and toast() == (said or before)
 # step 2: the new words being made: no fraction (an arc goes round), its last line in the hover note
-job = {"done": None, "path": fresh, "note": "Picking 300 words", "then": "reroll"}
-app._tool_job = job
-assert app.dev_progress("review") == (None, "Step 2 of 2: Picking 300 words", "New words · step 2 of 2")
-assert app.tune_reroll(None) is None and toast() == "Still making review words"
+job = DT.Job(then="reroll", path=fresh, note="Picking 300 words")
+app.devtools.tool = job
+assert app.devtools.progress("review") == (None, "Step 2 of 2: Picking 300 words", "New words · step 2 of 2")
+assert app.devtools.tune_reroll(None) is None and toast() == "Still making review words"
 pump(6)
 assert ring.running() and ring.state[0] is None and ring._second_text() == "New words · step 2 of 2"
 spin = ring._spin; pump(4); assert ring._spin == spin               # (reduce motion: it stays still)
 app.anim.reduce_motion = False
 pump(4); spin = ring._spin; pump(4); assert ring._spin != spin      # (the arc turns)
 app.anim.reduce_motion = True
-job["done"] = (0, "300 new words to review"); app._watch_tool(job)
-assert app.dev_progress("review") is None
+job.done = (0, "300 new words to review"); app.devtools._watch_tool(job)
+assert app.devtools.progress("review") is None
 d.dlg.close()
 
 # ---- the stop button: the tuner (its numbers thrown away, no reroll), or the review words being made ---------------
-assert app.stop_review_tool() is None                               # (nothing running)
+assert app.devtools.stop() is None                               # (nothing running)
 t3, rerolled = FakeTuner(), []
-assert app.tune_reroll(None, start=lambda c: t3, run=reroll)
+assert app.devtools.tune_reroll(None, start=lambda c: t3, run=reroll)
 t3.say("Round 2 of up to 12\n")
-assert app.stop_note().startswith("Stop: the tuner closes")
-assert app.stop_review_tool() == "tuner" and t3.code == -15
-wait_for(lambda: app._tuner_job is None)
+assert app.devtools.stop_note().startswith("Stop: the tuner closes")
+assert app.devtools.stop() == "tuner" and t3.code == -15
+wait_for(lambda: app.devtools.tuner is None)
 pump(10)
 assert not rerolled and toast() == "Stopped: the tuner's numbers were thrown away"
 # a real tool on a worker thread: stopped with what it started; its half-written file removed
@@ -274,11 +275,11 @@ with open(mr, "w", encoding="utf-8") as f:
             "open(sys.argv[3] + '.part', 'w').write('half')\n"
             "print('Picking 300 words', flush=True)\n"
             "time.sleep(60)\n")
-assert app.make_review_words(None) and app.stop_note() == "Stop: the review words stay as they were"
-wait_for(lambda: os.path.exists(fresh + ".part") and app._tool_job.get("note"), 20)
-assert app.dev_progress("review") == (None, "Picking 300 words", None)
-assert app.stop_review_tool() == "tools"
-wait_for(lambda: app._tool_job is None, 20)
+assert app.devtools.make_review_words(None) and app.devtools.stop_note() == "Stop: the review words stay as they were"
+wait_for(lambda: os.path.exists(fresh + ".part") and app.devtools.tool.note, 20)
+assert app.devtools.progress("review") == (None, "Picking 300 words", None)
+assert app.devtools.stop() == "tools"
+wait_for(lambda: app.devtools.tool is None, 20)
 assert toast() == "Stopped: the review words are as they were"
 assert not os.path.exists(fresh + ".part") and os.path.exists(fresh)          # (the old review file kept)
 if os.name != "nt":                                                  # (what it started went with it)
@@ -298,23 +299,23 @@ open(mr, "w").close()
 
 # ---- every 50 new answers, Tune & reroll starts by itself (DT-6, asked for; still a click away any time) ----------
 s.set_meta("tune_base", "")
-assert app.next_auto_tune(7) == 57 and s.get_meta("tune_base") == "7"       # (the first time: from the answers now)
+assert app.devtools.next_auto_tune(7) == 57 and s.get_meta("tune_base") == "7"       # (the first time: from the answers now)
 starts = []
 auto = lambda c: starts.append(c) or FakeTuner()
-assert app.review_answered(56, start=auto) is None and not starts
+assert app.devtools.review_answered(56, start=auto) is None and not starts
 with open(review_answers_path(fresh), "w", encoding="utf-8") as f:
     f.write("".join(json.dumps({"w": f"a{i}", "keys": [], "kinds": [], "whole": False}) + "\n" for i in range(57)))
-cmd = app.review_answered(57, start=auto, run=reroll)
+cmd = app.devtools.review_answered(57, start=auto, run=reroll)
 assert cmd and cmd[-1] == "--start-hidden" and starts == [cmd]               # (hidden until it is done)
-assert s.get_meta("tune_base") == "57" and app.next_auto_tune(57) == 107
+assert s.get_meta("tune_base") == "57" and app.devtools.next_auto_tune(57) == 107
 assert "tuning the rules in the background" in toast()
-assert app.review_answered(200, start=auto) is None and len(starts) == 1    # (one runs: never a second)
-app._tuner_job["proc"].end(1); wait_for(lambda: app._tuner_job is None)
-by_hand = app.tune_reroll(None, start=auto, run=reroll)                      # (by hand: no --start-hidden, and the
+assert app.devtools.review_answered(200, start=auto) is None and len(starts) == 1    # (one runs: never a second)
+app.devtools.tuner.proc.end(1); wait_for(lambda: app.devtools.tuner is None)
+by_hand = app.devtools.tune_reroll(None, start=auto, run=reroll)                      # (by hand: no --start-hidden, and the
 assert by_hand and "--start-hidden" not in by_hand and s.get_meta("tune_base") == "57"    # next 50 count from here)
-app._tuner_job["proc"].end(1); wait_for(lambda: app._tuner_job is None)
+app.devtools.tuner.proc.end(1); wait_for(lambda: app.devtools.tuner is None)
 os.rename(os.path.join(src_root, "rudeness_entries.jsonl"), os.path.join(src_root, "away.jsonl"))
-assert app.review_answered(500, start=auto) is None and len(starts) == 2     # (no entries: it waits, asks nothing)
+assert app.devtools.review_answered(500, start=auto) is None and len(starts) == 2     # (no entries: it waits, asks nothing)
 os.rename(os.path.join(src_root, "away.jsonl"), os.path.join(src_root, "rudeness_entries.jsonl"))
 pump(5)
 
@@ -361,7 +362,7 @@ assert opened == [log]
 # the crash test: the dialog closes, then a real error goes through the safety net
 errors_seen = []
 root.report_callback_exception = lambda *exc: errors_seen.append(exc[1])
-app.crash_test(d.dlg, delay=10)
+app.devtools.crash_test(d.dlg, delay=10)
 assert not d.dlg.alive()
 for _ in range(20):
     pump(1)

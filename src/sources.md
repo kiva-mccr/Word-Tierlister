@@ -2,7 +2,7 @@
 
 File > Source & Updates (T-6..T-8, U-1; one panel since U-4): Updates on top (check GitHub, update the form you are running); below, from source, make a standalone program next to `tierlist.py`; in the program, unpack its source into a folder (a sync); either way an "Update to the newest version first" tick.
 
-- **Uses:** `constants`, `deps`, `errors`, `filepicker`, `fonts`, `problems`, `saves`, `standalone`, `startup`, `theme`, `widgets`
+- **Uses:** `background`, `constants`, `deps`, `dialogs`, `errors`, `filepicker`, `fonts`, `problems`, `saves`, `standalone`, `startup`, `theme`
 - **Used by:** `app`, `stress_ui`, `tierlist`
 - **Tests:** `_selftest_devtools`, `_selftest_nightly`, `_selftest_selfupdate`, `_selftest_sources`
 

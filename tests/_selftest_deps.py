@@ -3,7 +3,7 @@ installing."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import os, subprocess, sys, tempfile
 import tkinter as tk
-from widgets import RoundButton
+from buttons import RoundButton
 import deps, errors as E, startup as S
 from theme import PALETTE
 from problems import SetupError

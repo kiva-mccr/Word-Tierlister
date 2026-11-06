@@ -2,7 +2,7 @@
 
 Settings > Tier colours... (UI-61, UI-80): a colour for each tier: click its pill, then set the colour with H / S / V bars or a hex code (each follows the other); Reset to defaults; Apply saves them in the save and reopens the window in them.
 
-- **Uses:** `constants`, `fonts`, `smooth`, `theme`, `ui_motion`, `widgets`
+- **Uses:** `buttons`, `constants`, `dialogs`, `fonts`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`
 - **Tests:** `_selftest_looks`
 

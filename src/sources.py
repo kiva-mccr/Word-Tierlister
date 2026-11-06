@@ -27,8 +27,8 @@ files differ from this source's, shows "Update to nightly": from source the fold
 (update_source: git pull from main, or main's source synced in); in the program main's source goes into the source
 folder beside it, which then builds the program in this one's place (update_nightly_program, --build-nightly).
 The nightly section shows only with Settings > Developer tools ticked and its "Nightly" bubble lit (a switch at the
-top right, lit to start with; it says so while main is the same); main is not even asked for otherwise. Beside it: "Log" (tierlist.log, App.open_log) and "Crash test"
-(App.crash_test, was --crash-test).
+top right, lit to start with; it says so while main is the same); main is not even asked for otherwise. Beside it: "Log" (tierlist.log, App.devtools.open_log) and "Crash test"
+(App.devtools.crash_test, was --crash-test).
 
 Either way a tick box, "Update to the newest version first" (T-8), ticked to start with and usable once a newer
 version is found: "Make the program" then downloads that version's source and builds from it, and "Unpack" downloads
@@ -36,11 +36,9 @@ it and shows what unpacking it would change before it does it. The first start o
 (T-9: App._offer_other_form), and a yes does it straight away (go=True), from the version you have.
 """
 import os
-import queue
 import shutil
 import sys
 import tempfile
-import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, ttk
@@ -55,7 +53,8 @@ from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen, remember_save
 from startup import ensure_packages, offer_system_install, run_with_progress
 from theme import PALETTE
-from widgets import StyledDialog
+from background import Task
+from dialogs import StyledDialog
 from constants import REPO_PAGE, VERSION
 
 TITLE = "Source & Updates"
@@ -112,8 +111,8 @@ class SourceDialog:
         self.main_now = None                      # main as it is now, once found (the Nightly bubble shows it the same)
         if self.nightly_always is not None:       # (Settings > Developer tools: the dialog's bubbles)
             self.bubbles = self.dlg.dev_bubbles((("Nightly", self._toggle_nightly, self.nightly_always),
-                                                 ("Log", app.open_log),
-                                                 ("Crash test", lambda: app.crash_test(self.dlg))))
+                                                 ("Log", app.devtools.open_log),
+                                                 ("Crash test", lambda: app.devtools.crash_test(self.dlg))))
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
             self._menu_section()                                            # only until it is in the menu)
@@ -149,27 +148,23 @@ class SourceDialog:
     def _start_check(self):
         """Ask GitHub on a worker thread (it never touches the window): the newest release, then main as it is now
         and which files differ from this source (nightly). The answer is collected every 100 ms."""
-        answer = queue.Queue()
-
         def ask():
             release = self.check()
             main = self.nightly_check() if self.here and self.nightly_always is not None else None
-            answer.put((release, main, standalone.nightly_changes(main, self.here) if main else []))
-        threading.Thread(target=ask, daemon=True).start()
+            return release, main, standalone.nightly_changes(main, self.here) if main else []
 
-        def collect():
+        def collect(answer):
             if not self.dlg.alive():
                 return
-            try:
-                self.release, main, files = answer.get_nowait()
-            except queue.Empty:
-                self.dlg.win.after(100, collect)
-                return
+            self.release, main, files = answer
             self.checked = True
             self.main_now = main
             self.nightly, self.nightly_files = (main, files) if files else (None, [])
             self._show_check()
-        collect()
+        def failed(exc):                  # (said like GitHub not answering, never "Checking..." for good)
+            standalone.last_error = str(exc) or type(exc).__name__
+            collect((None, None, []))
+        Task(self.dlg.win, ask, done=collect, failed=failed)
 
     def again(self):
         """"Try again": ask GitHub once more."""

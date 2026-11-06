@@ -4,7 +4,7 @@ The save file: every read and write of the SQLite database goes through `Store` 
 
 - **Uses:** `constants`, `obscene`, `rudeness`
 - **Used by:** `browser`, `filepicker`, `speed_check`, `syncfiles`, `tierlist`
-- **Tests:** `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
+- **Tests:** `_selftest_launch`, `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
 
 The module docstring has the details; this page is the map.
 
@@ -17,6 +17,7 @@ The module docstring has the details; this page is the map.
 
 - `_three_kinds` (OB-12) runs once a save (meta `rude_kinds`): it maps the old six kinds' bits in meta `deal_rude`, `censor_kinds` and in words.rude / rude_main onto the three. Old saves keep an unused `words.smear_extra` column (OB-8); never read it.
 - Every public method that changes data commits before returning; no animation frame may touch the database.
+- Browse's kinds of word (F-57): a kind is a list of `words.kinds` values (`_kind_clause`) so `idx_placed_kinds` can look it up; a bit test (`kinds & bit`) reads every entry. A rare kind is found that way and sorted, a common one read in the sort's own index until a page turns up (`KIND_SORT_COST`: compared against its count and the page asked for). Test a change on a save with kinds (tools/speed_check.py gives its words kinds; Adverbs is the slow case).
 - Anything run per duel or per refresh must stay fast on a million-word save: read the indexes, check `EXPLAIN QUERY PLAN` for "TEMP B-TREE", test a dense and a sparse save.
 - Long work (a reshuffle) runs on a worker thread while nothing else writes.
 - Settings are text in `meta`; read numbers with `meta_number` (it handles damaged values), not `int(get_meta(...))`.

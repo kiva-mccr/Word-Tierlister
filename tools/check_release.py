@@ -106,7 +106,7 @@ def check_docs(problems):
         if _name(f).startswith("_selftest") and _name(f)[:-3] not in runner:
             problems.append(f"{f} is not run by tests/run_tests.sh")
     for need in (".claude/CLAUDE.md", ".claude/CHECKLIST.md", "tierlist.py", "requirements.txt", "README.md",
-                 "DEVELOPERS.md"):
+                 "DEVELOPERS.md", "ROADMAP.md"):
         if not os.path.exists(os.path.join(HERE, need)):
             problems.append(f"{need} is missing")
     for f in _files_in(""):
@@ -117,9 +117,10 @@ def check_docs(problems):
 # The layers of src/ (.claude/CLAUDE.md), lowest first: a module imports only from modules before it; the ones in
 # one inner list are equals (none imports another). Only UI modules (from "theme" on) import tkinter.
 LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["syncthing_api"], ["keymap"], ["bundle"],
-          ["standalone"], ["store"], ["wordsource", "saves", "definitions"], ["syncfiles"], ["theme"], ["fonts"],
-          ["sizing"], ["ui_style"], ["ui_motion"], ["smooth", "framesync"], ["widgets"], ["errors"], ["startup"], ["ui_chart", "fullscreen"],
-          ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog", "review"], ["dealing"], ["sources"], ["app"]]
+          ["standalone"], ["store"], ["wordsource", "saves", "definitions"], ["launch"], ["syncfiles"], ["theme", "background"], ["fonts"],
+          ["sizing"], ["ui_style"], ["ui_motion"], ["smooth", "framesync"], ["smears", "popups"], ["buttons"],
+          ["menus", "drawer", "cards"], ["dialogs"], ["widgets"], ["errors"], ["startup"], ["ui_chart", "fullscreen"],
+          ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog", "review"], ["dealing"], ["sources"], ["devtools"], ["app"]]
 
 
 def _module_imports(path):

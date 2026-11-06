@@ -13,13 +13,12 @@ smeared, that kind is censored; plain, it is shown even while censoring (Store.c
 three smeared to start with). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once. With Settings > Developer tools ticked, one split bubble at the top right (asked for, picked from a
-mock-up): "Review words" (OB-9's review window, App.review_words; the first review words made when there are none)
+mock-up): "Review words" (OB-9's review window, App.devtools.review_words; the first review words made when there are none)
 | "Tune & reroll" (tools/tune_rudeness.py's window, then new review words from tools/measure_rudeness.py next:
-App.tune_reroll); its ring and the right half's words show the step.
+App.devtools.tune_reroll); its ring and the right half's words show the step.
 """
 import gc
 import random
-import threading
 import tkinter as tk
 from tkinter import ttk
 
@@ -28,7 +27,11 @@ from obscene import CENSORABLE, RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
-from widgets import RoundButton, ShapeCard, SmearToggle, StyledDialog, Tooltip
+from background import Task
+from buttons import RoundButton, SmearToggle
+from cards import ShapeCard
+from dialogs import StyledDialog
+from popups import Tooltip
 
 CENSOR_NOTE = "blurred, except on hover"
 
@@ -86,9 +89,10 @@ class DealDialog:
             dlg.button("Cancel", dlg.close)
             dlg.button("Apply", self.apply, default=True)
             if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
+                tools = app.devtools
                 self.bubbles = dlg.dev_bubbles(((
-                    "Review words", lambda: app.review_words(dlg), None, lambda: app.dev_progress("review"), None,
-                    ("Tune & reroll", lambda: app.tune_reroll(dlg)), (app.stop_note, app.stop_review_tool)),))
+                    "Review words", lambda: tools.review_words(dlg), None, lambda: tools.progress("review"), None,
+                    ("Tune & reroll", lambda: tools.tune_reroll(dlg)), (tools.stop_note, tools.stop)),))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------
@@ -363,35 +367,34 @@ class DealDialog:
         app.busy = True                              # nothing else writes to the save meanwhile (_poll_defs)
         gc.collect()                                 # tk objects may only be freed on this thread: tidy up now and
         gc.disable()                                 # pause the collector, so it never runs inside the worker
-        result = {}
 
         def work():                                  # (no tkinter here)
-            try:
-                if deal is not None:
-                    self.store.set_deal(**deal)
-                if cfg is not None:
-                    self.store.reshuffle(**cfg)
-            except Exception as exc:                 # (any failure: a crash of the worker said "reshuffled")
-                result["error"] = str(exc) or type(exc).__name__
-        worker = threading.Thread(target=work, daemon=True)
-        worker.start()
+            if deal is not None:
+                self.store.set_deal(**deal)
+            if cfg is not None:
+                self.store.reshuffle(**cfg)
 
-        def wait():
-            if worker.is_alive():
-                d.win.after(50, wait)
-                return
+        def ended():                                 # (the save is free again even if the dialog has gone)
             app.busy = False
             gc.enable()
+            if not d.alive():
+                return False
             self.bar.stop()
-            if result.get("error"):
-                for b in (*d.buttons.values(), self.new_seed):
-                    b.set_enabled(True)
-                d.on_cancel = self._skip if self.first else d.close
-                self.bar.grid_remove()
-                self.say(f"Could not apply: {result['error']}")
+            return True
+
+        def done(_):
+            if ended():
+                self._finish("Queue reshuffled" if cfg else "Words dealt")
+
+        def failed(exc):                             # (any failure: a crash of the worker once said "reshuffled")
+            if not ended():
                 return
-            self._finish("Queue reshuffled" if cfg else "Words dealt")
-        wait()
+            for b in (*d.buttons.values(), self.new_seed):
+                b.set_enabled(True)
+            d.on_cancel = self._skip if self.first else d.close
+            self.bar.grid_remove()
+            self.say(f"Could not apply: {str(exc) or type(exc).__name__}")
+        Task(app.root, work, done=done, failed=failed, ms=50)
 
     def _finish(self, message):
         app = self.app

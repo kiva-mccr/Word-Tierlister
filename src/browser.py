@@ -23,7 +23,12 @@ from smooth import arrow_image
 from store import Store
 from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_ROW_TEXT, TIER_TEXT
 from ui_motion import lerp_color
-from widgets import ChoiceButton, RoundButton, Toast, TreeSmears, fill_definitions, refresh_widgets
+from buttons import RoundButton
+from drawer import fill_definitions
+from menus import ChoiceButton
+from popups import Toast
+from smears import TreeSmears
+from widgets import refresh_widgets
 
 
 class Browser:

@@ -52,7 +52,7 @@ open(os.path.join(work, "requirements.txt"), "w").write(req)
 code, out = run("--zip", os.path.join(tmp, "out.zip"))
 assert code == 0 and "zip:" in out, out
 names = zipfile.ZipFile(os.path.join(tmp, "out.zip")).namelist()
-for need in ("tierlist.py", "requirements.txt", "README.md", "DEVELOPERS.md", "docs/images/place-light.png", "LICENSE", "src/app.py", "src/widgets.py",
+for need in ("tierlist.py", "requirements.txt", "README.md", "DEVELOPERS.md", "ROADMAP.md", "docs/images/place-light.png", "LICENSE", "src/app.py", "src/widgets.py",
              "tests/run_tests.sh", "tests/_selftest.py", "tests/_paths.py", "tools/check_release.py",
              ".claude/CLAUDE.md", ".claude/CHECKLIST.md"):
     assert "word-tierlister/" + need in names, (need, names)

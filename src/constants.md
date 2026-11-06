@@ -3,8 +3,8 @@
 Shared constants and tiny pure helpers that every layer may use: tiers, modes, kinds of words, queue shapes, the program's `VERSION` and GitHub `REPO`, and the offline switch the tests set.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `dealing`, `definitions`, `deps`, `errors`, `measure_rudeness`, `review`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `tune_rudeness`, `ui_chart`, `widgets`, `wordsource`
-- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_install`, `_selftest_lookup`, `_selftest_nextreview`, `_selftest_nightly`, `_selftest_resume`, `_selftest_review`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
+- **Used by:** `app`, `browser`, `cards`, `dealing`, `definitions`, `deps`, `devtools`, `errors`, `launch`, `measure_rudeness`, `review`, `saves`, `sources`, `standalone`, `startup`, `store`, `tiercolours`, `tierlist`, `tune_rudeness`, `ui_chart`, `wordsource`
+- **Tests:** `_selftest_dealing`, `_selftest_deps`, `_selftest_devtools`, `_selftest_install`, `_selftest_launch`, `_selftest_lookup`, `_selftest_nextreview`, `_selftest_nightly`, `_selftest_resume`, `_selftest_review`, `_selftest_selfupdate`, `_selftest_sources`, `_selftest_startup`, `_selftest_updates`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 

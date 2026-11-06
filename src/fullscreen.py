@@ -24,7 +24,7 @@ from keymap import NAMES
 from smooth import SmoothCanvas
 from theme import PALETTE, TIER_COLORS
 from ui_motion import lerp_color
-from widgets import RoundButton
+from buttons import RoundButton
 
 SLIDE_MS = 200          # a page sliding in
 POP_MS = 140            # the lit row growing a little

@@ -21,7 +21,7 @@ python tools/check_release.py --tests   # the checks to pass before handing work
 
 tkinter ships with Python (Debian / Ubuntu: `sudo apt install python3-tk`). Window tests need a display; on a
 headless Linux box they run under `xvfb-run` by themselves. The roadmap (every step, its status and the decisions
-behind it) is the big comment block at the top of `tierlist.py`; `.claude/CLAUDE.md` holds the conventions.
+behind it) is `ROADMAP.md`; `.claude/CLAUDE.md` holds the conventions.
 
 ## The big picture
 
@@ -37,7 +37,7 @@ flowchart TB
     startup["startup.py<br/>progress window; set-up on a worker thread"]
     wordsource["wordsource.py<br/>build the word list from Wiktionary or WordNet,<br/>frequencies, kinds of word, queue prep"]
     app["app.py: App<br/>the main window and its four modes"]
-    widgets["widgets.py, ui_chart.py, smooth.py<br/>word card, tier pills, duel cards, toasts,<br/>definitions pane, tier chart, progress shelf"]
+    widgets["cards.py, buttons.py, menus.py, drawer.py, popups.py, ui_chart.py, ...<br/>word card, tier pills, duel cards, toasts,<br/>definitions pane, tier chart, progress shelf"]
     dialogs["browser.py, dealing.py, tiercolours.py,<br/>shortcuts.py, sources.py, filepicker.py, review.py<br/>Browse, the settings windows, the rude-meaning review"]
     sync["syncdialog.py, syncfiles.py, syncthing_api.py<br/>sync with other devices"]
     defs["definitions.py: Definitions<br/>lookups on a worker thread"]
@@ -84,11 +84,11 @@ flowchart TB
     end
     subgraph L4["windows and views"]
         direction LR
-        ui_chart["ui_chart"] ~~~ fullscreen["fullscreen"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"]
+        ui_chart["ui_chart"] ~~~ fullscreen["fullscreen"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"] ~~~ devtools["devtools"]
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
-        theme["theme"] ~~~ fonts["fonts"] ~~~ sizing["sizing"] ~~~ ui_style["ui_style"] ~~~ ui_motion["ui_motion"] ~~~ smooth["smooth"] ~~~ framesync["framesync"] ~~~ widgets["widgets"] ~~~ errors["errors"] ~~~ startup["startup"]
+        theme["theme"] ~~~ fonts["fonts"] ~~~ sizing["sizing"] ~~~ ui_style["ui_style"] ~~~ ui_motion["ui_motion"] ~~~ smooth["smooth"] ~~~ framesync["framesync"] ~~~ smears["smears"] ~~~ popups["popups"] ~~~ buttons["buttons"] ~~~ menus["menus"] ~~~ drawer["drawer"] ~~~ cards["cards"] ~~~ dialogs_["dialogs"] ~~~ widgets["widgets"] ~~~ errors["errors"] ~~~ startup["startup"]
     end
     subgraph L2["words and saves (no tkinter)"]
         direction LR
@@ -112,33 +112,41 @@ note):
 
 | Module | Imports |
 |---|---|
-| `tierlist` | app, browser, constants, definitions, deps, errors, fonts, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | browser, constants, dealing, definitions, deps, errors, filepicker, fonts, framesync, fullscreen, keymap, review, rudeness, saves, shortcuts, sizing, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
-| `sources` | constants, deps, errors, filepicker, fonts, problems, saves, standalone, startup, theme, widgets |
-| `syncdialog` | deps, errors, fonts, problems, saves, startup, syncfiles, syncthing_api, theme, widgets |
-| `browser` | constants, errors, fonts, keymap, sizing, smooth, store, theme, ui_motion, widgets |
-| `filepicker` | errors, fonts, saves, store, theme, widgets |
-| `dealing` | constants, fonts, obscene, rudeness, theme, widgets |
-| `tiercolours` | constants, fonts, smooth, theme, ui_motion, widgets |
-| `shortcuts` | fonts, keymap, sizing, theme, widgets |
-| `review` | constants, fonts, keymap, sizing, theme, ui_style, widgets |
+| `tierlist` | app, browser, constants, definitions, deps, errors, fonts, launch, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
+| `app` | background, browser, buttons, cards, constants, dealing, definitions, deps, devtools, dialogs, drawer, errors, filepicker, fonts, framesync, fullscreen, keymap, menus, popups, review, rudeness, saves, shortcuts, sizing, smooth, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
+| `devtools` | background, constants, errors, filepicker, review, saves, standalone |
+| `sources` | background, constants, deps, dialogs, errors, filepicker, fonts, problems, saves, standalone, startup, theme |
+| `dealing` | background, buttons, cards, constants, dialogs, fonts, obscene, popups, rudeness, theme |
+| `review` | buttons, constants, drawer, fonts, keymap, obscene, sizing, theme, ui_style |
+| `syncdialog` | background, buttons, deps, dialogs, errors, fonts, popups, problems, saves, startup, syncfiles, syncthing_api, theme |
+| `tiercolours` | buttons, constants, dialogs, fonts, smooth, theme, ui_motion |
+| `shortcuts` | buttons, dialogs, fonts, keymap, sizing, theme |
+| `filepicker` | buttons, cards, dialogs, errors, fonts, saves, store, theme |
+| `browser` | buttons, constants, drawer, errors, fonts, keymap, menus, popups, sizing, smears, smooth, store, theme, ui_motion, widgets |
+| `fullscreen` | buttons, fonts, keymap, smooth, theme, ui_motion |
 | `ui_chart` | constants, smooth, theme, ui_motion |
-| `fullscreen` | fonts, keymap, smooth, theme, ui_motion, widgets |
-| `widgets` | constants, definitions, fonts, rudeness, sizing, smooth, theme, ui_motion |
 | `startup` | constants, deps, errors, fonts, problems, sizing, syncthing_api, theme, ui_style |
-| `errors` | constants, fonts, problems, theme, ui_style, widgets |
-| `ui_style` | fonts, theme |
+| `errors` | constants, dialogs, fonts, problems, theme, ui_style |
+| `widgets` | dialogs, drawer |
+| `dialogs` | buttons, fonts, sizing, theme, ui_style |
+| `cards` | buttons, constants, fonts, smears, smooth, theme, ui_motion |
+| `drawer` | buttons, definitions, rudeness, smears, theme |
+| `menus` | buttons, sizing, smooth, theme |
+| `buttons` | fonts, popups, smears, smooth, theme, ui_motion |
+| `popups` | sizing, smooth, theme, ui_motion |
+| `smears` | fonts, theme, ui_motion |
 | `smooth` | fonts |
-| `framesync` | (the standard library only) |
-| `wordsource` | constants, obscene, problems, rudeness |
-| `saves`, `definitions` | constants |
+| `ui_style` | fonts, theme |
 | `syncfiles` | store |
+| `launch` | constants, problems, wordsource |
+| `definitions` | constants |
+| `saves` | constants |
+| `wordsource` | constants, obscene, problems, rudeness |
 | `store` | constants, obscene, rudeness |
 | `standalone` | bundle, constants, deps |
-| `rudeness` | obscene |
-| `deps` | constants |
 | `syncthing_api` | deps |
-| `constants`, `obscene`, `problems`, `keymap`, `bundle`, `theme`, `fonts`, `sizing`, `ui_motion` | nothing of ours |
+| `deps` | constants |
+| `rudeness` | obscene |
 
 ## Start-up
 
@@ -159,7 +167,7 @@ flowchart TB
     H --> I["new_root(): a hidden Tk with fonts and styles"]
     I --> J["startup.ensure_packages: one dialog,<br/>a tick box per missing package"]
     J --> K["startup.run_with_progress(set_up)<br/>on a worker thread, a progress window with time left"]
-    K --> K1["set_up: build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
+    K --> K1["launch.set_up: names every stage first,<br/>then build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
     K1 --> L["App(root, store, Definitions(store)).open_window()"]
     L --> L1{"--build-nightly or --review-rude?<br/>(the program's nightly update; a developer option)"}
     L1 -- "--build-nightly" --> L2["SourceDialog(go=True, target=...):<br/>build the program in place of the old one"]
@@ -185,7 +193,7 @@ sequenceDiagram
     participant K as Keymap (keymap.py)
     participant Anim as Animator (ui_motion.py)
     participant S as Store (store.py)
-    participant W as widgets
+    participant W as widgets (cards.py, buttons.py, popups.py)
     Tk->>App: <KeyPress>
     App->>App: held key? App._repeat_allowed (500 ms, then every 250 ms)
     App->>Anim: hurry_all() (running animations speed up, never jump)
@@ -301,8 +309,10 @@ erDiagram
 
 ## Threads
 
-Tk is single-threaded, so only the main thread touches widgets. Worker threads hand their results back through
-queues that the main loop polls. No animation frame may touch the database.
+Tk is single-threaded, so only the main thread touches widgets. A worker thread hands its answer back through
+`src/background.py`: a `Task` runs `work()` on a worker and calls `done` (or `failed`) on the main thread, and a
+`Repeat` is a timer on the main thread; both stop when their window closes. Definitions and the start-up
+progress window keep queues of their own that the main loop polls. No animation frame may touch the database.
 
 ```mermaid
 flowchart LR
@@ -322,10 +332,10 @@ flowchart LR
     end
     Setup -- "log lines, queue" --> App
     Defs -- "drain(): results queue" --> App
-    Upd -- "queue" --> App
-    RudeRead -- "queue" --> App
-    Deal -- "done" --> App
-    Sync -- "queue; folded in a step at a time" --> App
+    Upd -- "Task" --> App
+    RudeRead -- "Task" --> App
+    Deal -- "Task" --> App
+    Sync -- "Task; folded in a step at a time" --> App
 ```
 
 ## Builds, releases and updates
@@ -371,7 +381,7 @@ by this repository's workflow.
 | What a key or button does, what shows on screen | `src/app.py` (`on_key`, `_key_target`, `_show_place`, `_show_pair`) |
 | A key's default | `src/keymap.py` (`ACTIONS`) |
 | The menus | `App._menu_items` in `src/app.py` |
-| How a widget looks or animates | `src/widgets.py` (and its test, `tests/_selftest_widgets2.py`) |
+| How a widget looks or animates | its module: `src/cards.py`, `buttons.py`, `menus.py`, `drawer.py`, `popups.py`, `smears.py`, `dialogs.py` (the map: `src/widgets.py`; their test, `tests/_selftest_widgets2.py`) |
 | Colours | `src/theme.py` (`PALETTE`, `TIER_COLORS`, the dark look `DARK`, `contrast()`) |
 | Fonts and text sizes | `src/fonts.py` (`font(role)`) |
 | Window sizes, zoom, fitting the screen | `src/sizing.py`, `App._worst_size`, `App._fit_window`, `App._fill_pane`, `App.set_zoom` |
@@ -437,7 +447,9 @@ found again, so switching between the two loses nothing.
 
 | File | Job |
 |---|---|
-| `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
+| `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. |
+| `src/launch.py` | Start-up's stages (the word list, the queue, `--seed`), each named once with its work: the progress window's "Step i of n" comes from the same list that runs. |
+| `ROADMAP.md` | The roadmap: every step, what was asked and built, and the decisions. |
 | `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
 | `src/obscene.py` | The kinds of rude meaning (Expletive, Sexual, Slur; OB-12), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
 | `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards the rules' own six kinds (Clinical, Crude, Swear, Insult, Sexual, Slur), folded into the three shown (`fold`), from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |
@@ -463,8 +475,14 @@ found again, so switching between the two loses nothing.
 | `src/framesync.py` | X11 only: a maximized or resized window never shows its old picture in its top-left corner (F-53): the page's X window has centre gravity, and frame sync (`_NET_WM_SYNC_REQUEST`) is answered once a new size is drawn. Through Tk's own X connection (ctypes). |
 | `src/startup.py` | First-run progress window (set-up on a worker thread; time left, "Step i of n") and the window's package install step. |
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows); text whose letters reach past their boxes (Young Serif's j and f) is repainted whole (F-32). |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame; `dev_bubbles` puts `DevBubble`s, the developer tools' small pills, at the right of its headline), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
-| `src/widgets.py` | `Tooltip` (hover notes), `RoundButton` (rounded pastel buttons with hover, press and key hints), `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared sideways, never past its own ends (F-33), its end letters smeared further inward (F-43), and un-smears under the pointer, `smear_items` / `Unsmear`), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), the header pieces (`TabBar` mode tabs, which show only once they have work, `HeaderMenus` + `DropMenu`), `ChoiceButton` (drop-down choices), `Toast` (messages), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt), `StyledDialog` (the shared dialog frame; `dev_bubbles` puts `DevBubble`s, the developer tools' small pills, at the right of its headline; a running tool's bubble shows a progress ring round its dot, from `App.dev_progress`), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `FileList` (the file picker's list) and other small widgets. |
+| `src/smears.py` | Censored words drawn smeared (ST-6): `smear_items` (copies side by side, never past the word's own ends (F-33), its end letters smeared further inward (F-43)), `Unsmear` (un-smears under the pointer), `smeared_label` (for the definition panes) and `TreeSmears` (Browse's list). |
+| `src/popups.py` | `Toast` (messages, each its own, the newest on top) and `Tooltip` (hover notes). |
+| `src/buttons.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `SmearWordButton` and `DevBubble` (the developer tools' small pills; a running tool's shows a progress ring round its dot, from `DevTools.progress`). |
+| `src/menus.py` | `DropMenu` (the program's own drop-downs, kept built and hidden while closed), `ChoiceButton` (drop-down choices), `HeaderMenus` (File / Edit / View / Settings), `TabBar` (mode tabs, which show only once they have work), `close_popups` / `watch_focus`. |
+| `src/drawer.py` | `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `fill_definitions`, `word_at` (a word in a meaning to look up, W-1). |
+| `src/cards.py` | `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt) and `FileList` (the file picker's list). |
+| `src/dialogs.py` | `StyledDialog` (the shared dialog frame; `dev_bubbles` puts `DevBubble`s at the right of its headline) and `dialog_open`. |
+| `src/widgets.py` | The map of the widget modules above, and `refresh_widgets` (re-measure them all after a font change). |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (every spine one width, UI-79; a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/fullscreen.py` | Full screen (FS-2): `PauseMenu`, the menu Esc opens over the whole window (pages made from the top menus, Back and a trail, rows that slide in and pop), and `dialog_bar`, the Back bar and trail a dialog wears there in place of Cancel and its title bar. |
 | `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5, and beside each kind a small smear button to censor it or not, OB-7, OB-8) and Censor obscene words; on the first start the same in three steps. |
@@ -473,6 +491,8 @@ found again, so switching between the two loses nothing.
 | `src/tiercolours.py` | Settings > Tier colours... (UI-61, UI-80): click a tier's pill, then set its colour with the H / S / V bars or a hex code (each follows the other); a colour too dark for the tier's letter is said so and Apply waits; Reset to defaults; Apply saves them and shows them (the window is rebuilt in place). |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
+| `src/background.py` | Work on a worker thread handed back to the Tk thread (`Task`: `done` or `failed`, never lost) and timers on it (`Repeat`); both stop when their window closes. |
+| `src/devtools.py` | The developer tools' bubbles (Settings > Developer tools): the review of rude meanings, Review words and Tune & reroll run from `tools/` in the background (a `Job` each, with its ring and stop button), Log and Crash test. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder, each code file's notes up to date, the import layers); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/speed_check.py` | Times refresh, placing, duels and every Browse sort on a big throwaway save (a million words by default, dense and sparse); fails when something is more than twice its budget (F-9). |
@@ -492,8 +512,8 @@ found again, so switching between the two loses nothing.
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
-Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `theme`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `widgets`, `errors`, `startup` -> `ui_chart`, `fullscreen`, `browser`, `filepicker`, `shortcuts`, `dealing`, `sources` -> `app` -> `tierlist`. A file only imports from files
+Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `syncthing_api`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `launch` -> `syncfiles` -> `theme`, `background`,
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `framesync`, `smears`, `popups`, `buttons`, `menus`, `drawer`, `cards`, `dialogs`, `widgets`, `errors`, `startup` -> `ui_chart`, `fullscreen`, `browser`, `filepicker`, `shortcuts`, `tiercolours`, `syncdialog`, `review`, `dealing`, `sources` -> `devtools` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Notes beside the code
@@ -539,7 +559,7 @@ missing or out of date, and also checks that each module imports only from the l
   pointer; a click shows its definition there (the main window's pane says "Back to ..." to return) and puts it in
   Browse for the moment, greyed at the bottom ("not placed yet"), where the tier buttons or the placing keys (1-6)
   place it for real; a refresh or closing Browse lets it go. A word not in the list is offered to add first.
-  (`widgets.word_at` / `fill_definitions(on_word=)`, `App.look_up`, `Browser.look_up` / `show_lookups`.)
+  (`drawer.word_at` / `fill_definitions(on_word=)`, `App.look_up`, `Browser.look_up` / `show_lookups`.)
 - Anything that must survive a restart: save it through a `Store` method (it commits).
 
 ## Tests
@@ -638,9 +658,9 @@ Wiktionary entries first when they are missing). **Tune & reroll** runs the two 
 tuner's rounds, then turns while the new words are picked, and its right half names the step; a toast in the main
 window says when each step is done. Closing the tuner's window while it tunes only hides it; a click on Tune & reroll
 brings it back. Discard while it tunes stops there, with no reroll. The ring under the pointer turns into a red cross
-that stops either step (`App.stop_review_tool`: the tool's whole process group, so the tuner's workers go too; a
+that stops either step (`DevTools.stop` in `src/devtools.py`: the tool's whole process group, so the tuner's workers go too; a
 half-written review file or entries file is removed). They run the scripts in `tools/`, so only from the source.
-Every 50 new answers (`App.AUTO_TUNE`, counted from the last start, meta `tune_base`) the review starts Tune & reroll
+Every 50 new answers (`DevTools.AUTO_TUNE`, counted from the last start, meta `tune_base`) the review starts Tune & reroll
 by itself with the tuner's `--start-hidden`, never while one runs nor without the entries; the review window's strip
 reads the tuner's `rude_tune_history.jsonl` (beside the answers) for a tick per earlier tune, with its tested error,
 and has a Tune & reroll now button. Reviews ask only about one-part words: no hyphenated or spaced

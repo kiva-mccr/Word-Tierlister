@@ -11,12 +11,8 @@ import math
 import os
 import random
 import re
-import signal
 import sqlite3
-import subprocess
 import sys
-import queue
-import threading
 import time
 import webbrowser
 
@@ -30,17 +26,18 @@ from definitions import Online, wiktionary_url
 import wordsource
 from browser import Browser
 from dealing import DealDialog
+from background import Repeat, Task
+from devtools import DevTools
 from errors import ask_buttons, ask_yes_no, show_error, show_exception, show_message
-from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES,
-                       QUEUE_SHAPES, REPO_PAGE, REVIEW_FILE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word,
-                       review_answers_path, typed_word)
+from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
+                       QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
-from review import RudeReview, read_answers
+from review import RudeReview
 from syncdialog import AutoSync, SyncDialog
 import standalone
 import framesync
@@ -50,11 +47,16 @@ import theme
 from theme import PALETTE, TIER_COLORS, TIER_TEXT
 from ui_motion import HURRY_MS, Animator
 from ui_style import apply_ttk_style, unveil, veil
-from filepicker import ask_export, ask_import, browse, use_themed
+from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from fullscreen import PauseMenu, dialog_bar
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
-                     Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
+from buttons import LinkButton, RoundButton, TierChip, TierRow
+from cards import AnchorLadder, EmptyCard, DuelCards, WordCard
+from dialogs import StyledDialog, dialog_open
+from drawer import DefinitionDrawer
+from menus import ChoiceButton, HeaderMenus, TabBar, watch_focus
+from popups import Toast, Tooltip
+from widgets import refresh_widgets
 
 
 SCRIPT_DIR = app_dir()          # where tierlist.py is, or a built program (T-1)
@@ -107,72 +109,6 @@ def reopen_while_asked(app, store, defs, new_root):
         else:                                    # one still waiting would end the next window's loop at once)
             root.mainloop()
     return app
-
-
-# a tool started by a developer bubble gets a process group of its own, so stopping it stops what it started too
-_OWN_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-
-
-def stop_tree(proc, run=subprocess.run):
-    """Stop a tool a developer bubble started, and the processes it started (the tuner's workers); never waits
-    (whoever watches it sees it end)."""
-    if proc is None or proc.poll() is not None:
-        return
-    try:
-        if os.name == "nt":
-            threading.Thread(target=run, args=(["taskkill", "/F", "/T", "/PID", str(proc.pid)],),
-                             kwargs={"capture_output": True, "timeout": 30}, daemon=True).start()
-        else:
-            os.killpg(proc.pid, signal.SIGTERM)
-    except (OSError, AttributeError, TypeError):
-        try:
-            proc.terminate()
-        except OSError:
-            pass
-
-
-def _run_tools(cmds, cwd, on_line=None, job=None):
-    """Run each command in turn (a worker thread: no Tk here): (the exit code, the last line it printed), stopping
-    at the first that fails. `on_line(step, steps, line)`: each line as it is printed (the bubble's hover note).
-    `job`: the running one is kept there ("proc", "step": its index), and none starts once it says "stop"."""
-    code, last = 0, ""
-    job = job if job is not None else {}
-    for i, cmd in enumerate(cmds):
-        if job.get("stop"):
-            return 1, "stopped"
-        p = subprocess.Popen(cmd, cwd=cwd, env=standalone.clean_env(), stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, text=True, bufsize=1, **_OWN_GROUP)
-        job["proc"], job["step"] = p, i
-        if job.get("stop"):               # (stopped while it was starting)
-            stop_tree(p)
-        last = ""
-        for line in p.stdout:
-            if line.strip():
-                last = line.strip()
-                if on_line:
-                    on_line(i + 1, len(cmds), last)
-        code = p.wait()
-        if code:
-            break
-    return code, last
-
-
-def _follow_tuner(proc, job):
-    """Read the tuner's printed rounds into `job` (a worker thread: no Tk here): over once it says it is done
-    (its window may stay open for Keep; what it prints later is still read, so its pipe never fills) or closes."""
-    try:
-        for line in proc.stdout:
-            m = re.match(r"Round (\d+) of up to (\d+)", line.strip())
-            if m and not job.get("over"):
-                job["frac"] = int(m.group(1)) / max(1, int(m.group(2)))
-                job["note"] = f"Round {m.group(1)} of up to {m.group(2)}"
-            elif line.startswith("Done"):
-                job["over"] = job["tuned"] = True        # (tuned to the end: the reroll follows once it closes)
-            elif line.startswith("Hidden"):       # (its close box while tuning: only hidden; show_tuner brings it back)
-                job["hidden"] = True
-    except (OSError, ValueError):
-        pass
-    job["over"] = True
 
 
 class App:
@@ -233,10 +169,11 @@ class App:
         self.browsers = []
         self.review = None                # the review of rude meanings (--review-rude, OB-9), when open
         self.review_path = None
+        self.devtools = DevTools(self)    # the developer tools' bubbles (Settings > Developer tools)
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
         self._was_online = False
-        root.after(self.ONLINE_POLL_MS, self._watch_online)
+        Repeat(root, self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._was_comparing = False   # (the place view showed a comparison last time: _render_place_state)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
@@ -298,7 +235,7 @@ class App:
         self._layout_defs()
         self.refresh()
         self._fit_window(initial=True)
-        root.after(120, self._poll_defs)
+        Repeat(root, 120, self._poll_defs)
         self.rude_read = None     # the background read of Wiktionary's meanings (_start_rude_read), while it runs
         root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
@@ -398,26 +335,24 @@ class App:
             last = 0
         if self.shut or self.store.closed or time.time() - last < self.UPDATE_EVERY_S:
             return
-        answer = queue.Queue()
-        threading.Thread(target=lambda: answer.put((check or standalone.latest_release)()), daemon=True).start()
-
-        def collect(release=None, got=False):
-            if self.shut or self.store.closed or not self.root.winfo_exists():
-                return
-            if not got:
-                try:
-                    release, got = answer.get_nowait(), True
-                    self.store.set_meta("update_checked", time.time())
-                except queue.Empty:
-                    return self.root.after(500, collect)
-            if not standalone.newer(release) or self.store.get_meta("update_told") == release["version"]:
-                return
+        def tell(release):
+            if self.shut or self.store.closed:
+                return False
             if dialog_open(self.root) or self.busy:
-                return self.root.after(1000, lambda: collect(release, True))
+                return True                              # (asked again in a second)
             self.store.set_meta("update_told", release["version"])
             self.flash(f"Version {release['version']} is out (you have {VERSION}): File > Source & Updates",
                        kind="info", ms=8000)
-        collect()
+            return False
+
+        def got(release):
+            if self.shut or self.store.closed:
+                return
+            self.store.set_meta("update_checked", time.time())
+            if standalone.newer(release) and self.store.get_meta("update_told") != release["version"] and \
+                    tell(release):
+                Repeat(self.root, 1000, lambda: tell(release))
+        Task(self.root, check or standalone.latest_release, done=got, failed=lambda exc: None, ms=500)
 
     # ---- T-9: the other form, offered once --------------------------------------------------------------------
     FORM_OFFER_MS = 1500                     # after the start's own questions; then checked this often until quiet
@@ -2192,7 +2127,6 @@ class App:
                     b.render_def()
             if self.review is not None and self.review.alive():
                 self.review.show_online()
-        self.root.after(self.ONLINE_POLL_MS, self._watch_online)
 
     # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
     def look_up(self, word, parent=None):
@@ -2239,24 +2173,23 @@ class App:
         if not wordsource.wants_rude_fetch(self.store):
             return
         self.store.set_meta("rude_tried", time.time())
-        state = self.rude_read = {"line": "", "result": None, "error": None}
+        state = self.rude_read = {"line": ""}
         path = self.store.path
 
         def work():                                  # (no tkinter, and its own read-only connection)
+            db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
             try:
-                db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-                try:
-                    words = {r[0] for r in db.execute("SELECT word FROM words")}
-                finally:
-                    db.close()
-                log = lambda text: state.__setitem__("line", text)      # noqa: E731
-                saved = wordsource.fetch_rude_senses(path, words, log)
-                log("Scoring rude meanings (100%)")
-                state["result"] = (saved, wordsource.find_rude(words, saved, log=log))
-            except Exception as exc:                 # offline, disk full, ...: tried again later (RUDE_RETRY_S)
-                state["error"] = str(exc) or type(exc).__name__
-        threading.Thread(target=work, daemon=True).start()
-        self.root.after(2000, self._poll_rude_read)
+                words = {r[0] for r in db.execute("SELECT word FROM words")}
+            finally:
+                db.close()
+            log = lambda text: state.__setitem__("line", text)      # noqa: E731
+            saved = wordsource.fetch_rude_senses(path, words, log)
+            log("Scoring rude meanings (100%)")
+            return saved, wordsource.find_rude(words, saved, log=log)
+
+        def failed(exc):                             # offline, disk full, ...: tried again later (RUDE_RETRY_S)
+            self.rude_read = None
+        Task(self.root, work, done=self._save_rude_read, failed=failed, ms=2000, wait=lambda: self.busy)
 
     def rude_read_note(self):
         """How far the background read has come ("12%"), or None when none is running (How words are dealt)."""
@@ -2265,34 +2198,32 @@ class App:
         m = re.search(r"\((\d+)%\)", self.rude_read["line"])
         return m.group(1) + "%" if m else "starting"
 
-    def _poll_rude_read(self):
-        state = self.rude_read
-        if state["error"]:
-            self.rude_read = None
+    def _save_rude_read(self, result):
+        """The meanings are read and scored: save them a few thousand rows a frame, never while a reshuffle writes."""
+        if self.shut or self.store.closed:
             return
-        if state["result"] is None or self.busy:
-            self.root.after(2000, self._poll_rude_read)
-            return
-        saved, found = state["result"]
+        saved, found = result
         steps = [self.store.save_rude_senses(saved, chunk=4000), self.store.set_rude(found, chunk=4000)]
 
-        def tick():                                  # a few thousand rows a frame, never while a reshuffle writes
-            if not self.busy:
-                if next(steps[0], StopIteration) is StopIteration:
-                    steps.pop(0)
-                    if not steps:
-                        self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
-                        self.rude_read = None
-                        self.after_external_change()
-                        self.flash("Rude meanings read from Wiktionary", ms=2500)
-                        return
-            self.root.after(15, tick)
-        tick()
+        def tick():
+            if self.busy or self.store.closed:
+                return not self.store.closed
+            if next(steps[0], StopIteration) is StopIteration:
+                steps.pop(0)
+                if not steps:
+                    self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
+                    self.rude_read = None
+                    self.after_external_change()
+                    self.flash("Rude meanings read from Wiktionary", ms=2500)
+                    return False
+            return True
+        if tick():
+            Repeat(self.root, 15, tick)
 
     def _poll_defs(self):
-        """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
+        """Every 120 ms (a Repeat): collect finished lookups, cache them in the save, and redraw the panes that show
+        them."""
         if self.busy:                          # a reshuffle is writing the save: collect them afterwards
-            self.root.after(120, self._poll_defs)
             return
         changed = False
         for word, text, found in self.defs.drain():
@@ -2305,7 +2236,6 @@ class App:
             for bw in list(self.browsers):
                 if bw.alive():
                     bw.render_def()
-        self.root.after(120, self._poll_defs)
 
     # ---- anchors ----------------------------------------------------------------------------------------------
     @property
@@ -2347,330 +2277,6 @@ class App:
         self.review_path = path
         self.review = RudeReview(self, path)
         return self.review
-
-    # ---- developer tools (the dialogs' bubbles, Settings > Developer tools) --------------------------------------
-    def review_file(self):
-        """The review file to use: the last one opened, else REVIEW_FILE next to the save (it may not exist)."""
-        last = self.store.get_meta("review_file")
-        if last and os.path.exists(last):
-            return last
-        return os.path.join(os.path.dirname(os.path.abspath(self.store.path)), REVIEW_FILE)
-
-    def pick_review_file(self, parent, ask=None):
-        """The review file, or None: when there is none at review_file(), ask for one (it is made by
-        tools/measure_rudeness.py sample). `ask(start) -> path or None`: how to ask (tests)."""
-        path = self.review_file()
-        if os.path.exists(path):
-            return path
-        start = os.path.dirname(path)
-        if ask is None:
-            if use_themed(self.root):
-                ask = lambda d: browse(parent, "Open a review file", d, mode="file", exts=(".jsonl",),
-                                       animator=self.anim, note="No rude_review.jsonl next to the save: pick one "
-                                       "made by tools/measure_rudeness.py sample.")
-            else:
-                ask = lambda d: filedialog.askopenfilename(parent=parent, initialdir=d, title="Open a review file",
-                                                           filetypes=[("Review files", "*.jsonl"), ("All", "*")])
-        path = ask(start)
-        if not path:
-            return None
-        self.store.set_meta("review_file", os.path.abspath(path))
-        return path
-
-    def review_rude(self, dlg=None, ask=None):
-        """The "Review rude meanings" bubble (How words are dealt): close the dialog (it holds the input), then open
-        the review (open_review), asking for the file first when there is none next to the save."""
-        path = self.pick_review_file(dlg.win if dlg else self.root, ask)
-        if not path:
-            return None
-        if dlg is not None:
-            dlg.close()
-        return self.open_review(path)
-
-    TOOLS_ROOT = standalone.ROOT          # (the source folder whose tools/ the developer bubbles run; tests point it
-                                          # elsewhere)
-
-    def _tool(self, name, parent):
-        """tools/<name> in the source folder, or None after saying the bubble works only from the source (a built
-        program carries no tools to run)."""
-        path = os.path.join(self.TOOLS_ROOT, "tools", name)
-        if not is_frozen() and os.path.exists(path):
-            return path
-        show_message("Developer tools", "Only from the source", f"tools/{name} runs from the source folder: start "
-                     "Word Tierlister with python tierlist.py (File > Source & Updates can unpack the source).",
-                     parent=parent)
-        return None
-
-    def dev_progress(self, name):
-        """How a developer tool that keeps running is doing, for its bubble's ring: None (not running) or
-        (fraction or None, the hover note, the split bubble's right half or None). "review": the Review words
-        bubble: Tune & reroll's two steps (the tuner's rounds, then Make review words: no fraction, it cannot tell
-        how far), or the first review words being made."""
-        tuner = getattr(self, "_tuner_job", None)
-        if tuner is not None and tuner["proc"].poll() is None:
-            if tuner.get("over"):                 # (done: waiting for Keep or Discard in its window)
-                return 1.0, "Step 1 of 2: tuned; Keep or Discard in the tuner's window", "Keep or Discard · step 1 of 2"
-            note = tuner.get("note") or "The tuner is reading Wiktionary's entries"
-            if tuner.get("hidden"):
-                note += "  ·  click Tune & reroll to bring its window back"
-            return tuner.get("frac") or 0.0, "Step 1 of 2: " + note, "Tuning · step 1 of 2"
-        job = getattr(self, "_tool_job", None)
-        if job is None:
-            return None
-        note = job.get("note") or "Making review words"
-        if job.get("then") == "reroll":
-            return None, "Step 2 of 2: " + note, "New words · step 2 of 2"
-        return None, note, None
-
-    def show_tuner(self, bring=True):
-        """Bring the tuner's window back (asked for: closed while it tunes, a click on its bubble opens it again; once
-        done, the next click shows the open window rather than starting another). True if a tuner was there."""
-        job = getattr(self, "_tuner_job", None)
-        if job is None or job["proc"].poll() is not None:
-            return False
-        if not bring:                             # (only: is one running?)
-            return True
-        try:
-            job["proc"].stdin.write("show\n")
-            job["proc"].stdin.flush()
-        except (OSError, ValueError, AttributeError):
-            return False
-        job["hidden"] = False
-        return True
-
-    def stop_note(self):
-        """The Review words bubble's hover note over its ring (the stop button): what stopping does now."""
-        tuner = getattr(self, "_tuner_job", None)
-        if tuner is not None and tuner["proc"].poll() is None:
-            return "Stop: the tuner closes and its numbers are thrown away; no new review words are made"
-        job = getattr(self, "_tool_job", None)
-        if job is not None and job.get("then") == "open":
-            return "Stop: no review words are made"
-        return "Stop: the review words stay as they were"
-
-    def stop_review_tool(self):
-        """The Review words bubble's stop button (asked for): stop the tuner, or the review words being made (its
-        half-written file is removed once it has ended: _watch_tool). Returns what it stopped: "tuner", "tools" or
-        None."""
-        tuner = getattr(self, "_tuner_job", None)
-        if tuner is not None and tuner["proc"].poll() is None:
-            tuner["stop"] = True
-            stop_tree(tuner["proc"])
-            return "tuner"
-        job = getattr(self, "_tool_job", None)
-        if job is not None and job["done"] is None:
-            job["stop"] = True
-            stop_tree(job.get("proc"))
-            return "tools"
-        return None
-
-    @staticmethod
-    def _drop_partial(job):
-        """Remove what the stopped command left half written (a review file, Wiktionary's entries)."""
-        partial = job.get("partial") or ()
-        step = job.get("step")
-        if step is None or step >= len(partial):
-            return
-        try:
-            os.remove(partial[step])
-        except OSError:
-            pass
-
-    def review_words(self, dlg=None, ask=None, run=None):
-        """The Review words bubble's left half (asked for: one bubble for the review words): the review
-        (review_rude); with no review file yet, the first review words are made (make_review_words) and the review
-        opens on them. Returns what it started (the review, the commands) or None."""
-        if getattr(self, "_tool_job", None) and self._tool_job.get("then") == "open":
-            self.flash("Still making the first review words", kind="info")
-            return None
-        if os.path.exists(self.review_file()):
-            return self.review_rude(dlg)
-        return self.make_review_words(dlg, ask, run, then="open")
-
-    AUTO_TUNE = 50                        # new answers between two automatic Tune & rerolls (DT-6, asked for)
-
-    def _tune_base(self, n):
-        """The answers there were when Tune & reroll last started (meta tune_base); the first time, `n`."""
-        try:
-            return int(self.store.get_meta("tune_base"))
-        except (TypeError, ValueError):
-            self.store.set_meta("tune_base", str(n))
-            return n
-
-    def next_auto_tune(self, n):
-        """At how many answered words the next automatic Tune & reroll starts (the review's strip), with `n` now."""
-        return self._tune_base(n) + self.AUTO_TUNE
-
-    def review_answered(self, n, start=None, run=None):
-        """The review saved an answer, `n` words answered (DT-6): every AUTO_TUNE new ones, Tune & reroll starts by
-        itself, its tuner hidden until it is done (--start-hidden); never while one runs, nor without the tools or
-        the entries (no questions asked: it waits for the next answer). Returns the tuner's command, or None."""
-        if n < self.next_auto_tune(n) or getattr(self, "_tool_job", None) or self.show_tuner(bring=False):
-            return None
-        if is_frozen() or not os.path.exists(os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")):
-            return None
-        return self.tune_reroll(None, start=start, run=run, hidden=True)
-
-    def tune_reroll(self, dlg=None, ask=None, start=None, run=None, hidden=False):
-        """The Review words bubble's right half, Tune & reroll (asked for: the tools run in sequence): the tuner
-        (tune_rules); once it has tuned to the end and its window is closed (Keep or Discard), new review words
-        (make_review_words, then="reroll"). While it runs, a click brings the tuner's window back (or says the new
-        words are still being made). `run`: for the reroll (tests). Returns the tuner's command, or None."""
-        if getattr(self, "_tool_job", None):
-            self.flash("Still making review words", kind="info")
-            return None
-        if self.show_tuner():                     # (one tuner at a time: the open one is brought forward)
-            if dlg is not None:
-                dlg.close()
-            return None
-        cmd = self.tune_rules(dlg, ask, start, hidden=hidden)
-        job = getattr(self, "_tuner_job", None)
-        if cmd:
-            answered = read_answers(review_answers_path(self.review_file()))
-            self.store.set_meta("tune_base", str(len(answered)))     # (by hand too: the next 50 count from here)
-        if cmd and job is not None:
-            job["run"] = run
-            self._watch_tuner(job)
-        return cmd
-
-    def _watch_tuner(self, job):
-        """Tune & reroll's steps (polled: the tuner is read on a worker thread): a toast when the tuner is done,
-        then, once its process has ended after tuning to the end, the reroll; a tuner closed mid-way ends it."""
-        if job.get("tuned") and not job.get("said"):
-            job["said"] = True
-            self.flash("The tuner is done: Keep or Discard its numbers in its window", kind="ok", ms=6000)
-        if job["proc"].poll() is None:
-            self.root.after(300, lambda: self._watch_tuner(job))
-            return
-        if getattr(self, "_tuner_job", None) is job:
-            self._tuner_job = None
-        if job.get("stop"):
-            self.flash("Stopped: the tuner's numbers were thrown away", kind="info", ms=5000)
-        elif job.get("tuned"):
-            self.make_review_words(None, run=job.get("run"), then="reroll")
-        elif job["proc"].poll():
-            self.flash("The tuner stopped before it was done", kind="warn", ms=6000)
-
-    def make_review_words(self, dlg=None, ask=None, run=None, then=None):
-        """Make review words (OB-11): tools/measure_rudeness.py in the background, the review file
-        next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (the answered
-        words kept, the rest replaced by 300 picked from the answers' misses; an open review opens again on them). The Wiktionary entries it reads (rudeness_entries.jsonl in the source folder) are fetched
-        first when missing, after asking (`ask(): yes?`, tests). A toast says when it starts and what it made.
-        `run(commands) -> (exit code, its last line)` runs them, on a worker thread (tests: at once). `then`: "open"
-        (the review opens on them) or "reroll" (the end of Tune & reroll: its toast). Returns the commands, or None."""
-        parent = dlg.win if dlg else self.root
-        tool = self._tool("measure_rudeness.py", parent)
-        if tool is None:
-            return None
-        if getattr(self, "_tool_job", None):
-            self.flash("Still making review words", kind="info")
-            return None
-        path = self.review_file()
-        cmds, partial = [], []            # (partial: what each command leaves half written when it is stopped)
-        entries = os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")
-        if not os.path.exists(entries):
-            if not (ask or (lambda: ask_yes_no(
-                    "Make review words", "Read Wiktionary's entries first?",
-                    "The words are picked from every English entry of Wiktionary: about 3 GB to read once, kept as "
-                    "rudeness_entries.jsonl (about 300 MB) in the source folder. It can take half an hour.",
-                    yes="Read them", parent=parent)))():
-                return None
-            cmds.append([sys.executable, tool, "fetch"])
-            partial.append(entries)
-        first = not os.path.exists(path)
-        cmds.append([sys.executable, tool, "sample", "--out", path] if first else
-                    [sys.executable, tool, "next", "--review", path])
-        partial.append(path if first else path + ".part")     # (next writes a .part, then swaps it in)
-        self.store.set_meta("review_file", os.path.abspath(path))
-        self.flash(f"Making {'1,500' if first else '300 new'} review words: a few minutes", kind="info", ms=5000)
-        self._tool_job = {"done": None, "path": path, "note": None, "then": then, "partial": partial}
-        job = self._tool_job
-
-        def line(step, steps, text):
-            job["note"] = (f"Step {step} of {steps}: " if steps > 1 else "") + text
-
-        def work():
-            job["done"] = run(cmds, self.TOOLS_ROOT) if run else _run_tools(cmds, self.TOOLS_ROOT, line, job)
-        if run:
-            work()
-        else:
-            threading.Thread(target=work, daemon=True).start()
-        self._watch_tool(job)
-        return cmds
-
-    def _watch_tool(self, job):
-        """The toast once the tools have run (polled: the worker thread never touches Tk)."""
-        if job["done"] is None:
-            self.root.after(500, lambda: self._watch_tool(job))
-            return
-        self._tool_job = None
-        code, last = job["done"]
-        if job.get("stop"):
-            self._drop_partial(job)
-            self.flash("Stopped: the review words are as they were" if job.get("then") != "open" else
-                       "Stopped: no review words were made", kind="info", ms=5000)
-        elif code == 0:
-            if self.review is not None and self.review.alive() and self.review_path == job["path"]:
-                self.review.close()               # (the file was refreshed under it: open it again on the new words,
-                self.open_review(job["path"])     # its answers saved already)
-            elif job.get("then") == "open" and os.path.exists(job["path"]):
-                self.open_review(job["path"])
-            done = last or "review words made"
-            self.flash(f"Tune & reroll is done: {done}" if job.get("then") == "reroll" else done, kind="ok", ms=6000)
-        else:
-            self.flash(f"{'Tune & reroll' if job.get('then') == 'reroll' else 'Making review words'} failed: {last}",
-                       kind="warn", ms=8000)
-
-    def tune_rules(self, dlg=None, ask=None, start=None, hidden=False):
-        """Tune the rules (OB-10; Tune & reroll's first step): tools/tune_rudeness.py's window, a program of its own, on the review
-        file and its answers (asked for when there is none next to the save). It needs the Wiktionary entries
-        (making the first review words reads them) and some answers. `start(command)`: how to start it (tests). Returns the
-        command, or None."""
-        parent = dlg.win if dlg else self.root
-        tool = self._tool("tune_rudeness.py", parent)
-        path = tool and self.pick_review_file(parent, ask)
-        if not path:
-            return None
-        entries = os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")
-        if not os.path.exists(review_answers_path(path)):
-            show_message("Tune the rules", "Nothing answered yet", "Review some rude meanings first: the rules are "
-                         "tuned against your answers.", parent=parent)
-            return None
-        if not os.path.exists(entries):
-            show_message("Tune the rules", "Wiktionary's entries are missing", "Review words reads them when "
-                         "it makes the first review words (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
-            return None
-        cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"] + (["--start-hidden"] if hidden else [])
-        proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
-                                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                                                     bufsize=1, **_OWN_GROUP)))(cmd)
-        if getattr(proc, "stdout", None) is not None:      # (its rounds fill the bubble's ring: _follow_tuner)
-            self._tuner_job = {"proc": proc, "frac": 0.0, "note": None}
-            threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()
-        if dlg is not None:
-            dlg.close()
-        self.flash(f"{self.AUTO_TUNE} new answers: tuning the rules in the background (its window shows when done)"
-                   if hidden else "The tuner is opening: it reads Wiktionary's entries first (about a minute)",
-                   kind="info", ms=5000)
-        return cmd
-
-    def open_log(self):
-        """The "Log" bubble (Source & Updates): tierlist.log next to the save, in the system's text viewer."""
-        path = os.path.join(os.path.dirname(os.path.abspath(self.store.path)), LOG_FILE)
-        try:
-            if not os.path.exists(path):
-                raise OSError(f"there is no {LOG_FILE} yet")
-            standalone.open_folder(path)          # (xdg-open / open / startfile open a file with its own program)
-        except OSError as exc:
-            self.flash(f"Could not open the log: {exc}", kind="warn")
-        return path
-
-    def crash_test(self, dlg=None, delay=300):
-        """The "Crash test" bubble (was --crash-test): close the dialog, then fail on purpose, to see the error
-        dialog and the log entry; the program keeps running."""
-        if dlg is not None:
-            dlg.close()
-        self.root.after(delay, lambda: 1 / 0)
 
     def edit_anchors(self):
         """Dialog to choose the six anchor words (UI-28): a pill per tier, and any problem (empty, used twice,

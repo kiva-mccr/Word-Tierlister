@@ -3,7 +3,7 @@
 Finding, choosing, remembering and exporting save files, and where a built program keeps its save (T-1), so replacing `tierlist.py` or switching to the program never loses progress.
 
 - **Uses:** `constants`
-- **Used by:** `app`, `filepicker`, `sources`, `syncdialog`, `tierlist`
+- **Used by:** `app`, `devtools`, `filepicker`, `sources`, `syncdialog`, `tierlist`
 - **Tests:** `_selftest_appdir`, `_selftest_tidy`
 
 The module docstring has the details; this page is the map.

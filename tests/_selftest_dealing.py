@@ -10,7 +10,7 @@ import tkinter as tk
 import tierlist as T
 from rudeness import KIND_BITS as B
 from fonts import font
-from widgets import UNSMEAR_MS
+from smears import UNSMEAR_MS
 from constants import KIND_NOTES, RUDE_NAMES, card_label, mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"
@@ -56,6 +56,29 @@ s.place("run", 1); s.place("table", 1)
 assert [r["word"] for r in s.list_words("", "Verbs")[0]] == ["run"]
 assert {r["word"] for r in s.list_words("", "Obscene words")[0]} == {"bastard", "shit"}
 assert {r["word"] for r in s.list_words("", "Nouns")[0]} == {"run", "table", "bastard", "shit"}
+# A kind's words are read in the sort's order, or (a rare kind) found by kind and sorted: the same pages either way
+import random as _r
+k = T.Store(os.path.join(tempfile.mkdtemp(), "kinds.db")); kw = [f"k{i:04d}" for i in range(600)]
+k.insert_words(kw); rnd = _r.Random(3)
+k.db.executemany("UPDATE words SET tier=?, rating=?, games=?, kinds=? WHERE word=?",
+                 [(rnd.randrange(6), rnd.choice((1400, 1500, 1600)), rnd.randrange(4),
+                   rnd.choice((None, 1, 2, 3, 8, 16, 17, 31)), w) for w in kw[:500]])
+k.db.commit(); k._forget_tallies()
+for flt, bit in T.Store.KIND_FILTERS.items():
+    want = {r["word"] for r in k.db.execute("SELECT word FROM words WHERE tier IS NOT NULL AND (COALESCE(kinds, 16) & ?) != 0",
+                                            (bit,))}
+    for sort in T.Store.SORTS:
+        for rev in (False, True):
+            pages = []
+            for cost in (0, 10 ** 9):                        # (0: always found by kind, then sorted; huge: always in the sort's order)
+                T.Store.KIND_SORT_COST = cost
+                pages.append([(k.list_words("", flt, sort, limit=40, offset=o, reverse=rev)) for o in (0, 40)])
+            T.Store.KIND_SORT_COST = 1
+            (a, ta), (b, tb) = pages[0][0], pages[1][0]
+            assert [r["word"] for r in a] == [r["word"] for r in b] and ta == tb == len(want), (flt, sort, rev)
+            assert [r["word"] for r in pages[0][1][0]] == [r["word"] for r in pages[1][1][0]], (flt, sort, rev)
+            assert {r["word"] for r in a} <= want
+k.close()
 assert not s.censored("bastard")
 s.set_censor(True)
 assert s.censored("bastard") and not s.censored("table") and not s.censored("")

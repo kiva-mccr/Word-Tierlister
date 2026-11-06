@@ -2,7 +2,7 @@
 
 File > Sync with other devices (SY-1): install and start Syncthing, this device's code, link / accept / unlink devices, the Sync automatically tick (on to start with) and the warning that both devices must be on at the same time; and `AutoSync`, which folds the other devices' files in and writes this one's while the program runs.
 
-- **Uses:** `deps`, `errors`, `fonts`, `problems`, `saves`, `startup`, `syncfiles`, `syncthing_api`, `theme`, `widgets`
+- **Uses:** `background`, `buttons`, `deps`, `dialogs`, `errors`, `fonts`, `popups`, `problems`, `saves`, `startup`, `syncfiles`, `syncthing_api`, `theme`
 - **Used by:** `app`
 - **Tests:** `_selftest_sync`
 

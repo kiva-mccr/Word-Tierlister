@@ -3,7 +3,7 @@
 Where the words come from and getting them ready: the WordNet list, the Wiktionary download and parse (resumable), compound detection, word frequencies, kinds of words, the rude meanings, and the queue order.
 
 - **Uses:** `constants`, `obscene`, `problems`, `rudeness`
-- **Used by:** `app`, `measure_rudeness`, `tierlist`
+- **Used by:** `app`, `launch`, `measure_rudeness`, `tierlist`
 - **Tests:** `_selftest`, `_selftest_errors`, `_selftest_obscene`, `_selftest_startup`
 
 The module docstring has the details; this page is the map.

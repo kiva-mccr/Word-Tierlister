@@ -11,7 +11,8 @@ from sizing import usable_area
 from keymap import (DEV_GROUPS, GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, spec_of,
                     place_display, place_keys)
 from theme import PALETTE
-from widgets import RoundButton, StyledDialog
+from buttons import RoundButton
+from dialogs import StyledDialog
 
 COLUMNS = (("all", "browse"), ("place", "compare"), ("duel", "review"))     # the cards, left to right
 

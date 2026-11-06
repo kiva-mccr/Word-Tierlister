@@ -165,7 +165,7 @@ maximize(False, "1000x700")
 assert (shown(), body()) == before                                   # restored: still the same text
 # a dialog open while the zoom changes (reported: its text grew inside a window that kept its size, and was cut
 # off): it follows the new size, re-wrapped, fitted and centred again
-from widgets import StyledDialog
+from dialogs import StyledDialog
 from sizing import usable_area
 long = ("It builds Word Tierlister into one program for this computer, next to tierlist.py (a minute or two), then "
         "reopens as the program with the same save; Python is no longer needed to run it.")

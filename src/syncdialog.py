@@ -13,7 +13,6 @@ the program writes the file one last time.
 """
 import json
 import os
-import queue
 import sqlite3
 import threading
 import time
@@ -24,12 +23,15 @@ import deps
 import errors
 import syncfiles
 import syncthing_api as st
+from background import Repeat, Task
 from fonts import font
 from problems import STOPPED_MESSAGE
 from saves import user_data_dir
 from startup import run_with_progress
 from theme import PALETTE
-from widgets import LinkButton, StyledDialog, Tooltip
+from buttons import LinkButton
+from dialogs import StyledDialog
+from popups import Tooltip
 
 TITLE = "Sync with other devices"
 INTRO = ("Keeps your tier list the same on your other computers. It uses Syncthing, a free program that copies a "
@@ -87,7 +89,7 @@ class AutoSync:
         self.connect = st.connect # (how Syncthing is reached; tests pass a fake)
         self.listeners = []       # called after each round (the open dialog shows when it last synced)
         if start:
-            app.root.after(self.FIRST_MS, self._tick)
+            Repeat(app.root, self.CHECK_MS, self._tick, first=self.FIRST_MS)
 
     @property
     def folder(self):
@@ -122,17 +124,17 @@ class AutoSync:
         threading.Thread(target=work, daemon=True).start()
 
     def _tick(self):
+        """Every CHECK_MS (a Repeat, from FIRST_MS after the start): a round when anything changed. False once the
+        program is closing."""
         if getattr(self.app, "shut", False) or self.store.closed:
-            return
-        try:
-            if self.folder and not self.started:
-                self.start_syncthing()
-            if self.folder and self.auto:
-                self.sync()
-            if self.folder and self.sent is not None:
-                self.confirm()
-        finally:
-            self.app.root.after(self.CHECK_MS, self._tick)
+            return False
+        if self.folder and not self.started:
+            self.start_syncthing()
+        if self.folder and self.auto:
+            self.sync()
+        if self.folder and self.sent is not None:
+            self.confirm()
+        return True
 
     def sync(self, force=False, then=None):
         """One round: write this device's file if it changed (at most every WRITE_GAP seconds, unless `force`), read
@@ -153,7 +155,6 @@ class AutoSync:
             marks = json.loads(store.get_meta("sync_marks", "") or "{}")
         except ValueError:
             marks = {}
-        out = queue.Queue()
 
         def work():
             got = {"wrote": False, "files": [], "errors": [], "bad": {}}
@@ -161,7 +162,7 @@ class AutoSync:
                 files(got)
             except Exception as exc:                 # (anything else: said, and the round still ends)
                 got["errors"].append(f"Syncing stopped: {exc!r}")
-            out.put(got)
+            return got
 
         def files(got):
             if write:
@@ -177,16 +178,10 @@ class AutoSync:
                 except ValueError as exc:            # (said once, not at every look: until the file changes)
                     got["errors"].append(f"{os.path.basename(p)}: {exc}")
                     got["bad"][p] = v
-        threading.Thread(target=work, daemon=True).start()
-        self._collect(out, version, then)
+        Task(self.app.root, work, done=lambda got: self._collect(got, version, then))
         return True
 
-    def _collect(self, out, version, then):
-        try:
-            got = out.get_nowait()
-        except queue.Empty:
-            self.app.root.after(100, lambda: self._collect(out, version, then))
-            return
+    def _collect(self, got, version, then):
         if getattr(self.app, "shut", False) or self.store.closed:
             return
         if got["wrote"]:
@@ -269,27 +264,20 @@ class AutoSync:
         if self.asking or self.store.closed:
             return
         self.asking = True
-        out = queue.Queue()
 
         def work():
             try:
-                out.put(self.connect(start_it=False).up_to_date())
+                return self.connect(start_it=False).up_to_date()
             except Exception:                    # (Syncthing not running or busy: asked again at the next look)
-                out.put([])
+                return []
 
-        def collect():
-            try:
-                names = out.get_nowait()
-            except queue.Empty:
-                self.app.root.after(200, collect)
-                return
+        def collect(names):
             self.asking = False
             if names and not self.store.closed and self.sent is not None:
                 self._record(names)
                 for f in list(self.listeners):
                     f()
-        threading.Thread(target=work, daemon=True).start()
-        collect()
+        Task(self.app.root, work, done=collect, ms=200)
 
     def flush(self):
         """Closing: write this device's file one last time if anything changed since (on this thread: quick, and
@@ -383,25 +371,12 @@ class SyncDialog:
     def _background(self, fn, done):
         """Run `fn` on a worker thread (Syncthing's answers take a moment); `done(ok, value or message)` on this
         thread, if the dialog is still open."""
-        out = queue.Queue()
-
         def work():
             try:
-                out.put((True, fn()))
+                return True, fn()
             except (st.SyncthingError, OSError) as exc:
-                out.put((False, str(exc)))
-        threading.Thread(target=work, daemon=True).start()
-
-        def poll():
-            if not self.dlg.alive():
-                return
-            try:
-                ok, value = out.get_nowait()
-            except queue.Empty:
-                self.dlg.win.after(100, poll)
-                return
-            done(ok, value)
-        poll()
+                return False, str(exc)
+        Task(self.dlg.win, work, done=lambda answer: self.dlg.alive() and done(*answer))
 
     # ---- Syncthing missing ------------------------------------------------------------------------------------
     def offer_install(self):

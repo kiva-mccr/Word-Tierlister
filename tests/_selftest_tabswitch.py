@@ -130,7 +130,7 @@ app.on_close()
 # 6. DuelCards on its own: half-way through the fade the old pair is faded towards the page; then the new one shows
 r = tk.Tk()
 from ui_motion import Animator
-from widgets import DuelCards
+from cards import DuelCards
 anim = Animator(r)
 duel = DuelCards(r, lambda side: None, animator=anim)
 duel.pack(); duel.show("apple", "pear"); r.update()

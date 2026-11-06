@@ -73,7 +73,7 @@ REPO_FILES = ("LICENSE", ".gitignore", ".gitattributes")      # (in every downlo
 
 # the files at the top that ship, by name (F-47): anything else there (an export, notes of yours, a script) is yours,
 # never packed into a program nor removed with the source (a test keeps this in step with git's list)
-TOP_FILES = ("tierlist.py", "tierlist.md", "README.md", "DEVELOPERS.md", "requirements.txt", *REPO_FILES)
+TOP_FILES = ("tierlist.py", "tierlist.md", "README.md", "DEVELOPERS.md", "ROADMAP.md", "requirements.txt", *REPO_FILES)
 
 
 def source_files(root=ROOT):
