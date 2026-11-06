@@ -685,8 +685,9 @@ waits 3 rounds plus one per 0.1 points of noise (15 at most) before stopping; Ke
 noise of the lowest. Each change pays a light pull towards today's numbers, so a change that hardly pays stays put,
 and a step that helps neither way shrinks to 70% (SHRINK), so the search keeps looking for longer. Answers made from
 planted numbers check that it finds them again (see tune_rudeness.md). Every finished tune is remembered in `rude_tune_history.jsonl` beside the answers, and
-the Earlier tunes tab shows each as a tick at its word count, from the error before it down to after it (the first tune
-says what later ones will add; ticks close in words are spread apart, `tune_xs`).
+the Earlier tunes tab shows each as a dot at its word count for the error after it, with a standard error bar over the
+tested parts (the history's "se"; the first tune says what later ones will add; dots close in words are spread apart,
+`tune_xs`).
 `--start-hidden` starts the window hidden (it shows itself when done).
 Under the chart, tabs show one panel at a time: Earlier tunes, Each kind, Numbers changed, Guard and Still wrong
 (the last two list everything and scroll).

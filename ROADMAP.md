@@ -689,6 +689,11 @@ sees it close silently. Both steps are useful even if the program is only ever r
   add; ticks spread apart. Then (asked for: "are we sure the tuning is smart"; all four fixes picked): noise
   from each part against itself, word families in one part, a light pull, steps shrinking to 70%; tested on
   answers made from planted numbers: 3.0% -> 0.7% (1.8% before).
+  Then (asked: "what is going on with the vertical line", wanting standard error bars; A picked from three
+  mock-ups in project files tune-window/error-bars/): Earlier tunes draws a dot for each tune's error after,
+  whiskers +- its standard error over the tested parts (saved as "se" in the history: tunes saved before it
+  have a dot only), the dots joined, faint % grid lines named at the left; "before" stays only in the words
+  at the top right (standard_error, which noise now uses too).
 - [x] **OB-11** Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
   most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
   a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
