@@ -608,9 +608,9 @@ To check the rules against your own judgement (OB-9), review a sample by hand. `
 fetch` keeps the Wiktionary download compactly (about 3 GB to read, once). `python tools/measure_rudeness.py sample`
 then writes `rude_review.jsonl`: 1,500 words, weighted so every kind is covered, plus words with a clean main meaning
 and a rude later one, and likely misses (found clean but with a slang label or a body word). Put it next to your save,
-tick Settings > Developer tools and click **Review rude meanings** at the top right of Settings > How words are
-dealt (or start `python tierlist.py --review-rude`). With no file next to the save it asks for one and remembers it.
-**Score the rules**, beside it, compares your answers so far with the guesses written into the review file. A window goes through the words one by one, showing the main meaning
+tick Settings > Developer tools and click **Review words** at the top right of Settings > How words are
+dealt (or start `python tierlist.py --review-rude`). With no file next to the save it makes one (`sample`) and opens
+the review on it; `--review-rude` asks for one instead and remembers it. A window goes through the words one by one, showing the main meaning
 and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 4 set the selected meaning's
 kind (Not rude, Expletive, Sexual, Slur), S says whether the whole word should be smeared,
 W opens the word's Wiktionary page (greyed out while offline), Enter goes to the next word and Backspace goes back
@@ -631,10 +631,13 @@ Wiktionary's own rude meanings, on a meaning found clean; a few words each, so e
 common words with no sign at all, the only way to count what the rules miss. The review window goes on from the
 first word not answered (an open review opens again on the new words); "Here because" says why each word was picked.
 
-Both can be run from the window too: tick Settings > Developer tools, and How words are dealt shows **Make review
-words** (runs `sample` the first time, then `next` to refresh it, in the background; it offers to fetch the Wiktionary entries
-first when they are missing; a toast says what it made) and **Tune the rules** (opens the tuner's window; closing it while it tunes only hides it, and a click on the bubble, whose ring shows the rounds, brings it back). They run
-the scripts in `tools/`, so only from the source. Reviews ask only about one-part words: no hyphenated or spaced
+Both can be run from the window too: tick Settings > Developer tools, and How words are dealt shows one split bubble.
+**Review words** opens the review, running `sample` first when there is no review file (it offers to fetch the
+Wiktionary entries first when they are missing). **Tune & reroll** runs the two in sequence: the tuner's window
+(below), then, once it has tuned to the end and you Keep or Discard, `next` in the background. Its ring shows the
+tuner's rounds, then turns while the new words are picked, and its right half names the step; a toast in the main
+window says when each step is done. Closing the tuner's window while it tunes only hides it; a click on Tune & reroll
+brings it back. Discard while it tunes stops there, with no reroll. They run the scripts in `tools/`, so only from the source. Reviews ask only about one-part words: no hyphenated or spaced
 entries, contractions kept (asked for, like the word list).
 
 To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
@@ -657,9 +660,9 @@ earliest round within the noise of the lowest.
 flowchart TB
     D["the Wiktionary download"] -- "measure_rudeness.py fetch" --> E["the compact entries<br/>(read once, about 3 GB)"]
     E -- "measure_rudeness.py sample" --> RV["rude_review.jsonl<br/>1,500 words, the rules' guesses filled in"]
-    RV --> WIN["Review rude meanings (src/review.py)<br/>How words are dealt's bubble, or --review-rude"]
+    RV --> WIN["Review rude meanings (src/review.py)<br/>the Review words bubble, or --review-rude"]
     WIN -- "1-7 a meaning's kind, S smear the word;<br/>saved on every change" --> ANS["rude_review_answers.jsonl<br/>beside the review file"]
-    ANS -- "Score the rules (bubble), or<br/>measure_rudeness.py answers" --> SC["how often the rules agree,<br/>meaning by meaning"]
+    ANS -- "measure_rudeness.py answers" --> SC["how often the rules agree,<br/>meaning by meaning"]
     ANS -- "tune_rudeness.py" --> TU["tune on 4 parts, test on the 5th,<br/>each part in turn; the guard;<br/>the meanings still wrong"]
     E --> TU
     TU -- "Keep" --> RU["src/rudeness.py: the new numbers,<br/>RUDENESS_VERSION bumped"]

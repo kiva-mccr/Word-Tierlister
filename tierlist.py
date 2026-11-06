@@ -2174,6 +2174,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           line on its stdin brings it back (App.show_tuner: a click on the running bubble, DevBubble(on_running=), or
 #           on the plain one once done while its window is still open); done while hidden, it pops back up by itself
 #           (the user's pick); hidden when the program closes, it stops. The hover note says it can be brought back.
+# [x] DT-5 Asked for, picked from a mock-up (project files dev-bubbles/): one bubble for the review words and a notice
+#           when a tool finishes. How words are dealt's four bubbles became one split pill (DevBubble(second=)):
+#           "Review words" (App.review_words: the review; with no review file, sample first, then the review opens)
+#           | "Tune & reroll" (App.tune_reroll: the tuner, then, once it printed Done and its process ended after Keep
+#           or Discard, measure_rudeness next; App._watch_tuner). Discard while tuning: no reroll. The ring follows
+#           both steps and the right half names the step ("Tuning · step 1 of 2", "New words · step 2 of 2").
+#           Score the rules went (the tuner shows the score; review.score_guesses removed). The notice: a toast in
+#           the main window when the tuner is done and when the new words are made (the user's pick over a lasting
+#           bubble or a tick). _selftest_devtools.py.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
