@@ -257,7 +257,7 @@ dm.close(); update()
 import os as _os
 _env = dict(_os.environ)
 _os.environ.update(XDG_SESSION_TYPE="wayland", XDG_CURRENT_DESKTOP="")
-assert DropMenu.warm_shows(root)
+assert DropMenu.warm_shows(root) == (root.tk.call("tk", "windowingsystem") == "x11")   # (X11 only)
 _os.environ.update(XDG_SESSION_TYPE="x11", XDG_CURRENT_DESKTOP="openbox")
 assert not DropMenu.warm_shows(root)                                  # (no compositor: it would flash)
 _os.environ.clear(); _os.environ.update(_env)
