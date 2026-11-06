@@ -172,6 +172,10 @@ click on its bubble brings it back, App.show_tuner over its stdin; done while hi
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
+OB-12 (asked for, picked from mock-ups: three broad kinds, Expletive, Sexual, Slur, all smeared to start with; medical
+words, mild name-calling and toilet words are ordinary; the rules score six inner kinds, rudeness.fold folds them;
+OB-8's extra reading gone; old saves mapped once, Store._three_kinds; the review's answers in the old kinds set aside;
+next asks about few sure-clean words; a word mostly used rudely is smeared whole, rudeness.mostly_rude).
 OB-9 (asked for: review rude meanings by hand to test the rules: `tools/measure_rudeness.py sample` -> rude_review.jsonl,
 `python tierlist.py --review-rude` (src/review.py, a window; per meaning, the rules' guess filled in), answers beside it, `measure_rudeness answers`;
 still rules only: the program never reads the answers).
@@ -237,16 +241,18 @@ Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast
   read (table rude); prepare_queue scores them ("Scoring rude meanings"); words.rude = kinds of its meanings
   (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
   (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
-  Censoring smears Crude, Swear, Sexual, Slur to start with (obscene.CENSORED); each kind has a smear button in How
-  words are dealt (OB-7; Clinical and Insult too, off to start with, OB-8: words.smear_extra; Store.censor_kinds /
-  censored_words; smeared meanings keep their kind). "Obscene words" is still scored from CENSORED alone. "Obscene words" still starts unticked.
+  Kinds shown: Expletive, Sexual, Slur (OB-12; obscene.RUDE_KINDS), all smeared to start with (obscene.CENSORED),
+  each with a smear button in How words are dealt (OB-7; Store.censor_kinds / censored_words; smeared meanings keep
+  their kind). The rules' tables score obscene.RULE_KINDS (six) and rudeness.fold turns them into the three. "Obscene words" still starts unticked.
   Only words smeared whole get rude kinds ("Obscene words" = censored words; the user chose it); a group's own
-  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 14; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
+  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 16; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
   the commonest, 0.4% false alarms; forms count as their word's first meaning (F-12); hyphenated parts count on slang meanings; word families replaced the hand list's roots; Wiktionary's examples were tried
   and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
   labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents
   (scratch only): see OB-6). Never name a module like a PyPI package (src/ is first on the path: "packaging").
-  Ask the user's examples of false matches.
+  Ask the user's examples of false matches. The numbers above are the six kinds'; OB-12's three were not measured
+  against a yardstick (the user's new answers are it); rudeness.mostly_rude was tried on the real entries (a scratch
+  entries.jsonl from measure_rudeness fetch: +81 words smeared whole with their forms).
   OB-9's review answers (the user's, rude_review_answers.jsonl) are the yardstick to tune against now (OB-10's tuner:
   only ever run on stand-in answers here; a round takes about a minute on 4 cores for 1,500 words); a draft of a
   tighter Clinical rule and more WordNet trees was tried in scratch (not built): ask before building it.

@@ -5,7 +5,7 @@ tools/measure_rudeness.py sample: JSON lines, commonest first), word by word. Fo
 worth asking about (the main one, then those with a sign of rudeness), each with the rules' guess filled in, and
 whether the rules smear the whole word. The keys (the keymap's "review" group, changeable) answer:
 
-    1 ... 7      the kind of the selected meaning (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur); it
+    1 ... 4      the kind of the selected meaning (Not rude, Expletive, Sexual, Slur: OB-12); it
                  stays selected (moving on by itself made the lit button show the next meaning's kind, which read
                  as the key changing the meaning below: reported)
     Up / Down    another meaning (a click on one, or on its kind, selects it too)
@@ -29,22 +29,22 @@ import tkinter as tk
 from constants import review_answers_path
 from fonts import font
 from keymap import spec_of
+from obscene import set_aside_old_answers
 from sizing import keep_on_screen, place_dialog
 from theme import PALETTE, TIER_COLORS
 from ui_style import set_icon, show_drawn
 from widgets import RoundButton
 
-KINDS = (("clean", "Clean"), ("clinical", "Clinical"), ("crude", "Crude"), ("swear", "Swear word"),
-         ("insult", "Insult"), ("sexual", "Sexual"), ("slur", "Slur"))
+KINDS = (("clean", "Not rude"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))   # (OB-12)
 KIND_NAMES = dict(KINDS)
 WRAP_CHARS = 64           # a meaning wraps at this many average characters
 
 
-TIER_OF_KIND = {"clinical": 4, "crude": 1, "swear": 2, "insult": 5, "sexual": 0, "slur": 3}   # (as in the mock-up)
+TIER_OF_KIND = {"expletive": 2, "sexual": 0, "slur": 3}   # (as in the mock-ups)
 
 
 def kind_colour(kind):
-    """A kind's pastel: a tier colour each (read now: they can be changed), Clean the plain neutral."""
+    """A kind's pastel: a tier colour each (read now: they can be changed), Not rude the plain neutral."""
     if kind == "clean":
         return PALETTE["neutral"]
     return TIER_COLORS[TIER_OF_KIND[kind]]
@@ -67,8 +67,11 @@ def read_review(path):
 
 
 def read_answers(path):
-    """{word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet."""
+    """{word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet (or it was in the old six
+    kinds: set aside, obscene.set_aside_old_answers)."""
     out = {}
+    if set_aside_old_answers(path):
+        return out
     try:
         with open(path, encoding="utf-8") as f:
             for line in f:

@@ -789,6 +789,21 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (asked for: "the words that teach the system the most"): next refreshes the file (the answered words
 #           stay first, Back still walks them; the unanswered ones are replaced), its groups weighted by where the
 #           rules were wrong, and a group like your misses (a label or gloss word on meanings answered otherwise).
+# [x] OB-12 Three kinds of rude meaning (asked for: the six were hard to sort into, "there isn't an easily
+#           consistent answer for many"; picked from mock-ups): Expletive (strong language: swearing, harsh insults,
+#           crude words), Sexual (sex acts and slang), Slur (words aimed at a group that could make someone feel
+#           bad). Medical words, mild name-calling and toilet words are ordinary words. All three smeared to start
+#           with; Expletives dealt to start with, Sexual and Slurs not. The rules still score their six kinds
+#           (obscene.RULE_KINDS) and rudeness.fold turns them into the three (Crude and Insult only when vulgar or
+#           offensive); RUDENESS_VERSION 15. An older save keeps its choices (Store._three_kinds); OB-8's extra
+#           reading (score_saved(also=...), words.smear_extra) is gone. The review's keys are 1-4 (Not rude,
+#           Expletive, Sexual, Slur); answers in the old kinds are set aside (the user: start from scratch).
+#           Then (asked for): measure_rudeness next asks about few words the rules are sure are clean ("no sign at
+#           all" 3%, sample's "found clean" a twentieth), so the time goes on the unclear ones.
+#           Then (asked for, picked from three versions tried on the real data): a word mostly used rudely is
+#           smeared whole whatever its first meaning (rudeness.mostly_rude: 3 or more firmly rude meanings, half of
+#           its meanings or more): dick, bitch, faggot, balls, pussy and 10 more, 81 words with their forms; "cock"
+#           (1 of 34) is not; "roger" (3 of 5) is. RUDENESS_VERSION 16.
 # [x] Z-1   One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
 #           screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
 #           change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to

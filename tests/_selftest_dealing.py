@@ -22,22 +22,23 @@ s = T.Store(os.path.join(tempfile.mkdtemp(), "deal.db"))
 s.insert_words(WORDS)
 s.set_kinds([(w, 1) for w in WORDS] + [("run", 3), ("luminous", 4), ("moist", 4), ("quickly", 8), ("of", 16)])
 # what the rules found (OB-6): the kinds of each word's meanings, smeared whole, the meanings smeared
-FOUND = {"bastard": (B["swear"], True, []), "shit": (B["crude"], True, []),
-         "bureaucracy": (B["clean"] | B["insult"], False, []), "table": (B["clean"] | B["sexual"], False, ["Something rude."])}
+FOUND = {"bastard": (B["slur"], True, []), "shit": (B["expletive"], True, []),
+         "bureaucracy": (B["clean"] | B["sexual"], False, []),
+         "table": (B["clean"] | B["sexual"], False, ["Something rude."])}
 s.set_rude(FOUND)
 assert s.obscene_words() == {"bastard", "shit"}
-TICKED = B["clinical"] | B["crude"] | B["swear"] | B["insult"]
+TICKED = B["expletive"]                                              # (OB-12: Sexual and Slurs left out to start with)
 assert s.deal_settings() == {"kinds": 31, "obscene": False, "rude": TICKED, "censor": False}   # (Obscene words unticked)
 c = s.kind_counts()
-assert c == {"noun": len(WORDS) - 6, "verb": 1, "adj": 2, "adv": 1, "other": 1, "obscene": 2, "clinical": 0,
-             "crude": 1, "swear": 1, "insult": 1, "sexual": 1, "slur": 0}, c   # (run: noun + verb)
+assert c == {"noun": len(WORDS) - 6, "verb": 1, "adj": 2, "adv": 1, "other": 1, "obscene": 2, "expletive": 1,
+             "sexual": 2, "slur": 1}, c   # (run: noun + verb)
 assert s.get_word("bastard")["out"] == 1 and s.get_word("bureaucracy")["out"] == 0 and s.get_word("table")["out"] == 0
 s.set_deal(kinds=4, obscene=False)                                   # adjectives only
 dealt = [r[0] for r in s.db.execute("SELECT word FROM words WHERE out=0")]
 assert sorted(dealt) == ["luminous", "moist"] and s.next_unplaced()["word"] in dealt and s.left_out() == len(WORDS) - 2
-s.set_deal(kinds=31, obscene=True, rude=B["crude"])                  # a kind of rude meaning: Crude only
+s.set_deal(kinds=31, obscene=True, rude=B["expletive"])              # a kind of rude meaning: Expletives only
 assert s.get_word("shit")["out"] == 0 and s.get_word("bastard")["out"] == 1 and s.get_word("bureaucracy")["out"] == 0
-s.set_deal(kinds=0, obscene=True, rude=B["crude"] | B["swear"])      # "untick the rest to sort only obscene words"
+s.set_deal(kinds=0, obscene=True, rude=B["expletive"] | B["slur"])   # only obscene words
 assert s.next_unplaced()["word"] in ("bastard", "shit")
 s.place("bastard", 2); s.place("shit", 3)
 assert s.next_unplaced() is None and s.get_word("table")["tier"] is None      # left out, never deleted
@@ -58,31 +59,33 @@ assert {r["word"] for r in s.list_words("", "Nouns")[0]} == {"run", "table", "ba
 assert not s.censored("bastard")
 s.set_censor(True)
 assert s.censored("bastard") and not s.censored("table") and not s.censored("")
-# censoring each kind on its own (Store.censor_kinds: the smear button beside each kind in How words are dealt)
-assert s.censor_kinds() == {"crude", "swear", "sexual", "slur"} and s.censored_words() == {"bastard", "shit"}
+# censoring each kind on its own (Store.censor_kinds: the smear button beside each kind; all three to start with)
+assert s.censor_kinds() == {"expletive", "sexual", "slur"} and s.censored_words() == {"bastard", "shit"}
 s.set_rude({**FOUND, "table": (B["clean"] | B["sexual"], False, [["Something rude.", "sexual"]]),
-            "bastard": (B["swear"] | B["sexual"], True, [])})
+            "bastard": (B["slur"] | B["sexual"], True, [])})
 assert s.smeared_meanings("table") == ["Something rude."]
-s.set_censor_kinds({"crude", "sexual"})                  # (bastard: swear and sexual; either one censored smears it)
+s.set_censor_kinds({"expletive", "sexual"})              # (bastard: slur and sexual; either one censored smears it)
 assert s.censored("shit") and s.censored("bastard") and s.smeared_meanings("table") == ["Something rude."]
-s.set_censor_kinds({"crude"})
+s.set_censor_kinds({"expletive"})
 assert s.censored("shit") and not s.censored("bastard") and s.smeared_meanings("table") == []
-assert s.censor_kinds() == {"crude"} and s.censored_words() == {"shit"}
+assert s.censor_kinds() == {"expletive"} and s.censored_words() == {"shit"}
 s.set_censor_kinds(set()); assert not s.censored("shit") and s.censor_kinds() == set()
-# OB-8: Clinical and Insult can be censored too (off to start with): a word that counting them smears whole, and
-# their meanings; "Obscene words" (dealing) stays as it was
-s.set_rude({**FOUND, "bureaucracy": (B["clean"] | B["insult"], False, [["Red tape.", "insult"]], None,
-                                     B["clean"] | B["insult"])})
-s.set_censor_kinds({"crude", "swear", "sexual", "slur"})
-assert not s.censored("bureaucracy") and s.smeared_meanings("bureaucracy") == []
-s.set_censor_kinds({"crude", "swear", "sexual", "slur", "insult"})
-assert s.censor_kinds() == {"crude", "swear", "sexual", "slur", "insult"} and s.censored("bureaucracy")
-assert s.smeared_meanings("bureaucracy") == ["Red tape."] and s.obscene_words() == {"bastard", "shit"}
-assert s.get_word("bureaucracy")["out"] == 0                                  # (still dealt as an ordinary noun)
-s.set_censor_kinds({"insult"}); assert s.censored_words() == {"bureaucracy"}
-s.set_censor_kinds({"crude", "swear", "sexual", "slur", "nonsense"}); s.set_rude(FOUND)
-assert s.censor_kinds() == {"crude", "swear", "sexual", "slur"} and s.smeared_meanings("table") == ["Something rude."]
-assert not s.censored("bureaucracy")
+s.set_censor_kinds({"expletive", "sexual", "slur", "nonsense"}); s.set_rude(FOUND)
+assert s.censor_kinds() == {"expletive", "sexual", "slur"} and s.smeared_meanings("table") == ["Something rude."]
+# OB-12: a save from before the three kinds keeps its choices: Crude, Swear, Insult -> Expletive; Clinical goes
+old = T.Store(os.path.join(tempfile.mkdtemp(), "old.db"))
+old.insert_words(["shit", "penis", "fuck", "kike"])
+old.db.execute("DELETE FROM meta WHERE key='rude_kinds'")
+old.db.executemany("INSERT OR REPLACE INTO meta(key, value) VALUES(?, ?)",
+                   [("deal_rude", str(2 | 4 | 8 | 16)), ("censor_kinds", str(4 | 8 | 32 | 64))])
+old.db.executemany("UPDATE words SET rude=?, rude_main=? WHERE word=?",
+                   [(1 | 4, 4, "shit"), (2, 2, "penis"), (32 | 8, 32, "fuck"), (64, 64, "kike")])
+old._three_kinds(); old._three_kinds()                                        # (once: the second does nothing)
+assert old.deal_settings()["rude"] == B["expletive"] and old.censor_kinds() == {"expletive", "sexual", "slur"}
+got = {r[0]: (r[1], r[2]) for r in old.db.execute("SELECT word, rude, rude_main FROM words")}
+assert got == {"shit": (B["clean"] | B["expletive"], B["expletive"]), "penis": (0, None),
+               "fuck": (B["sexual"] | B["expletive"], B["sexual"]), "kike": (B["slur"], B["slur"])}, got
+old.close()
 
 # ---- the window ----------------------------------------------------------------------------------------------
 s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "moist"])
@@ -103,7 +106,7 @@ assert card.find_withtag("smear") and card.itemcget("word", "state") == "hidden"
 # above it, faintly: its parts of speech, then (a censored word) its kind of rude word (asked for: "noun · sexual")
 assert card.kind == card_label(s.get_word("shit")["kinds"], RUDE_NAMES.get(s.rude_kind("shit"))) and "noun" in card.kind
 assert card_label(1 | 2) == "noun \u00b7 verb" and card_label(1, "sexual") == "noun \u00b7 sexual"
-assert card_label(16) == "" and card_label(None, "crude") == "crude" and card_label(None) == ""   # ("other": nothing)
+assert card_label(16) == "" and card_label(None, "expletive") == "expletive" and card_label(None) == ""   # ("other": nothing)
 assert card_label(1, "sexual", compound=True) == "noun \u00b7 compound word \u00b7 sexual"     # (compound: asked for)
 assert card_label(None, compound=True) == "compound word"
 s.db.execute("UPDATE words SET pen=1 WHERE word='shit'"); s.db.commit(); app.refresh(); pump(2)
@@ -240,7 +243,7 @@ assert smears[0].word_at(3, 3) is None                                         #
 # W-2: a smeared word's own smeared meanings un-smear with it, the pointer anywhere over the pane; an unsmeared
 # word's (above) each under the pointer
 s.set_def("bastard", "\u2022 (noun) (vulgar) Something rude.")
-s.set_rude({**FOUND, "bastard": (B["swear"], True, ["Something rude."])})
+s.set_rude({**FOUND, "bastard": (B["slur"], True, ["Something rude."])})
 app.mem_defs.pop("bastard", None)                                  # (looked up earlier: none was found then)
 app.def_words = ["bastard"]; app._render_defs(); pump(2)
 while app.defs.pending:
@@ -262,11 +265,10 @@ bw.close(); pump(1)
 font_px = font("body").measure("n")
 d = app.edit_dealing(); pump(4)
 assert list(d.buttons) == ["Cancel", "Apply"] and set(d.kind_ticks) == {
-    "Nouns", "Verbs", "Adjectives", "Adverbs", "Other", "Obscene words", "Clinical", "Crude", "Swear words", "Insults",
-    "Sexual", "Slurs"}
+    "Nouns", "Verbs", "Adjectives", "Adverbs", "Other", "Obscene words", "Expletives", "Sexual", "Slurs"}
 # OB-5: the kinds of rude meaning are open under Obscene words while it is ticked
 assert d.obscene_v.get() and d.rude_box.winfo_ismapped() and d.rude_vs["sexual"].get() and not d.rude_vs["slur"].get()
-assert d.kind_tips["Insults"][0].text_fn(None) == KIND_NOTES["insult"]           # (only what it holds: asked for)
+assert d.kind_tips["Expletives"][0].text_fn(None) == KIND_NOTES["expletive"]           # (only what it holds: asked for)
 d.obscene_v.set(False); pump(2); assert d.rude_box.winfo_ismapped()     # (censoring: open for its smear buttons)
 d.censor_v.set(False); pump(2); assert not d.rude_box.winfo_ismapped()
 d.censor_v.set(True); d.obscene_v.set(True); pump(2); assert d.rude_box.winfo_ismapped()
@@ -297,23 +299,25 @@ assert not d.alive() and not s.deal_settings()["censor"] and not card.censored
 s.set_censor(True); app.after_external_change(); pump(2)
 assert app.cur_word == "shit" and card.censored
 d = app.edit_dealing(); pump(4)
-assert set(d.smear_btns) == {"clinical", "crude", "swear", "insult", "sexual", "slur"}
-assert [k for k, v in sorted(d.smear_vs.items()) if not v.get()] == ["clinical", "insult"]   # (OB-8: off to start with)
-assert not d.smear_btns["insult"].find_withtag("smear")
-crude = d.smear_btns["crude"]
-assert crude.find_withtag("smear") and int(crude.grid_info()["row"]) == int(d.kind_ticks["Crude"].grid_info()["row"])
-crude.event_generate("<ButtonRelease-1>", x=3, y=3); pump(1)
-assert not d.smear_vs["crude"].get() and not crude.find_withtag("smear")
-crude.focus_force(); pump(1); crude.event_generate("<space>"); pump(1)
-assert d.smear_vs["crude"].get() and crude.find_withtag("smear")             # (Space flips it too)
-crude.toggle(); pump(1)
+assert set(d.smear_btns) == {"expletive", "sexual", "slur"}
+assert all(v.get() for v in d.smear_vs.values())                             # (OB-12: all smeared to start with)
+assert int(d.kind_ticks["Slurs"].grid_info()["row"]) == 1 and int(d.kind_ticks["Sexual"].grid_info()["row"]) == 0
+assert "Medical words" in " ".join(str(w.cget("text")) for w in d.sections["kinds"].winfo_children()
+                                   if w.winfo_class() == "TLabel")           # (the mock-up's note)
+loud = d.smear_btns["expletive"]
+assert loud.find_withtag("smear") and int(loud.grid_info()["row"]) == int(d.kind_ticks["Expletives"].grid_info()["row"])
+loud.event_generate("<ButtonRelease-1>", x=3, y=3); pump(1)
+assert not d.smear_vs["expletive"].get() and not loud.find_withtag("smear")
+loud.focus_force(); pump(1); loud.event_generate("<space>"); pump(1)
+assert d.smear_vs["expletive"].get() and loud.find_withtag("smear")         # (Space flips it too)
+loud.toggle(); pump(1)
 d.buttons["Apply"].invoke(); pump(4)                                          # the smear alone: at once, no shuffle
-assert not d.alive() and s.censor_kinds() == {"swear", "sexual", "slur"} and not card.censored
+assert not d.alive() and s.censor_kinds() == {"sexual", "slur"} and not card.censored
 assert not s.censored("shit") and s.censored("bastard")
 d = app.edit_dealing(); pump(4)
-assert not d.smear_vs["crude"].get() and d.smear_vs["swear"].get()           # (remembered)
-d.smear_vs["crude"].set(True); d.censor_v.set(False); d.buttons["Apply"].invoke(); pump(4)
-assert s.censor_kinds() == {"crude", "swear", "sexual", "slur"} and not s.deal_settings()["censor"] and not card.censored
+assert not d.smear_vs["expletive"].get() and d.smear_vs["sexual"].get()     # (remembered)
+d.smear_vs["expletive"].set(True); d.censor_v.set(False); d.buttons["Apply"].invoke(); pump(4)
+assert s.censor_kinds() == {"expletive", "sexual", "slur"} and not s.deal_settings()["censor"] and not card.censored
 d = app.edit_dealing(); pump(4)
 for v in d.kind_vs.values():
     v.set(False)

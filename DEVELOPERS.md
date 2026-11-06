@@ -439,8 +439,8 @@ found again, so switching between the two loses nothing.
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. Also holds the roadmap. |
 | `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
-| `src/obscene.py` | The kinds of rude meaning (Clinical, Crude, Swear word, Insult, Sexual, Slur), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
-| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards each kind (Clinical, Crude, Swear word, Insult, Sexual, Slur) from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |
+| `src/obscene.py` | The kinds of rude meaning (Expletive, Sexual, Slur; OB-12), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
+| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards the rules' own six kinds (Clinical, Crude, Swear, Insult, Sexual, Slur), folded into the three shown (`fold`), from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
 | `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and of rude meaning, the ones left out; ST-6, OB-5), the meanings the rudeness rules read and what they found (OB-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
 | `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
@@ -587,13 +587,12 @@ flowchart TB
 - **Order**: "Most common first" (by frequency rank) or "Mostly common, a little shuffled" (the default; its
   shape, spread and seed set how far it reaches). Compound words come later (`pen`).
 - **Which words**: a tick box per kind of word, with counts; all start ticked but "Obscene words". Its kinds of
-  rude meaning: Clinical, Crude, Swear words and Insults start ticked, Sexual and Slurs do not.
-- **Censoring** smears Crude, Swear word, Sexual and Slur meanings to start with. Every kind has a small "abc" pill
-  beside it, smeared while it is censored; Clinical and Insult start plain (OB-8). A word with several kinds stays
-  smeared while any of them is censored. "Obscene words" (dealing) is scored from the four alone; the rules also
-  read each word counting Clinical and Insult (`score_saved(also=...)`), kept in `words.smear_extra` (its kinds when
-  that smears it whole, partial index `idx_words_extra`), so turning those on smears "penis" or "idiot" without
-  moving them out of their kind of word. In a word that is not smeared whole, only its rude meanings are smeared, in the
+  rude meaning (OB-12, the user's three): Expletives start ticked, Sexual and Slurs do not. Medical words, mild
+  name-calling and toilet words are ordinary words.
+- **Censoring** smears all three kinds to start with. Every kind has a small "abc" pill beside it, smeared while it
+  is censored. A word with several kinds stays smeared while any of them is censored. A save from before OB-12 keeps
+  its choices (`Store._three_kinds`, once: Crude, Swear and Insult become Expletive, Clinical goes; OB-8's
+  `words.smear_extra` is no longer read). In a word that is not smeared whole, only its rude meanings are smeared, in the
   definitions, and only meanings of a censored kind (`rudeness.results` keeps each one's kind). The pills are saved
   in meta `censor_kinds` (`Store.censor_kinds`; `Store.censored_words` lists the words they smear). The card names
   a word's kinds faintly above it ("noun · sexual") either way. Turning censoring on says it may not be fully
@@ -612,8 +611,8 @@ and a rude later one, and likely misses (found clean but with a slang label or a
 tick Settings > Developer tools and click **Review rude meanings** at the top right of Settings > How words are
 dealt (or start `python tierlist.py --review-rude`). With no file next to the save it asks for one and remembers it.
 **Score the rules**, beside it, compares your answers so far with the guesses written into the review file. A window goes through the words one by one, showing the main meaning
-and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 7 set the selected meaning's
-kind (Clean, Clinical, Crude, Swear word, Insult, Sexual, Slur), S says whether the whole word should be smeared,
+and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 4 set the selected meaning's
+kind (Not rude, Expletive, Sexual, Slur), S says whether the whole word should be smeared,
 W opens the word's Wiktionary page (greyed out while offline), Enter goes to the next word and Backspace goes back
 one word in the file. These keys can be changed in Keyboard shortcuts, which shows
 them only while the review is open. The answers are saved on every change (a kind, the whole word), to `rude_review_answers.jsonl` beside
@@ -668,7 +667,7 @@ flowchart TB
 ```mermaid
 flowchart TB
     M["each meaning of a word<br/>(kept from Wiktionary at the build: the rude table)"] --> P
-    subgraph P["points towards each of the six kinds: Clinical, Crude, Swear word, Insult, Sexual, Slur"]
+    subgraph P["points towards the rules' six kinds: Clinical, Crude, Swear, Insult, Sexual, Slur,<br/>folded into Expletive, Sexual, Slur (Crude and Insult only when vulgar or offensive; Clinical none)"]
         direction LR
         p1["Wiktionary's labels<br/>(vulgar), (slang), (offensive)"] ~~~ p2["its topics<br/>and categories"] ~~~ p3["the definition's<br/>wording"] ~~~ p4["WordNet<br/>(when installed)"] ~~~ p5["synonym lists:<br/>which kind a slang<br/>meaning is"] ~~~ p6["word families:<br/>bullshit is built<br/>from shit"]
     end
@@ -688,7 +687,7 @@ flowchart TB
     W{"the word: its points,<br/>mostly from its first meaning"}
     W -- "enough" --> WS["smeared whole (words.obscene)<br/>listed under Obscene words<br/>e.g. shit, bastard"]
     W -- "not enough" --> WO["an ordinary word, dealt with its kind of word<br/>only its rude meanings smeared in definitions<br/>e.g. can, come, fairy"]
-    WS --> CEN["censoring smears only the censored kinds:<br/>Crude, Swear word, Sexual, Slur, each with its own pill"]
+    WS --> CEN["censoring smears only the censored kinds:<br/>Expletive, Sexual, Slur, each with its own pill"]
     WO --> CEN
 ```
 
@@ -696,7 +695,8 @@ The smaller rules, each with the example that made it:
 
 | Rule | Example |
 |---|---|
-| Clinical counts only when the word is about it | "penis", not "take" |
+| The proper word is never rude; a crude word or an insult is an expletive only when vulgar or offensive | "penis", "poop", "idiot" are ordinary; "shit", "bastard" are not |
+| A word mostly used rudely is smeared whole, whatever its first meaning: 3 or more firmly rude meanings, half of them or more | "dick", "bitch", "balls"; not "cock" (1 of 34) or "gash" |
 | A hedged label never smears a word whole | "what the hell" is only mildly vulgar |
 | A hyphenated word with a rude part makes its slang meanings as rude | "piss-taker"; "doo-wop" has no slang meaning |
 | Words a definition only gives as examples do not count | "such as slime or semen" |

@@ -116,13 +116,13 @@ and Ctrl+Z brings it back.
   word turns up now and then. The curve shows how far the shuffle reaches.
 - **Which words**: nouns, verbs, adjectives, adverbs and the rest, each with a tick box and a count. Untick a kind
   and those words wait out of sight; nothing is ever deleted.
-- **Obscene words** start unticked. Tick them and you can choose which kinds of rude meaning you want (crude,
-  swear words, insults, sexual, slurs, clinical).
+- **Obscene words** start unticked. Tick them and you can choose which kinds of rude meaning you want:
+  expletives (swearing, harsh insults and crude words), sexual, and slurs. Medical words, mild name-calling and
+  toilet words count as ordinary words.
 - **Censor obscene words** smears a rude word sideways until you point at it, on the card, in Browse and in the
   definitions. A word that is only rude in one of its meanings (like "can") keeps its word, and only that meaning
   is smeared. A small "abc" button beside each kind of rude meaning lets you censor that kind or let it
-  through on its own: crude, swear words, sexual and slurs are censored to start with, clinical and insults are not
-  (click their button to smear words like "penis" or "idiot" too). Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
+  through on its own; all three are censored to start with. Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
   or an innocent word gets smeared. Exports always keep the real words.
 
 ## Make it yours

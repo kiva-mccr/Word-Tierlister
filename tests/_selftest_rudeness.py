@@ -11,24 +11,26 @@ def kind(gloss, tags=(), topics=(), cats=(), pos="noun"):
 
 
 assert kind("A table.") == "clean" and kind("To arrive.", ["slang"]) == "clean"
-assert kind("Rubbish; worthless matter.", ["vulgar"]) == "swear"                      # vulgar alone: a swear word
-assert kind("Very good.", ["slang", "vulgar"], pos="adj") == "swear"                   # ("good-ass")
+assert kind("Rubbish; worthless matter.", ["vulgar"]) == "expletive"                  # vulgar alone: strong language
+assert kind("Very good.", ["slang", "vulgar"], pos="adj") == "expletive"               # ("good-ass")
 assert kind("To have sexual intercourse with.", ["vulgar"]) == "sexual"
-assert kind("The act of defecating.", ["vulgar"]) == "crude"
-assert kind("A nasty, despicable person.", ["vulgar"]) == "insult"
-assert kind("A stupid person.", ["derogatory"]) == "insult"
+assert kind("The act of defecating.", ["vulgar"]) == "expletive"                       # crude and vulgar (OB-12)
+assert kind("The act of defecating.") == "clean" and kind("Feces.", ["childish"]) == "clean"     # toilet words
+assert kind("A nasty, despicable person.", ["vulgar"]) == "expletive"                  # a harsh insult
+assert kind("A stupid person.", ["derogatory"]) == "clean"                             # mild name-calling (OB-12)
 assert kind("An Italian person.", ["derogatory"]) == "slur" and kind("An Italian person.") == "clean"
 assert kind("A trans woman.", ["derogatory", "offensive"]) == "slur"
 assert kind("A person of Chinese descent.", ["ethnic", "slur"]) == "slur"
-assert kind("A stupid person.") == "insult" and kind("a stupid person", ["derogatory"]) == "insult"   # (no slur)
-assert kind("The penis.", cats=["Genitalia"]) == "clinical"                            # the proper word
+assert kind("A stupid person.") == "clean" and kind("a stupid person", ["derogatory"]) == "clean"   # (no slur)
+assert kind("A stupid person.", ["offensive"]) == "expletive"                            # (offensive: harsh)
+assert kind("The penis.", cats=["Genitalia"]) == "clean"                               # the proper word
 assert kind("Penis.", ["slang"], cats=["Genitalia"]) == "sexual"                      # a slang one is not
 assert kind("Urine.", ["childish"]) == "clean"                                          # a softener ("wee-wee")
 assert kind("A muscle of the forearm.", topics=["anatomy"]) == "clean"                # anatomy alone: clean
-assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
-assert kind("Damn!", ["vulgar"], pos="intj") == "swear"
+assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "expletive"
+assert kind("Damn!", ["vulgar"], pos="intj") == "expletive"
 assert kind("Darn.", ["euphemistic"], cats=["English swear words"]) == "clean"     # a minced oath: the polite word
-assert kind("Darn.", ["vulgar"], cats=["English swear words"]) == "swear"
+assert kind("Darn.", ["vulgar"], cats=["English swear words"]) == "expletive"
 assert kind("Chess pieces.", ["slang"], cats=["English ethnic slurs"]) != "slur"  # (a category alone: maybe a slip)
 assert kind("Sometimes used of a person.", ["sometimes", "offensive"]) == "clean"     # hedged: half as rude
 assert kind("A person.", ["offensive"]) == "clean"                                   # (a label alone: a suspect)
@@ -37,8 +39,8 @@ assert kind("A person.", ["offensive"]) == "clean"                              
 rude, clean = {"sexual": 6.0}, {}
 assert word_points([rude]) == 6.0 >= WHOLE_MIN and word_points([clean, rude]) < WHOLE_MIN    # rude, but not usually
 assert word_points([rude, clean, clean]) >= WHOLE_MIN
-assert word_points([{"insult": 5.0}], kinds={"sexual", "slur"}) == 0.0                # Insult not censored
-assert sense_points({"insult": 5.0, "crude": 3.0}, {"crude"}) == 3.0
+assert word_points([{"expletive": 5.0}], kinds={"sexual", "slur"}) == 0.0             # Expletive not censored
+assert sense_points({"expletive": 5.0, "sexual": 3.0}, {"sexual"}) == 3.0
 assert word_points([]) == 0.0 and MEANING_MIN < WHOLE_MIN
 scored = score_word([{"glosses": ["A container."]}, {"glosses": ["The vagina."], "tags": ["vulgar"]}], "noun", "box")
 assert [sense_kind(p) for p in scored] == ["clean", "sexual"] and word_points(scored) < WHOLE_MIN   # shown; smeared meaning
@@ -65,7 +67,7 @@ both = score_words(words, {w: ["noun"] * len(s) for w, s in words.items()})
 assert sense_kind(both["schlong"][0]) == "sexual"                            # its synonyms are sexual: outward
 assert sense_kind(both["banana"][1]) == "sexual" and sense_kind(both["banana"][0]) == "clean"   # inward
 assert sense_kind(both["table"][0]) == "clean"
-assert [sense_kind(p) for p in both["member"]] == ["clean", "clinical"]       # synonyms share meaning, not rudeness:
+assert [sense_kind(p) for p in both["member"]] == ["clean", "clean"]          # synonyms share meaning, not rudeness:
                                                                               # a plain word for it stays the proper one
 
 # WordNet, when installed (never downloaded here): a meaning matched by the words its definition shares
@@ -79,18 +81,18 @@ else:
     assert wordnet_match("pee", "To urinate.", "verb", wn) is not None                # a synonym for a gloss
     assert wordnet_match("pig", "A light pinkish-red colour, like that of a pig.", "noun", wn) is None or \
         wkind("pig", "A light pinkish-red colour, like that of a pig.") == "clean"    # not the animal, not a hog
-    assert wkind("pee", "To urinate.", "verb") == "crude"                             # (no label on Wiktionary)
-    assert wkind("puke", "vomit.") == "crude" and wkind("genitalia", "External sex organs.") == "clinical"
-    assert wkind("jackass", "A foolish or stupid person.", tags=["vulgar"]) == "insult"
+    assert wkind("pee", "To urinate.", "verb") == "clean"                             # a toilet word (OB-12)
+    assert wkind("puke", "vomit.") == "clean" and wkind("genitalia", "External sex organs.") == "clean"
+    assert wkind("jackass", "A foolish or stupid person.", tags=["vulgar"]) == "expletive"
     assert wkind("table", "A flat surface.") == "clean"
     assert sense_kind(sw([{"glosses": ["To urinate."]}], "verb", "pee", None)[0]) == "clean"   # (without it)
 
-# the fixes from the 50-word sample: plain sex words are Clinical, euphemisms add nothing, a group makes a slur
-assert kind("Belonging to the sex which typically produces sperm.") in ("clean", "clinical")
+# the fixes from the 50-word sample: plain sex words are the proper ones, euphemisms add nothing, a group makes a slur
+assert kind("Belonging to the sex which typically produces sperm.") == "clean"
 assert kind("A lavatory.", ["euphemistic"]) == "clean"
 assert kind("Someone who performs anilingus.", ["slang", "vulgar"]) == "sexual"
 assert kind("Welsh person.", ["derogatory"]) == "slur" and kind("A native of the South Pacific islands.", ["derogatory"]) == "slur"
-assert kind("A youth of low social standing.", ["derogatory", "offensive"]) == "insult"   # offensive alone: no slur
+assert kind("A youth of low social standing.", ["derogatory", "offensive"]) == "expletive"   # offensive alone: no slur
 from rudeness import is_form, form_target
 assert is_form({"glosses": ["present participle and gerund of fist"]})
 assert form_target({"glosses": ["x"], "alt_of": [{"word": "pum-pum"}]}) == "pum-pum"
@@ -108,7 +110,7 @@ W = {"shit": [{"glosses": ["Faeces."], "tags": ["vulgar"]}], "bull": [{"glosses"
 plain = score_words(W)
 both = score_words(W, family=fam)
 assert sum(both["bullshit"][0].values()) == sum(plain["bullshit"][0].values()) + 2   # from shit, not from bull
-assert both["bullshit"][0]["crude"] >= 2                       # (towards shit's kind: Faeces is Crude)
+assert both["bullshit"][0]["expletive"] >= 2                   # (towards shit's kind: vulgar Faeces is an expletive)
 assert both["cocktail"] == plain["cocktail"]                   # (cock's first meaning is the bird)
 assert sum(both["shithead"][0].values()) == sum(plain["shithead"][0].values()) + 2  # (listed as derived by shit)
 # false matches the user found: "did" (a form of "do", which has a slang meaning), "best" (of "good"), "well: (slang)
@@ -125,9 +127,9 @@ got = score_words(W)
 assert sense_kind(got["do"][1]) == "sexual" and sense_kind(got["did"][0]) == "clean"      # a form follows the first
 assert sense_kind(got["fucked"][0]) == "sexual"                                            # meaning of its word
 assert kind("Very (as a general-purpose intensifier).", ["slang"], pos="adv") == "clean"
-assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "swear"
-assert meaning_kinds(W["take"], got["take"]) == ["clean", "clean"]                          # (Clinical, but not
-assert meaning_kinds(W["penis"], got["penis"]) == ["clinical"]                              # what "take" is about)
+assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "expletive"
+assert meaning_kinds(W["take"], got["take"]) == ["clean", "clean"]                          # (the proper words:
+assert meaning_kinds(W["penis"], got["penis"]) == ["clean"]                                 # no kind, OB-12)
 assert results("take", W["take"], got["take"], {"sexual"})[0] == KIND_BITS_["clean"]
 assert kind("To take the virginity of.", ["euphemistic"], pos="verb") != "sexual"          # (a euphemism: polite)
 
@@ -150,18 +152,19 @@ assert score_saved(saved, {"sexual"}, zipf=lambda w: 2.0)["top"][2] == [["Fellat
 # "Obscene words" holds only words smeared whole (asked for): one rude meaning of many ("box: the vagina") is smeared
 # in the definitions, and the word itself is an ordinary one
 box = score_saved(saved, {"sexual"}, zipf=lambda w: 5.5)["box"]
-assert box == (KIND_BITS_["clean"], False, [["The vagina.", "sexual"]], None, None), box
+assert box == (KIND_BITS_["clean"], False, [["The vagina.", "sexual"]], None), box
 
 # borrowed ideas, measured on random lists judged by hand (OB-6): a rude label alone is a suspect, not an insult;
 # a euphemism is the polite word; a slang meaning that is a rude word, or a short slang name for a body part, is rude
 assert kind("Someone unfamiliar with the sea.", ["derogatory"]) == "clean"              # ("landlubber")
-assert kind("A stupid, contemptible person.", ["derogatory"]) == "insult"
+assert kind("A stupid, contemptible person.", ["derogatory"]) == "clean"                 # (OB-12: mild)
+assert kind("A stupid, contemptible person.", ["offensive"]) == "expletive"
 assert kind("To urinate.", ["euphemistic"], cats=["Bodily functions"], pos="verb") == "clean"   # ("pass water")
 W = {"damn": [{"glosses": ["To condemn to hell."], "tags": ["vulgar"], "categories": ["English swear words"]}],
      "dam": [{"glosses": ["A barrier across a river."]}, {"glosses": ["Damn."], "tags": ["slang"]}],
      "unit": [{"glosses": ["A single thing."]}, {"glosses": ["A penis."], "tags": ["slang"]}]}
 got = score_words(W)
-assert sense_kind(got["dam"][1]) == "swear" and sense_kind(got["dam"][0]) == "clean"
+assert sense_kind(got["dam"][1]) == "expletive" and sense_kind(got["dam"][0]) == "clean"
 assert sense_kind(got["unit"][1]) == "sexual" and sense_kind(score_words({k: W[k] for k in ("unit",)})["unit"][1])
 
 # the program keeps an entry's meanings compactly, the first with its family; score_saved reads them back
@@ -176,23 +179,18 @@ kept = compact({"glosses": ["A penis."], "tags": ["informal", "countable"]}, "no
 assert kept["t"] == ["informal"] and not has_signal({"g": "A table.", "t": ["informal"]})
 saved = {"shithead": json.dumps(c), "shit": json.dumps(compact_entry(
     {"word": "shit", "pos": "noun", "senses": [{"glosses": ["Faeces."], "tags": ["vulgar"]}]}))}
-got = score_saved(saved, {"crude", "swear", "sexual", "slur"})
+got = score_saved(saved, {"expletive", "sexual", "slur"})
 assert got["shithead"][0] == KIND_BITS["clean"] and got["shit"][1], got         # (an insult alone: an ordinary word)
 # a word goes into the rude kinds only when one of its meanings needs censoring; then all its kinds count
 both = {"bitch": json.dumps(compact_entry({"word": "bitch", "pos": "noun", "senses": [
     {"glosses": ["A stupid, contemptible person."], "tags": ["derogatory"]},
     {"glosses": ["To complain."], "tags": ["vulgar"]}]}))}
-b, whole, _, _k, _x = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"]
-assert not whole and b == KIND_BITS["clean"], b                   # (its first meaning an insult: not smeared whole)
-# OB-8: counting Insult too (censored only when asked for) smears it whole, the four kinds' reading unchanged
-b2, whole2, smeared2, _k, extra = score_saved(both, {"crude", "swear", "sexual", "slur"}, also={"clinical", "insult"})["bitch"]
-assert (b2, whole2) == (b, whole) and extra and extra & KIND_BITS["insult"], extra
-assert ["A stupid, contemptible person.", "insult"] in smeared2, smeared2          # (its insult meaning, kept with its kind)
-assert score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch"][4] is None              # (not asked: none)
+b, whole, _, _k = score_saved(both, {"expletive", "sexual", "slur"})["bitch"]
+assert not whole and b == KIND_BITS["clean"], b                   # (its first meaning mild name-calling: not smeared)
 both["bitch2"] = json.dumps(compact_entry({"word": "bitch2", "pos": "noun", "senses": [
     {"glosses": ["A contemptible woman."], "tags": ["vulgar", "derogatory"]}, {"glosses": ["To complain."], "tags": ["vulgar"]}]}))
-b, whole, _, _k, _x = score_saved(both, {"crude", "swear", "sexual", "slur"})["bitch2"]
-assert whole and b & KIND_BITS["swear"] and b & KIND_BITS["insult"], b      # smeared whole: all its kinds count
+b, whole, _, _k = score_saved(both, {"expletive", "sexual", "slur"})["bitch2"]
+assert whole and b == KIND_BITS["expletive"], b                   # smeared whole: a harsh insult, an expletive
 # a group's own name is no slur (SLUR_MARKS): a word with a plain meaning naming one, "sometimes" rude, a letter-case
 # form, or named by the word itself; a slur label, "ethnic" or "vulgar" still makes one
 def word_kinds(word, senses):
@@ -211,7 +209,7 @@ assert kind("A transgender person.", ["derogatory", "offensive", "sometimes"]) =
 # form; a WordNet tie goes to the clean meaning; a childish meaning softens its links; hedged labels never smear a
 # common word whole; a list of examples is not the meaning; a meaning naming the word itself is as rude as it
 from rudeness import _form_gloss, _refers_to, parts_kind
-C = {"crude", "swear", "sexual", "slur"}
+C = {"expletive", "sexual", "slur"}
 def entry(word, *senses):
     return json.dumps(compact_entry({"word": word, "pos": "noun", "senses": [
         {"glosses": [g], "tags": list(t), **({"form_of": [{"word": f}]} if f else {})} for g, t, f in senses]}))
@@ -243,7 +241,30 @@ assert not _refers_to("A cocktail containing pomegranate juice", "pom") and not 
 assert kind("A small flat for sale, such as a condominium.") == "clean"    # ("condom" inside "condominium")
 # UI-59: a word smeared whole says what it mostly is (main_kind), shown faintly above it on the card
 from rudeness import main_kind
-assert main_kind([{"crude": 9.0, "swear": 4.0}, {"sexual": 6.0}], C) == "crude"      # (its first meaning most)
+assert main_kind([{"expletive": 9.0}, {"sexual": 6.0}], C) == "expletive"            # (its first meaning most)
 assert main_kind([{}, {"insult": 5.0}], C) is None                                   # (no censored kind at all)
+# OB-12: the rules' six kinds folded into the three shown (rudeness.fold)
+from rudeness import fold
+assert fold({"clinical": 5.0}, {}) == {}                                             # the proper word: none
+assert fold({"crude": 4.0, "insult": 3.0}, {}) == {}                                # toilet words, mild insults
+assert fold({"crude": 4.0, "swear": 2.0}, {"tags": ["vulgar"]}) == {"expletive": 4.0}   # the best of them, harsh
+assert fold({"swear": 3.5, "sexual": 3.0, "slur": 1.0}, {}) == {"expletive": 3.5, "sexual": 3.0, "slur": 1.0}
 assert got["skull-fuck"][3] == "sexual" and got["boys"][3] is None                   # (not smeared whole: none)
+# OB-12 (the user's choice from the real data): a word mostly used rudely is smeared whole though its first meaning
+# is ordinary: at least 3 firmly rude meanings, half of its meanings or more ("dick"); one or two of a few ("gash"),
+# a hedged label, or one among many ("cock") is not
+from rudeness import mostly_rude
+def senses_of(*pairs):
+    return [{"glosses": [g], "tags": list(t)} for g, t in pairs]
+dick = senses_of(("A male person.", ()), ("A penis.", ("vulgar",)), ("A contemptible man.", ("vulgar",)),
+                 ("To have sex with.", ("vulgar",)), ("Nothing at all.", ()))
+assert mostly_rude(dick, ["clean", "sexual", "expletive", "sexual", "clean"], C)
+assert not mostly_rude(dick, ["clean", "sexual", "expletive", "sexual", "clean"], {"slur"})      # (not censored)
+assert not mostly_rude(dick[:3] + senses_of(*[("A tap.", ())] * 4), ["clean", "sexual", "expletive"] + ["clean"] * 4, C)
+hedged = senses_of(("A cut.", ()), *[("The vagina.", ("sometimes", "vulgar"))] * 3)
+assert not mostly_rude(hedged, ["clean", "sexual", "sexual", "sexual"], C)
+W2 = {"dick": json.dumps([compact(x, "noun") for x in dick]),
+      "dicks": json.dumps([compact({"glosses": ["plural of dick"], "form_of": [{"word": "dick"}]}, "noun")])}
+got = score_saved(W2, C)
+assert got["dick"][1] and got["dicks"][1], got                                       # (its plural follows)
 print("RUDENESS OK")

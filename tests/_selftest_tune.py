@@ -17,9 +17,9 @@ def sense(gloss, tags=(), topics=(), syns=(), pos="noun"):
             **({"s": list(syns)} if syns else {}), "pos": pos}
 
 
-# made-up words: medical ones answered Clinical (the rules find them clean: a topic of 0.5 points), rude ones
+# made-up words: offensive rascals answered Expletive (the rules find them clean: a label alone is a suspect), rude ones
 ENTRIES = {
-    **{f"med{i}": [sense(f"A medical condition of the {p}.", topics=["medicine"])]
+    **{f"mean{i}": [sense(f"A {p} rascal.", tags=["offensive"])]
        for i, p in enumerate(["liver", "kidney", "lung", "skin", "eye", "ear", "bone", "blood", "heart", "gut"] * 3)},
     **{f"rude{i}": [sense("Sexual intercourse.", tags=["vulgar", "slang"]), sense("A tool.")] for i in range(20)},
     **{f"dolt{i}": [sense("A stupid person.", tags=["derogatory"])] for i in range(20)},
@@ -38,15 +38,14 @@ def key(c):
 
 answers = {}
 for w, cs in ENTRIES.items():
-    kinds = {key(cs[0]): ("clinical" if w.startswith("med") else "sexual" if w.startswith("rude") else
-                          "insult" if w.startswith("dolt") else "clean")}
+    kinds = {key(cs[0]): ("expletive" if w.startswith("mean") else "sexual" if w.startswith("rude") else "clean")}
     answers[w] = {"kinds": kinds, "whole": w.startswith("rude")}
 answers["ghost"] = {"kinds": {"x": "clean"}, "whole": False}          # (a word not in the entries: left out)
 
 data, saved = T.prepare(entries, answers, wn=None, log=lambda *a: None)
 assert "ghost" not in data["answers"] and len(data["answers"]) == len(ENTRIES)
 assert "rude2" in data["words"]                                       # (bonk's synonyms are scored too)
-assert set(saved) >= {"rude1", "dolt1", "med1"} and "word1" not in saved   # (the program's words: a sign of rudeness)
+assert set(saved) >= {"rude1", "dolt1", "mean1"} and "word1" not in saved   # (the program's words: a sign of rudeness)
 assert len(T.params()) == len(set(T.params())) > 30
 assert "TOPIC_POINTS * clinical" in T.params() and "TAG_POINTS vulgar swear" in T.params()
 
@@ -73,9 +72,9 @@ T.apply(start, data["base"])
 assert rudeness.TOPIC_POINTS["medicine"]["clinical"] == 0.5 and rudeness.MEANING_MIN == 3.0     # (put back)
 assert rudeness.sense_kind.__module__ == "rudeness" and not isinstance(rudeness.WORDING[0][0], T._Memo)
 
-# the error: 100% minus the average F1; the rules start wrong on the medical words
+# the error: 100% minus the average F1; the rules start wrong on the offensive rascals
 err, t = T.evaluate(data, start, targets)
-assert t["clinical"][2] == 30 and t["clinical"][0] == 0 and 0 < err < 100
+assert t["expletive"][2] == 30 and t["expletive"][0] == 0 and 0 < err < 100
 assert T.error({"clean": [5, 0, 0], "sexual": [0, 0, 0]}) == 0.0      # (a class never answered is left out)
 assert abs(T.error({"clean": [1, 1, 0]}) - 100 / 3) < 1e-9
 assert {T.part_of(w) for w in targets} == set(range(T.PARTS))
@@ -124,7 +123,7 @@ th.join(10)
 assert not th.is_alive() and tu2.round == 0
 
 # a few answers leave some parts empty: only the parts with words are tested and averaged (it once added None)
-few = {w: answers[w] for w in ("rude1", "med2", "word3")}
+few = {w: answers[w] for w in ("rude1", "mean2", "word3")}
 d_few, s_few = T.prepare(entries, few, wn=None, log=lambda *a: None)
 assert len(T.tested_parts(d_few)) < T.PARTS
 events = queue.Queue()
@@ -137,8 +136,8 @@ assert all(v is not None for e in got if e[0] == "round" for p, (_tr, v) in e[2]
 # the guard: what the program's words would show
 g_now = T.guard(saved, start, data["base"])
 assert g_now["whole"] == 20 and g_now["sexual"] >= 20, g_now
-assert T.doubled({"whole": 10, "clinical": 0}, {"whole": 25, "clinical": 12}) == ["whole", "clinical"]
-assert T.doubled({"whole": 10, "clinical": 0}, {"whole": 19, "clinical": 9}) == []
+assert T.doubled({"whole": 10, "slur": 0}, {"whole": 25, "slur": 12}) == ["whole", "slur"]
+assert T.doubled({"whole": 10, "slur": 0}, {"whole": 19, "slur": 9}) == []
 
 # Keep: the numbers written into a copy of rudeness.py, comments kept, read back exactly; the version bumped
 src = os.path.join(folder, "rudeness.py")
@@ -273,7 +272,7 @@ lines = [i for i in win.chart.find_all() if win.chart.type(i) == "line" and len(
 assert len(lines) >= T.PARTS + 1
 assert "Best at round" in win.note.cget("text")
 kinds_text = [w.cget("text") for w in win.kinds_box.winfo_children()]
-assert "Clinical" in kinds_text and "Smeared whole" in kinds_text and "→" in kinds_text
+assert "Expletive" in kinds_text and "Smeared whole" in kinds_text and "→" in kinds_text
 assert any(w.cget("text").startswith("Numbers changed") for w in win.changes_box.winfo_children())
 guard_text = " ".join(w.cget("text") for w in win.guard_box.winfo_children())
 assert "with the best numbers" in guard_text and "Smeared whole" in guard_text
@@ -281,7 +280,7 @@ asked, told = [], []
 errors_ask, errors_show = errors.ask_yes_no, errors.show_message
 errors.ask_yes_no = lambda *a, **k: asked.append(a) or False
 errors.show_message = lambda *a, **k: told.append(a)
-win.guards["best"] = dict(win.guards["now"], clinical=win.guards["now"]["clinical"] * 3 + 30)
+win.guards["best"] = dict(win.guards["now"], slur=win.guards["now"]["slur"] * 3 + 30)
 win.draw_guard()
 assert "check" in " ".join(w.cget("text") for w in win.guard_box.winfo_children())
 win.keep()

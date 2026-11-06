@@ -859,7 +859,7 @@ wc.set("cum", "frequency rank #8", censor=True, kind="sexual"); root.update()
 assert wc.find_withtag("smear") and smear_over_kind()[0] == 0
 wc.smear.clear = 0.5; wc.smear.paint(); assert smear_over_kind()[0] == 0
 anim, crossed = Animator(root), 0
-wc.set("bollocks", "frequency rank #8", censor=True, kind="crude"); root.update()     # (tall letters: they reach up)
+wc.set("bollocks", "frequency rank #8", censor=True, kind="expletive"); root.update()     # (tall letters: they reach up)
 wc.set("jizz", "frequency rank #9", censor=True, kind="sexual")
 wc.transition_from("bollocks", "frequency rank #8", 0, -wc.winfo_reqheight(), anim)
 frame_at = wc._frame

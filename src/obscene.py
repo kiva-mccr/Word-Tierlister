@@ -1,11 +1,13 @@
-"""Obscene words: the kinds of rude meaning (RUDE_KINDS; TICKED: dealt to start with; CENSORED: smeared while
-censoring to start with, and what "Obscene words" is scored from; CENSORABLE: every kind can be smeared, OB-8), the labels Wiktionary marks rude meanings with (RUDE: shown in the stored definitions), and a short
+"""Obscene words: the kinds of rude meaning (RUDE_KINDS: Expletive, Sexual, Slur, OB-12; TICKED: dealt to start
+with; CENSORED: smeared while censoring to start with; RULE_KINDS: what the rules score, folded into them), the labels Wiktionary marks rude meanings with (RUDE: shown in the stored definitions), and a short
 list chosen by hand (on_list), which stands in for a save whose Wiktionary meanings have not been read yet and for
 a word added by hand (OB-6: src/rudeness.py decides by rules). No tkinter, no internet.
 
     on_list("motherfucker") -> True          obscene_in(words) -> the ones on the list
 """
 
+import json
+import os
 import re
 
 # Wiktionary's labels for a rude meaning (shown in the stored definitions, with their hedges: rudeness.HEDGES)
@@ -83,9 +85,31 @@ def obscene_in(words):
 
 
 # ---- kinds of rude words (OB-6: src/rudeness.py scores each meaning towards them) ----------------------------------
-RUDE_KINDS = ("clinical", "crude", "swear", "insult", "sexual", "slur")
-TICKED = frozenset(("clinical", "crude", "swear", "insult"))    # dealt by default (Sexual and Slur left out)
-CENSORED = frozenset(("crude", "swear", "sexual", "slur"))       # smeared while censoring (the user's choice: never
-                                                                # Clinical or Insult, unless asked for: OB-8)
-CENSORABLE = frozenset(RUDE_KINDS)    # each can be censored on its own (OB-7, OB-8: a smear button per kind; only
-                                      # CENSORED's kinds to start with)
+# OB-12 (asked for: the six kinds were hard to sort into): three broad kinds, every one smeared while censoring.
+# Medical words, mild name-calling and toilet words are ordinary words.
+RUDE_KINDS = ("expletive", "sexual", "slur")
+TICKED = frozenset(("expletive",))    # dealt by default (Sexual and Slur left out)
+CENSORED = frozenset(RUDE_KINDS)     # smeared while censoring to start with (each has its smear button, OB-7)
+CENSORABLE = frozenset(RUDE_KINDS)
+# what the rules' tables give points to (rudeness.py): finer than the kinds shown, folded into them per meaning
+# (rudeness.fold: Swear, and Crude or Insult with a vulgar or offensive label, are Expletive; Clinical is none)
+RULE_KINDS = ("clinical", "crude", "swear", "insult", "sexual", "slur")
+
+
+def set_aside_old_answers(path):
+    """A review's answers file written with the six kinds from before OB-12 is moved aside (the user: start the answers
+    from scratch), to rude_review_answers_six_kinds.jsonl beside it (numbered if that is taken). True if it was."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            old = any(set(json.loads(line).get("kinds", ())) - {"clean", *RUDE_KINDS} for line in f if line.strip())
+    except (OSError, ValueError, AttributeError, TypeError):
+        return False
+    if not old:
+        return False
+    base, ext = os.path.splitext(path)
+    aside, n = f"{base}_six_kinds{ext}", 1
+    while os.path.exists(aside):
+        n += 1
+        aside = f"{base}_six_kinds_{n}{ext}"
+    os.replace(path, aside)
+    return True

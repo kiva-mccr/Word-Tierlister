@@ -22,8 +22,8 @@ The compact entries (rudeness_entries.jsonl next to the sorting, about 300 MB) k
 a form of, the word family). Every word is kept
 because the links between words (the second pass) reach anywhere. The comparison uses the meanings Claude saw (the
 first few of each word) and a censoring policy, the same for both sides:
-    A   every rude kind is censored (Clinical, Crude, Swear word, Insult, Sexual, Slur)
-    B   only Crude, Swear word, Sexual and Slur (Clinical and Insult words shown as they are)
+    A   every rude kind is censored (Expletive, Sexual, Slur)
+    B   the kinds censored to start with (obscene.CENSORED: the same three since OB-12)
 1 in 40 of the other words, never candidates for the sorting, are a control taken to be clean: the share the
 rules flag is their false-alarm rate. Never part of the program.
 """
@@ -46,7 +46,9 @@ from wordfreq import zipf_frequency  # noqa: E402
 import rudeness  # noqa: E402
 from wordsource import WIKT_URL  # noqa: E402
 
-POLICIES = {"A": set(obscene.RUDE_KINDS), "B": set(obscene.CENSORED)}
+POLICIES = {"A": set(obscene.RUDE_KINDS), "B": set(obscene.CENSORED)}     # (the same since OB-12: all three)
+# the sorting's six kinds as the three (OB-12), roughly: it never said which crude words or insults were harsh
+SIX_TO_THREE = {"clinical": "clean", "crude": "expletive", "swear": "expletive", "insult": "expletive"}
 OUTCOMES = ("shown", "some", "smeared", "left out")
 
 
@@ -133,14 +135,15 @@ def outcome(scored, censored, senses, ticked=obscene.TICKED, common=False):
 
 def read_sorting(path):
     """Claude's sorting (word_categories.tsv from the archived tools/classify_obscene.py, kept only as a yardstick):
-    {word: (kind, confidence, [meaning kinds], note)}."""
+    {word: (kind, confidence, [meaning kinds], note)}, its six kinds read as the three (SIX_TO_THREE)."""
+    three = lambda k: SIX_TO_THREE.get(k, k)     # noqa: E731
     out = {}
     with open(path, encoding="utf-8") as f:
         for line in f:
             if line.startswith("#") or not line.strip():
                 continue
             w, kind, conf, senses, note = (line.rstrip("\n").split("\t") + [""] * 5)[:5]
-            out[w] = (kind, int(conf or 0), [x for x in senses.split(",") if x], note)
+            out[w] = (three(kind), int(conf or 0), [three(x) for x in senses.split(",") if x], note)
     return out
 
 
@@ -267,7 +270,7 @@ ONE_PART = re.compile(r"[a-z][a-z']*")     # a review asks only about one-part w
 
 def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
     """{word: why it was picked}: about size / 10 words of each main kind the rules find, a fifth with a clean main
-    meaning and a rude later one, and a fifth found clean with a weak sign (`weak_words`: the likely misses). Half of
+    meaning and a rude later one, and a twentieth found clean with a weak sign (`weak_words`: the likely misses). Half of
     each group comes from its commonest words, half from the rest."""
     import random
     rng = random.Random(seed)
@@ -286,7 +289,8 @@ def pick_sample(words, scored, size=1500, seed=7, weak_words=()):
             groups["a clean main meaning, a rude later one"].append(w)
     groups["found clean, with a weak sign"] = [w for w in weak_words if w in scored and ONE_PART.fullmatch(w)
                                                 and all(rudeness.sense_kind(p) == "clean" for p in scored[w])]
-    share = {g: (size // 10 if g.startswith("the rules say") else size // 5) for g in groups}
+    share = {g: (size // 10 if g.startswith("the rules say") else size // 20 if g.startswith("found clean")
+                 else size // 5) for g in groups}         # (OB-12: few found clean, a check)
     picked = {}
     for g in sorted(groups):
         picked.update((w, g) for w in _half_common(set(groups[g]) - set(picked), share[g], rng))
@@ -320,8 +324,9 @@ def weak_signs(words, limit_zipf=2.5):
 
 
 # ---- the next review: the words that teach the rules most (active review) -----------------------------------
-NEXT_SHARES = (("like your misses", 0.2), ("a candidate signal", 0.25), ("signals disagree", 0.15),
-               ("near the line", 0.25), ("no sign at all", 0.15))
+NEXT_SHARES = (("like your misses", 0.22), ("a candidate signal", 0.28), ("signals disagree", 0.17),
+               ("near the line", 0.30), ("no sign at all", 0.03))
+# (OB-12, asked for: few words the rules are sure are clean: "no sign at all" is a handful, a check on the misses)
 # (picked in this order: a word goes to the first group it is in; each share is weighted by how often the rules were
 # wrong on the words that group gave before: group_shares)
 MISS_MIN = 2              # a sign of the misses (a label or gloss word) needs this many meanings answered otherwise ...
@@ -581,8 +586,10 @@ def make_sample(entries, out, size=1500, wn=None, log=print):
 
 def read_answers(path):
     """{word: {"kinds": {meaning key: kind}, "whole": bool}} from a review's answers file (the last answer for a
-    word wins)."""
+    word wins). An answers file in the old six kinds is set aside first (obscene.set_aside_old_answers): {}."""
     out = {}
+    if obscene.set_aside_old_answers(path):
+        return out
     with open(path, encoding="utf-8") as f:
         for line in f:
             if line.strip():
