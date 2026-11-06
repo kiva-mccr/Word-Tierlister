@@ -206,7 +206,8 @@ recorded mock-ups after research: Tk has no frame sync).
 F-53 (asked for, approved from recordings: a maximize or restore slides the page's contents in a straight line from
 where the old picture was left, App._slide_from_here; src/framesync.py, X11 only: centre gravity, so the old picture is
 never left in the top-left corner, and frame sync for drags, the only resizes mutter syncs).
-F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
+F-55 (reported: every card vanished for a moment on a zoom: shapes with nothing on screen are painted even while a fit
+measures). F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
 for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11 (undone by F-54: GNOME sometimes lost the menu; closed menus are hidden again); CI quick check, macOS off pull
 requests). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu

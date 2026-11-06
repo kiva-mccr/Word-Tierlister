@@ -2066,6 +2066,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
+# [x] F-55 Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
+#           F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
+#           tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between
+#           tries. Now a shape with nothing on screen is painted at once; only shapes already showing wait for the
+#           size kept. A zoom takes as long as before (~0.1 s here). Approved before building ("go ahead").
 # [x] F-54 Reported (Fedora, GNOME): sometimes a top menu did not open on a click; its button stayed lit after the
 #           pointer left, a second click unlit it and a third opened it. The program thought the menu open, but F-51's
 #           closed menu, parked mapped off-screen, was sometimes never moved back on screen by GNOME. Picked by the
