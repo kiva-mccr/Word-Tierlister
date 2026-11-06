@@ -1999,6 +1999,11 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   tools/speed_check.py gives its words kinds as Wiktionary has them and times Adverbs too.
 - [x] **F-58** Asked for (the same audit): the developer tools' bubbles moved out of App (about 400 lines) into
   src/devtools.py: DevTools (App.devtools) and a Job for each running tool in place of loose dicts.
+- [x] **F-59** Asked for (the rewrite audit's item 8): the roadmap moved out of tierlist.py (2,180 of its 2,542
+  lines) into ROADMAP.md, the same text as Markdown; ROADMAP.md is in standalone.TOP_FILES.
+- [x] **F-60** Asked for (the audit's item 5): start-up's stages named once with their work (src/launch.py:
+  `stages`, `set_up`); main() no longer works out the "Step i of n" plan in one if / elif chain and runs a second copy
+  of it. wordsource's wiktionary_steps / queue_steps still predict the stage lines their work logs.
 - [x] **F-55** Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
   F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
   tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between

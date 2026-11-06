@@ -118,6 +118,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 import deps  # noqa: E402  (after the path line above)
+import launch  # noqa: E402
 import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
@@ -140,7 +141,7 @@ try:
     from app import App, apply_look, reopen_while_asked
     from fonts import init_fonts, load_typefaces
     from errors import install_handlers, run_guarded
-    from problems import SetupError, end_session, ensure_streams, open_log, start_session
+    from problems import end_session, ensure_streams, open_log, start_session
     from startup import detach_console, ensure_packages, run_with_progress
     from ui_style import apply_ttk_style
     from browser import Browser  # noqa: F401
@@ -148,7 +149,7 @@ except ImportError as exc:
     if (getattr(exc, "name", "") or "").split(".")[0] not in ("tkinter", "_tkinter"):
         raise  # a real bug, not a missing tkinter
     tk = App = Browser = None
-    from problems import SetupError, end_session, ensure_streams, open_log, start_session   # (no tkinter)
+    from problems import end_session, ensure_streams, open_log, start_session   # (no tkinter)
 
 
 def main():
@@ -252,49 +253,13 @@ def main():
         # Wiktionary in place, keeping all progress.
         existing = store.count_words()
         current = store.get_meta("source") or ("wordnet" if existing else None)
-        builds_wiktionary = (not args.wordlist and current != "custom"
-                             and args.source == "wiktionary" and current != "wiktionary")
+        builds_wiktionary = launch.builds_wiktionary(current, args.wordlist, args.source)
 
         def set_up(log):
-            # the main steps, up front, for the progress window's "Step 2 of 5" (the same branches as below)
-            steps, adds = [], False
-            if args.wordlist:
-                adds = existing == 0
-            elif current == "custom":
-                pass
-            elif builds_wiktionary:
-                steps, adds = wiktionary_steps(store, args.wiktionary_file), True
-            elif args.source == "wordnet" and existing == 0:
-                steps, adds = ["First run: building the word list"], True
-            steps += queue_steps(store, adds_words=adds, by_wiktionary=builds_wiktionary)
-            if args.seed is not None and args.seed != store.queue_settings()["seed"]:
-                steps.append("Reshuffling the queue")
-            log(plan_line(steps))
-            if args.wordlist:
-                if existing == 0:
-                    store.insert_words(build_word_list(args.wordlist))
-                    store.set_meta("source", "custom")
-            elif current == "custom":
-                pass  # a custom list is never replaced automatically
-            elif builds_wiktionary:
-                if existing:
-                    log(f"Upgrading your {existing:,}-word list to the full Wiktionary list. "
-                        "Your progress is kept.")
-                try:
-                    build_wiktionary(store, args.wiktionary_file, args.keep_download, log=log)
-                except (RuntimeError, OSError) as exc:
-                    raise SetupError(f"Could not build the Wiktionary word list: {exc}\n\n"
-                                     "Try again (downloads resume), download the file yourself and pass "
-                                     "--wiktionary-file, or use --source wordnet.") from exc
-            elif args.source == "wordnet" and existing == 0:
-                log("First run: building the word list (about 10-30 seconds)...")
-                store.insert_words(build_word_list())
-                store.set_meta("source", "wordnet")
-            # queue order: flag compounds and shuffle (cheap when already done), honour --seed
-            prepare_queue(store, log=log)
-            if args.seed is not None and args.seed != store.queue_settings()["seed"]:
-                log(f"Reshuffling the queue with seed {args.seed}...")
-                store.reshuffle(seed=args.seed)
+            # the word list (an older WordNet save is upgraded to Wiktionary in place, keeping all progress) and the
+            # queue; every step is named first for the progress window's "Step 2 of 5" (launch.stages)
+            launch.set_up(store, log, existing, current, wordlist=args.wordlist, source=args.source,
+                          wiktionary_file=args.wiktionary_file, keep_download=args.keep_download, seed=args.seed)
 
         def new_root():
             r = tk.Tk(className=WM_CLASS)   # (named, so a Linux taskbar finds the program's icon: ensure_launcher)
@@ -304,7 +269,7 @@ def main():
             install_handlers(r, log_path, db_path)      # unexpected errors: log + friendly dialog
             return r
 
-        def launch():
+        def open_program():
             # --- 4. make sure the save has a word list and a queue order. This is the slow part on a
             #        first run, so it runs on a worker thread behind a progress window (startup.py); the
             #        window only appears if it takes more than a moment. Every message goes through `log`.
@@ -354,7 +319,7 @@ def main():
 
         # Always guarded: with or without a console, a failure ends in a dialog and a log entry.
         try:
-            run_guarded(launch, log_path, db_path)
+            run_guarded(open_program, log_path, db_path)
         finally:
             end_session(log_path)         # (not reached by a hard crash or a kill: the next start says so)
 

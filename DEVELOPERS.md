@@ -159,7 +159,7 @@ flowchart TB
     H --> I["new_root(): a hidden Tk with fonts and styles"]
     I --> J["startup.ensure_packages: one dialog,<br/>a tick box per missing package"]
     J --> K["startup.run_with_progress(set_up)<br/>on a worker thread, a progress window with time left"]
-    K --> K1["set_up: build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
+    K --> K1["launch.set_up: names every stage first,<br/>then build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
     K1 --> L["App(root, store, Definitions(store)).open_window()"]
     L --> L1{"--build-nightly or --review-rude?<br/>(the program's nightly update; a developer option)"}
     L1 -- "--build-nightly" --> L2["SourceDialog(go=True, target=...):<br/>build the program in place of the old one"]
@@ -438,6 +438,7 @@ found again, so switching between the two loses nothing.
 | File | Job |
 |---|---|
 | `tierlist.py` | Entry point: command-line options, start-up sequence, `main()`. |
+| `src/launch.py` | Start-up's stages (the word list, the queue, `--seed`), each named once with its work: the progress window's "Step i of n" comes from the same list that runs. |
 | `ROADMAP.md` | The roadmap: every step, what was asked and built, and the decisions. |
 | `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
 | `src/obscene.py` | The kinds of rude meaning (Expletive, Sexual, Slur; OB-12), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |

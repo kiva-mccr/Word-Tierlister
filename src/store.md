@@ -4,7 +4,7 @@ The save file: every read and write of the SQLite database goes through `Store` 
 
 - **Uses:** `constants`, `obscene`, `rudeness`
 - **Used by:** `browser`, `filepicker`, `speed_check`, `syncfiles`, `tierlist`
-- **Tests:** `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
+- **Tests:** `_selftest_launch`, `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
 
 The module docstring has the details; this page is the map.
 

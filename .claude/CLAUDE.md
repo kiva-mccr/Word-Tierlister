@@ -32,7 +32,7 @@ the file. Its facts (uses, used by, tests, public API) come from `python tools/n
 pitfalls" are written by hand: add the rule or the bug there when you fix one. check_release fails on a stale note.
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
-constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> syncfiles -> theme, fonts, sizing, ui_style,
+constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, fonts, sizing, ui_style,
 ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> devtools -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
@@ -98,8 +98,9 @@ ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, 
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
   `problems.describe`; the dialog and safety net are in `errors.py` (everything runs inside `run_guarded`).
 - Any progress bar with a real percentage must also show an ETA (`startup.EtaTracker` / `format_eta`).
-  Long jobs name their main steps first (`constants.plan_line`) for the "Step i of n" corner; keep
-  `wordsource.wiktionary_steps` / `queue_steps` in step with the stage lines they predict. pip downloads are
+  Long jobs name their main steps first (`constants.plan_line`) for the "Step i of n" corner; start-up's stages are
+  named once with their work (`launch.stages`); keep `wordsource.wiktionary_steps` / `queue_steps` in step with the
+  stage lines build_wiktionary / prepare_queue log. pip downloads are
   measured by watching its TMPDIR (`deps.install`); re-measure `deps.DOWNLOAD` if requirements change.
 - Screenshots for review: run the app under `xvfb-run`, grab with PIL `ImageGrab` (see git history or
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
