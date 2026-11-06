@@ -138,16 +138,20 @@ assert img.get(61, 8) == cols[60] and img.get(101, 8) == cols[100]              
 bg = tuple(v // 257 for v in cv.winfo_rgb(cv.cget("bg")))
 assert img.get(0, 0) == bg and img.get(121, 15) == bg                               # (corners outside: the backdrop)
 assert img.get(61, 0) != cols[60] and img.get(61, 1) != cols[60]                    # (a soft hairline edge on top)
-# measuring (App._fit_size): shapes made or resized while sizes are tried are painted once, after, at the last size
+# measuring (App._fit_size): a shape made while sizes are tried is painted at once (F-55: a fit's tries rebuild the
+# shapes and Tk draws between them, so the cards and pills vanished on a zoom); one already on screen keeps its
+# picture while it is resized, and is painted once, after, at the last size
 calls = []
 real = SM._stretched_mask
 SM._stretched_mask = lambda *a: calls.append(a[:4]) or real(*a)
 try:
     with SM.measuring(paint=True):
         m = cv.round_rect(5, 5, 77, 31, 9, fill="#C9E4FF", tags="mz")
+        assert len(calls) == 1 and cv.smooth_image("mz") is not None                 # never blank on screen
+        calls.clear()
         for x2 in (90, 103, 117):
             cv.round_rect_coords("mz", 5, 5, x2, 31, r=9)
-        assert calls == [] and cv.smooth_image("mz") is None                         # nothing painted yet
+        assert calls == [] and cv.bbox(cv.smooth_image("mz"))[2] < 90               # the old picture meanwhile
     assert len(calls) == 1 and cv.smooth_image("mz") is not None                     # once, at the size kept
     assert cv.bbox(cv.smooth_image("mz"))[2] >= 116
     calls.clear()

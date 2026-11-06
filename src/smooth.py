@@ -393,7 +393,7 @@ _unpainted = {}         # (canvas, item) -> None: shapes skipped meanwhile, pain
 
 class measuring:
     """`with smooth.measuring():` while only sizes matter (App._fit_size and _precheck_zoom try text sizes): the
-    rounded shapes skip their painting, the most costly part of a refresh. With paint=True the shapes still there
+    rounded shapes already on screen skip their painting, the most costly part of a refresh (new ones are painted). With paint=True the shapes still there
     at the end are painted then, once, at their final size; otherwise at the next refresh (their last painted look
     is forgotten, so that refresh paints them even at the same size)."""
 
@@ -525,8 +525,11 @@ class SmoothCanvas(tk.Canvas):
         # colours snapped to steps of 4 (invisible): a fade or a hover tint then reuses the same few images
         fill, outline = _snap(_rgb(rec["fill"])), _snap(_rgb(rec["outline"]))
         sig = (x1, y1, x2, y2, rec["radii"], fill, outline, rec["width"], rec["state"])
-        if _measuring[0]:
-            rec["sig"] = None                          # (painted when measuring ends, or at the next refresh)
+        # While sizes are only measured, a shape already on screen keeps its picture (painted when measuring ends, or
+        # at the next refresh). One with nothing on screen yet is painted now: a fit's tries rebuild shapes and Tk
+        # draws between them, so every card, pill and chart bar vanished for a moment on a zoom (F-55).
+        if _measuring[0] and rec["img"] is not None:
+            rec["sig"] = None
             _unpainted[(self, item)] = None
             return
         if not force and rec.get("sig") == sig:
