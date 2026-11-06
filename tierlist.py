@@ -783,6 +783,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (reported: the chart super squished on a 1200 px screen; approved from a mock-up): kinds, numbers
 #           changed and the guard side by side, the chart the height the rest leaves, the rounds axis to the rounds
 #           run plus those it may still wait, the % numbers thinned on a short chart.
+#           Then (asked for: "modern methods"; trialled on stand-in answers, picked): each change pays a pull
+#           towards today's numbers (random kicks were tried and dropped: nothing better, 2.5x the time); every tune is
+#           remembered (rude_tune_history.jsonl) and drawn as a tick at its words, before down to after (approved
+#           from a mock-up); --start-hidden for the program's automatic tune.
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds

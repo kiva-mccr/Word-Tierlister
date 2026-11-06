@@ -136,6 +136,20 @@ assert "error" not in [e[0] for e in got], [e for e in got if e[0] == "error"]
 assert all(set(e[1]["errors"]) <= set(T.tested_parts(d_few)) | {T.ALL} for e in got if e[0] == "sweep")
 assert all(v is not None for e in got if e[0] == "sweep" for p, (_tr, v) in e[1]["errors"].items() if p != T.ALL)
 
+# the pull towards today's numbers: nothing for today's, a number moved its own size costs PULL, a doubled factor too
+assert T.cost(data, start) == 0.0
+one = [p for p in start if " * " not in p and abs(start[p]) >= 0.5][0]
+assert abs(T.cost(data, dict(start, **{one: start[one] * 2})) - T.PULL) < 1e-9
+fac = [p for p in start if " * " in p][0]
+assert abs(T.cost(data, dict(start, **{fac: 2.0})) - T.PULL) < 1e-9
+# the earlier tunes' file: a line per tune, bad lines skipped
+hist_path = os.path.join(folder, "h.jsonl")
+T.write_history(hist_path, [{"words": 50, "start": 20.0, "best": 18.0, "kept": True}])
+with open(hist_path, "a", encoding="utf-8") as f:
+    f.write("not json\n{\"words\": 1}\n")
+assert T.read_history(hist_path) == [{"words": 50, "start": 20.0, "best": 18.0, "kept": True}]
+assert T.read_history(os.path.join(folder, "none.jsonl")) == []
+
 # the noise: the parts' standard error; the stop waits longer the noisier the average (asked for)
 assert T.noise([20.0]) == 0.0 and abs(T.noise([18.0, 22.0]) - 2.0) < 1e-9
 assert T.patience(0.0) == T.PATIENCE and T.patience(0.5) == T.PATIENCE + 1 and T.patience(1.2) == T.PATIENCE + 3
@@ -242,6 +256,11 @@ assert win.done and win.best_round and "Your answers: " in win.info.cget("text")
 assert not win.hidden and root.state() == "normal"                # (done while hidden: back, for Keep)
 assert (root.winfo_width(), root.winfo_height()) == opened, (opened, root.winfo_width(), root.winfo_height())
 assert win.wait and win.noise and "Noise ±" in win.note.cget("text")
+past = T.read_history(os.path.join(folder, T.HISTORY_FILE))     # (the finished tune remembered, asked for)
+assert len(past) == 1 and past[0]["words"] == len(data["answers"]) and not past[0]["kept"]
+assert past[0]["best"] <= past[0]["start"] and win.past_chart.find_all()
+assert any(win.past_chart.itemcget(i, "text") == f"{len(data['answers']):,}" for i in win.past_chart.find_all()
+           if win.past_chart.type(i) == "text")                 # (its tick named by its words)
 assert win.span() == 6                                          # (the rounds axis: never past the rounds it may run)
 assert win.kinds_box.winfo_manager() == "pack" and win.guard_box.master is win.kinds_box.master   # (side by side)
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
@@ -309,6 +328,7 @@ assert asked and open(src, encoding="utf-8").read() == before     # (asked, and 
 errors.ask_yes_no = lambda *a, **k: True
 win.keep()
 assert told and told[-1][1] == "Written into src/rudeness.py"
+assert T.read_history(os.path.join(folder, T.HISTORY_FILE))[-1]["kept"]   # (Keep marks it kept)
 assert open(src, encoding="utf-8").read() != before
 errors.ask_yes_no, errors.show_message = errors_ask, errors_show
 assert win.closed

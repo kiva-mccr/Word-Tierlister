@@ -16,7 +16,9 @@ How it works:
     stops after patience(noise) rounds without one: 3, one more per 0.5 points of noise, 15 at most (asked for: a
     noisy average waits longer to decide);
   * a round tries every number a step up and a step down (then JUMP steps), keeping a change when it lowers the
-    error on the words tuned on (coordinate descent); a step that helps no way halves, so the search settles;
+    error on the words tuned on plus a pull towards today's numbers (cost: PULL points for a number moved its own
+    size, asked for: only changes that clearly pay stay) (coordinate descent); a step that helps no way halves, so
+    the search settles;
   * the error is 100% minus the average F1 of the kinds (Clean and each rude kind, meaning by meaning, as
     rudeness.sense_kind gives them) and of smearing the whole word (rudeness.results): Slur counts as much as
     Clean, though most meanings are clean; the numbers tuned are the rules' own (obscene.RULE_KINDS), the kinds
@@ -26,6 +28,9 @@ How it works:
     than doubling is marked, and Keep asks first;
   * the window (asked for): every row there from the start, empty, and one size; each round's results arrive in
     one event ("sweep") and show at once, only the bar moving between them;
+  * every finished tune is remembered in rude_tune_history.jsonl beside the answers (read_history: words, start and
+    best tested error, kept): the window's strip shows each as a tick at its words, from before down to after;
+  * --start-hidden (the program's automatic tune) starts the window hidden: it shows itself when done;
   * "still wrong": the tested meanings the best numbers still get wrong (no number fixes those: ideas for new
     rules), all written to rude_tune_misses.txt beside the answers.
 
@@ -61,6 +66,10 @@ PARTS = 5                       # the answered words are tested in this many par
 ALL = PARTS                     # (the run that tunes on every answered word)
 STEP = 0.2                      # a number's first step: 20% of it (a factor's: 0.2)
 MIN_STEP = 0.02                 # a step this small is settled
+PULL = 1.0                      # error points a change costs per number moved its own size (a factor: doubled or
+                                # halved): only changes that clearly pay stay (asked for: a pull towards today's;
+                                # tried on 600 stand-in answers: 13.0% -> 12.0% with 3 numbers moved, against 12.4%
+                                # with 11; random kicks after settling were tried too and found nothing better)
 JUMP = 4                        # a step that helps neither way is tried this many times as far before it halves
                                 # (the error moves in jumps: a small step often changes no meaning's kind)
 PATIENCE = 3                    # rounds without a real gain before it stops, on an average with no noise ...
@@ -68,6 +77,7 @@ NOISE_ROUND = 0.5               # ... and one round more for each this many poin
 PATIENCE_MAX = 15
 DOUBLED = 2.0                   # the guard marks a kind that covers this many times the words it does now
 MISSES_FILE = "rude_tune_misses.txt"
+HISTORY_FILE = "rude_tune_history.jsonl"   # (every finished tune, beside the answers: the window's earlier tunes)
 
 # the numbers tuned: plain numbers (name), one entry of a table (table, key, kind), or a factor on every entry of a
 # kind in a table (table, "*", kind: its entries scaled together, written back one by one)
@@ -421,12 +431,22 @@ def say(line):
         pass
 
 
+def cost(data, values):
+    """The pull towards today's numbers, in error points: PULL for each number moved its own size."""
+    total = 0.0
+    for p, v in values.items():
+        a = data["start"][p]
+        total += abs(math.log2(max(v, 1e-6))) if " * " in p else abs(v - a) / max(abs(a), 0.5)
+    return PULL * total
+
+
 def tune_round(data, values, steps, train, order, progress=None):
     """One round of the search over `train`: every number a step up and down (in `order`), a change kept when it
-    lowers the error, a step that helps neither way halved; progress(numbers tried, of) after each number. Returns
-    (values, steps, error on train)."""
+    lowers the error plus the pull towards today's numbers (cost), a step that helps neither way halved;
+    progress(numbers tried, of) after each number. Returns (values, steps, error on train, without the pull)."""
     values, steps = dict(values), dict(steps)
-    best, _t = evaluate(data, values, train)
+    plain, _t = evaluate(data, values, train)
+    best = plain + cost(data, values)
     for i, p in enumerate(order, 1):
         if progress:
             progress(i - 1, len(order))
@@ -440,14 +460,15 @@ def tune_round(data, values, steps, train, order, progress=None):
             if v == values[p]:
                 continue
             err, _t = evaluate(data, {**values, p: v}, train)
-            if err < best - 1e-9:
-                best, values[p], moved = err, v, True
+            pulled = err + cost(data, {**values, p: v})
+            if pulled < best - 1e-9:
+                best, plain, values[p], moved = pulled, err, v, True
                 break
         steps[p] = steps[p] if moved else steps[p] / 2
     if progress:
         progress(len(order), len(order))
     apply(values, data["base"])
-    return values, steps, best
+    return values, steps, plain
 
 
 # ---- the tuning processes ------------------------------------------------------------------------------------------
@@ -725,6 +746,25 @@ def changed(start, values):
     return [(p, start[p], v) for p, v in values.items() if round(v, 2) != round(start[p], 2)]
 
 
+def read_history(path):
+    """The earlier tunes, oldest first: [{"when", "words", "meanings", "start", "best", "round", "kept"}]."""
+    out = []
+    try:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                with contextlib.suppress(ValueError):
+                    out.append(json.loads(line))
+    except OSError:
+        pass
+    return [h for h in out if isinstance(h, dict) and {"words", "start", "best"} <= set(h)]
+
+
+def write_history(path, past):
+    with contextlib.suppress(OSError):
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(json.dumps(h) + "\n" for h in past)
+
+
 def read_answers(path):
     """The answers file's {word: {"kinds": {meaning key: kind}, "whole": bool}} (measure_rudeness.read_answers)."""
     import measure_rudeness
@@ -941,6 +981,7 @@ class TuneWindow:
     the guard, the meanings still wrong; Pause, Discard, Keep the best numbers."""
 
     CHART = (960, 520)                      # (the most it starts at; it grows with the window)
+    PAST_H = 140                            # (the earlier tunes' strip)
     CHART_MIN = 260                         # (the least: a smaller screen cuts the window instead)
     SCREEN_KEPT = 110                       # (the screen's height kept for title bars and panels)
     TICK_MS = 1000                          # the bar's time left counts down this often
@@ -986,7 +1027,13 @@ class TuneWindow:
         self.bar = ttk.Progressbar(box, maximum=100, mode="determinate", style="Tune.Horizontal.TProgressbar")
         self.bar.pack(fill="x")
         self.bar_text = tk.Label(box, font=font("small"), bg=bg, fg=P["muted"], anchor="w")
-        self.bar_text.pack(fill="x", pady=(3, 10))
+        self.bar_text.pack(fill="x", pady=(3, 6))
+        self.history_path = os.path.join(os.path.dirname(os.path.abspath(answers_path)), HISTORY_FILE)
+        self.past = read_history(self.history_path)
+        self.past_chart = tk.Canvas(box, height=self.PAST_H, bg=P["surface"], highlightthickness=1,
+                                    highlightbackground=P["border"])
+        self.past_chart.pack(fill="x", pady=(0, 8))          # (earlier tunes: a tick at each one's words, asked for)
+        self.past_chart.bind("<Configure>", lambda _e: self.draw_past())
         self.eta, self.step, self.share = None, None, None      # (the reading's bar: its step and share done)
         self.round_started = None                               # (a round's bar: when it began, each part's share)
         self.bar_round, self.tried, self.round_eta = 0, {}, None
@@ -1209,6 +1256,7 @@ class TuneWindow:
             self.check_best()
             self.show_bar()
             self.draw()                           # (the rounds axis closes up to the last round)
+            self.remember()
         elif kind == "error":
             self.failed = True
             if self.hidden:
@@ -1238,6 +1286,7 @@ class TuneWindow:
         self.draw_kinds()
         self.draw_misses()
         self.draw_guard()
+        self.draw_past()
 
     # ---- started by the program's Tune the rules bubble (--from-program) -----------------------------------------
     def listen(self, stream):
@@ -1382,6 +1431,71 @@ class TuneWindow:
                      + ("a small gap, so it is not just memorising your answers)." if gap < 5 else
                         "a wide gap: it is learning your answers more than the rules)."))
         self.note.config(text=best + stop)
+
+    # ---- earlier tunes ---------------------------------------------------------------------------------------------
+    def current(self):
+        """This tune as the strip draws it (None before round 0): words, its start and best tested error."""
+        if not self.avg or not self.data:
+            return None
+        avg = dict(self.avg)
+        return {"words": len(self.data["answers"]), "start": avg[0], "best": avg.get(self.best_round or 0, avg[0]),
+                "round": self.best_round or 0, "kept": False}
+
+    def remember(self):
+        """A finished tune goes into the history beside the answers (Keep marks it kept)."""
+        now = self.current()
+        if now is None or getattr(self, "remembered", None):
+            return
+        self.remembered = now["when"] = time.strftime("%Y-%m-%d %H:%M")
+        now["meanings"] = sum(len(p) for p, _w in self.data["answers"].values())
+        self.past.append(now)
+        write_history(self.history_path, self.past)
+        self.draw_past()
+
+    def draw_past(self):
+        """The earlier tunes along the words answered: each a tick from its start error down to its best (kept ones
+        filled), this one highlighted; a line on the right says how far the error has come."""
+        c, P, small = self.past_chart, self.P, self.font("small")
+        c.delete("all")
+        w, h = c.winfo_width(), int(c.cget("height"))
+        if w < 50:
+            return
+        now = None if getattr(self, "remembered", None) else self.current()
+        tunes = self.past + ([now] if now else [])
+        line = small.metrics("linespace")
+        if not tunes:
+            c.create_text(0, h / 2, anchor="w", font=small, fill=P["muted"],
+                          text="Earlier tunes show here: a tick for each, at the words answered then.")
+            return
+        first, last = tunes[0], tunes[-1]
+        say = (f"This tune, {last['words']:,} words: {last['start']:.1f}% → {last['best']:.1f}%"
+               + (f"   ·   the first, {first['words']:,} words: {first['start']:.1f}% → {first['best']:.1f}%"
+                  if len(tunes) > 1 else ""))
+        pad = 12
+        c.create_text(pad, pad + line / 2, anchor="w", font=small, fill=P["muted"],
+                      text=f"Earlier tunes ({len(self.past)}): error before → after, by words answered")
+        right = c.create_text(w - pad, pad + line / 2, anchor="e", font=small, fill=P["text"], text=say)
+        top, bottom = pad + line + 10, h - pad - line - 4
+        hi = max(max(t["start"], t["best"]) for t in tunes) + 0.5
+        lo = max(0.0, min(min(t["start"], t["best"]) for t in tunes) - 0.5)
+        most = max(t["words"] for t in tunes)
+        left, end = pad + 30, w - pad - 30
+        x = lambda n: left + n / max(1, most) * (end - left)                  # noqa: E731
+        y = lambda v: top + (hi - v) / max(0.1, hi - lo) * (bottom - top)     # noqa: E731
+        if len(tunes) > 1:                                    # (the error after each tune: falling is good news)
+            c.create_line(*[v for t in tunes for v in (x(t["words"]), y(t["best"]))], fill=PART_LINE, width=2)
+        for t in tunes:
+            here = t is now
+            col = AVERAGE_LINE if t.get("kept") or here else PART_LINE
+            tx = x(t["words"])
+            c.create_line(tx - 5, y(t["start"]), tx + 5, y(t["start"]), fill=P["muted"], width=2)   # (before)
+            c.create_line(tx, y(t["start"]), tx, y(t["best"]), fill=col, width=3 if here else 2)
+            r = 5 if here else 4
+            c.create_oval(tx - r, y(t["best"]) - r, tx + r, y(t["best"]) + r, outline=col,
+                          fill=col if t.get("kept") or here else P["surface"], width=2)
+            c.create_text(tx, h - pad - line / 2, text=f"{t['words']:,}", font=small,
+                          fill=P["text"] if here else P["muted"])
+        c.tag_raise(right)
 
     # ---- the slots: built once, empty; each round fills them in place ---------------------------------------------
     BLANK = "–"
@@ -1547,6 +1661,9 @@ class TuneWindow:
             show_error("Tune the rules", f"The numbers were not written: {e}", parent=self.root)
             return
         moved = changed(self.tuning.start_values, values)
+        if self.past and self.past[-1].get("when") == getattr(self, "remembered", None):
+            self.past[-1]["kept"] = True
+            write_history(self.history_path, self.past)
         show_message("Tune the rules", "Written into src/rudeness.py",
                      f"{len(moved)} numbers changed and RUDENESS_VERSION bumped. Read the diff (git diff "
                      "src/rudeness.py), run the tests and measure_rudeness answers, then commit.", parent=self.root)
@@ -1616,6 +1733,8 @@ def main(argv=None):
     ap.add_argument("--from-program", action="store_true",
                     help="(the program's Tune the rules bubble) the close box hides the window while tuning runs; "
                          "a \"show\" line on stdin brings it back")
+    ap.add_argument("--start-hidden", action="store_true",
+                    help="(the program's automatic tune) the window starts hidden; it shows when done, or on \"show\"")
     ap.add_argument("--workers", type=int, default=min(PARTS + 1, os.cpu_count() or 1),
                     help="processes tuning the parts (0: this one)")
     args = ap.parse_args(argv)
@@ -1632,7 +1751,10 @@ def main(argv=None):
     root = tk.Tk()
     init_fonts(root)
     set_icon(root)
+    if args.start_hidden:
+        root.withdraw()
     win = TuneWindow(root, answers_path, args.rounds, os.path.join(ROOT, "src", "rudeness.py"))
+    win.hidden = args.start_hidden            # (done or failed while hidden: it shows itself)
     if args.from_program and sys.stdin is not None:
         win.from_program = True
         threading.Thread(target=win.listen, args=(sys.stdin,), daemon=True).start()
