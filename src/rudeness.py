@@ -305,6 +305,11 @@ def plain_group_name(sense, points):
 _EXAMPLES = re.compile(r"[,;]?\s*\b(such as|e\.g\.|for example|for instance|including)\b.*$", re.I)
 
 
+# selling sex or illicit sex: Sexual even in plain words (the user's answers: "brothel", "pimp", "fornication"), where
+# the plain words for sex itself are the proper ones ("sex: sexual activity", "penis": clean)
+VICE = re.compile(r"\b(prostitut\w*|brothels?|whores?|promiscu\w*|fornicat\w*|pimps?|procur(er|ess)\w*)\b", re.I)
+
+
 def score_sense(sense, pos="", word="", wn=None, identity=False):
     """{kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories",
     "glosses"); `word`, `wn`: the word and WordNet (or None), for WORDNET_POINTS; `identity`: the word is a group's
@@ -351,6 +356,8 @@ def score_sense(sense, pos="", word="", wn=None, identity=False):
         moved = points["clinical"] * 0.7     # points go to Sexual (Crude for bodily waste)
         points["clinical"] -= moved
         _add(points, {"crude" if points.get("crude", 0) > points.get("sexual", 0) else "sexual": moved})
+    elif not slangy and points.get("sexual") and VICE.search(said):    # selling or illicit sex: Sexual, though
+        points["sexual"] = min(points["sexual"], MEANING_MIN)            # never enough alone to smear the word
     elif not slangy and points.get("sexual"):    # and plain words about sex are the proper ones ("male: produces
         moved = points["sexual"] * 0.7           # sperm", "pin-up"): Clinical, not Sexual
         points["sexual"] -= moved
@@ -365,7 +372,12 @@ def score_sense(sense, pos="", word="", wn=None, identity=False):
         for k in points:                                               # "pass water", "go potty", "oldest occupation"
             if k != "clinical":
                 points[k] *= SOFTENED
-    return fold(unslur(points, sense, word, identity), sense)
+    out = fold(unslur(points, sense, word, identity), sense)
+    if rude_label and out.get("slur", 0.0) >= MEANING_MIN and any(g.search(gloss) for g in GROUP):
+        for k in ("expletive", "sexual"):    # a rude name for a group of people is a slur first, however vulgar
+            if k in out:                     # ("fag: a homosexual man" was an expletive)
+                out[k] = min(out[k], out["slur"] * 0.99)
+    return out
 
 
 HARSH = {"vulgar", "offensive"}      # labels that make a crude word or an insult an expletive ("shit", "bastard")
@@ -382,12 +394,13 @@ def harsh(sense):
 
 def fold(points, sense):
     """The rules' {kind: points} (RULE_KINDS) as the kinds shown (RUDE_KINDS, OB-12, the user's three): Expletive is
-    the best of Swear, and Crude and Insult when the meaning is harsh; Sexual and Slur stay; Clinical (the proper
-    word: "penis", "urinate") goes. A shown kind keeps its key whenever a kind that counts towards it has one, at 0 if
+    the best of Swear, and Insult when the meaning is harsh; Sexual and Slur stay; Crude (bodily waste: the user's
+    answers keep "shit: feces" and "john: a toilet" ordinary, however vulgar) and Clinical (the proper
+    word: "penis", "urinate") go. A shown kind keeps its key whenever a kind that counts towards it has one, at 0 if
     need be (the tuner reads a meaning with no keys as one no number can make rude: true, as harshness is labels)."""
     out = {k: points[k] for k in ("sexual", "slur") if k in points}
     loud = harsh(sense)
-    parts = [points[k] for k in ("swear", "crude", "insult") if k in points and (k == "swear" or loud)]
+    parts = [points[k] for k in ("swear", "insult") if k in points and (k == "swear" or loud)]
     if parts:
         out["expletive"] = max(parts)
     return out
@@ -448,7 +461,24 @@ def score_word(senses, pos="", word="", wn=None):
     scored = [score_sense(s, p, word, wn) for s, p in zip(senses, poses)]
     if is_identity(senses, scored):                  # the word is a group's own name (SLUR_MARKS)
         scored = [score_sense(s, p, word, wn, identity=True) for s, p in zip(senses, poses)]
-    return scored
+    return euphemisms(senses, scored)
+
+
+def euphemisms(senses, scored):
+    """An ordinary word's later meaning that is about sex is a euphemism, and Sexual, labelled or not (the user's
+    rule: "one: an act of sexual intercourse", "job: a sex act", "connection"; the plain words, "sex", "copulate",
+    stay clean): when the word's first real meaning is clean and says nothing of sex, each later meaning whose words
+    are about sex (the first WORDING) gets at least MEANING_MIN Sexual, its Clinical points moved there."""
+    first = next((i for i, s in enumerate(senses) if not is_form(s)), None)
+    if first is None or sense_kind(scored[first]) != "clean" or WORDING[0][0].search(gloss_of(senses[first])):
+        return scored
+    out = list(scored)
+    for i, s in enumerate(senses):
+        if i != first and not is_form(s) and sense_kind(out[i]) == "clean" and WORDING[0][0].search(gloss_of(s)):
+            p = dict(out[i])
+            p["sexual"] = max(p.get("sexual", 0.0) + p.pop("clinical", 0.0), MEANING_MIN)
+            out[i] = p
+    return out
 
 
 # ---- the links between words: a second pass over the first scores (Wiktionary's synonym lists) -------------------
@@ -641,7 +671,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "16"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "17"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["expletive"], True, [], "expletive")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters

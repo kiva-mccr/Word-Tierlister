@@ -717,6 +717,15 @@ sees it close silently. Both steps are useful even if the program is only ever r
   smeared whole whatever its first meaning (rudeness.mostly_rude: 3 or more firmly rude meanings, half of
   its meanings or more): dick, bitch, faggot, balls, pussy and 10 more, 81 words with their forms; "cock"
   (1 of 34) is not; "roger" (3 of 5) is. RUDENESS_VERSION 16.
+- [x] **OB-13** Rules from the user's answers (asked for: "what is still wrong might help you figure out more
+  rules"; 547 words answered, the tuner's misses grouped into six ideas, each measured on the answers first):
+  an ordinary word's later meaning about sex is a euphemism and Sexual, labelled or not (rudeness.euphemisms;
+  the user: "euphemisms as sexual, clinical terms as normal"); selling or illicit sex is Sexual in plain
+  words (rudeness.VICE: brothel, pimp, fornication), never enough alone to smear the word; toilet words are no
+  expletive however vulgar (fold drops Crude); a rude name for a group of people is a slur first. Error on
+  the answers 23.4% -> 20.4% (measured on the same answers: the tuner's held-out run is the real test); the
+  program's words: Sexual 3,528 -> 3,734, Expletive 4,768 -> 4,646, Slur 1,617 -> 1,647, whole 11,619 ->
+  11,710. "Slur beats expletive" everywhere was tried and was worse (24.8%). RUDENESS_VERSION 17.
 - [x] **Z-1** One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
   screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
   change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to

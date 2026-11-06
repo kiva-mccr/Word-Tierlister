@@ -21,12 +21,13 @@ The module docstring has the details; this page is the map.
 - `plain_group_name`: True if a meaning is a group's name with no rude label or points ("gay: a homosexual"): the word is its name.
 - `score_sense`: {kind: points} for one meaning (a kaikki.org sense: its "tags", "raw_tags", "topics", "categories", "glosses"); `word`, `wn`: the word and WordNet (or None), for...
 - `harsh`: True if Wiktionary marks a meaning vulgar or offensive (HARSH, or a vulgar category): a crude word or an insult so marked is strong language, one not so marked an...
-- `fold`: The rules' {kind: points} (RULE_KINDS) as the kinds shown (RUDE_KINDS, OB-12, the user's three): Expletive is the best of Swear, and Crude and Insult when the meaning...
+- `fold`: The rules' {kind: points} (RULE_KINDS) as the kinds shown (RUDE_KINDS, OB-12, the user's three): Expletive is the best of Swear, and Insult when the meaning is harsh;...
 - `sense_kind`: The meaning's kind: its best-scoring kind with at least MEANING_MIN points, else "clean" (ties go to the ruder kind, in RUDE_KINDS' order from the end).
 - `sense_points`: A meaning's points towards the given kinds (its best one of them).
 - `is_form`: True if a meaning only names another word ("plural of bitch", "alternative spelling of bell end").
 - `word_points`: The word's points from its meanings' {kind: points} (in order), counting only `kinds` (the censored ones): its first meaning counts FIRST_WEIGHT, the mean of the rest...
 - `score_word`: [{kind: points} for each meaning] of a word's senses (kaikki.org); pos: their part of speech (one per sense, or one for all); word: the word itself (for its WordNet...
+- `euphemisms`: An ordinary word's later meaning that is about sex is a euphemism, and Sexual, labelled or not (the user's rule: "one: an act of sexual intercourse", "job: a sex...
 - `rude_kinds_of`: {word: the set of kinds of its rude meanings} from the first pass ({word: [{kind: points}]}): words with none left out.
 - `incoming_links`: {word: [(kind, definition, from word)]}: each rude meaning (first pass) that lists the word as a synonym.
 - `synonyms`: The words a sense lists as its synonyms (kaikki.org's dicts, or plain words in a compact sense).
@@ -52,6 +53,8 @@ The module docstring has the details; this page is the map.
 
 - Rules only: no fitted weights, no word lists (the user's choice). Measure every change with `tools/measure_rudeness.py`.
 - Bump `RUDENESS_VERSION` whenever a rule changes: that is what makes every save score its words again.
+- Euphemisms are Sexual, the plain words for sex are not (the user's rule, OB-13): `euphemisms` lifts an ordinary word's later meanings about sex (its first real meaning clean and silent on sex); "sex: sexual activity", "penis", "copulate" stay clean. Selling or illicit sex (`VICE`) is Sexual in plain words but capped at MEANING_MIN, so "brothel" or "pimp" is never smeared whole for it.
+- Toilet words never make an expletive, however vulgar (`fold` leaves Crude out): the user's answers keep "shit: feces", "john: a toilet" ordinary. A rude name for a group (a rude label, slur points at MEANING_MIN, GROUP matching) is a slur before an expletive or Sexual; letting any slur points win everywhere was worse (24.8% against 23.4%).
 - A meaning "refers back" to a word smeared whole only by naming it with an ending (`_refers_to`, `_ENDINGS`), never by its first letters: a prefix match made "pom: ... pomegranate juice", "jock: a disc jockey" and "lav: lavalier microphone" rude.
 - Only a word smeared whole keeps rude kinds ("Obscene words" = censored words). One rude meaning among ordinary ones ("can", "come") stays ordinary; that meaning is smeared in the definitions.
 - A group's own name is never a slur ("jews", "trans", "gay", "queer"): only a slur / ethnic / vulgar label or the ethnic-slurs category makes one (`SLUR_MARKS`, `IDENTITY`).
