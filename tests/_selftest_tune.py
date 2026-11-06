@@ -88,16 +88,19 @@ while not events.empty():
     got.append(events.get())
 names = [e[0] for e in got]
 assert "error" not in names, [e for e in got if e[0] == "error"]
-rounds = [e for e in got if e[0] == "round"]
-assert rounds[0][1] == 0 and set(rounds[1][2]) == set(range(T.PARTS + 1)) and rounds[0][2][0][1] is not None
-assert rounds[1][2][T.ALL][1] is None                                 # (the run on every word has no test)
-assert tu.best[0] > 0 and tu.best[1] < rounds[0][3], (tu.best[:2], rounds[0][3])
-assert ("tally", "now") in [e[:2] for e in got] and ("tally", "best") in [e[:2] for e in got]
+sweeps = [e[1] for e in got if e[0] == "sweep"]                       # (a round's results in one event: asked for)
+assert set(names) <= {"begin", "part", "step", "sweep", "done"}, set(names)
+assert sweeps[0]["round"] == 0 and set(sweeps[1]["errors"]) == set(range(T.PARTS + 1))
+assert sweeps[0]["errors"][0][1] is not None and sweeps[0]["tally"][0] == "now" and "misses" in sweeps[0]
+assert sweeps[1]["errors"][T.ALL][1] is None                          # (the run on every word has no test)
+assert tu.best[0] > 0 and tu.best[1] < sweeps[0]["average"], (tu.best[:2], sweeps[0]["average"])
+assert any(sw.get("tally", ("",))[0] == "best" for sw in sweeps)
+assert all(sw["wait"][1] == T.patience(sw["noise"]) for sw in sweeps)
 assert names[-1] == "done"
 moved = dict((p, (a, b)) for p, a, b in T.changed(tu.start_values, tu.best[2]))
 assert moved, "nothing moved"
 assert rudeness.MEANING_MIN == 3.0 and not isinstance(rudeness.GROUP[0], T._Memo)    # (the rules left as they were)
-miss = [e for e in got if e[0] == "misses"][-1][1]
+miss = [sw["misses"] for sw in sweeps if "misses" in sw][-1]
 with open(os.path.join(folder, T.MISSES_FILE), encoding="utf-8") as f:
     assert len(f.read().strip().splitlines()) == len(miss) + 1
 for p, (lo, hi) in data["bounds"].items():
@@ -130,8 +133,17 @@ events = queue.Queue()
 T.Tuning(d_few, s_few, events, rounds=2, workers=0).run()
 got = [events.get() for _ in range(events.qsize())]
 assert "error" not in [e[0] for e in got], [e for e in got if e[0] == "error"]
-assert all(set(e[2]) <= set(T.tested_parts(d_few)) | {T.ALL} for e in got if e[0] == "round")
-assert all(v is not None for e in got if e[0] == "round" for p, (_tr, v) in e[2].items() if p != T.ALL)
+assert all(set(e[1]["errors"]) <= set(T.tested_parts(d_few)) | {T.ALL} for e in got if e[0] == "sweep")
+assert all(v is not None for e in got if e[0] == "sweep" for p, (_tr, v) in e[1]["errors"].items() if p != T.ALL)
+
+# the noise: the parts' standard error; the stop waits longer the noisier the average (asked for)
+assert T.noise([20.0]) == 0.0 and abs(T.noise([18.0, 22.0]) - 2.0) < 1e-9
+assert T.patience(0.0) == T.PATIENCE and T.patience(0.5) == T.PATIENCE + 1 and T.patience(1.2) == T.PATIENCE + 3
+assert T.patience(99) == T.PATIENCE_MAX
+# Keep's round: the earliest within the noise of the lowest (asked for), not a win by wobble
+hist = [(0, {}, 24.0, 1.0, None), (1, {}, 20.5, 1.0, None), (2, {}, 19.5, 1.0, None), (3, {}, 19.2, 1.0, None)]
+assert T.best_round(hist) == 2
+assert T.best_round(hist[:2]) == 1 and T.best_round([(0, {}, 5.0, 0.0, None), (1, {}, 5.0, 0.0, None)]) == 0
 
 # the guard: what the program's words would show
 g_now = T.guard(saved, start, data["base"])
@@ -185,6 +197,11 @@ def pump(n=5):
 
 pump()
 assert "Reading" in win.info.cget("text") and not win.keep_btn.enabled
+opened = root.winfo_width(), root.winfo_height()
+# every row there from the start, empty (asked for): the kinds, the guard's names, the misses' rows
+assert set(win.kind_cells) == {k for k, _n in T.GUARD_NAMES} and len(win.miss_cells) == T.SHOWN_MISSES
+assert all(a.cget("text") == T.TuneWindow.BLANK for a, _b in win.kind_cells.values())
+assert len(win.change_cells) == T.SHOWN_CHANGES and win.guard_cells["whole"].cget("text") == T.TuneWindow.BLANK
 # the bar while the entries are read: moving until a share is known, then the share and (in time) the time left
 assert str(win.bar.cget("mode")) == "indeterminate" and win.bar_text.cget("text").startswith(T.READING)
 win.events.put(("progress", T.READING, 0.1)); pump(10)
@@ -223,6 +240,8 @@ for _ in range(400):
         break
 assert win.done and win.best_round and "Your answers: " in win.info.cget("text")
 assert not win.hidden and root.state() == "normal"                # (done while hidden: back, for Keep)
+assert (root.winfo_width(), root.winfo_height()) == opened, (opened, root.winfo_width(), root.winfo_height())
+assert win.wait and win.noise and "Noise ±" in win.note.cget("text")
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
 assert any(t.startswith("error: the average of the 5 parts") for t in texts)
 assert any(t.startswith("each part, tested") for t in texts) and "the rules as they are now" in texts

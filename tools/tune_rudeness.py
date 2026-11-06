@@ -10,7 +10,11 @@ into src/rudeness.py for a person to read over and commit.
 How it works:
   * the answered words (rude_review_answers.jsonl beside the review file) are split into 5 parts; for each part the
     numbers are tuned on the other 4 and tested on it, so every answered word is tested once, never by numbers
-    tuned on it; a sixth run tunes on every answered word: Keep takes its numbers at the round the tests liked best;
+    tuned on it; a sixth run tunes on every answered word: Keep takes its numbers at the round the tests liked best
+    (the earliest whose average is within the noise of the lowest, best_round: a win by wobble is luck);
+  * the noise is the parts' standard error (noise); a round is a real gain only by more than it, and the search
+    stops after patience(noise) rounds without one: 3, one more per 0.5 points of noise, 15 at most (asked for: a
+    noisy average waits longer to decide);
   * a round tries every number a step up and a step down (then JUMP steps), keeping a change when it lowers the
     error on the words tuned on (coordinate descent); a step that helps no way halves, so the search settles;
   * the error is 100% minus the average F1 of the kinds (Clean and each rude kind, meaning by meaning, as
@@ -20,6 +24,8 @@ How it works:
   * the guard scores every word the program scores (rudeness.score_saved on the words with a sign of rudeness) with
     the rules now and with the best numbers: how many words each kind and smearing whole would cover; a kind more
     than doubling is marked, and Keep asks first;
+  * the window (asked for): every row there from the start, empty, and one size; each round's results arrive in
+    one event ("sweep") and show at once, only the bar moving between them;
   * "still wrong": the tested meanings the best numbers still get wrong (no number fixes those: ideas for new
     rules), all written to rude_tune_misses.txt beside the answers.
 
@@ -33,6 +39,7 @@ import contextlib
 import copy
 import hashlib
 import json
+import math
 import os
 import queue
 import re
@@ -56,6 +63,9 @@ STEP = 0.2                      # a number's first step: 20% of it (a factor's: 
 MIN_STEP = 0.02                 # a step this small is settled
 JUMP = 4                        # a step that helps neither way is tried this many times as far before it halves
                                 # (the error moves in jumps: a small step often changes no meaning's kind)
+PATIENCE = 3                    # rounds without a real gain before it stops, on an average with no noise ...
+NOISE_ROUND = 0.5               # ... and one round more for each this many points of noise (the parts' standard error)
+PATIENCE_MAX = 15
 DOUBLED = 2.0                   # the guard marks a kind that covers this many times the words it does now
 MISSES_FILE = "rude_tune_misses.txt"
 
@@ -724,9 +734,10 @@ def read_answers(path):
 # ---- the run, between the window and the processes -------------------------------------------------------------
 class Tuning:
     """The search: every part's rounds in the processes, one round at a time; events go to `events` (a queue) as
-    ("round", n, {part: (train error, test error)}, average test error), ("best", round), ("done", why),
-    ("tally", "now" | "best", {class: [tp, fp, fn]}), ("guard", "now" | "best", counts), ("misses", list),
-    ("log", text), ("error", text). pause(), resume(), stop()."""
+    ("sweep", {round, errors: {part: (train error, test error)}, average, noise, wait: (rounds since a real gain,
+    of), and when Keep's round changes best, tally: ("now" | "best", {class: [tp, fp, fn]}), misses}), ("begin",
+    round, jobs), ("part", round, done, of), ("done", "settled" | "steady" | "rounds"), ("error", text).
+    pause(), resume(), stop()."""
 
     def __init__(self, data, saved, events, rounds=60, workers=PARTS + 1, misses_path=None):
         self.data, self.saved, self.events, self.rounds, self.workers = data, saved, events, rounds, workers
@@ -735,7 +746,7 @@ class Tuning:
         self.tested = tested_parts(data)    # (only parts with answered words: a few answers leave some empty)
         self.values = {part: dict(self.start_values) for part in range(PARTS + 1)}
         self.steps = {part: {p: STEP for p in self.start_values} for part in range(PARTS + 1)}
-        self.history = []                   # [(round, {part: values}, average test error)]
+        self.history = []                   # [(round, {part: values}, average test error, noise, tally)]
         self.best = None                    # (round, average test error, all words' values, tally)
         self._go = threading.Event()
         self._go.set()
@@ -762,13 +773,16 @@ class Tuning:
         jobs = [ex.submit(_run_part, p, self.start_values, {k: 0.0 for k in self.start_values}, 0)
                 for p in self.tested]
         now = self._results(0, jobs)
-        avg = sum(r[4] for r in now) / len(now)
-        self.events.put(("round", 0, {r[0]: (r[3], r[4]) for r in now}, avg))
-        self.events.put(("tally", "now", _sum_tallies(r[5] for r in now)))
-        self.history.append((0, {p: dict(self.start_values) for p in range(PARTS + 1)}, avg))
+        tests = [r[4] for r in now]
+        avg = sum(tests) / len(tests)
+        self.history.append((0, {p: dict(self.start_values) for p in range(PARTS + 1)}, avg, noise(tests),
+                             _sum_tallies(r[5] for r in now)))
         self.best = (0, avg, dict(self.start_values), _sum_tallies(r[5] for r in now))
-        self.events.put(("best", 0))
-        self._misses(ex)
+        gain_at = avg                       # (the average at the last real gain: lower by more than the noise)
+        since, wait = 0, patience(noise(tests))
+        self.events.put(("sweep", {"round": 0, "errors": {r[0]: (r[3], r[4]) for r in now}, "average": avg,
+                                   "noise": noise(tests), "best": 0, "tally": ("now", self.best[3]),
+                                   "misses": self._misses(ex), "wait": (since, wait)}))
         for rnd in range(1, self.rounds + 1):
             self._go.wait()
             if self._stop:
@@ -777,17 +791,30 @@ class Tuning:
             res = {r[0]: r for r in self._results(rnd, jobs)}
             for p, r in res.items():
                 self.values[p], self.steps[p] = r[1], r[2]
-            avg = sum(res[p][4] for p in self.tested) / len(self.tested)
+            tests = [res[p][4] for p in self.tested]
+            avg, spread = sum(tests) / len(tests), noise(tests)
             self.round = rnd
-            self.history.append((rnd, {p: dict(self.values[p]) for p in res}, avg))
-            self.events.put(("round", rnd, {p: (res[p][3], res[p][4]) for p in res}, avg))
-            if avg < self.best[1] - 1e-9:
-                self.best = (rnd, avg, dict(self.values[ALL]), _sum_tallies(res[p][5] for p in self.tested))
-                self.events.put(("best", rnd))
-                self.events.put(("tally", "best", self.best[3]))
-                self._misses(ex)
+            self.history.append((rnd, {p: dict(self.values[p]) for p in res}, avg, spread,
+                                 _sum_tallies(res[p][5] for p in self.tested)))
+            sweep = {"round": rnd, "errors": {p: (res[p][3], res[p][4]) for p in res}, "average": avg,
+                     "noise": spread}
+            pick = best_round(self.history)
+            if pick != self.best[0]:
+                r_, vals, a_, _n, t_ = self.history[pick]
+                self.best = (r_, a_, dict(vals[ALL]), t_)
+                sweep.update(best=pick, tally=("best", t_), misses=self._misses(ex))
+            if avg < gain_at - spread - 1e-9:
+                gain_at, since = avg, 0
+            else:
+                since += 1
+            wait = patience(spread)
+            sweep["wait"] = (since, wait)
+            self.events.put(("sweep", sweep))       # (everything of a round at once: the window shows it in one go)
             if all(s < MIN_STEP for st in self.steps.values() for s in st.values()):
                 self.events.put(("done", "settled"))
+                return
+            if since >= wait:
+                self.events.put(("done", "steady"))
                 return
         self.events.put(("done", "rounds"))
 
@@ -802,15 +829,16 @@ class Tuning:
         return out
 
     def _misses(self, ex):
-        """The tested meanings the best round still gets wrong (each part's numbers at that round): an event, and
-        all of them in the misses file."""
+        """The tested meanings the best round still gets wrong (each part's numbers at that round), all of them
+        written to the misses file too."""
         scored = {}
-        for job in [ex.submit(_tested, part, self.values[part]) for part in self.tested]:
+        at = self.history[self.best[0]][1]
+        for job in [ex.submit(_tested, part, at[part]) for part in self.tested]:
             scored.update(job.result()[1])
         found = misses(self.data, scored)
-        self.events.put(("misses", found))
         if self.misses_path:
             write_misses(self.misses_path, found, self.best[0])
+        return found
 
     def pause(self):
         self._go.clear()
@@ -821,6 +849,26 @@ class Tuning:
     def stop(self):
         self._stop = True
         self._go.set()
+
+
+def noise(tests):
+    """The average's noise: the standard error of the parts' tested errors (points; none from one part)."""
+    if len(tests) < 2:
+        return 0.0
+    mean = sum(tests) / len(tests)
+    return (sum((t - mean) ** 2 for t in tests) / (len(tests) - 1)) ** 0.5 / len(tests) ** 0.5
+
+
+def best_round(history):
+    """The round Keep takes (asked for): the earliest whose average is within the noise of the lowest (a win smaller
+    than the noise is likely luck, and an earlier round has changed fewer numbers)."""
+    low = min(history, key=lambda h: h[2])
+    return next(h[0] for h in history if h[2] <= low[2] + low[3] + 1e-9)
+
+
+def patience(spread):
+    """Rounds without a real gain before the search stops: longer the noisier the average (asked for)."""
+    return min(PATIENCE_MAX, PATIENCE + math.ceil(spread / NOISE_ROUND - 1e-9))
 
 
 def _mp_queue():
@@ -909,6 +957,7 @@ class TuneWindow:
         self.points = {}                    # {part: [(round, test error)]}, ALL: train error
         self.avg = []                       # [(round, average test error)]
         self.tallies, self.guards, self.miss = {}, {}, []
+        self.noise, self.wait, self.held_guard = [], None, None   # ([(round, points)], (rounds since a gain, of))
         self.best_round, self.done, self.closed = None, False, False
         bg = P["bg"]
         root.title("Tune the rules")
@@ -924,7 +973,7 @@ class TuneWindow:
         tk.Label(box, text="Rules only: it changes the numbers in rudeness.py; the program never reads your answers.",
                  font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w")
         self.info = tk.Label(box, font=font("body"), bg=bg, fg=P["text"], text="Reading the Wiktionary entries ...",
-                             justify="left", anchor="w")
+                             justify="left", anchor="nw", height=2)        # (two lines kept: the window never grows)
         self.info.pack(fill="x", pady=(12, 6))
         from tkinter import ttk
         style = ttk.Style(root)
@@ -944,8 +993,9 @@ class TuneWindow:
         self.bottom = tk.Frame(box, bg=bg)                      # (packed first at the bottom: the chart takes the rest)
         self.chart = tk.Canvas(box, width=w, height=h, bg=P["surface"], highlightthickness=1,
                                highlightbackground=P["border"])
-        self.note = tk.Label(self.bottom, font=font("small"), bg=bg, fg=P["muted"], wraplength=w, justify="left")
-        self.note.pack(anchor="w", pady=(6, 0))
+        self.note = tk.Label(self.bottom, font=font("small"), bg=bg, fg=P["muted"], wraplength=w, justify="left",
+                             anchor="nw", height=2)
+        self.note.pack(fill="x", pady=(6, 0))
         box = self.bottom
         cols = tk.Frame(box, bg=bg)
         cols.pack(fill="x", pady=(14, 0))
@@ -958,6 +1008,9 @@ class TuneWindow:
         self.guard_box.pack(fill="x", pady=(16, 0))
         self.miss_box = tk.Frame(box, bg=bg)
         self.miss_box.pack(fill="x", pady=(12, 0))
+        self._build_slots()                     # (every row there from the start, empty: filled in place, asked for)
+        for fill in (self.draw_kinds, self.draw_changes, self.draw_guard, self.draw_misses):
+            fill()
         nav = tk.Frame(box, bg=bg)
         nav.pack(fill="x", pady=(18, 0))
         kw = dict(font=font("body"), padx=16, pady=6, radius=12, animator=anim)
@@ -976,6 +1029,8 @@ class TuneWindow:
         self.pause_btn.set_enabled(False)
         self.hidden = self.failed = False
         root.protocol("WM_DELETE_WINDOW", self.close_box)
+        root.update_idletasks()                 # (its size set once: a longer line later never makes it jump)
+        root.geometry(f"{root.winfo_reqwidth()}x{root.winfo_reqheight()}")
         self.show_bar()
         self.draw()
         self._poll_job = root.after(150, self._poll)
@@ -1032,7 +1087,7 @@ class TuneWindow:
         self.bar_text.config(text=f"{what}: {share:.0%}" + (f"  ·  {startup.format_eta(left)} in this round" if left
                                                              is not None else "  ·  working out the time left"
                                                              if done < of else "")
-                             + ("  (it stops early once nothing improves)" if rnd == 1 else ""))
+                             + ("  (it stops early once no round gains more than the noise)" if rnd == 1 else ""))
 
     def round_share(self):
         """How much of this round is done: each part's numbers tried (a part done counts whole)."""
@@ -1124,27 +1179,14 @@ class TuneWindow:
             self.show_bar()
         elif kind == "ready":
             self.start(*e[1:])
-        elif kind == "round":
-            _k, rnd, errs, avg = e
-            for part, (train, test) in errs.items():
-                self.points.setdefault(part, []).append((rnd, train if part == ALL else test))
-            self.avg.append((rnd, avg))
-            self.status.config(text=f"Round {rnd} of up to {self.rounds}" + ("  ·  paused" if self._paused() else ""))
-            say(f"Round {rnd} of up to {self.rounds}")
-            self.draw()
-        elif kind == "best":
-            self.best_round = e[1]
-            self.keep_btn.set_enabled(e[1] > 0)
-            self.draw()
-        elif kind == "tally":
-            self.tallies[e[1]] = e[2]
-            self.draw_kinds()
-        elif kind == "misses":
-            self.miss = e[1]
-            self.draw_misses()
+        elif kind == "sweep":
+            self.sweep(e[1])
         elif kind == "guard":
-            self.guards[e[1]] = e[2]
-            self.draw_guard()
+            if e[1] == "now" and not self.avg:          # (held for round 0: the window fills in one go)
+                self.held_guard = e[2]
+            else:
+                self.guards[e[1]] = e[2]
+                self.draw_guard()
         elif kind == "show":
             self.show_again()
         elif kind == "gone":                      # (the program closed: a hidden tuner would be out of reach)
@@ -1156,8 +1198,8 @@ class TuneWindow:
                 self.show_again()
             self.done = True
             self.pause_btn.set_enabled(False)
-            self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: "
-                               + ("settled" if e[1] == "settled" else "the last round"))
+            self.status.config(text=f"Done at round {self.avg[-1][0] if self.avg else 0}: " + {
+                "settled": "settled", "steady": "no real gain for a while"}.get(e[1], "the last round"))
             self.check_best()
             self.show_bar()
         elif kind == "error":
@@ -1166,6 +1208,29 @@ class TuneWindow:
                 self.show_again()
             self.status.config(text="Stopped: an error")
             self.note.config(text=e[1], fg=self.P["bad"][1])
+
+    def sweep(self, r):
+        """A round's results, all at once (asked for: nothing shows piecemeal): the chart, the note, each kind, the
+        numbers changed, the misses; round 0 also the guard's first count."""
+        rnd = r["round"]
+        for part, (train, test) in r["errors"].items():
+            self.points.setdefault(part, []).append((rnd, train if part == ALL else test))
+        self.avg.append((rnd, r["average"]))
+        self.noise.append((rnd, r["noise"]))
+        self.wait = r["wait"]
+        if "best" in r:
+            self.best_round = r["best"]
+            self.keep_btn.set_enabled(r["best"] > 0)
+            self.tallies[r["tally"][0]] = r["tally"][1]
+            self.miss = r["misses"]
+        if rnd == 0 and getattr(self, "held_guard", None) is not None:
+            self.guards["now"] = self.held_guard
+        self.status.config(text=f"Round {rnd} of up to {self.rounds}" + ("  ·  paused" if self._paused() else ""))
+        say(f"Round {rnd} of up to {self.rounds}")
+        self.draw()
+        self.draw_kinds()
+        self.draw_misses()
+        self.draw_guard()
 
     # ---- started by the program's Tune the rules bubble (--from-program) -----------------------------------------
     def listen(self, stream):
@@ -1211,7 +1276,10 @@ class TuneWindow:
         w, h = c.winfo_width(), c.winfo_height()
         if w < 50 or h < 50:                                    # (not laid out yet)
             w, h = int(c.cget("width")), int(c.cget("height"))
+        from theme import mix
+        band = mix(P["surface"], AVERAGE_LINE, 0.28)
         legend = ((AVERAGE_LINE, None, 3, f"error: the average of the {PARTS} parts (100% minus the average F1)"),
+                  (band, None, 10, "its noise (± the parts' standard error)"),
                   (PART_LINE, None, 2, "each part, tested on numbers tuned without it"),
                   (P["muted"], (4, 4), 1, "the rules as they are now"))
         small = font("small")                          # (every margin measured: the text's size varies by screen)
@@ -1247,6 +1315,11 @@ class TuneWindow:
         c.create_line(left, y(start), w - right, y(start), fill=P["muted"], dash=(4, 4))
         c.create_text(w - right + 8, y(start), text=f"now {start:.1f}%", anchor="w", font=font("small"),
                       fill=P["muted"])
+        if len(self.noise) > 1:                                  # (the band under every line)
+            spread = dict(self.noise)
+            upper = [(x(r), y(min(hi, e + spread.get(r, 0)))) for r, e in self.avg]
+            lower = [(x(r), y(max(0, e - spread.get(r, 0)))) for r, e in reversed(self.avg)]
+            c.create_polygon(*[v for pt in upper + lower for v in pt], fill=band, outline="")
         for part in range(PARTS):
             pts = self.points.get(part, [])
             if len(pts) > 1:
@@ -1272,113 +1345,147 @@ class TuneWindow:
         self.draw_changes()
 
     def draw_note(self):
+        stop = ""
+        if self.wait and self.noise:
+            since, wait = self.wait
+            stop = (f" Noise ±{self.noise[-1][1]:.1f} points, so it stops after {wait} rounds without a gain bigger "
+                    f"than the noise ({since} so far).")
         if not self.best_round:
-            self.note.config(text="No round has beaten the rules as they are yet.")
+            self.note.config(text="No round has beaten the rules as they are yet." + stop)
             return
         fit = dict(self.points.get(ALL, [])).get(self.best_round)
         avg = dict(self.avg)[self.best_round]
         gap = avg - fit if fit is not None else 0
-        self.note.config(text=f"Best at round {self.best_round}. Keep takes the numbers tuned on all your words at "
-                         f"that round. Error on the words it tuned on: {fit:.1f}% ({gap:.1f} points below the tested "
-                         "error: " + ("a small gap, so it is not just memorising your answers)." if gap < 5 else
-                                      "a wide gap: it is learning your answers more than the rules).")
-                         if fit is not None else "")
+        best = f"Best at round {self.best_round}. Keep takes the numbers tuned on all your words at that round."
+        if fit is not None:
+            best += (f" Error on the words it tuned on: {fit:.1f}% ({gap:.1f} points below the tested error: "
+                     + ("a small gap, so it is not just memorising your answers)." if gap < 5 else
+                        "a wide gap: it is learning your answers more than the rules)."))
+        self.note.config(text=best + stop)
 
-    def _clear(self, frame):
-        for wdg in frame.winfo_children():
-            wdg.destroy()
+    # ---- the slots: built once, empty; each round fills them in place ---------------------------------------------
+    BLANK = "–"
+
+    def _build_slots(self):
+        import review
+        tk, P, font = self.tk, self.P, self.font
+        bg, card = P["bg"], P["surface"]
+        lab = lambda box, role="small", colour=None, back=bg, **kw: tk.Label(    # noqa: E731
+            box, font=font(role), bg=back, fg=colour or P["text"], **kw)
+        box = self.kinds_box
+        lab(box, colour=P["muted"], text="Each kind, tested (precision / recall)").grid(
+            row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
+        self.kind_cells = {}
+        for i, (k, name) in enumerate(GUARD_NAMES[1:] + GUARD_NAMES[:1], 1):
+            colour = review.kind_colour(k) if k != "whole" else P["surface2"]
+            lab(box, text=name, back=colour, padx=8, pady=1, width=12).grid(row=i, column=0, sticky="w", pady=1)
+            now = lab(box, colour=P["muted"], text=self.BLANK, width=9)
+            now.grid(row=i, column=1, padx=(10, 4))
+            lab(box, colour=P["muted"], text="→").grid(row=i, column=2)
+            best = lab(box, "body", text=self.BLANK, width=9, anchor="w")
+            best.grid(row=i, column=3, padx=(4, 0), sticky="w")
+            self.kind_cells[k] = (now, best)
+        box = self.changes_box
+        self.changes_title = lab(box, colour=P["muted"], text="Numbers changed", anchor="w")
+        self.changes_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        self.change_cells = []
+        for i in range(1, SHOWN_CHANGES + 1):
+            name = lab(box, text="", width=30, anchor="w")
+            name.grid(row=i, column=0, sticky="w", pady=1)
+            value = lab(box, "body", text="", width=12, anchor="e")
+            value.grid(row=i, column=1, sticky="e", padx=(14, 0))
+            self.change_cells.append((name, value))
+        self.changes_more = lab(box, colour=P["muted"], text="", anchor="w")
+        self.changes_more.grid(row=SHOWN_CHANGES + 1, column=0, sticky="w")
+        box = self.guard_box
+        self.guard_title = lab(box, colour=P["muted"], back=card, text="Guard: the words the program scores")
+        self.guard_title.grid(row=0, column=0, columnspan=8, sticky="w")
+        self.guard_cells = {}
+        for i, (k, name) in enumerate(GUARD_NAMES):
+            lab(box, colour=P["muted"], back=card, text=name).grid(row=1, column=2 * i, sticky="w", padx=(0, 6))
+            cell = lab(box, "body", back=card, text=self.BLANK, width=18, anchor="w")
+            cell.grid(row=1, column=2 * i + 1, sticky="w", padx=(0, 6))
+            self.guard_cells[k] = cell
+        self.guard_foot = lab(box, colour=P["muted"], back=card, text="")
+        self.guard_foot.grid(row=3, column=0, columnspan=8, sticky="w", pady=(4, 0))
+        box = self.miss_box
+        self.miss_title = lab(box, colour=P["muted"], text="Still wrong after tuning (no number can fix these: ideas "
+                              "for new rules)")
+        self.miss_title.pack(anchor="w")
+        self.miss_cells = []
+        for _ in range(SHOWN_MISSES):
+            r = tk.Frame(box, bg=bg)
+            r.pack(anchor="w", pady=1)
+            cells = [lab(r, "body", text="", width=12, anchor="w"),
+                     lab(r, colour=P["muted"], text="", width=44, anchor="w"),
+                     lab(r, text="", width=13, padx=6), lab(r, text="", width=13, padx=6)]
+            for j, c in enumerate(cells):
+                c.pack(side="left", padx=(6, 0) if j > 1 else 0)
+            self.miss_cells.append(cells)
+        self.miss_foot = lab(box, colour=P["muted"], text="")
+        self.miss_foot.pack(anchor="w", pady=(2, 0))
 
     def draw_kinds(self):
-        import review
-        tk, P, font, box = self.tk, self.P, self.font, self.kinds_box
-        self._clear(box)
-        tk.Label(box, text="Each kind, tested (precision / recall)", font=font("small"), bg=P["bg"],
-                 fg=P["muted"]).grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 4))
         now, best = (precision_recall(self.tallies[k]) if k in self.tallies else None for k in ("now", "best"))
-        for i, (k, name) in enumerate(GUARD_NAMES[1:] + (("whole", "Smeared whole"),), 1):
-            if now is None:
-                break
-            colour = review.kind_colour(k) if k != "whole" else P["surface2"]
-            tk.Label(box, text=name, font=font("small"), bg=colour, fg=P["text"], padx=8, pady=1,
-                     width=12).grid(row=i, column=0, sticky="w", pady=1)
-            fmt = lambda pr: f"{pr[0]:.0f} / {pr[1]:.0f}"        # noqa: E731
-            tk.Label(box, text=fmt(now[k]), font=font("small"), bg=P["bg"], fg=P["muted"]).grid(row=i, column=1,
-                                                                                               padx=(10, 4))
-            if best:
-                tk.Label(box, text="→", font=font("small"), bg=P["bg"], fg=P["muted"]).grid(row=i, column=2)
-                tk.Label(box, text=fmt(best[k]), font=font("body"), bg=P["bg"], fg=P["text"]).grid(
-                    row=i, column=3, padx=(4, 0), sticky="w")
+        fmt = lambda pr: f"{pr[0]:.0f} / {pr[1]:.0f}"           # noqa: E731
+        for k, (a, b) in self.kind_cells.items():
+            a.config(text=fmt(now[k]) if now else self.BLANK)
+            b.config(text=fmt(best[k]) if best else self.BLANK)
 
     def draw_changes(self):
-        tk, P, font, box = self.tk, self.P, self.font, self.changes_box
-        self._clear(box)
-        if not self.tuning or not self.tuning.best:
-            return
-        moved = changed(self.tuning.start_values, self.tuning.best[2])
-        moved.sort(key=lambda m: -abs(m[2] - m[1]) / max(abs(m[1]), 0.5))
-        tk.Label(box, text=f"Numbers changed ({len(moved)} of {len(self.tuning.start_values)})", font=font("small"),
-                 bg=P["bg"], fg=P["muted"]).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
-        for i, (p, a, b) in enumerate(moved[:SHOWN_CHANGES], 1):
-            shown = p.replace(" * ", " × ")
-            tk.Label(box, text=shown, font=font("small"), bg=P["bg"], fg=P["text"]).grid(row=i, column=0, sticky="w",
-                                                                                        pady=1)
-            tk.Label(box, text=f"{_num(a)} → {_num(b)}", font=font("body"), bg=P["bg"], fg=P["text"]).grid(
-                row=i, column=1, sticky="e", padx=(14, 0))
-        if len(moved) > SHOWN_CHANGES:
-            tk.Label(box, text=f"and {len(moved) - SHOWN_CHANGES} more", font=font("small"), bg=P["bg"],
-                     fg=P["muted"]).grid(row=SHOWN_CHANGES + 1, column=0, sticky="w")
+        moved = []
+        if self.tuning and self.tuning.best:
+            moved = changed(self.tuning.start_values, self.tuning.best[2])
+            moved.sort(key=lambda m: -abs(m[2] - m[1]) / max(abs(m[1]), 0.5))
+            self.changes_title.config(text=f"Numbers changed ({len(moved)} of {len(self.tuning.start_values)})")
+        for i, (name, value) in enumerate(self.change_cells):
+            p, a, b = moved[i] if i < len(moved) else ("", None, None)
+            name.config(text=p.replace(" * ", " × "))
+            value.config(text=f"{_num(a)} → {_num(b)}" if p else "")
+        extra = len(moved) - SHOWN_CHANGES
+        self.changes_more.config(text=f"and {extra} more" if extra > 0 else "")
 
     def draw_guard(self):
-        tk, P, font, box = self.tk, self.P, self.font, self.guard_box
-        self._clear(box)
-        bg = P["surface"]
+        P = self.P
         now, best = self.guards.get("now"), self.guards.get("best")
         n = len(self.saved) if self.data else 0
-        title = f"Guard: across all {n:,} words the program scores" + (", with the best numbers" if best else "")
-        tk.Label(box, text=title, font=font("small"), bg=bg, fg=P["muted"]).grid(row=0, column=0, columnspan=8,
-                                                                                 sticky="w")
-        if now is None:
-            tk.Label(box, text="Counting the words with the rules as they are now ...", font=font("small"), bg=bg,
-                     fg=P["muted"]).grid(row=1, column=0, columnspan=8, sticky="w")
-            return
-        marked = doubled(now, best) if best else []
-        for i, (k, name) in enumerate(GUARD_NAMES):
-            row, col = 1 + i // 4, 2 * (i % 4)
-            tk.Label(box, text=name, font=font("small"), bg=bg, fg=P["muted"]).grid(row=row, column=col, sticky="w",
-                                                                                    padx=(0, 6))
-            if best:
+        self.guard_title.config(text="Guard: the words the program scores" if not n else
+                                f"Guard: across all {n:,} words the program scores"
+                                + (", with the best numbers" if best else ""))
+        marked = doubled(now, best) if now and best else []
+        for k, cell in self.guard_cells.items():
+            if now is None:
+                text = self.BLANK
+            elif best:
                 d = (100 * (best[k] - now[k]) / now[k]) if now[k] else 0
                 text = f"{now[k]:,} → {best[k]:,}" + (f"  {d:+.0f}%" if now[k] and best[k] != now[k] else "")
                 text += ": check" if k in marked else ""
             else:
                 text = f"{now[k]:,}"
-            tk.Label(box, text=text, font=font("body"), bg=bg, fg=P["bad"][1] if k in marked else P["text"]).grid(
-                row=row, column=col + 1, sticky="w", padx=(0, 18))
-        foot = ("A kind more than doubling is marked: Keep asks first." if best else
-                "Counted again with the best numbers when the search pauses or ends." if self.best_round is None or
-                "best_round" not in self.guards else "Counting with the best numbers ...")
-        tk.Label(box, text=foot, font=font("small"), bg=bg, fg=P["muted"]).grid(row=3, column=0, columnspan=8,
-                                                                                sticky="w", pady=(4, 0))
+            cell.config(text=text, fg=P["bad"][1] if k in marked else P["text"])
+        self.guard_foot.config(text="Counted with the rules as they are, shown with round 0." if now is None else
+                               "A kind more than doubling is marked: Keep asks first." if best else
+                               "Counted again with the best numbers when the search pauses or ends."
+                               if self.best_round is None or "best_round" not in self.guards else
+                               "Counting with the best numbers ...")
 
     def draw_misses(self):
         import review
-        tk, P, font, box = self.tk, self.P, self.font, self.miss_box
-        self._clear(box)
-        if not self.miss:
-            return
-        tk.Label(box, text=f"Still wrong after tuning: {len(self.miss):,} meanings (no number can fix these: ideas "
-                 "for new rules)", font=font("small"), bg=P["bg"], fg=P["muted"]).pack(anchor="w")
-        for word, gloss, want, got in self.miss[:SHOWN_MISSES]:
-            r = tk.Frame(box, bg=P["bg"])
-            r.pack(anchor="w", pady=1)
-            tk.Label(r, text=word, font=font("body"), bg=P["bg"], fg=P["text"], width=12, anchor="w").pack(side="left")
-            tk.Label(r, text=gloss[:52] + ("…" if len(gloss) > 52 else ""), font=font("small"), bg=P["bg"],
-                     fg=P["muted"], width=44, anchor="w").pack(side="left")
-            for who, k in (("you", want), ("rules", got)):
-                tk.Label(r, text=f"{who}: {review.KIND_NAMES[k]}", font=font("small"), bg=review.kind_colour(k),
-                         fg=P["text"], padx=6).pack(side="left", padx=(6, 0))
-        tk.Label(box, text=f"… all {len(self.miss):,} are written to {MISSES_FILE} beside your answers.",
-                 font=font("small"), bg=P["bg"], fg=P["muted"]).pack(anchor="w", pady=(2, 0))
+        P = self.P
+        n = len(self.miss)
+        self.miss_title.config(text="Still wrong after tuning" + (f": {n:,} meanings" if self.avg else "")
+                               + " (no number can fix these: ideas for new rules)")
+        for i, (word, gloss, you, rules) in enumerate(self.miss_cells):
+            if i < n:
+                w, g, want, got = self.miss[i]
+                word.config(text=w)
+                gloss.config(text=g[:52] + ("…" if len(g) > 52 else ""))
+                you.config(text=f"you: {review.KIND_NAMES[want]}", bg=review.kind_colour(want))
+                rules.config(text=f"rules: {review.KIND_NAMES[got]}", bg=review.kind_colour(got))
+            else:
+                for c in (word, gloss, you, rules):
+                    c.config(text="", bg=P["bg"])
+        self.miss_foot.config(text=f"… all {n:,} are written to {MISSES_FILE} beside your answers." if n else "")
 
     # ---- the buttons ----------------------------------------------------------------------------------------------
     def pause(self):

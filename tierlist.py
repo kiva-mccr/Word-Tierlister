@@ -776,6 +776,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the entries read in a process of their own (reading them in the window's froze it for seconds), the
 #           helper processes at a lower priority, and a chart that fills the window and follows its size, its legend
 #           one line under the plot and its vertical axis named.
+#           Then (asked for, from a mock-up): the window opens with every row there, empty, and keeps one size; each
+#           round's results show at once ("sweep"); the stop allows for noise (the parts' standard error, a band on
+#           the chart): a real gain beats the last by more than it, and the wait grows with it (3 rounds, one more
+#           per 0.5 points, 15 at most); Keep takes the earliest round within the noise of the lowest (picked).
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
