@@ -213,9 +213,9 @@ pump()
 assert "Reading" in win.info.cget("text") and not win.keep_btn.enabled
 opened = root.winfo_width(), root.winfo_height()
 # every row there from the start, empty (asked for): the kinds, the guard's names, the misses' rows
-assert set(win.kind_cells) == {k for k, _n in T.GUARD_NAMES} and len(win.miss_cells) == T.SHOWN_MISSES
+assert set(win.kind_cells) == {k for k, _n in T.GUARD_NAMES} and win.miss_text.get("1.0", "end").strip() == ""
 assert all(a.cget("text") == T.TuneWindow.BLANK for a, _b in win.kind_cells.values())
-assert len(win.change_cells) == T.SHOWN_CHANGES and win.guard_cells["whole"].cget("text") == T.TuneWindow.BLANK
+assert win.changes_text.get("1.0", "end").strip() == "" and win.guard_cells["whole"].cget("text") == T.TuneWindow.BLANK
 # the bar while the entries are read: moving until a share is known, then the share and (in time) the time left
 assert str(win.bar.cget("mode")) == "indeterminate" and win.bar_text.cget("text").startswith(T.READING)
 win.events.put(("progress", T.READING, 0.1)); pump(10)
@@ -262,10 +262,18 @@ assert past[0]["best"] <= past[0]["start"] and win.past_chart.find_all()
 assert any(win.past_chart.itemcget(i, "text") == f"{len(data['answers']):,}" for i in win.past_chart.find_all()
            if win.past_chart.type(i) == "text")                 # (its tick named by its words)
 assert win.span() == 6                                          # (the rounds axis: never past the rounds it may run)
-assert win.kinds_box.winfo_manager() == "pack" and win.guard_box.master is win.kinds_box.master   # (side by side)
+assert {p.grid_info()["row"] for p in win.panels.values()} == {0}    # (the tabs' panels in one cell, asked for)
+for key, _n in T.TuneWindow.TABS:
+    win.show_tab(key)
+win.show_tab("misses"); pump(5)
+lines = win.miss_text.get("1.0", "end").strip().splitlines()        # (every miss listed; more than fit: a bar)
+assert len(lines) == len(win.miss) and win.miss
+bars = [w for w in win.miss_text.master.winfo_children() if w.winfo_class() == "TScrollbar"]
+assert bool(bars[0].winfo_manager()) == (len(win.miss) > T.LIST_LINES), (len(win.miss), bars[0].winfo_manager())
+win.show_tab("past")
 texts = [win.chart.itemcget(i, "text") for i in win.chart.find_all() if win.chart.type(i) == "text"]
-assert any(t.startswith("error: the average of the 5 parts") for t in texts)
-assert any(t.startswith("each part, tested") for t in texts) and "the rules as they are now" in texts
+assert any(t.startswith("average error") for t in texts)
+assert "each part" in texts and "the rules now" in texts and "noise" in texts
 assert "error (lower is better)" in texts                         # (the vertical axis, asked for)
 
 
@@ -291,7 +299,7 @@ no_overlap()                                                      # (reported: t
 small_font.configure(size=small_size)
 win.draw(); pump(5)
 legend = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and
-          win.chart.itemcget(i, "text") == "the rules as they are now"][0]
+          win.chart.itemcget(i, "text") == "the rules now"][0]
 zero = [i for i in win.chart.find_all() if win.chart.type(i) == "text" and win.chart.itemcget(i, "text") == "0%"][0]
 assert win.chart.coords(legend)[1] > win.chart.coords(zero)[1] + 30   # (the legend under the plot, not over it)
 assert win.bar_text.cget("text") == "Done" and float(win.bar.cget("value")) == 100
@@ -310,10 +318,11 @@ assert any(t.startswith("now ") for t in texts) and any(t.startswith("average ")
 assert f"best: round {win.best_round}" in texts
 lines = [i for i in win.chart.find_all() if win.chart.type(i) == "line" and len(win.chart.coords(i)) > 4]
 assert len(lines) >= T.PARTS + 1
-assert "Best at round" in win.note.cget("text")
+assert "Best: round" in win.note.cget("text")
 kinds_text = [w.cget("text") for w in win.kinds_box.winfo_children()]
 assert "Expletive" in kinds_text and "Smeared whole" in kinds_text and "→" in kinds_text
-assert any(w.cget("text").startswith("Numbers changed") for w in win.changes_box.winfo_children())
+assert win.changes_title.cget("text").startswith("Numbers changed")
+assert win.changes_text.get("1.0", "end").strip()
 guard_text = " ".join(w.cget("text") for w in win.guard_box.winfo_children())
 assert "with the best numbers" in guard_text and "Smeared whole" in guard_text
 asked, told = [], []

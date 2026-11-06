@@ -966,8 +966,7 @@ def _run_guard(values, base):
 # ---- the window ----------------------------------------------------------------------------------------------------
 PART_LINE = "#A6D9BD"           # (the chart's own colours: a part's faint line, the average's)
 AVERAGE_LINE = "#5FBF8C"
-SHOWN_CHANGES = 4
-SHOWN_MISSES = 3
+LIST_LINES = 6                  # (the lines Numbers changed and Still wrong show; more scroll)
 GUARD_NAMES = (("whole", "Smeared whole"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))
 
 
@@ -981,7 +980,9 @@ class TuneWindow:
     the guard, the meanings still wrong; Pause, Discard, Keep the best numbers."""
 
     CHART = (960, 520)                      # (the most it starts at; it grows with the window)
-    PAST_H = 140                            # (the earlier tunes' strip)
+    PAST_H = 120
+    TABS = (("past", "Earlier tunes"), ("kinds", "Each kind"), ("changes", "Numbers changed"), ("guard", "Guard"),
+            ("misses", "Still wrong"))                            # (the earlier tunes' strip)
     CHART_MIN = 260                         # (the least: a smaller screen cuts the window instead)
     SCREEN_KEPT = 110                       # (the screen's height kept for title bars and panels)
     TICK_MS = 1000                          # the bar's time left counts down this often
@@ -1013,11 +1014,9 @@ class TuneWindow:
         tk.Label(top, text="Tune the rules", font=font("head"), bg=bg, fg=P["text"]).pack(side="left")
         self.status = tk.Label(top, font=font("body"), bg=bg, fg=P["muted"])
         self.status.pack(side="right")
-        tk.Label(box, text="Rules only: it changes the numbers in rudeness.py; the program never reads your answers.",
-                 font=font("small"), bg=bg, fg=P["muted"]).pack(anchor="w")
-        self.info = tk.Label(box, font=font("body"), bg=bg, fg=P["text"], text="Reading the Wiktionary entries ...",
-                             justify="left", anchor="nw", height=2)        # (two lines kept: the window never grows)
-        self.info.pack(fill="x", pady=(12, 6))
+        self.info = tk.Label(box, font=font("small"), bg=bg, fg=P["muted"], anchor="w",
+                             text="Reading the Wiktionary entries ...")
+        self.info.pack(fill="x")
         from tkinter import ttk
         style = ttk.Style(root)
         if "clam" in style.theme_names():
@@ -1025,15 +1024,13 @@ class TuneWindow:
         style.configure("Tune.Horizontal.TProgressbar", background=P["accent"], troughcolor=P["surface2"],
                         bordercolor=P["surface2"], lightcolor=P["accent"], darkcolor=P["accent"], thickness=10)
         self.bar = ttk.Progressbar(box, maximum=100, mode="determinate", style="Tune.Horizontal.TProgressbar")
-        self.bar.pack(fill="x")
-        self.bar_text = tk.Label(box, font=font("small"), bg=bg, fg=P["muted"], anchor="w")
-        self.bar_text.pack(fill="x", pady=(3, 6))
+        self.bar.pack(fill="x", pady=(10, 0))
+        under = tk.Frame(box, bg=bg)
+        under.pack(fill="x", pady=(3, 8))
+        self.bar_text = tk.Label(under, font=font("small"), bg=bg, fg=P["muted"], anchor="w")
+        self.bar_text.pack(side="left")
         self.history_path = os.path.join(os.path.dirname(os.path.abspath(answers_path)), HISTORY_FILE)
         self.past = read_history(self.history_path)
-        self.past_chart = tk.Canvas(box, height=self.PAST_H, bg=P["surface"], highlightthickness=1,
-                                    highlightbackground=P["border"])
-        self.past_chart.pack(fill="x", pady=(0, 8))          # (earlier tunes: a tick at each one's words, asked for)
-        self.past_chart.bind("<Configure>", lambda _e: self.draw_past())
         self.eta, self.step, self.share = None, None, None      # (the reading's bar: its step and share done)
         self.round_started = None                               # (a round's bar: when it began, each part's share)
         self.bar_round, self.tried, self.round_eta = 0, {}, None
@@ -1046,20 +1043,27 @@ class TuneWindow:
                              anchor="nw", height=2)
         self.note.pack(fill="x", pady=(6, 0))
         box = self.bottom
-        cols = tk.Frame(box, bg=bg)                 # (side by side, asked for: rows under rows squished the chart)
-        cols.pack(fill="x", pady=(10, 0))
-        self.kinds_box = tk.Frame(cols, bg=bg)
-        self.kinds_box.pack(side="left", anchor="n")
-        self.changes_box = tk.Frame(cols, bg=bg)
-        self.changes_box.pack(side="left", anchor="n", padx=(32, 0))
-        self.guard_box = tk.Frame(cols, bg=P["surface"], highlightthickness=1, highlightbackground=P["border"],
-                                  padx=12, pady=6)
-        self.guard_box.pack(side="right", anchor="n", padx=(24, 0))
-        self.miss_box = tk.Frame(box, bg=bg)
-        self.miss_box.pack(fill="x", pady=(10, 0))
+        from widgets import TabBar                  # (the details one at a time under tabs, asked for: crowded)
+        card = P["surface"]
+        self.tabs = TabBar(box, self.TABS, self.show_tab, font("small"), animator=anim, canvas_bg=bg, page_bg=card)
+        self.tabs.pack(fill="x", pady=(8, 0))
+        self.page = tk.Frame(box, bg=card, padx=14, pady=10)
+        self.page.pack(fill="x")
+        self.page.grid_columnconfigure(0, weight=1)
+        self.past_chart = tk.Canvas(self.page, height=self.PAST_H, bg=card, highlightthickness=0)
+        self.past_chart.bind("<Configure>", lambda _e: self.draw_past())   # (earlier tunes: a tick each, asked for)
+        self.kinds_box = tk.Frame(self.page, bg=card)
+        self.changes_box = tk.Frame(self.page, bg=card)
+        self.guard_box = tk.Frame(self.page, bg=card)
+        self.miss_box = tk.Frame(self.page, bg=card)
+        self.panels = dict(zip([k for k, _n in self.TABS], (self.past_chart, self.kinds_box, self.changes_box,
+                                                             self.guard_box, self.miss_box)))
+        for panel in self.panels.values():          # (all in one cell: the page is as tall as the tallest, always)
+            panel.grid(row=0, column=0, sticky="nsew")
         self._build_slots()                     # (every row there from the start, empty: filled in place, asked for)
         for fill in (self.draw_kinds, self.draw_changes, self.draw_guard, self.draw_misses):
             fill()
+        self.show_tab(self.TABS[0][0])
         nav = tk.Frame(box, bg=bg)
         nav.pack(fill="x", pady=(12, 0))
         kw = dict(font=font("body"), padx=16, pady=6, radius=12, animator=anim)
@@ -1068,8 +1072,6 @@ class TuneWindow:
         self.keep_btn = RoundButton(nav, "Keep the best numbers", self.keep, bg=P["select_bg"], **kw)
         self.keep_btn.pack(side="right")
         RoundButton(nav, "Discard", self.discard, bg=P["surface"], **kw).pack(side="right", padx=(0, 8))
-        tk.Label(nav, text="Keep writes the numbers into src/rudeness.py and bumps RUDENESS_VERSION: review the diff "
-                 "before committing.", font=font("small"), bg=bg, fg=P["muted"]).pack(side="left", padx=(16, 0))
         self.bottom.pack(side="bottom", fill="x")
         self.chart.pack(fill="both", expand=True)
         self._resize_job = None
@@ -1172,10 +1174,9 @@ class TuneWindow:
             self.pause_btn.set_enabled(False)
             return
         have = len(tested_parts(data))
-        self.info.config(text=f"Your answers: {len(data['answers']):,} words, {n:,} meanings. Split into {PARTS} "
-                         f"parts: tuned on {PARTS - 1}, tested on the {PARTS}th, each part in turn."
-                         + (f" Only {have} of the {PARTS} parts have answered words yet, so the test is rough until "
-                            "you answer more." if have < PARTS else ""))
+        self.info.config(text=f"Your answers: {len(data['answers']):,} words, {n:,} meanings, in {PARTS} parts "
+                         f"(each tested on numbers tuned on the rest)"
+                         + (f"; only {have} parts have words yet: a rough test" if have < PARTS else ""))
         self.tuning = Tuning(data, saved, self.events, self.rounds, workers,
                              os.path.join(os.path.dirname(os.path.abspath(self.answers_path)), MISSES_FILE))
         threading.Thread(target=self.tuning.run, daemon=True).start()
@@ -1334,10 +1335,8 @@ class TuneWindow:
             w, h = int(c.cget("width")), int(c.cget("height"))
         from theme import mix
         band = mix(P["surface"], AVERAGE_LINE, 0.28)
-        legend = ((AVERAGE_LINE, None, 3, f"error: the average of the {PARTS} parts (100% minus the average F1)"),
-                  (band, None, 10, "its noise (± the parts' standard error)"),
-                  (PART_LINE, None, 2, "each part, tested on numbers tuned without it"),
-                  (P["muted"], (4, 4), 1, "the rules as they are now"))
+        legend = ((AVERAGE_LINE, None, 3, "average error (100% minus F1)"), (band, None, 10, "noise"),
+                  (PART_LINE, None, 2, "each part"), (P["muted"], (4, 4), 1, "the rules now"))
         small = font("small")                          # (every margin measured: the text's size varies by screen)
         line = small.metrics("linespace")
         axis = 6 + line + 8                                     # (the vertical axis's name, then its numbers)
@@ -1417,20 +1416,22 @@ class TuneWindow:
         stop = ""
         if self.wait and self.noise:
             since, wait = self.wait
-            stop = (f" Noise ±{self.noise[-1][1]:.1f} points, so it stops after {wait} rounds without a gain bigger "
-                    f"than the noise ({since} so far).")
+            stop = (f" Noise ±{self.noise[-1][1]:.1f}: it stops after {wait} rounds with no gain beyond it "
+                    f"({since} so far).")
         if not self.best_round:
             self.note.config(text="No round has beaten the rules as they are yet." + stop)
             return
         fit = dict(self.points.get(ALL, [])).get(self.best_round)
         avg = dict(self.avg)[self.best_round]
         gap = avg - fit if fit is not None else 0
-        best = f"Best at round {self.best_round}. Keep takes the numbers tuned on all your words at that round."
+        best = f"Best: round {self.best_round}, which Keep takes."
         if fit is not None:
-            best += (f" Error on the words it tuned on: {fit:.1f}% ({gap:.1f} points below the tested error: "
-                     + ("a small gap, so it is not just memorising your answers)." if gap < 5 else
-                        "a wide gap: it is learning your answers more than the rules)."))
+            best += (f" On the words it tuned on: {fit:.1f}% (" + ("a small gap: not memorising)." if gap < 5 else
+                                                                  "a wide gap: memorising your answers)."))
         self.note.config(text=best + stop)
+
+    def show_tab(self, key):
+        self.tk.Misc.tkraise(self.panels[key])         # (a Canvas's own tkraise raises its items)
 
     # ---- earlier tunes ---------------------------------------------------------------------------------------------
     def current(self):
@@ -1457,7 +1458,7 @@ class TuneWindow:
         filled), this one highlighted; a line on the right says how far the error has come."""
         c, P, small = self.past_chart, self.P, self.font("small")
         c.delete("all")
-        w, h = c.winfo_width(), int(c.cget("height"))
+        w, h = c.winfo_width(), max(int(c.cget("height")), c.winfo_height())
         if w < 50:
             return
         now = None if getattr(self, "remembered", None) else self.current()
@@ -1468,12 +1469,11 @@ class TuneWindow:
                           text="Earlier tunes show here: a tick for each, at the words answered then.")
             return
         first, last = tunes[0], tunes[-1]
-        say = (f"This tune, {last['words']:,} words: {last['start']:.1f}% → {last['best']:.1f}%"
-               + (f"   ·   the first, {first['words']:,} words: {first['start']:.1f}% → {first['best']:.1f}%"
-                  if len(tunes) > 1 else ""))
+        say = (f"this tune: {last['start']:.1f}% → {last['best']:.1f}%"
+               + (f"   ·   the first: {first['start']:.1f}% → {first['best']:.1f}%" if len(tunes) > 1 else ""))
         pad = 12
         c.create_text(pad, pad + line / 2, anchor="w", font=small, fill=P["muted"],
-                      text=f"Earlier tunes ({len(self.past)}): error before → after, by words answered")
+                      text="Error before → after, by words answered")
         right = c.create_text(w - pad, pad + line / 2, anchor="e", font=small, fill=P["text"], text=say)
         top, bottom = pad + line + 10, h - pad - line - 4
         hi = max(max(t["start"], t["best"]) for t in tunes) + 0.5
@@ -1503,7 +1503,7 @@ class TuneWindow:
     def _build_slots(self):
         import review
         tk, P, font = self.tk, self.P, self.font
-        bg, card = P["bg"], P["surface"]
+        bg = card = P["surface"]                    # (every panel sits on the tabs' page)
         lab = lambda box, role="small", colour=None, back=bg, **kw: tk.Label(    # noqa: E731
             box, font=font(role), bg=back, fg=colour or P["text"], **kw)
         box = self.kinds_box
@@ -1521,16 +1521,8 @@ class TuneWindow:
             self.kind_cells[k] = (now, best)
         box = self.changes_box
         self.changes_title = lab(box, colour=P["muted"], text="Numbers changed", anchor="w")
-        self.changes_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
-        self.change_cells = []
-        for i in range(1, SHOWN_CHANGES + 1):
-            name = lab(box, text="", width=30, anchor="w")
-            name.grid(row=i, column=0, sticky="w", pady=1)
-            value = lab(box, "body", text="", width=12, anchor="e")
-            value.grid(row=i, column=1, sticky="e", padx=(14, 0))
-            self.change_cells.append((name, value))
-        self.changes_more = lab(box, colour=P["muted"], text="", anchor="w")
-        self.changes_more.grid(row=SHOWN_CHANGES + 1, column=0, sticky="w")
+        self.changes_title.pack(anchor="w", pady=(0, 4))
+        self.changes_text = self._list(box, LIST_LINES)
         box = self.guard_box
         self.guard_title = lab(box, colour=P["muted"], back=card, text="Guard: the words the program scores")
         self.guard_title.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 2))
@@ -1546,19 +1538,47 @@ class TuneWindow:
         box = self.miss_box
         self.miss_title = lab(box, colour=P["muted"], text="Still wrong after tuning (no number can fix these: ideas "
                               "for new rules)")
-        self.miss_title.pack(anchor="w")
-        self.miss_cells = []
-        for _ in range(SHOWN_MISSES):
-            r = tk.Frame(box, bg=bg)
-            r.pack(anchor="w", pady=1)
-            cells = [lab(r, "body", text="", width=12, anchor="w"),
-                     lab(r, colour=P["muted"], text="", width=44, anchor="w"),
-                     lab(r, text="", width=13, padx=6), lab(r, text="", width=13, padx=6)]
-            for j, c in enumerate(cells):
-                c.pack(side="left", padx=(6, 0) if j > 1 else 0)
-            self.miss_cells.append(cells)
+        self.miss_title.pack(anchor="w", pady=(0, 4))
+        self.miss_text = self._list(box, LIST_LINES)
         self.miss_foot = lab(box, colour=P["muted"], text="")
-        self.miss_foot.pack(anchor="w", pady=(2, 0))
+        self.miss_foot.pack(anchor="w", pady=(4, 0))
+
+    def _list(self, box, lines):
+        """A read-only list of lines with a slim scroll bar, shown only while they do not all fit (asked for: a long
+        list scrolls); its column keeps the bar's width either way, so showing it never re-wraps or resizes."""
+        from tkinter import ttk
+        tk, P, font = self.tk, self.P, self.font
+        frame = tk.Frame(box, bg=P["surface"])
+        frame.pack(fill="x")
+        text = tk.Text(frame, height=lines, wrap="none", state="disabled", font=font("small"), bd=0,
+                       highlightthickness=0, padx=0, pady=0, bg=P["surface"], fg=P["text"], cursor="arrow",
+                       spacing1=2, spacing3=2)
+        bar = ttk.Scrollbar(frame, orient="vertical", command=text.yview)
+
+        def scrolled(first, last):
+            bar.set(first, last)
+            need = float(first) > 0.0 or float(last) < 1.0
+            if need != bool(bar.winfo_manager()):
+                bar.grid(row=0, column=1, sticky="ns") if need else bar.grid_remove()
+        text.configure(yscrollcommand=scrolled)
+        text.grid(row=0, column=0, sticky="nsew")
+        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, minsize=bar.winfo_reqwidth())
+        text.tag_configure("big", font=font("body"))
+        text.tag_configure("muted", foreground=P["muted"])
+        text.bind("<MouseWheel>", lambda e: text.yview_scroll(-1 if e.delta > 0 else 1, "units") or "break")
+        return text
+
+    def _fill_list(self, text, lines, tabs):
+        """`lines`: [[(text, tags), ...]]; `tabs`: the columns' stops (pixels; "right" ones align numbers)."""
+        text.config(state="normal", tabs=tabs)
+        text.delete("1.0", "end")
+        for i, parts in enumerate(lines):
+            for chunk, tags in parts:
+                text.insert("end", chunk, tags)
+            if i < len(lines) - 1:
+                text.insert("end", "\n")
+        text.config(state="disabled")
 
     def draw_kinds(self):
         now, best = (precision_recall(self.tallies[k]) if k in self.tallies else None for k in ("now", "best"))
@@ -1573,12 +1593,11 @@ class TuneWindow:
             moved = changed(self.tuning.start_values, self.tuning.best[2])
             moved.sort(key=lambda m: -abs(m[2] - m[1]) / max(abs(m[1]), 0.5))
             self.changes_title.config(text=f"Numbers changed ({len(moved)} of {len(self.tuning.start_values)})")
-        for i, (name, value) in enumerate(self.change_cells):
-            p, a, b = moved[i] if i < len(moved) else ("", None, None)
-            name.config(text=p.replace(" * ", " × "))
-            value.config(text=f"{_num(a)} → {_num(b)}" if p else "")
-        extra = len(moved) - SHOWN_CHANGES
-        self.changes_more.config(text=f"and {extra} more" if extra > 0 else "")
+        small = self.font("small")
+        width = max([small.measure(p.replace(" * ", " × ")) for p, _a, _b in moved] + [small.measure("0") * 30])
+        self._fill_list(self.changes_text, [[(p.replace(" * ", " × "), ()), ("\t", ()),
+                                             (f"{_num(a)} → {_num(b)}", ("big",))] for p, a, b in moved],
+                        (width + 24,))
 
     def draw_guard(self):
         P = self.P
@@ -1606,20 +1625,20 @@ class TuneWindow:
 
     def draw_misses(self):
         import review
-        P = self.P
         n = len(self.miss)
         self.miss_title.config(text="Still wrong after tuning" + (f": {n:,} meanings" if self.avg else "")
                                + " (no number can fix these: ideas for new rules)")
-        for i, (word, gloss, you, rules) in enumerate(self.miss_cells):
-            if i < n:
-                w, g, want, got = self.miss[i]
-                word.config(text=w)
-                gloss.config(text=g[:52] + ("…" if len(g) > 52 else ""))
-                you.config(text=f"you: {review.KIND_NAMES[want]}", bg=review.kind_colour(want))
-                rules.config(text=f"rules: {review.KIND_NAMES[got]}", bg=review.kind_colour(got))
-            else:
-                for c in (word, gloss, you, rules):
-                    c.config(text="", bg=P["bg"])
+        small, body = self.font("small"), self.font("body")
+        c = small.measure("0")
+        word_w = max([body.measure(w) for w, *_r in self.miss] + [c * 10]) + 16
+        lines = []
+        for w, g, want, got in self.miss:
+            for k in (want, got):                  # (a pill's colour for each kind, read now: tier colours change)
+                self.miss_text.tag_configure(f"k_{k}", background=review.kind_colour(k), lmargin1=0)
+            lines.append([(w, ("big",)), ("\t", ()), (g[:52] + ("…" if len(g) > 52 else ""), ("muted",)), ("\t", ()),
+                          (f"  you: {review.KIND_NAMES[want]}  ", (f"k_{want}",)), ("  ", ()),
+                          (f"  rules: {review.KIND_NAMES[got]}  ", (f"k_{got}",))])
+        self._fill_list(self.miss_text, lines, (word_w, word_w + c * 54))
         self.miss_foot.config(text=f"… all {n:,} are written to {MISSES_FILE} beside your answers." if n else "")
 
     # ---- the buttons ----------------------------------------------------------------------------------------------
