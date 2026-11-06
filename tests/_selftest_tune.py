@@ -160,6 +160,7 @@ assert xs[-1] == 1000 and 100 < xs[0] < 900
 xs = T.tune_xs([50, 50, 51, 400], 0, 1000, 28)
 assert all(b - a >= 28 - 1e-9 for a, b in zip(xs, xs[1:])) and xs[-1] <= 1000 + 1e-9 and xs[0] >= 0
 assert T.tune_xs([100], 0, 1000, 28) == [1000]
+assert T.standard_error([5.0]) == 0.0 and abs(T.standard_error([1.0, 2.0, 3.0]) - 1 / 3 ** 0.5) < 1e-9
 
 # the noise: each part's change against itself (a hard part and an easy one moving together is no noise); the stop
 # waits longer the noisier the average (asked for)
@@ -274,6 +275,17 @@ assert win.wait and win.noise and "Noise ±" in win.note.cget("text")
 past = T.read_history(os.path.join(folder, T.HISTORY_FILE))     # (the finished tune remembered, asked for)
 assert len(past) == 1 and past[0]["words"] == len(data["answers"]) and not past[0]["kept"]
 assert past[0]["best"] <= past[0]["start"] and win.past_chart.find_all()
+assert past[0]["se"] >= 0                                        # (its standard error bar, asked for)
+win.past = [{"words": 40, "start": 30.0, "best": 27.0, "kept": True},                  # (saved before "se": no bar)
+            {"words": 60, "start": 28.0, "best": 25.0, "se": 1.5, "kept": True}] + win.past[-1:]
+win.draw_past()
+lines = [win.past_chart.coords(i) for i in win.past_chart.find_all() if win.past_chart.type(i) == "line"]
+bars = [xy for xy in lines if len(xy) == 4 and xy[0] == xy[2] and xy[1] != xy[3]]
+assert len(bars) == 1 + (past[0]["se"] > 0), lines                # (whiskers only where "se" was saved)
+assert any(win.past_chart.itemcget(i, "text").endswith("%") and win.past_chart.itemcget(i, "anchor") == "w"
+           for i in win.past_chart.find_all() if win.past_chart.type(i) == "text")    # (the error axis named)
+win.past = past
+win.draw_past()
 assert any(win.past_chart.itemcget(i, "text") == f"{len(data['answers']):,}" for i in win.past_chart.find_all()
            if win.past_chart.type(i) == "text")                 # (its tick named by its words)
 assert any(win.past_chart.itemcget(i, "text").startswith("Your first tune") for i in win.past_chart.find_all()

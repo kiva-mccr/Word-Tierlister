@@ -30,7 +30,8 @@ How it works:
   * the window (asked for): every row there from the start, empty, and one size; each round's results arrive in
     one event ("sweep") and show at once, only the bar moving between them;
   * every finished tune is remembered in rude_tune_history.jsonl beside the answers (read_history: words, start and
-    best tested error, kept): the window's strip shows each as a tick at its words, from before down to after;
+    best tested error, its standard error over the parts, kept): the window's strip shows each as a dot at its words
+    with a standard error bar;
   * --start-hidden (the program's automatic tune) starts the window hidden: it shows itself when done;
   * "still wrong": the tested meanings the best numbers still get wrong (no number fixes those: ideas for new
     rules), all written to rude_tune_misses.txt beside the answers.
@@ -802,7 +803,8 @@ def tune_xs(words, left, end, gap):
 
 
 def read_history(path):
-    """The earlier tunes, oldest first: [{"when", "words", "meanings", "start", "best", "round", "kept"}]."""
+    """The earlier tunes, oldest first: [{"when", "words", "meanings", "start", "best", "se", "round", "kept"}] ("se"
+    only from tunes saved since the error bars)."""
     out = []
     try:
         with open(path, encoding="utf-8") as f:
@@ -952,11 +954,16 @@ def noise(tests, against):
     ({part: tested error} each; points, none from one part). Each part is compared with itself: the spread between
     the parts is mostly how hard each one's words are, the same every round, and counting it (as before) put the
     noise at about +-0.4 where the changes' own was +-0.1 to 0.25, so real gains were taken for luck."""
-    d = [tests[p] - against[p] for p in tests if p in against]
-    if len(d) < 2:
+    return standard_error([tests[p] - against[p] for p in tests if p in against])
+
+
+def standard_error(values):
+    """The standard error of the mean of `values` (each part's tested error: a tune's error bar); 0 for fewer
+    than two."""
+    if len(values) < 2:
         return 0.0
-    mean = sum(d) / len(d)
-    return (sum((x - mean) ** 2 for x in d) / (len(d) - 1)) ** 0.5 / len(d) ** 0.5
+    mean = sum(values) / len(values)
+    return (sum((x - mean) ** 2 for x in values) / (len(values) - 1)) ** 0.5 / len(values) ** 0.5
 
 
 def best_round(history):
@@ -1500,12 +1507,14 @@ class TuneWindow:
 
     # ---- earlier tunes ---------------------------------------------------------------------------------------------
     def current(self):
-        """This tune as the strip draws it (None before round 0): words, its start and best tested error."""
+        """This tune as the strip draws it (None before round 0): words, its start and best tested error, and the
+        best's standard error over the parts ("se", its error bar)."""
         if not self.avg or not self.data:
             return None
-        avg = dict(self.avg)
-        return {"words": len(self.data["answers"]), "start": avg[0], "best": avg.get(self.best_round or 0, avg[0]),
-                "round": self.best_round or 0, "kept": False}
+        avg, best = dict(self.avg), self.best_round or 0
+        tests = [e for part in range(PARTS) for r, e in self.points.get(part, []) if r == best]
+        return {"words": len(self.data["answers"]), "start": avg[0], "best": avg.get(best, avg[0]),
+                "se": round(standard_error(tests), 3), "round": best, "kept": False}
 
     def remember(self):
         """A finished tune goes into the history beside the answers (Keep marks it kept)."""
@@ -1519,8 +1528,9 @@ class TuneWindow:
         self.draw_past()
 
     def draw_past(self):
-        """The earlier tunes along the words answered: each a tick from its start error down to its best (kept ones
-        filled), this one highlighted; a line on the right says how far the error has come."""
+        """The earlier tunes along the words answered (asked for: standard error bars): a dot for each tune's best
+        error (kept ones filled), whiskers +- its standard error over the parts (tunes saved before "se" have none),
+        this one highlighted, the dots joined; a line on the right says how far the error has come."""
         c, P, small = self.past_chart, self.P, self.font("small")
         c.delete("all")
         w, h = c.winfo_width(), max(int(c.cget("height")), c.winfo_height())
@@ -1531,34 +1541,42 @@ class TuneWindow:
         line = small.metrics("linespace")
         if not tunes:
             c.create_text(0, h / 2, anchor="w", font=small, fill=P["muted"],
-                          text="Earlier tunes show here: a tick for each, at the words answered then.")
+                          text="Earlier tunes show here: a dot for each, at the words answered then.")
             return
         first, last = tunes[0], tunes[-1]
         say = (f"this tune: {last['start']:.1f}% → {last['best']:.1f}%"
                + (f"   ·   the first: {first['start']:.1f}% → {first['best']:.1f}%" if len(tunes) > 1 else ""))
         pad = 12
         c.create_text(pad, pad + line / 2, anchor="w", font=small, fill=P["muted"],
-                      text="Error before → after, by words answered")
+                      text="Error after each tune (± its standard error), by words answered")
         right = c.create_text(w - pad, pad + line / 2, anchor="e", font=small, fill=P["text"], text=say)
         top, bottom = pad + line + 10, h - pad - line - 4
-        hi = max(max(t["start"], t["best"]) for t in tunes) + 0.5
-        lo = max(0.0, min(min(t["start"], t["best"]) for t in tunes) - 0.5)
-        left, end = pad + 30, w - pad - 30
+        se = lambda t: float(t.get("se") or 0)                                  # noqa: E731
+        hi = max(t["best"] + se(t) for t in tunes) + 0.5
+        lo = max(0.0, min(t["best"] - se(t) for t in tunes) - 0.5)
+        step = next(s for s in (1, 2, 5, 10, 20, 50) if (hi - lo) / s <= 3)     # (two or three grid lines)
+        left, end = pad + small.measure("100%") + 14, w - pad - 30
         xs = tune_xs([t["words"] for t in tunes], left, end, GAP)
         y = lambda v: top + (hi - v) / max(0.1, hi - lo) * (bottom - top)     # noqa: E731
-        c.create_line(left, bottom + 4, end, bottom + 4, fill=P["surface2"], width=1)       # (the words axis)
+        for g in range(math.ceil(lo / step) * step, math.floor(hi) + 1, step):  # (the error axis: faint lines)
+            c.create_line(left - 10, y(g), end + 14, y(g), fill=P["surface2"], width=1)
+            c.create_text(pad, y(g), anchor="w", font=small, fill=P["muted"], text=f"{g}%")
+        c.create_line(left - 10, bottom + 4, end + 14, bottom + 4, fill=P["surface2"], width=1)   # (the words axis)
         if len(tunes) > 1:                                    # (the error after each tune: falling is good news)
             c.create_line(*[v for tx, t in zip(xs, tunes) for v in (tx, y(t["best"]))], fill=PART_LINE, width=2)
-        else:                                 # (the first tune: one tick at the right, so say what will come)
+        else:                                 # (the first tune: one dot at the right, so say what will come)
             c.create_text(left, (top + bottom) / 2, anchor="w", font=small, fill=P["muted"], width=end - left - 80,
-                          text="Your first tune. Each later one adds a tick here, at the words answered by then, "
+                          text="Your first tune. Each later one adds a dot here, at the words answered by then, "
                                "so you can watch the error fall as you answer more.")
         label_left = w                                        # (labels from the newest back: none overlapping)
         for tx, t in reversed(list(zip(xs, tunes))):
             here = t is now
             col = AVERAGE_LINE if t.get("kept") or here else PART_LINE
-            c.create_line(tx - 5, y(t["start"]), tx + 5, y(t["start"]), fill=P["muted"], width=2)   # (before)
-            c.create_line(tx, y(t["start"]), tx, y(t["best"]), fill=col, width=3 if here else 2)
+            if se(t):                                         # (the error bar: whiskers with caps)
+                y0, y1 = y(t["best"] - se(t)), y(t["best"] + se(t))
+                c.create_line(tx, y0, tx, y1, fill=col, width=2)
+                for cap in (y0, y1):
+                    c.create_line(tx - 5, cap, tx + 5, cap, fill=col, width=2)
             r = 5 if here else 4
             c.create_oval(tx - r, y(t["best"]) - r, tx + r, y(t["best"]) + r, outline=col,
                           fill=col if t.get("kept") or here else P["surface"], width=2)
