@@ -261,6 +261,8 @@ assert len(past) == 1 and past[0]["words"] == len(data["answers"]) and not past[
 assert past[0]["best"] <= past[0]["start"] and win.past_chart.find_all()
 assert any(win.past_chart.itemcget(i, "text") == f"{len(data['answers']):,}" for i in win.past_chart.find_all()
            if win.past_chart.type(i) == "text")                 # (its tick named by its words)
+assert any(win.past_chart.itemcget(i, "text").startswith("Your first tune") for i in win.past_chart.find_all()
+           if win.past_chart.type(i) == "text")                 # (one tick at the far right: say what will come)
 assert win.span() == 6                                          # (the rounds axis: never past the rounds it may run)
 assert {p.grid_info()["row"] for p in win.panels.values()} == {0}    # (the tabs' panels in one cell, asked for)
 for key, _n in T.TuneWindow.TABS:

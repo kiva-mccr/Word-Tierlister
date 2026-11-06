@@ -1482,8 +1482,14 @@ class TuneWindow:
         left, end = pad + 30, w - pad - 30
         x = lambda n: left + n / max(1, most) * (end - left)                  # noqa: E731
         y = lambda v: top + (hi - v) / max(0.1, hi - lo) * (bottom - top)     # noqa: E731
+        c.create_line(left, bottom + 4, end, bottom + 4, fill=P["surface2"], width=1)       # (the words axis)
+        c.create_text(left, h - pad - line / 2, text="0", font=small, fill=P["muted"])
         if len(tunes) > 1:                                    # (the error after each tune: falling is good news)
             c.create_line(*[v for t in tunes for v in (x(t["words"]), y(t["best"]))], fill=PART_LINE, width=2)
+        else:                                 # (the first tune: one tick at the right, so say what will come)
+            c.create_text(left, (top + bottom) / 2, anchor="w", font=small, fill=P["muted"], width=end - left - 80,
+                          text="Your first tune. Each later one adds a tick here, at the words answered by then, "
+                               "so you can watch the error fall as you answer more.")
         for t in tunes:
             here = t is now
             col = AVERAGE_LINE if t.get("kept") or here else PART_LINE
