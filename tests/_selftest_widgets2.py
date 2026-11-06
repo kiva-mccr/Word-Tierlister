@@ -236,6 +236,31 @@ dm.open(50, 60); update()
 assert dm.win is prepared and dm.is_open()                     # (prepare: built ahead, hidden, for a quick open)
 assert dm.win.winfo_viewable() and dm.win.winfo_rootx() >= 0   # (open: shown again, on screen)
 dm.close(); update()
+# F-56 step 2: shown once see-through where it would open, then hidden again (never parked), opaque for the open
+import time as _time
+
+def until(cond, s=3.0):
+    end = _time.time() + s
+    while not cond() and _time.time() < end:
+        root.update(); _time.sleep(0.005)
+    return cond()
+
+assert dm.warm_show(50, 60) and float(dm.win.attributes("-alpha")) == 0.0 and not dm.is_open()
+assert not dm.warm_show(50, 60)                                       # (once at a time)
+assert until(lambda: not dm._warming) and dm.win.wm_state() == "withdrawn" and not dm.is_open()
+assert float(dm.win.attributes("-alpha")) == 1.0 and not DropMenu.open_menus
+dm.warm_show(50, 60); dm.open(50, 60); update()                       # opened during its warm showing
+assert dm.is_open() and not dm._warming and float(dm.win.attributes("-alpha")) == 1.0
+_time.sleep(0.3); update()
+assert dm.is_open() and dm.win.winfo_viewable()                      # (its end never hides an open menu)
+dm.close(); update()
+import os as _os
+_env = dict(_os.environ)
+_os.environ.update(XDG_SESSION_TYPE="wayland", XDG_CURRENT_DESKTOP="")
+assert DropMenu.warm_shows(root)
+_os.environ.update(XDG_SESSION_TYPE="x11", XDG_CURRENT_DESKTOP="openbox")
+assert not DropMenu.warm_shows(root)                                  # (no compositor: it would flash)
+_os.environ.clear(); _os.environ.update(_env)
 
 hm = HeaderMenus(root, [("File", items), ("Edit", items[3:])], small, animator=anim); hm.pack(side="top"); update()
 fb, eb = hm.buttons["File"], hm.buttons["Edit"]
@@ -270,6 +295,24 @@ hm.open_menu("File"); update(); assert str(root.tk.call("focus")).startswith(str
 hm.drops["File"].win.event_generate("<Escape>"); update()
 assert not hm.drops["File"].is_open() and str(root.tk.call("focus")) == str(ent)       # keys work again
 ent.destroy()
+
+# F-56 step 2: the idle build shows each menu once see-through, but waits while the pointer is over the header
+shows = []
+real_ws, real_show = DropMenu.warm_shows, DropMenu.warm_show
+DropMenu.warm_shows = staticmethod(lambda r: True)
+DropMenu.warm_show = lambda self, x, y: shows.append(self) or True
+hm._to_prepare = ["File", "Edit"]
+hm.event_generate("<Motion>", warp=True, x=5, y=5); update()
+hm._prepare_next()
+assert shows == [] and hm._to_prepare == ["File", "Edit"]                      # (pointer near: tried again later)
+root.event_generate("<Motion>", warp=True, x=root.winfo_width() - 2, y=root.winfo_height() - 2); update()
+assert hm._may_warm("File")                                                    # (pointer far away now)
+hm._prepare_next(); hm._prepare_next()
+assert shows == [hm.drops["File"], hm.drops["Edit"]] and hm._to_prepare == []
+hm._to_prepare = ["File"]; hm.open_menu("Edit"); update()
+assert not hm._may_warm("File"); hm.close(); update()                        # (never while a menu is open)
+hm._to_prepare = []
+DropMenu.warm_shows, DropMenu.warm_show = real_ws, real_show
 
 # ---- ChoiceButton (UI-43): a drop-down choice made of a button and a DropMenu (no input grab)
 cwin = tk.Toplevel(root)

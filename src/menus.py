@@ -3,6 +3,7 @@ closed), ChoiceButton (a drop-down choice), HeaderMenus (File / Edit / View / Se
 No ttk.Combobox or tk.Menu popups: they grab input and float over other programs on Linux. close_popups /
 watch_focus close every open drop-down (the program lost focus).
 """
+import os
 import tkinter as tk
 
 from sizing import clamp_to_monitor
@@ -207,6 +208,7 @@ class DropMenu:
         self.win = None                  # built once and kept (hidden while closed): rebuilt only for other items
         self._built = None               # what the kept window was built for (_shape)
         self._shown = False
+        self._warming = False            # shown see-through once while idle (warm_show), not open
         self._rows, self._active, self._on_close = [], None, None
         self._prev_focus = ""
         self.on_side = None              # called with -1 / +1 for Left / Right (HeaderMenus: the next menu)
@@ -259,6 +261,67 @@ class DropMenu:
         fonts = {str(parts[0].cget("font")) for _row, parts, _it in self._rows}
         for f in fonts:
             win.tk.call("font", "measure", f, self.WARM_TEXT)
+
+    WARM_SHOW_MS = 150                   # how long a warm showing stays up once drawn (for the compositor's picture)
+
+    @staticmethod
+    def warm_shows(root):
+        """True where warm_show helps and stays invisible: X11 under a compositor that honours see-through windows
+        (a Wayland session's XWayland, GNOME, KDE). Without one, -alpha does nothing and the menu would flash."""
+        try:
+            if root.tk.call("tk", "windowingsystem") != "x11":
+                return False
+        except tk.TclError:
+            return False
+        desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").upper()
+        return os.environ.get("XDG_SESSION_TYPE", "") == "wayland" or "GNOME" in desktop or "KDE" in desktop
+
+    def warm_show(self, x, y):
+        """Show the built window once, fully see-through, where open(x, y) would put it, and hide it again
+        WARM_SHOW_MS after it is drawn (F-56 step 2, asked for: the first open of each top menu was still slow on
+        Fedora / GNOME after _warm; a window's first time on screen is the slow one). It is hidden afterwards, never
+        parked (F-54); an open meanwhile simply makes it opaque. Returns False if it was not shown."""
+        if self._shown or self._warming or self.win is None:
+            return False
+        win = self.win
+        try:
+            win.update_idletasks()
+            w, h = win.winfo_reqwidth(), win.winfo_reqheight()
+            x, y = clamp_to_monitor(win, x, y, w, h)
+            win.attributes("-alpha", 0.0)
+            win.geometry(f"+{x}+{y}")
+            win.deiconify()
+        except tk.TclError:
+            return False
+        self._warming = True
+        left = [100]
+
+        def drawn():
+            if not self._warming:
+                return
+            try:
+                left[0] -= 1
+                if not win.winfo_viewable() and left[0] > 0:
+                    win.after(10, drawn)
+                    return
+                win.update_idletasks()
+                win.after(self.WARM_SHOW_MS, self._end_warm)
+            except tk.TclError:
+                self._warming = False
+        drawn()
+        return True
+
+    def _end_warm(self):
+        """The warm showing ends: hidden again (unless opened meanwhile), opaque for the next open."""
+        if not self._warming:
+            return
+        self._warming = False
+        try:
+            if not self._shown:
+                self.win.withdraw()
+            self.win.attributes("-alpha", 1.0)
+        except tk.TclError:
+            pass
 
     def _build(self):
         """Make the (hidden) window and its rows for the items (asked for: menus opened slowly, 40-190 ms each time,
@@ -330,6 +393,12 @@ class DropMenu:
         self._prev_focus = str(self.root.tk.call("focus"))    # given back on close (UI-27)
         self.prepare()
         win = self.win
+        if self._warming:                    # (opened during its warm showing: just made opaque)
+            self._warming = False
+            try:
+                win.attributes("-alpha", 1.0)
+            except tk.TclError:
+                pass
         self._refresh_rows()
         win.update_idletasks()
         # keep it on screen
@@ -474,13 +543,41 @@ class HeaderMenus(tk.Frame):
 
     PREPARE_MS, PREPARE_GAP_MS = 1500, 250   # the menus are built hidden, one at a time, once the window is up
 
-    def _prepare_next(self):
-        """Build the next menu's window ahead of its first open (DropMenu.prepare), one every PREPARE_GAP_MS."""
+    WARM_RETRY_MS, WARM_TRIES = 1000, 30     # a warm showing waits while the pointer is near or a menu is open
+
+    def _prepare_next(self, tries=0):
+        """Build the next menu's window ahead of its first open (DropMenu.prepare), one every PREPARE_GAP_MS; where
+        DropMenu.warm_shows, show it once see-through under its button too (F-56), though never while a menu is
+        open, the window is not on screen or the pointer is over the header or where the menu would show."""
         if not self._to_prepare or not self.winfo_exists():
             return
-        self.drops[self._to_prepare.pop(0)].prepare()
+        name = self._to_prepare[0]
+        drop = self.drops[name]
+        drop.prepare()
+        if DropMenu.warm_shows(self) and tries < self.WARM_TRIES:
+            if not self._may_warm(name):
+                self.after(self.WARM_RETRY_MS, lambda: self._prepare_next(tries + 1))
+                return
+            b = self.buttons[name]
+            drop.warm_show(b.winfo_rootx(), b.winfo_rooty() + b.winfo_height() + 2)
+        self._to_prepare.pop(0)
         if self._to_prepare:
             self.after(self.PREPARE_GAP_MS, self._prepare_next)
+
+    def _may_warm(self, name):
+        """A warm showing is invisible but still a window: none while a menu is open, the main window is not on
+        screen, or the pointer is over the header row or the area the menu would cover."""
+        try:
+            if DropMenu.open_menus or not self.winfo_viewable():
+                return False
+            px, py = self.winfo_pointerxy()
+            b, win = self.buttons[name], self.drops[name].win
+            x0, y0 = self.winfo_rootx(), self.winfo_rooty()
+            x1 = max(x0 + self.winfo_width(), b.winfo_rootx() + win.winfo_reqwidth())
+            y1 = b.winfo_rooty() + b.winfo_height() + 2 + win.winfo_reqheight()
+            return not (x0 - 40 <= px <= x1 + 40 and y0 - 40 <= py <= y1 + 40)
+        except tk.TclError:
+            return False
 
     def _top_geometry(self):
         top = self.winfo_toplevel()

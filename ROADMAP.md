@@ -1988,8 +1988,10 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   already built hidden while idle (F-49); the first open was still slow on Fedora / GNOME, not here (5 ms
   first, 2.5 ms later, under mutter on Xvfb). Step 1 of a plan the user picked: the idle build now also lays
   the rows out, makes their system windows and looks up the check mark's font (DropMenu._warm), all while
-  hidden. Step 2, only if still slow: show each menu once, see-through, where it opens, then hide it (never
-  parked off-screen, F-54).
+  hidden. Step 2 (the user: still "really slow and then fast after"): while idle, each menu is shown once, fully
+  see-through, where it opens, then hidden again (DropMenu.warm_show; never parked off-screen, F-54); only on X11
+  under a compositor (a Wayland session, GNOME, KDE), never while a menu is open or the pointer is near the
+  header. Under mutter here no pixel changed while it showed.
 - [x] **F-57** Asked for (a rewrite audit, the user picked its first three items): CLAUDE.md trimmed from 40 KB to 18 KB
   (finished steps live only in this roadmap; it keeps Next, the rules those steps taught and the known
   gaps). Browse's kinds of word: a rare kind (adverbs, 3%) sorted by Tier took 160 ms in 300k placed, 440 ms
