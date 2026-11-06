@@ -123,8 +123,8 @@ missed). Keep README.md and DEVELOPERS.md current in the same commit as the chan
 - Every prompt, before finishing: tidy what was touched (dead code, stale comments and names, leftover
   debug lines, unused imports via pyflakes, scratch files out of the repo), then:
 - Last thing on every prompt, after the work itself: update this CLAUDE.md if anything important
-  changed (Status, Known gaps, new files, commands, conventions or user preferences), then commit and
-  push it with the rest. Keep it short; skip it when nothing worth recording changed.
+  changed (Next, a rule learnt, Known gaps, new files, commands, conventions or user preferences), then commit and
+  push it with the rest. A finished step goes in the roadmap, not here. Keep it short; skip it when nothing changed.
 - The repo on GitHub is the source of truth for this file; a copy inside an uploaded zip may be older.
 - UI styling: keep the bottom bar (Undo, Browse / edit, Definition and the key-hint line) roughly as it
   looks now; modernize the top (the File / Edit / View / Settings menus and the mode switch such as
@@ -136,173 +136,53 @@ missed). Keep README.md and DEVELOPERS.md current in the same commit as the chan
   Windows builds via GitHub Actions) are planned after the UI steps, after ST-5.
 
 ## Status
-Done: UI-0..UI-13, UI-15..UI-20, UI-23 (Browse restyle), UI-24 (dialogs), UI-25 (contents grow with the window), UI-27 (focus back after a drop-down), UI-28 (anchor dialog), UI-47 (Tab between tabs), UI-30 (package links), UI-50 (queue Apply: no-change note, moving bar), UI-31 (a view per tab), UI-40 (anchors follow their tier), UI-34 + UI-14 (status line, progress shelf), UI-33 (pace, hover notes), UI-46 (tabs only with work), UI-35, UI-36, UI-43..45 (fixes, zoom), UI-49 (held keys), UI-52 (shelf hover), UI-37 (Space toggles comparing), UI-39 (Delete in Browse), UI-38 (Browse opens complete, like the other windows: no animation of its own; remembers its view), UI-41 (queue shape cards), UI-53 (smooth shapes), UI-54 (Windows scaling, pop-ups on their monitor), UI-55 (shelf marks), UI-42 (themed file picker on Linux), UI-48 (keyboard shortcuts: every key changeable), UI-51 (look up a word from the card), UI-26 (final pass: smoke test, 1M check), UI-56 (definitions pane fits its senses; grows only, back to 9 lines when closed), UI-57 (a zoom of its own for the maximized window), UI-58 (View > Censor obscene words), UI-59 (a rude word's kind faintly above it on the card), W-1 (click a word in a definition: it shows there and waits in Browse to be placed), UI-60 (a duel's definitions side by side), UI-61 (tier colours), UI-62 (dark mode, not the default), UI-63 (the card's label: parts of speech, then the rude kind: "noun · sexual"), UI-64 (turning censoring on says it may not be fully accurate: a note once a save, then a toast), UI-65 ("compound word" in the card's label), UI-66 (a new look rebuilds the window in place: no gap, same spot, Browse kept), UI-67 (a Wiktionary link on each definition, only while online), ST-8 (pip, venv and Python offered like tkinter; git never needed), F-19 (the log: sessions, hard crashes, freezes), IC-2 (Linux: the program file's icon via gio), IC-3 (Linux taskbar icon: WM_CLASS + a hidden launcher), ST-1..ST-4 (terminal: tkinter only; window: a tick box per package), ST-5 (Linux / macOS: the terminal handed back; applications-menu launcher), ST-9 (Windows: restarts with pythonw.exe so the console closes; never a .pyw), ST-6 (How words are dealt: order, kinds of words, censoring), ST-7 (download speed, Step i of n), OB-2 (rude senses smeared in definitions), OB-5 (kinds of rude meaning in How words are dealt), OB-6 (src/rudeness.py: rules from Wiktionary, WordNet when installed, links between words; 78% agreement with Claude's sorting; wired in), T-1 (saves.app_dir: a built program's save beside it), T-2 (tools/bundle.py: English word lists only), T-3 (tools/build.py: Linux build about 25 MB), M-1..M-11 (the mini-roadmap: fixes, Browse column sort, an orphan / speed sweep), SZ-1, R-1 (folders), T-6 (File > Source & Updates: make a program; src/standalone.py), T-7 (unpack the source from the program; a sync), F-1 (main window shown complete: App.open_window), F-2 (definitions pane opens full), F-3 (a form shows its word's meaning), T-8 (.github/workflows/build.yml: Linux + Windows builds on GitHub; a v<VERSION> tag publishes a Release; tools/build.py --all; the update tick), F-4..F-7 (Windows zoom keys, PyInstaller repair, smeared words in panes and Browse, notes beside the code), T-9 (first start offers the other form once), T-10 (the program's first start unpacks its source unless a copy is beside it; starting the other form closes this one), T-11 (clean environment between the forms and for builds; GTK / Qt excluded), T-12 (Clean up behind: a program made from an unpacked source replaces it), T-13 (from source: Update the source only, no build), T-14 (Clean up behind? at every build: keep / zip / remove; only the source's own files go), F-8 (a definition arriving mid-slide), F-9 (review: screens, speed on 1M words, censoring in messages), F-10 (start-up speed: bulk writes, frequencies kept from the ranking, shelf totals kept), F-11 (build: unused packages never packed, missing ones offered before a build), F-12 (smooth un-smear in panes; rudeness v10: forms, slurs that are not the usual meaning, hyphenated parts), F-13 (moving the build across disks; a big build names its biggest parts), T-4 dropped, T-5 (.github/release-notes.md: a short note atop every release on unsigned programs), F-14 (review since F-9: rudeness v12, a meaning refers back to its word only by a whole form), F-15 (a censored word appearing under a still pointer un-smears at once; the kind has its own row: the word under it 85%, the card a little taller), F-16 (the card's search tested: lower-case new words, tidied typing, undo of a looked-up word, the label after typing), F-17 (Browse's search tested; a broad search in a million words 1 s -> under 0.2 s), F-18 (an open dialog re-wraps and resizes when the zoom changes: maximizing cut its text off), F-20 (the definitions pane's opening flicker, back with the Wiktionary link: fixed, tested under openbox), F-21 (a freeze: hovering the card's magnifier looped in Tk; never remake an item from its own Enter/Leave), F-22 (the definitions pane's flicker tracked frame by frame: a growing window hands its room to the pane at <Configure>, animations never leap after a stall, closing leaves the layout first, the opening fit starts from the shown size), T-15 (clean up behind puts the program where the source was, in its folder), F-23 (late window growth added on top of the pane's height), UI-70 (the card's search caret blinks), UI-71 (the censoring note in the window it was turned on in), F-24 (clean up tried for real; .gitignore counts as source), IC-4 (the icon's darker border), W-2 (smeared meanings clickable; a smeared word's meanings un-smear with the pane), F-25 (the form offer's timer never reads a closed save), F-26 (the pane's italics follow a zoom), F-27 (the pane's contents never unmapped: placed for good, height always set), F-28 (a longer definition eases the pane taller, the same way as opening; the user confirmed F-27 worked), F-29 (comparing re-fits when it would not fit; the pane eases shorter), F-30 (zoom limits found while the window is hidden, kept per screen; a refusal only shakes), UI-72 (room for a message under the page), ST-10 (File > Add to Start menu on Windows: a shortcut via PowerShell, pythonw.exe from source), F-31 (tierlist.md, tierlist.py's note, tracked at last; an export never overwrites it), UI-68 (Browse's sort arrow points the way values grow; "Tier" not "Default"), UI-69 (the usual and maximized zooms stay compatible: the usual window never shows more than maximized), IC-1 (the icon: tools/make_icon.py
-draws src/icons; ui_style.set_icon on every window; .ico for the Windows program; the Linux launcher's copy),
-UI-80 (Tier colours: click a tier pill, then H / S / V bars or a hex code that follow each other; too dark for the ink: Apply waits; picked from mock-ups), UI-79 (the shelf's spines one width), UI-73 (typefaces), UI-75 (GitHub link), UI-76 (contrast), UI-77 (Dusk dark mode): the user picked these from two
-rounds of mock-ups (a Design canvas artifact, each board beside the real window) and kept buttons, card and labels.
-UI-78 (borders: of six slight changes, only softer button and pill edges, widgets.EDGE; the user is attached to the
-current style), F-32 (letters reaching past their boxes: smeared and repainted whole), F-33 (smears never reach past
-the word: line ends smear inward, the user's rules), F-34 (the definitions pane's scroll bar), F-35 / F-37 (no bar under a smear: its band only between the end letters), F-38 (short letters smear further), F-39 (second letters never over the end letters; the user checked 194 smeared
-words covering the commonest start / end letter pairs and found them all good: add a per-pair spot fix only if one is reported), F-40 (the letters' holes filled, gone at
-the very start of un-smearing), F-43 (the end letters smear inward twice as far: their holes showed), F-45 (Windows: per monitor dpi version 1, not 2: fixed-size windows grew wider on another monitor),
-F-36 (smear frames cheap again: layout once, one item a copy, one guard). F-41 (switching tabs with the pane open: the fit never draws the line counts it tries (pane pinned, lines worked out from one measurement), the duel tabs share one text size, and their cards fade over to the new pair). Docs reviewed for the first release
-(README: Using it, Licence; release notes; code map). T-16 (a macOS program in the release: Apple Silicon, zipped
-.app, icon.icns). T-17 (Run workflow > "Publish as a release" makes the tag and the release: a session cannot push tags). F-42 (the Windows build's check hung on the one-file program's inner process holding its pipe: output to files, the whole tree stopped, jobs time out after 30 min). U-1 (File > Check
-for updates: the program replaces itself with the release's program, kept as .old until the new one starts; a git
-checkout updates with git pull, other source folders sync; a quiet check at start once a day). U-2 (the censoring
-toast is the How words are dealt line). U-3 (a built program trusts this computer's certificates: SSL_CERT_FILE from
-deps.CA_BUNDLES; the update dialog says what went wrong). U-4 (asked for: File > Check for updates merged into File > Source
-& Updates, one panel: Updates on top, then make the program / unpack the source with the update tick; a 404 "Not
-Found" is said to mean the repository is private; it was, and the user has made it public). U-5 (Add to applications menu / Start menu
-moved into Source & Updates, plus a tick when making the program; none on macOS). U-6 (that section only in the
-program and only until it is in the menu; the build's tick only while it is not). U-7 (that tick on by default). U-8 (renamed Word Tierlister everywhere; the old
-word-tierlist-* release copies were dropped after 1.0.4 (the user: nobody runs 1.0.2 or older); the old data folder, pointer file, records, launcher and shortcut are still found).
-SY-1 (sync between devices with Syncthing: a file per device, the later change wins; File > Sync with other devices, its look agreed from screenshots). SY-2 ("Last synced" only once another device answers; the device code hidden behind an eye inside its box, closed eye picked). T-18 (.github/workflows/macos.yml: self-tests, build and screenshots on GitHub's Apple Silicon and Intel Macs; run_tests.sh KEEP_GOING=1).
-F-46 (words new to this list from a sync or an Import get the hand-picked list's rudeness check, Store._mark_added).
-U-9 (asked for, for testing: "Update to nightly" in Source & Updates, only while main's files differ from yours by git's ids,
-fully manual; the program builds its replacement from main's source in the source folder beside it, --build-nightly;
-release programs are now checked against SHA256SUMS.txt, nightlies not).
-DT-1 (asked for: dev tools from the window: Settings > Developer tools, off to start with, shows small bubbles at a
-dialog's top right, StyledDialog.dev_bubbles / widgets.DevBubble: How words are dealt has Review rude meanings and
-Score the rules, Source & Updates has Nightly (a switch), Log and Crash test; a new dev tool gets a bubble there, the
-command kept). DT-2 (reported: the nightly showed to everyone while main was ahead; now only with Developer tools on and
-the Nightly bubble lit). DT-3 (a running dev tool's bubble: a ring round the dot fills, or an arc spins with no
-fraction; App.dev_progress feeds it; picked from a mock-up). DT-4 (the tuner's close box hides it while it tunes; a
-click on its bubble brings it back, App.show_tuner over its stdin; done while hidden, it pops back up). DT-5 (asked for,
-picked from a mock-up: one split bubble in How words are dealt, Review words | Tune & reroll, DevBubble(second=);
-Tune & reroll = the tuner, then measure_rudeness next once it closes after Done; Score the rules gone; a toast in the
-main window when each step finishes). DT-6 (asked for, picked from mock-ups: every 50 new answers Tune & reroll
-starts by itself, the tuner --start-hidden, App.review_answered / meta tune_base; the review window's strip of earlier
-tunes from the tuner's rude_tune_history.jsonl, tested error per tick, and a Tune & reroll now button;
-widgets.SmearWordButton: the word smeared on pink when "Smear the whole word" is yes). DT-7 (asked for, picked from
-a mock-up: a running bubble's ring under the pointer is a red cross that stops it, DevBubble(stop=); App.stop_review_tool,
-the tool's process group, half-written files removed).
-S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
-OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
-OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).
-OB-12 (asked for, picked from mock-ups: three broad kinds, Expletive, Sexual, Slur, all smeared to start with; medical
-words, mild name-calling and toilet words are ordinary; the rules score six inner kinds, rudeness.fold folds them;
-OB-8's extra reading gone; old saves mapped once, Store._three_kinds; the review's answers in the old kinds set aside;
-next asks about few sure-clean words; a word mostly used rudely is smeared whole, rudeness.mostly_rude).
-OB-9 (asked for: review rude meanings by hand to test the rules: `tools/measure_rudeness.py sample` -> rude_review.jsonl,
-`python tierlist.py --review-rude` (src/review.py, a window; per meaning, the rules' guess filled in), answers beside it, `measure_rudeness answers`;
-still rules only: the program never reads the answers).
-OB-10 (asked for: tune the rules' numbers against those answers: `python tools/tune_rudeness.py`, a window: 5 parts,
-each tested on numbers tuned without it, the error round by round, a guard over the program's words, the meanings still
-wrong; Keep writes the numbers into rudeness.py and bumps RUDENESS_VERSION; picked from mock-ups; then a bar for the
-reading and each round, the entries read in a process of their own (the window froze), a chart that follows the window's size).
-OB-11 (asked for: active review: `tools/measure_rudeness.py next` refreshes the review file: answered words stay first,
-the rest replaced by 300 new ones, groups weighted by where the rules were wrong, plus like your misses; near the line, signals disagreeing, candidate signals mined from Wiktionary's own rude labels, common words
-with no sign at all; each group spread over what its words share; one-part words only, contractions kept). Developer
-tools bubbles in How words are dealt: Make review words (sample, then next, in the background) and Tune the rules
-(the tuner's window); both run tools/ from the source.
-Z-1 (one fit for every view, per screen and zoom: nothing on the page resizes the window or its text; the
-definitions pane fills the room left; each monitor keeps its own zooms; picked from a mock-up; a 1366 x 768 laptop
-now shows 90% at most). D-1 (README.md for users with screenshots in docs/images; DEVELOPERS.md for coders: Mermaid graphs, the file map,
-options, tests; File > Where is my save file? > Show in folder, standalone.reveal_file).
-W-3 (asked for: one-part words only, contractions kept: hyphenated entries are never read; an older save leaves out
-its untouched ones once at start, Store.leave_out_hyphenated; --include-phrases gone; a --words list is never touched).
-F-47 (the folder logic reviewed, asked for "what a user expects": Remove it keeps what you added or changed,
-standalone.removable / TOP_FILES (a new top-level file must be added there); builds swapped in, install_program;
-downloads removed; a Mac app keeps its save in Application Support and its source in Documents, open -n).
-F-48 (asked for: no window shows unfinished: drawn see-through, then shown; the main window until it settles). F-49 (reported:
-slow top menus, built at every open: now built once and kept; a maximize re-fits at once; the user's timing showed one
-text size per maximize, the stretch while maximizing is GNOME's own animation). F-50 (maximizing
-still stepped: the old page, then half drawn: now it re-fits see-through inside the event, shown once drawn; chosen by the user).
-F-52 (still jarring: maximizing keeps the text size, the page only gets more room; UI-57's own zoom dropped; picked from
-recorded mock-ups after research: Tk has no frame sync).
-F-53 (asked for, approved from recordings: a maximize or restore slides the page's contents in a straight line from
-where the old picture was left, App._slide_from_here; src/framesync.py, X11 only: centre gravity, so the old picture is
-never left in the top-left corner, and frame sync for drags, the only resizes mutter syncs).
-F-55 (reported: every card vanished for a moment on a zoom: shapes with nothing on screen are painted even while a fit
-measures). F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
-for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11 (undone by F-54: GNOME sometimes lost the menu; closed menus are hidden again); CI quick check, macOS off pull
-requests). F-56 (asked for: the first open of a top menu was slow on Fedora: the idle build also lays it out, makes its system windows and finds the check mark's font, still hidden; step 2 if still slow: one see-through showing, never off-screen). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
-FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
-(src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
-Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).
-Next: the release (merge this, then Actions > Build programs > Run workflow on main, ticked). Dropped: UI-21 (next-up peek), UI-74 (film grain)
-and UI-32 (moving background): Tk has no see-through widgets, and the user ruled out rewriting the page as a canvas.
-Boundary's swap strip: the user will come back to it. The "Window by window" list in the roadmap
-shows which steps touch which window.
-Shelved ("In consideration" in the roadmap's Decisions): Boundary's swap strip (archived,
-commit 9b78889; swaps are still counted).
-Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
+Every step's story (what was asked, what was built, what the user picked) is in the roadmap at the top of
+`tierlist.py`: search it for the ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it here.
+- Next: the release (Actions > Build programs > Run workflow on main, "Publish as a release" ticked; a session cannot
+  push tags, T-17).
+- Dropped: UI-21 (next-up peek), UI-74 (film grain), UI-32 (moving background): Tk has no see-through widgets and the
+  user ruled out rewriting the page as a canvas. FS-1 (going back from a pop-up means full screen's menu). T-4.
+- Shelved ("In consideration" in the roadmap's Decisions): Boundary's swap strip (archived, commit 9b78889; swaps are
+  still counted); the user will come back to it.
+- Decided: binaries go in GitHub Releases (T-8), not a folder; the placement toast ends in its chart bar (UI-17).
+- The "Window by window" list in the roadmap shows which steps touch which window.
 
-## Known gaps
-- UI-73's private font loading works on Linux (fontconfig) and on the macOS runners (CoreText, T-18: it must run before
-  the first Tk); the Windows loader (AddFontResourceEx, FR_PRIVATE) never ran; if it fails the old installed fonts stand in.
-- F-53's framesync (centre gravity, frame sync) was seen under openbox here, not recorded under GNOME (mutter on Xvfb
-  paints too rarely to record); Windows / macOS get the slide only, never seen there for a stale picture.
-- Z-1's monitor check (300 ms after the window stops moving) was only faked here (one Xvfb screen): confirm with
-  two real monitors, and on Windows that a monitor with another scaling is noticed.
-- The pane's dip (F-23, F-27) is fixed (the user confirmed). A window that must grow for the pane can still show
-  GNOME's compositor resizing it a frame late, and the window's own resize is one step (F-28).
-- The Windows console hand-off (ST-9: pythonw.exe) works on real Windows (confirmed by the user); the FreeConsole
-  fallback (`startup.detach_console`, no pythonw.exe) was only simulated. ST-5's terminal hand-back was checked on Linux in a pseudo-terminal, not on a Mac.
-- UI-54 (dpi awareness, monitor work areas) was only simulated here; confirm on real Windows 11. F-45 (version 1, so the
-  setup window no longer grows on another monitor) was worked out from Tk's source, not seen on Windows. Tk 8.6 keeps
-  its size when moved to a monitor with a different scaling.
-- On absurdly small effective screens (for example 1366x768 at 2.0 scaling with the definitions pane
-  open) the centre area can still clip.
-- Obscene words (OB-6, wired in): rules only (src/rudeness.py), never Claude's list or a review (archived, commit
-  233d6ca; old saves keep unused tables obscene_review / kinds). The Wiktionary build keeps the meanings the rules
-  read (table rude); prepare_queue scores them ("Scoring rude meanings"); words.rude = kinds of its meanings
-  (rudeness.KIND_BITS), words.obscene = smeared whole. A save without the meanings reads them in the background
-  (App._start_rude_read: a 3 GB download; never tried against the real site from here, nor on a real old save).
-  Kinds shown: Expletive, Sexual, Slur (OB-12; obscene.RUDE_KINDS), all smeared to start with (obscene.CENSORED),
-  each with a smear button in How words are dealt (OB-7; Store.censor_kinds / censored_words; smeared meanings keep
-  their kind). The rules' tables score obscene.RULE_KINDS (six) and rudeness.fold turns them into the three. "Obscene words" still starts unticked.
-  Only words smeared whole get rude kinds ("Obscene words" = censored words; the user chose it); a group's own
-  name is never a slur (SLUR_MARKS). Bump rudeness.RUDENESS_VERSION whenever the rules change (now 16; words.rude_main keeps the main kind). Measure with tools/measure_rudeness.py (79.0%, 81.3% of
-  the commonest, 0.4% false alarms; forms count as their word's first meaning (F-12); hyphenated parts count on slang meanings; word families replaced the hand list's roots; Wiktionary's examples were tried
-  and did not help; forms follow their word's first meaning; common words (COMMON_ZIPF) count only strongly
-  labelled rude meanings; borrowed ideas and voting checked on random and held-out lists judged by subagents
-  (scratch only): see OB-6). Never name a module like a PyPI package (src/ is first on the path: "packaging").
-  Ask the user's examples of false matches. The numbers above are the six kinds'; OB-12's three were not measured
-  against a yardstick (the user's new answers are it); rudeness.mostly_rude was tried on the real entries (a scratch
-  entries.jsonl from measure_rudeness fetch: +81 words smeared whole with their forms).
-  OB-9's review answers (the user's, rude_review_answers.jsonl) are the yardstick to tune against now (OB-10's tuner:
-  only ever run on stand-in answers here; a round takes about a minute on 4 cores for 1,500 words); a draft of a
-  tighter Clinical rule and more WordNet trees was tried in scratch (not built): ask before building it.
-  Tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
-- IC-2 (gio custom icon) works on Fedora (the user saw it); IC-3 (taskbar) could not be seen here (no GNOME Shell). Earlier:
-  IC-2 could not be seen here (no desktop metadata service); confirm on Fedora's GNOME Files.
-  ST-8's pkexec / winget installs were only faked in tests.
-- ST-10's Start menu shortcut (PowerShell's WScript.Shell) was only faked here: confirm on real Windows that it
-  appears in the Start menu, starts with no console window and shows the icon.
-- IC-1 on Windows (the .exe's icon, the taskbar group via SetCurrentProcessExplicitAppUserModelID) was never seen on
-  real Windows; on Linux it was seen in openbox's title bar.
-- The Windows zoom keys are now read by keycode with Ctrl held (keymap.WIN_CTRL_KEYS); not tried on real Windows.
-  The PyInstaller.utils error was not reproduced here: the build now checks the parts it uses and repairs an
-  incomplete PyInstaller.
-- U-3's certificate fix was reproduced from source with the certificates hidden, not in a real built program on
-  Fedora or a Mac.
-- The repository must stay public for updates: GitHub answers a private repository's releases with 404 to anyone not
-  signed in (it was private until U-4; the user made it public). Never change its visibility; keep secrets out of it.
-- U-9's nightly was checked against the real GitHub API (main's tree) but never run end to end: the program's
-  rebuild (source beside it started with --build-nightly, PyInstaller, swap) was only faked; try it first on Linux.
-- U-1's self-update never ran against a real release or on Windows / macOS (renaming the running .exe, ditto):
-  the first test is updating a 1.0.0 program to the next release.
-- T-8's workflow and the update tick never ran against the real GitHub (no gh login here; no release published
-  yet). A release needs constants.VERSION bumped and the tag v<VERSION> pushed; the workflow button needs it on main.
-- The user's Linux build is about 25 MB now (it was 99 MB before T-11 excluded GTK and Qt).
-- T-20's workflow runs every self-test on GitHub's Windows (and Linux): Windows lessons so far: paths with backslashes, home from
-  USERPROFILE, no os.geteuid, a hidden window gets no <Configure>, <Configure> on the main window when nothing moved, Segoe UI
-  wraps and measures differently (check a smear's runs from its layout, not fixed strings).
-- T-18's macOS test workflow is the only way the program is tried on a Mac: read its run's failures and screenshots
-  (Actions > Test on macOS) before trusting a macOS change. Mac runners are slower: a check of an animation's first frame holds the
-  animator's clock (`anim.clock`, `_real=False`), and a check of work in the background holds that work with an Event.
-  README.md and .github/release-notes.md say macOS is not tested on a real Mac yet (asked for): drop that once it is.
-- T-16's macOS job (macos-latest, ditto zip, icon.icns) never ran: the first release is its first build; Intel Macs
-  get no program.
-- T-3's Windows (.exe) and macOS (.app) builds were never tried (PyInstaller builds only for the system it runs
-  on; this container is Linux). The macOS build is an app bundle (--onedir).
-- A read-only save file's dialog could not be verified (the test machine ran as root).
-- Holding a key in Refine once crashed the user's PC; after the two fixes (Boundary's pair list, held repeats wait
-  after a slow action) the user no longer sees it.
-- SY-1 was tried against two real Syncthing 1.27 instances on one Linux machine; never between two real computers,
-  over relays, nor on Windows / macOS (the Startup shortcut, the LaunchAgent, brew services). The later change wins by
-  each device's clock. Tests never start the real Syncthing (AutoSync.started, fakes).
-- "+N today" counts from the undo history, which keeps the last ~5,000 actions: past that in one day it
-  undercounts.
+## Rules learnt from earlier steps
+- A new top-level file must be added to `standalone.TOP_FILES` (F-47: Remove it keeps what the user added).
+- Never name a module like a PyPI package (src/ is first on the path: "packaging" broke it).
+- Bump `rudeness.RUDENESS_VERSION` whenever the rules change (now 16). The program reads rules only, never the
+  review's answers (OB-9); tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
+- Smears: the user checked 194 words over the commonest end-letter pairs (F-39); add a per-pair spot fix only if one is
+  reported.
+- Developer tools are bubbles at a dialog's top right, shown only with Settings > Developer tools on (DT-1); a new
+  dev tool gets a bubble there and keeps its command. They run tools/ from the source, never from a built program.
+- Never remake a canvas item from its own Enter/Leave (F-21: Tk looped and froze).
+- Windows lessons from CI (T-20): backslash paths, home from USERPROFILE, no os.geteuid, a hidden window gets no
+  <Configure>, Segoe UI wraps differently (check a smear's runs from its layout, not fixed strings).
+- macOS is tried only by .github/workflows/macos.yml (T-18): read its failures and screenshots before trusting a macOS
+  change. Its runners are slow: hold the animator's clock (`anim.clock`, `_real=False`) or background work (an Event).
+- The repository must stay public (updates read its releases; private answers 404). Never change its visibility;
+  keep secrets out of it.
+- Obscene words: rules only (src/rudeness.py). words.rude = kinds of its meanings (rudeness.KIND_BITS), words.obscene
+  = smeared whole. Three kinds are shown (Expletive, Sexual, Slur: obscene.RUDE_KINDS, all smeared to start with);
+  the rules score six (obscene.RULE_KINDS) and rudeness.fold turns them into three. A group's own name is never a slur.
+  Measure with tools/measure_rudeness.py; ask before building the drafted tighter Clinical rule.
+
+## Known gaps (never seen for real; confirm when the user can)
+- Windows, never run on a real machine: the private font loader (UI-73), dpi awareness and monitor work areas (UI-54,
+  F-45), the Start menu shortcut (ST-10), the .exe's icon and taskbar group (IC-1), the zoom keys by keycode, the
+  FreeConsole fallback (ST-9; pythonw.exe itself is confirmed), renaming the running .exe on update (U-1).
+- macOS, never on a real Mac: the .app build (T-16, Apple Silicon only), the terminal hand-back (ST-5), update by
+  ditto. README and release notes say so (asked for): drop that once it is tried.
+- Linux / GNOME: framesync (F-53) seen under openbox only; IC-3's taskbar icon not seen (no GNOME Shell here); a window
+  growing for the pane can show GNOME resizing a frame late (F-28).
+- Two monitors: Z-1's monitor check was only faked (one Xvfb screen); Tk 8.6 keeps its size on a monitor with other
+  scaling. Absurdly small screens (1366x768 at 2.0 with the pane open) can still clip.
+- Releases: the first real update from 1.0.0 (U-1), the nightly rebuild end to end (U-9, try Linux first) and U-3's
+  certificate fix in a built program were never run for real. A release needs constants.VERSION bumped.
+- Sync (SY-1): tried between two Syncthing 1.27 instances on one Linux machine only; the later change wins by each
+  device's clock. Tests never start the real Syncthing.
+- Rude meanings read in the background for an old save (App._start_rude_read, a 3 GB download): never tried against
+  the real site. The tuner (OB-10) was only run on stand-in answers here (a round: about a minute on 4 cores).
+- ST-8's pkexec / winget installs were only faked; a read-only save's dialog could not be checked (tests run as root).
+- "+N today" counts from the undo history (~5,000 actions): past that in a day it undercounts.

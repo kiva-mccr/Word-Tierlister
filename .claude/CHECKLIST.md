@@ -43,7 +43,7 @@ done by `python tools/check_release.py`; the rest need a person or Claude to loo
       later steps updated, no stale names (renamed functions, test files).
 - [ ] DEVELOPERS.md: file map, layers, graphs, any new command-line option. README.md: any new feature a user
       sees, in plain words (a new screen: a screenshot in docs/images).
-- [ ] `.claude/CLAUDE.md`: Status line (done / next) and Known gaps are current.
+- [ ] `.claude/CLAUDE.md`: Next, the rules and Known gaps are current (finished steps go in the roadmap only).
 - [ ] Zip built with `python tools/check_release.py --zip word-tierlister.zip` (not copied by hand), then the
       file list looked at: every module, `requirements.txt`, `CLAUDE.md`, `CHECKLIST.md`, the tests,
       and no `.db`, `.log` or caches.
