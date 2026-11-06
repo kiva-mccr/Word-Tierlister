@@ -2,7 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """The rule tuner (OB-10: tools/tune_rudeness.py): fast scoring gives the rules' own results, the search lowers the
 error on made-up answers, the parts never test a word on numbers tuned with it, Keep writes the numbers into a copy
 of rudeness.py (read back, version bumped), and the window draws every part and asks before a kind doubles."""
-import json, os, queue, shutil, sys, tempfile, time
+import collections, json, os, queue, shutil, sys, tempfile, time
 os.environ["HOME"] = tempfile.mkdtemp()
 os.environ["USERPROFILE"] = os.environ["HOME"]
 sys.path.insert(0, os.path.join(_paths.ROOT, "tools"))
@@ -77,7 +77,12 @@ err, t = T.evaluate(data, start, targets)
 assert t["expletive"][2] == 30 and t["expletive"][0] == 0 and 0 < err < 100
 assert T.error({"clean": [5, 0, 0], "sexual": [0, 0, 0]}) == 0.0      # (a class never answered is left out)
 assert abs(T.error({"clean": [1, 1, 0]}) - 100 / 3) < 1e-9
-assert {T.part_of(w) for w in targets} == set(range(T.PARTS))
+assert set(T.parts_of(data).values()) == set(range(T.PARTS)) and set(T.parts_of(data)) == set(data["answers"])
+# a word family stays in one part (a tested word is never helped by its relatives), and the parts stay even
+split = T.split_parts([f"w{i}" for i in range(20)] + ["fuck", "fucker", "fucking", "motherfucker"],
+                      {"fucker": ("fuck",), "fucking": ("fuck",), "motherfucker": ("fucker", "mother")})
+assert len({split[w] for w in ("fuck", "fucker", "fucking", "motherfucker")}) == 1
+assert sorted(collections.Counter(split.values()).values()) == [4, 5, 5, 5, 5]
 
 # the search, in this process: the error falls, every event arrives, Keep's numbers come from all the words
 events = queue.Queue()
@@ -149,15 +154,25 @@ with open(hist_path, "a", encoding="utf-8") as f:
     f.write("not json\n{\"words\": 1}\n")
 assert T.read_history(hist_path) == [{"words": 50, "start": 20.0, "best": 18.0, "kept": True}]
 assert T.read_history(os.path.join(folder, "none.jsonl")) == []
+# the earlier tunes' ticks: along the words, the newest at the end, never on top of each other (reported: 452, 462)
+xs = T.tune_xs([452, 462], 0, 1000, 28)
+assert xs[-1] == 1000 and 100 < xs[0] < 900
+xs = T.tune_xs([50, 50, 51, 400], 0, 1000, 28)
+assert all(b - a >= 28 - 1e-9 for a, b in zip(xs, xs[1:])) and xs[-1] <= 1000 + 1e-9 and xs[0] >= 0
+assert T.tune_xs([100], 0, 1000, 28) == [1000]
 
-# the noise: the parts' standard error; the stop waits longer the noisier the average (asked for)
-assert T.noise([20.0]) == 0.0 and abs(T.noise([18.0, 22.0]) - 2.0) < 1e-9
-assert T.patience(0.0) == T.PATIENCE and T.patience(0.5) == T.PATIENCE + 1 and T.patience(1.2) == T.PATIENCE + 3
+# the noise: each part's change against itself (a hard part and an easy one moving together is no noise); the stop
+# waits longer the noisier the average (asked for)
+assert T.noise({0: 20.0}, {0: 19.0}) == 0.0 and T.noise({0: 18.0, 1: 22.0}, {0: 17.0, 1: 21.0}) == 0.0
+assert abs(T.noise({0: 18.0, 1: 22.0}, {0: 20.0, 1: 20.0}) - 2.0) < 1e-9
+assert T.patience(0.0) == T.PATIENCE and T.patience(0.1) == T.PATIENCE + 1 and T.patience(0.25) == T.PATIENCE + 3
 assert T.patience(99) == T.PATIENCE_MAX
 # Keep's round: the earliest within the noise of the lowest (asked for), not a win by wobble
-hist = [(0, {}, 24.0, 1.0, None), (1, {}, 20.5, 1.0, None), (2, {}, 19.5, 1.0, None), (3, {}, 19.2, 1.0, None)]
+row = lambda r, a, b: (r, {}, (a + b) / 2, 0.0, None, {0: a, 1: b})              # noqa: E731
+hist = [row(0, 24, 24), row(1, 20, 21), row(2, 19, 20), row(3, 19.3, 19.1)]
 assert T.best_round(hist) == 2
-assert T.best_round(hist[:2]) == 1 and T.best_round([(0, {}, 5.0, 0.0, None), (1, {}, 5.0, 0.0, None)]) == 0
+assert T.best_round(hist[:2]) == 1 and T.best_round([row(0, 5, 5), row(1, 5, 5)]) == 0
+assert T.best_round([row(0, 10, 30), row(1, 9.5, 29.5)]) == 1     # (half a point, every part: real, not luck)
 
 # the guard: what the program's words would show
 g_now = T.guard(saved, start, data["base"])
@@ -267,6 +282,9 @@ assert win.span() == 6                                          # (the rounds ax
 assert {p.grid_info()["row"] for p in win.panels.values()} == {0}    # (the tabs' panels in one cell, asked for)
 for key, _n in T.TuneWindow.TABS:
     win.show_tab(key)
+if not win.miss:                    # (the made-up answers can be fitted whole: list the rules' own misses)
+    win.miss = sweeps[0]["misses"]
+    win.draw_misses()
 win.show_tab("misses"); pump(5)
 lines = win.miss_text.get("1.0", "end").strip().splitlines()        # (every miss listed; more than fit: a bar)
 assert len(lines) == len(win.miss) and win.miss

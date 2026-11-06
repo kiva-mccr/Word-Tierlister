@@ -19,7 +19,8 @@ The module docstring has the details; this page is the map.
 - `scope`: The words the two passes read for `targets` (measure_rudeness.scope, plus the words they are forms of and the parts of hyphenated ones).
 - `score_targets`: {word: [{kind: points}]} for `targets` (both passes), from `data`'s words.
 - `answer_pairs`: {word: ([(meaning index, kind answered)], whole answered)} for the answers whose meanings are found.
-- `part_of`: Which of the PARTS a word is tested in (fixed: by its letters).
+- `split_parts`: {word: which of the PARTS it is tested in}: a word family (words linked by `family`, the words each is built from) stays in one part, so no tested word is helped by...
+- `parts_of`: {answered word: its part} (split_parts, worked out once and kept in `data`).
 - `tally`: {class: [tp, fp, fn]} over `words_in`: each kind meaning by meaning, and "whole" (smearing the word).
 - `error`: 100% minus the average F1 of the classes answered at least once (tally).
 - `evaluate`: The error and tally of `values` over `words_in`.
@@ -39,13 +40,14 @@ The module docstring has the details; this page is the map.
 - `misses`: [(word, gloss, answered, the rules' kind)] of the tested meanings `scored` still gets wrong, commonest first.
 - `write_misses`: The misses as text: one meaning a line, the word, your kind, the rules' kind, its definition.
 - `changed`: [(param, from, to)] of the numbers that moved (factors shown as their effect: "TOPIC_POINTS * clinical").
+- `tune_xs`: Where each earlier tune's tick goes (oldest first): along the words answered, from the first tune's count (a little before it) to the newest's at `end`, no two closer...
 - `read_history`: The earlier tunes, oldest first: [{"when", "words", "meanings", "start", "best", "round", "kept"}].
 - `write_history`: (no docstring)
 - `read_answers`: The answers file's {word: {"kinds": {meaning key: kind}, "whole": bool}} (measure_rudeness.read_answers).
 - `Tuning`: The search: every part's rounds in the processes, one round at a time; events go to `events` (a queue) as ("sweep", {round, errors: {part: (train error, test error)},...
   - methods: run, pause, resume, stop
-- `noise`: The average's noise: the standard error of the parts' tested errors (points; none from one part).
-- `best_round`: The round Keep takes (asked for): the earliest whose average is within the noise of the lowest (a win smaller than the noise is likely luck, and an earlier round has...
+- `noise`: How far apart two rounds' averages may be by luck: the standard error of each part's change between them ({part: tested error} each; points, none from one part).
+- `best_round`: The round Keep takes (asked for): the earliest whose average is within the noise (noise) of the lowest's (a win smaller than the noise is likely luck, and an earlier...
 - `patience`: Rounds without a real gain before the search stops: longer the noisier the average (asked for).
 - `tested_parts`: The parts that hold at least one answered word (in order): only these are tested and averaged.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
@@ -59,7 +61,7 @@ The module docstring has the details; this page is the map.
 ## Rules and pitfalls (fixed before: keep them fixed)
 
 - Started from the program (--from-program), the close box only hides the window while it tunes (`close_box`); `listen` turns stdin's "show" lines into events and its end into "gone" (a hidden tuner then stops). `close` cancels the pending `_poll`: one firing after the window was destroyed printed Tcl errors.
-- Never test a word on numbers tuned with it: the 5 parts (`part_of`, fixed by the word's letters) each tune on the other 4; Keep takes the run on every word at the round the tests liked best.
+- Never test a word on numbers tuned with it: the 5 parts (`split_parts`: a word family stays in one part, families biggest first to the emptiest part) each tune on the other 4 (split by letters alone, 207 of 600 answered words had a relative in another part, so tested errors flattered); Keep takes the run on every word at the round the tests liked best.
 - Every helper process is spawned (`_spawning`), never forked: started by the program (--from-program), the stdin listener thread holds sys.stdin's lock, and a forked child's start-up closes sys.stdin, so the tuning processes hung before round 0 ended (reported).
 - The chart's margins are measured from the small font (the axis name, the widest number, the legend's rows): fixed margins overlapped at the user's text size (reported).
 - Never read the entries in the window's process (`load` starts a spawned process: reading 3 GB of JSON beside Tk froze the window for up to 2.5 s at a time, longer as the heap grew). The helper processes call `lower_priority`; `Inline` (tests, --workers 0) runs in the window's process and must not.
@@ -67,15 +69,15 @@ The module docstring has the details; this page is the map.
 - A few answers leave some parts with no words: only `tested_parts` are run, averaged and summed (averaging every part once added a missing test error, a TypeError under the graph).
 - `fast()` must give exactly the rules' own scores (the self-test compares it with `rudeness.score_words` under odd numbers): what it remembers never depends on the numbers, a meaning that scores nothing scores nothing whatever they are, and a meaning's points are remembered for the values of the numbers it was seen to hang on. A new number or table in rudeness.py: add it to PARAMS (`params`, `apply`, `write_back`, `check`) or it stays as it is.
 - `rudeness._signals` keeps WordNet's points once worked out: inside `fast()` they are read from the table each time (a tuned WORDNET_POINTS was ignored otherwise).
-- The error moves in jumps (a small step often changes no meaning's kind): a step that helps neither way is tried JUMP times as far before it halves.
+- The error moves in jumps (a small step often changes no meaning's kind): a step that helps neither way is tried JUMP times as far before it shrinks (SHRINK 0.7: halving settled in 5-8 rounds, short of planted numbers).
 - Keep writes each number where it stands (comments kept) and runs the new file's text to check every number landed, then bumps RUDENESS_VERSION; read the diff before committing.
 - The tuning processes never load WordNet (its matches are worked out first, `wordnet_tables`); the guard's process does, once.
 - The window is one size from the start (asked for): every row is built empty in `_build_slots` and only filled in place (`draw_kinds`, `draw_changes`, `draw_guard`, `draw_misses` set text, never add or remove widgets), the info and note keep two lines, and the window's size is set once. A round's results come as one "sweep" event and show together; the guard's first count is held for round 0's sweep.
 - The chart gets the height the rest leaves on the screen (`CHART_MIN` at least): reported squished on a 1200 px screen when the empty rows were stacked; kinds, numbers changed and the guard sit side by side, the Keep note on the button row. Every fixed-size label keeps a width (and lines) of its own: a wrapping label with only a wraplength grew wider than its slot and was cut. The rounds axis shows the rounds run plus those it may still wait (`span`), and the % numbers thin out on a short chart.
-- Each change pays a pull towards today's numbers (`cost`, PULL): tried on 600 stand-in answers it reached a lower tested error with 3 numbers moved instead of 11. Random kicks after settling were tried and found nothing better in 2.5 times the time (not built). `tune_round` returns the error without the pull: the chart shows plain error.
-- Earlier tunes: one line per finished tune in `rude_tune_history.jsonl` beside the answers (`remember` on done, Keep rewrites it kept); the program's review window reads the same file (its keys: when, words, meanings, start, best, round, kept; error %, not agreement). The first tune is one tick at the strip's far right, which read as an empty strip (reported): it says what later tunes will add, over a words axis from 0.
+- Each change pays a pull towards today's numbers (`cost`, PULL): a light one. At 1.0 it found only 2 of 6 numbers planted in made-up answers (it held back real gains); with none, 13 numbers that should have stayed put moved. With the light pull, slower steps, paired noise and family parts together, the same test fell from 3.0% to 0.7% tested (1.8% before), the training error reached 0, and the numbers that moved most were the planted ones (two planted numbers never moved: the others' changes already gave every answer). Random kicks after settling were tried and found nothing better in 2.5 times the time (not built). `tune_round` returns the error without the pull: the chart shows plain error.
+- Earlier tunes: one line per finished tune in `rude_tune_history.jsonl` beside the answers (`remember` on done, Keep rewrites it kept); the program's review window reads the same file (its keys: when, words, meanings, start, best, round, kept; error %, not agreement). The first tune is one tick at the strip's far right, which read as an empty strip (reported): it says what later tunes will add. Tunes close in words sat on top of each other with their labels run together ("452462", reported): `tune_xs` spreads the ticks over the words from a little before the first tune, at least GAP apart, and a label that would overlap the newer one beside it is left out.
 - The details sit under tabs (asked for: "crowded"; approved from a mock-up): Earlier tunes, Each kind, Numbers changed, Guard, Still wrong, all gridded in one cell (`panels`) so the page is always as tall as the tallest, raised with `tk.Misc.tkraise` (a Canvas's own tkraise raises its items). Numbers changed and Still wrong list everything in a read-only Text (`_list`, LIST_LINES) whose scroll bar shows only while the lines do not all fit (asked for); its column keeps the bar's width.
-- The stop allows for noise (asked for): a gain counts only when it beats the last real gain by more than the parts' standard error (`noise`), the wait grows with it (`patience`), and Keep's round is the earliest within the noise of the lowest (`best_round`, picked by the user); its misses come from that round's numbers, not the latest.
+- The stop allows for noise (asked for): a gain counts only when it beats the last real gain by more than the noise (`noise`: the standard error of each part's change against itself; the parts' own spread, used before, is mostly how hard each part's words are and put the noise at about ±0.4 against ±0.1-0.25, so Keep took round 0 and said no numbers changed though the error fell, reported), the wait grows with it (`patience`), and Keep's round is the earliest within the noise of the lowest (`best_round`, picked by the user); its misses come from that round's numbers, not the latest.
 
 ## Changing it
 
