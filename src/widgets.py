@@ -15,7 +15,7 @@ from rudeness import GLOSS_KEY
 from fonts import font, letter_holes, text_overhang
 from sizing import clamp_to_monitor, keep_on_screen, monitor_at, place_dialog
 from smooth import ICONS, SmoothCanvas, curve_image
-from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
+from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light, mix
 from ui_motion import HURRY_MS, lerp_color
 from ui_style import unveil, veil
 
@@ -1692,6 +1692,95 @@ class SmearToggle(SmoothCanvas):
         if on:
             smear_items(self, item, ink, fill, 1.0, ("smear",))
             self.itemconfigure(item, state="hidden")
+
+    def refresh(self):
+        self._draw()
+
+
+class SmearWordButton(SmoothCanvas):
+    """A rounded button that says what a yes means (asked for: easy to tell yes from no; picked from a mock-up): its
+    `text` on the left and the word on the right, smeared on the S tier's colour while on, plain on the surface
+    colour while off, the key under the word. A click (or Space / Return once it has focus) runs `command`; a change
+    gives a short bounce (none with Reduce motion). The review's "Smear the whole word".
+
+        b = SmearWordButton(parent, "Smear the whole word", toggle, animator=app.anim); b.show("bugger", True)
+    """
+    BOUNCE = (-3, -2, -1, 0)      # pixels up, a frame each (BOUNCE_MS apart), when it changes
+    BOUNCE_MS = 30
+
+    def __init__(self, parent, text, command, font_=None, word_font=None, bg=None, animator=None):
+        super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
+                         bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
+                         highlightcolor=PALETTE["accent"])
+        self.text, self.command, self._anim = text, command, animator
+        self._font, self._word_font = font_ or font("body"), word_font or font("heading")
+        self.word, self.on, self.hint, self.enabled = "", False, "", True
+        self._hover, self._lift, self._job = False, 0, None
+        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
+            self.bind(seq, lambda e: self.invoke())
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
+        self._draw()
+
+    def invoke(self):
+        if self.enabled:
+            self.command()
+
+    def show(self, word, on):
+        """Show `word`, smeared if `on`; a change of `on` for the same word bounces."""
+        bounce = word == self.word and bool(on) != self.on
+        self.word, self.on = word, bool(on)
+        self._draw()
+        if bounce and not getattr(self._anim, "reduce_motion", False):
+            self._bounce(0)
+
+    def set_hint(self, hint):
+        self.hint = hint
+        self._draw()
+
+    def set_enabled(self, on):
+        self.enabled = bool(on)
+        super().configure(cursor="hand2" if on else "")
+        self._draw()
+
+    def _set_hover(self, on):
+        self._hover = on
+        self._draw()
+
+    def _bounce(self, i):
+        if self._job:
+            self.after_cancel(self._job)
+            self._job = None
+        self._lift = self.BOUNCE[i]
+        self._draw()
+        if i + 1 < len(self.BOUNCE):
+            self._job = self.after(self.BOUNCE_MS, lambda: self._bounce(i + 1))
+
+    def _draw(self):
+        self.delete("all")
+        f, wf, small = self._font, self._word_font, font("small")
+        word = self.word or " "
+        pad = f.metrics("linespace")
+        wline, sline = wf.metrics("linespace"), small.metrics("linespace")
+        h = wline + sline + 10
+        ww = max(wf.measure(word), small.measure(self.hint))
+        w = pad + f.measure(self.text) + pad + ww + pad
+        super().configure(width=w + 2, height=h + 6)
+        on = self.on and self.enabled
+        fill = TIER_COLORS[0] if on else PALETTE["surface"]
+        edge = PALETTE["accent"] if self._hover and self.enabled else (mix(fill, ink_on(fill), 0.3) if on else PALETTE["border"])
+        y0 = 3 + self._lift
+        self.round_rect(1, y0, w, y0 + h, 12, fill=fill, outline=edge)
+        ink = ink_on(fill) if self.enabled else PALETTE["muted"]
+        self.create_text(1 + pad, y0 + h / 2, text=self.text, font=f, anchor="w", fill=ink)
+        cx = w - pad - ww / 2
+        item = self.create_text(cx - wf.measure(word) / 2, y0 + 4, text=word, font=wf, anchor="nw", fill=ink)
+        if on:                                    # (nw: smear_items reads a line's top left)
+            smear_items(self, item, ink, fill, 1.0, ("smear",))
+            self.itemconfigure(item, state="hidden")
+        if self.hint:
+            self.create_text(cx, y0 + 4 + wline + 1, text=self.hint, font=small, anchor="n",
+                             fill=ink if self.enabled else PALETTE["muted"])
 
     def refresh(self):
         self._draw()

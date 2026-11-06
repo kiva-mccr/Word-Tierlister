@@ -39,7 +39,7 @@ from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
-from review import RudeReview
+from review import RudeReview, read_answers
 from syncdialog import AutoSync, SyncDialog
 import standalone
 import framesync
@@ -2392,12 +2392,14 @@ class App:
             return None, "Step 2 of 2: " + note, "New words · step 2 of 2"
         return None, note, None
 
-    def show_tuner(self):
+    def show_tuner(self, bring=True):
         """Bring the tuner's window back (asked for: closed while it tunes, a click on its bubble opens it again; once
         done, the next click shows the open window rather than starting another). True if a tuner was there."""
         job = getattr(self, "_tuner_job", None)
         if job is None or job["proc"].poll() is not None:
             return False
+        if not bring:                             # (only: is one running?)
+            return True
         try:
             job["proc"].stdin.write("show\n")
             job["proc"].stdin.flush()
@@ -2417,7 +2419,31 @@ class App:
             return self.review_rude(dlg)
         return self.make_review_words(dlg, ask, run, then="open")
 
-    def tune_reroll(self, dlg=None, ask=None, start=None, run=None):
+    AUTO_TUNE = 50                        # new answers between two automatic Tune & rerolls (DT-6, asked for)
+
+    def _tune_base(self, n):
+        """The answers there were when Tune & reroll last started (meta tune_base); the first time, `n`."""
+        try:
+            return int(self.store.get_meta("tune_base"))
+        except (TypeError, ValueError):
+            self.store.set_meta("tune_base", str(n))
+            return n
+
+    def next_auto_tune(self, n):
+        """At how many answered words the next automatic Tune & reroll starts (the review's strip), with `n` now."""
+        return self._tune_base(n) + self.AUTO_TUNE
+
+    def review_answered(self, n, start=None, run=None):
+        """The review saved an answer, `n` words answered (DT-6): every AUTO_TUNE new ones, Tune & reroll starts by
+        itself, its tuner hidden until it is done (--start-hidden); never while one runs, nor without the tools or
+        the entries (no questions asked: it waits for the next answer). Returns the tuner's command, or None."""
+        if n < self.next_auto_tune(n) or getattr(self, "_tool_job", None) or self.show_tuner(bring=False):
+            return None
+        if is_frozen() or not os.path.exists(os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")):
+            return None
+        return self.tune_reroll(None, start=start, run=run, hidden=True)
+
+    def tune_reroll(self, dlg=None, ask=None, start=None, run=None, hidden=False):
         """The Review words bubble's right half, Tune & reroll (asked for: the tools run in sequence): the tuner
         (tune_rules); once it has tuned to the end and its window is closed (Keep or Discard), new review words
         (make_review_words, then="reroll"). While it runs, a click brings the tuner's window back (or says the new
@@ -2429,8 +2455,11 @@ class App:
             if dlg is not None:
                 dlg.close()
             return None
-        cmd = self.tune_rules(dlg, ask, start)
+        cmd = self.tune_rules(dlg, ask, start, hidden=hidden)
         job = getattr(self, "_tuner_job", None)
+        if cmd:
+            answered = read_answers(review_answers_path(self.review_file()))
+            self.store.set_meta("tune_base", str(len(answered)))     # (by hand too: the next 50 count from here)
         if cmd and job is not None:
             job["run"] = run
             self._watch_tuner(job)
@@ -2515,7 +2544,7 @@ class App:
             self.flash(f"{'Tune & reroll' if job.get('then') == 'reroll' else 'Making review words'} failed: {last}",
                        kind="warn", ms=8000)
 
-    def tune_rules(self, dlg=None, ask=None, start=None):
+    def tune_rules(self, dlg=None, ask=None, start=None, hidden=False):
         """Tune the rules (OB-10; Tune & reroll's first step): tools/tune_rudeness.py's window, a program of its own, on the review
         file and its answers (asked for when there is none next to the save). It needs the Wiktionary entries
         (making the first review words reads them) and some answers. `start(command)`: how to start it (tests). Returns the
@@ -2534,7 +2563,7 @@ class App:
             show_message("Tune the rules", "Wiktionary's entries are missing", "Review words reads them when "
                          "it makes the first review words (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
             return None
-        cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"]
+        cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"] + (["--start-hidden"] if hidden else [])
         proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
                                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
                                                      bufsize=1)))(cmd)
@@ -2543,7 +2572,9 @@ class App:
             threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()
         if dlg is not None:
             dlg.close()
-        self.flash("The tuner is opening: it reads Wiktionary's entries first (about a minute)", kind="info", ms=5000)
+        self.flash(f"{self.AUTO_TUNE} new answers: tuning the rules in the background (its window shows when done)"
+                   if hidden else "The tuner is opening: it reads Wiktionary's entries first (about a minute)",
+                   kind="info", ms=5000)
         return cmd
 
     def open_log(self):

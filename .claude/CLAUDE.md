@@ -171,7 +171,10 @@ fraction; App.dev_progress feeds it; picked from a mock-up). DT-4 (the tuner's c
 click on its bubble brings it back, App.show_tuner over its stdin; done while hidden, it pops back up). DT-5 (asked for,
 picked from a mock-up: one split bubble in How words are dealt, Review words | Tune & reroll, DevBubble(second=);
 Tune & reroll = the tuner, then measure_rudeness next once it closes after Done; Score the rules gone; a toast in the
-main window when each step finishes).
+main window when each step finishes). DT-6 (asked for, picked from mock-ups: every 50 new answers Tune & reroll
+starts by itself, the tuner --start-hidden, App.review_answered / meta tune_base; the review window's strip of earlier
+tunes from the tuner's rude_tune_history.jsonl, tested error per tick, and a Tune & reroll now button;
+widgets.SmearWordButton: the word smeared on pink when "Smear the whole word" is yes).
 S-2..S-7 (a security review, fixed in its suggested order: the build workflow's write token only in the release job, no Syncthing autoAcceptFolders, the source zip unpacked through standalone.inside, CSV words never formulas; S-1: SHA256SUMS.txt and build attestations on every release, checked by hand, not by Update).
 OB-7 (a censor button per kind of rude meaning: widgets.SmearToggle beside Crude, Swear words, Sexual, Slurs; picked from mock-ups).
 OB-8 (Clinical and Insults get one too, plain to start with: words.smear_extra from a second reading counting them).

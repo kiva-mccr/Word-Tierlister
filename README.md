@@ -236,7 +236,10 @@ answers, then, once you Keep or Discard the new numbers, picks 300 new review wo
 build, the log and a crash test (it shows the error dialog on purpose). While one keeps running a ring round its dot
 shows how far it is and the bubble says which step it is on; hover for the details. A short message at the bottom of
 the main window says when each step finishes. Closing the tuner's window while it tunes only hides it: click Tune &
-reroll to bring it back (it also comes back by itself when it finishes; Discard stops it).
+reroll to bring it back (it also comes back by itself when it finishes; Discard stops it). Every 50 new answers,
+Tune & reroll starts by itself, its window hidden until the tuning is done; the review window shows a line with a
+tick for each earlier tune (its error, lower is better), how many answers until the next one, and a Tune & reroll
+now button. Its "Smear the whole word" button shows the word itself, smeared on pink when the answer is yes.
 
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.

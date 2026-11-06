@@ -10,8 +10,9 @@ whether the rules smear the whole word. The keys (the keymap's "review" group, c
                  as the key changing the meaning below: reported)
     Up / Down    another meaning (a click on one, or on its kind, selects it too)
     S            smear the whole word, or not
-    W            open the word's Wiktionary page in the browser (greyed out while Wiktionary cannot be reached)
     Enter        keep the answers (as shown) and go on to the next word in the file
+The word's Wiktionary page opens from a small icon at the top right of the word (only while Wiktionary can be
+reached; asked for: like the card's icon, no button or key).
     Backspace    back one word in the file, as it was answered (a straight walk: Back then Enter returns to where
                  it was; a history of words answered made Enter after Back skip ahead: reported)
 
@@ -33,11 +34,12 @@ from obscene import set_aside_old_answers
 from sizing import keep_on_screen, place_dialog
 from theme import PALETTE, TIER_COLORS
 from ui_style import set_icon, show_drawn
-from widgets import RoundButton
+from widgets import WIKTIONARY_NOTE, LinkButton, RoundButton, SmearWordButton
 
 KINDS = (("clean", "Not rude"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))   # (OB-12)
 KIND_NAMES = dict(KINDS)
 WRAP_CHARS = 64           # a meaning wraps at this many average characters
+HISTORY_FILE = "rude_tune_history.jsonl"   # (tools/tune_rudeness.py writes a line per finished tune, beside the answers)
 
 
 TIER_OF_KIND = {"expletive": 2, "sexual": 0, "slur": 3}   # (as in the mock-ups)
@@ -85,6 +87,24 @@ def read_answers(path):
     return out
 
 
+def read_history(answers_path):
+    """The earlier tunes beside the answers file, oldest first: [{"words", "start", "best", "kept", ...}] (the
+    tuner's history file: "start" / "best" are tested errors in %, lower is better), or [] when there are none."""
+    out = []
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(answers_path)), HISTORY_FILE), encoding="utf-8") as f:
+            for line in f:
+                try:
+                    h = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(h, dict) and {"words", "start", "best"} <= set(h):
+                    out.append(h)
+    except OSError:
+        pass
+    return out
+
+
 def write_answers(path, answers, order):
     """Write every answer to `path` (the review's words in its order, then any others: answers from an earlier,
     smaller review are kept), through a temporary file, so a crash mid-write never leaves half a file."""
@@ -126,8 +146,23 @@ class RudeReview:
         self.count.pack(side="right")
         tk.Label(box, text="A developer option: nothing is smeared here, and the answers only test the rules.",
                  font=font("small"), bg=bg, fg=PALETTE["muted"]).pack(anchor="w")
-        self.word = tk.Label(box, font=font("heading"), bg=bg, fg=PALETTE["text"])
-        self.word.pack(pady=(16, 2))
+        tunes = tk.Frame(box, bg=bg)                 # (DT-6: earlier tunes, the next automatic one, one by hand)
+        tunes.pack(fill="x", pady=(10, 0))
+        self.tune_btn = RoundButton(tunes, "Tune & reroll now", lambda: self.app.tune_reroll(None), bg=PALETTE["surface"],
+                                    font=font("small"), padx=10, pady=3, radius=10, animator=app.anim)
+        self.tune_btn.pack(side="right", padx=(8, 0))
+        self.next_tune = tk.Label(tunes, font=font("small"), bg=bg, fg=PALETTE["muted"])
+        self.next_tune.pack(side="right", padx=(12, 0))
+        self.strip = tk.Canvas(tunes, bg=bg, highlightthickness=0, bd=0, height=self._strip_height())
+        self.strip.pack(side="left", fill="x", expand=True)
+        self.strip.bind("<Configure>", lambda e: self._draw_strip())
+        head = tk.Frame(box, bg=bg)
+        head.pack(fill="x", pady=(16, 2))
+        self.word = tk.Label(head, font=font("heading"), bg=bg, fg=PALETTE["text"])
+        self.word.pack()
+        size = max(12, int(font("heading").metrics("linespace") * 0.6))   # (the word's Wiktionary page, like the
+        self.wikt_link = LinkButton(head, "external", self.open_wiktionary, note=WIKTIONARY_NOTE, size=size, bg=bg)
+        self._wikt_shown = False                                         # card's icon: only while online)
         self.why = tk.Label(box, font=body, bg=bg, fg=PALETTE["muted"])
         self.why.pack()
         self.rows = tk.Frame(box, bg=bg)
@@ -144,12 +179,9 @@ class RudeReview:
             self.kind_btns[k] = b
         nav = tk.Frame(box, bg=bg)
         nav.pack(fill="x", pady=(16, 0))
-        self.whole_btn = RoundButton(nav, "", self.toggle_whole, bg=PALETTE["surface"], font=body, padx=14, pady=6,
-                                     radius=12, animator=app.anim)
+        self.whole_btn = SmearWordButton(nav, "Smear the whole word", self.toggle_whole, font_=body,
+                                         animator=app.anim)       # (the word itself, smeared when yes: DT-6)
         self.whole_btn.pack(side="left")
-        self.wikt_btn = RoundButton(nav, "Open in Wiktionary", self.open_wiktionary, bg=PALETTE["surface"], font=body,
-                                    padx=14, pady=6, radius=12, animator=app.anim)
-        self.wikt_btn.pack(side="left", padx=(8, 0))
         self.next_btn = RoundButton(nav, "Next word", self.next_word, bg=PALETTE["select_bg"], font=body,
                                     padx=16, pady=6, radius=12, animator=app.anim)
         self.next_btn.pack(side="right")
@@ -194,6 +226,7 @@ class RudeReview:
         done = sum(1 for w in self.order if w in self.answers)
         total = len(self.items)
         self.count.config(text=f"{done:,} of {total:,} answered ({100 * done // max(1, total)}%)")
+        self._draw_strip()
         if self.back_btn.enabled != (self.i > 0):
             self.back_btn.set_enabled(self.i > 0)
         self.show_online()
@@ -232,7 +265,7 @@ class RudeReview:
         self.ask.config(text=f"Kind of meaning {self.sel + 1}:" if len(it["senses"]) > 1 else "Kind of this meaning:")
         for k, b in self.kind_btns.items():           # the selected meaning's kind in its colour, the rest plain
             b.config(bg=kind_colour(k) if k == self.kinds[self.sel] else PALETTE["surface"])
-        self.whole_btn.config(text="Smear the whole word: " + ("yes" if self.whole else "no"))
+        self.whole_btn.show(it["w"], self.whole)
         if new:
             self._refit()
 
@@ -256,6 +289,50 @@ class RudeReview:
         for w in (row, h, g):
             w.bind("<Button-1>", lambda e, n=n: self.select(n))
         return row, (h, g), chip
+
+    # ---- earlier tunes (DT-6) -------------------------------------------------------------------------------
+    def _strip_height(self):
+        return font("small").metrics("linespace") * 2 + 12
+
+    def strip_marks(self):
+        """What the strip shows: (answered words, [(words, error %, kept)] of the earlier tunes, the words at which the
+        next automatic Tune & reroll starts, or None)."""
+        n = len(self.answers)
+        past = [(int(h["words"]), float(h["best"] if h.get("kept") else h["start"]), bool(h.get("kept")))
+                for h in read_history(self.answers_path)]
+        nxt = getattr(self.app, "next_auto_tune", lambda n: None)(n)
+        return n, past, nxt
+
+    def _draw_strip(self):
+        """A line from no answers to the next automatic tune: filled as far as the answers go, a tick at each earlier
+        tune with its tested error over it (lower is better; hollow: its numbers were not kept), the words under it,
+        and, beside it, how many answers until the next tune."""
+        c = self.strip
+        c.delete("all")
+        w = c.winfo_width()
+        if w < 40:
+            return
+        n, past, nxt = self.strip_marks()
+        small = font("small")
+        line = small.metrics("linespace")
+        top = max([n, nxt or 0] + [p[0] for p in past]) or 1
+        x0, x1, y = 2, w - 2, line + 4
+        at = lambda words: x0 + (x1 - x0) * words / top
+        c.create_line(x0, y, x1, y, fill=PALETTE["border"], width=4, capstyle="round")
+        if n:
+            c.create_line(x0, y, at(n), y, fill=PALETTE["ring"], width=4, capstyle="round")
+        last = -999
+        for words, err, kept in past:
+            x = at(words)
+            c.create_line(x, y - 6, x, y + 6, fill=PALETTE["ring"] if kept else PALETTE["muted"], width=2)
+            if x - last > small.measure("00% error") + 8:     # (crowded ticks: only some are labelled)
+                c.create_text(x, y - 7, text=f"{err:.0f}% error", font=small, anchor="s", fill=PALETTE["muted"])
+                c.create_text(x, y + 7, text=f"{words:,}", font=small, anchor="n", fill=PALETTE["muted"])
+                last = x
+        if nxt:
+            x = at(nxt)
+            c.create_line(x, y - 6, x, y + 6, fill=PALETTE["border"], width=2)
+        self.next_tune.config(text=f"next tune in {max(0, nxt - n):,}" if nxt else "")
 
     def _refit(self):
         """Size the window to its contents (a word with more meanings is taller), kept on its monitor."""
@@ -303,6 +380,9 @@ class RudeReview:
         self.answers[it["w"]] = {"w": it["w"], "keys": [s["key"] for s in it["senses"]], "kinds": list(self.kinds),
                                  "whole": self.whole}
         write_answers(self.answers_path, self.answers, self.order)
+        answered = getattr(self.app, "review_answered", None)
+        if answered is not None:
+            answered(len(self.answers))          # (DT-6: every 50 new answers, Tune & reroll starts by itself)
 
     def back(self):
         """Back one word in the file, shown as it was answered."""
@@ -316,10 +396,15 @@ class RudeReview:
             self.app.open_wiktionary(self.item["w"])
 
     def show_online(self):
-        """Grey the Wiktionary button out while there is no word or Wiktionary cannot be reached."""
+        """The Wiktionary icon at the word area's top right, only while there is a word and Wiktionary can be
+        reached (asked for: an icon like the card's, no button or key)."""
         on = self.item is not None and bool(self.app.online.online)
-        if self.wikt_btn.enabled != on:
-            self.wikt_btn.set_enabled(on)
+        if on != self._wikt_shown:
+            self._wikt_shown = on
+            if on:
+                self.wikt_link.place(relx=1.0, rely=0.0, anchor="ne")
+            else:
+                self.wikt_link.place_forget()
 
     # ---- keys -----------------------------------------------------------------------------------------------
     def apply_keys(self):
@@ -328,8 +413,7 @@ class RudeReview:
         hint = lambda a: " / ".join(km.display(a, short=True))
         for k, b in self.kind_btns.items():
             b.config(hint=hint("review_" + k))
-        self.whole_btn.config(hint=hint("review_whole"))
-        self.wikt_btn.config(hint=hint("review_wiktionary"))
+        self.whole_btn.set_hint(hint("review_whole"))
         self.next_btn.config(hint=hint("review_next"))
         self.back_btn.config(hint=hint("review_back"))
 
@@ -344,7 +428,7 @@ class RudeReview:
             self.set_kind(kind)
         else:
             {"review_up": lambda: self.select(self.sel - 1), "review_down": lambda: self.select(self.sel + 1),
-             "review_whole": self.toggle_whole, "review_wiktionary": self.open_wiktionary, "review_next": self.next_word, "review_back": self.back}[action]()
+             "review_whole": self.toggle_whole, "review_next": self.next_word, "review_back": self.back}[action]()
         return "break"
 
     def alive(self):

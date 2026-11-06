@@ -236,6 +236,28 @@ job["done"] = (0, "300 new words to review"); app._watch_tool(job)
 assert app.dev_progress("review") is None
 d.dlg.close()
 
+# ---- every 50 new answers, Tune & reroll starts by itself (DT-6, asked for; still a click away any time) ----------
+s.set_meta("tune_base", "")
+assert app.next_auto_tune(7) == 57 and s.get_meta("tune_base") == "7"       # (the first time: from the answers now)
+starts = []
+auto = lambda c: starts.append(c) or FakeTuner()
+assert app.review_answered(56, start=auto) is None and not starts
+with open(review_answers_path(fresh), "w", encoding="utf-8") as f:
+    f.write("".join(json.dumps({"w": f"a{i}", "keys": [], "kinds": [], "whole": False}) + "\n" for i in range(57)))
+cmd = app.review_answered(57, start=auto, run=reroll)
+assert cmd and cmd[-1] == "--start-hidden" and starts == [cmd]               # (hidden until it is done)
+assert s.get_meta("tune_base") == "57" and app.next_auto_tune(57) == 107
+assert "tuning the rules in the background" in toast()
+assert app.review_answered(200, start=auto) is None and len(starts) == 1    # (one runs: never a second)
+app._tuner_job["proc"].end(1); wait_for(lambda: app._tuner_job is None)
+by_hand = app.tune_reroll(None, start=auto, run=reroll)                      # (by hand: no --start-hidden, and the
+assert by_hand and "--start-hidden" not in by_hand and s.get_meta("tune_base") == "57"    # next 50 count from here)
+app._tuner_job["proc"].end(1); wait_for(lambda: app._tuner_job is None)
+os.rename(os.path.join(src_root, "rudeness_entries.jsonl"), os.path.join(src_root, "away.jsonl"))
+assert app.review_answered(500, start=auto) is None and len(starts) == 2     # (no entries: it waits, asks nothing)
+os.rename(os.path.join(src_root, "away.jsonl"), os.path.join(src_root, "rudeness_entries.jsonl"))
+pump(5)
+
 # ---- Source & Updates: Nightly (a switch), Log, Crash test ----------------------------------------------------------
 proj = tempfile.mkdtemp()
 for name, text in (("tierlist.py", "x = 1\n"), ("src/a.py", "a = 1\n")):

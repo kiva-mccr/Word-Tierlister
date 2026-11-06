@@ -37,6 +37,8 @@ The module docstring has the details; this page is the map.
   - methods: refresh
 - `SmearToggle`: A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space / Return once it has focus) flips it: the censor button...
   - methods: toggle, refresh
+- `SmearWordButton`: A rounded button that says what a yes means (asked for: easy to tell yes from no; picked from a mock-up): its `text` on the left and the word on the right, smeared on...
+  - methods: invoke, show, set_hint, set_enabled, refresh
 - `DevBubble`: A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for: dev tools reachable from the window, not only by command;...
   - methods: running, invoke, lit, refresh
 - `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
@@ -66,6 +68,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- DevBubble with `second=`: each half runs its own command even while running (the app decides: the tuner's window back, or "still making"); `_split` is only known once drawn. SmearWordButton reads the S tier's colour at every draw (tier colours can change) and keeps one size smeared or not.
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
 - A closed DropMenu is hidden (withdrawn) everywhere, never parked mapped off-screen (F-54, reported: on GNOME the move back on screen was sometimes lost, so the menu never showed while its button stayed lit, and the next click "closed" it). Use `is_open` for "open".
 - A RoundButton draws on <Configure> only when its size changed (`_drawn`): every new button was drawn twice. A ShapeCard redraws on `set` only when its spread or choice changed.
