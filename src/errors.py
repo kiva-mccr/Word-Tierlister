@@ -28,7 +28,7 @@ from constants import WM_CLASS
 from problems import STOPPED_MESSAGE, SetupError, append_log, describe
 from theme import PALETTE
 from ui_style import apply_ttk_style
-from widgets import StyledDialog
+from dialogs import StyledDialog
 
 APP_TITLE = "Word Tierlister"
 open_link = webbrowser.open     # how a link in a dialog opens its page (tests replace it)

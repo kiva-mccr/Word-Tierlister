@@ -118,7 +118,7 @@ finally:
 # showing it never changes the pane's width (its room is kept) or the text's wrapping
 import tkinter as tk
 from fonts import init_fonts, font
-from widgets import DefinitionDrawer
+from drawer import DefinitionDrawer
 r = tk.Tk(); init_fonts(r)
 d = DefinitionDrawer(r, {"body": font("body"), "head": font("heading")}); d.pack(fill="x")
 d.show_words(["table"], lambda w: "1. (noun) short"); d.set_open(True)

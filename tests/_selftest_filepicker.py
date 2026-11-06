@@ -9,7 +9,7 @@ import tierlist as T
 import filepicker as FP
 from fonts import init_fonts
 from ui_style import apply_ttk_style
-from widgets import FileList
+from cards import FileList
 
 # a pretend home: Documents (an export, a sub-folder, a note), Downloads, a hidden folder, another save
 for d in ("Documents/old", "Downloads", ".hidden"):

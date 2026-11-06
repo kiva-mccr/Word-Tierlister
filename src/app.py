@@ -50,8 +50,13 @@ from ui_style import apply_ttk_style, unveil, veil
 from filepicker import ask_export, ask_import, use_themed
 from ui_chart import Bookshelf, ConflictCard, DistributionChart, SettledChart
 from fullscreen import PauseMenu, dialog_bar
-from widgets import (AnchorLadder, ChoiceButton, DefinitionDrawer, EmptyCard, DuelCards, HeaderMenus, LinkButton, RoundButton, StyledDialog, TabBar, TierChip, TierRow, Toast,
-                     Tooltip, WordCard, dialog_open, refresh_widgets, watch_focus)
+from buttons import LinkButton, RoundButton, TierChip, TierRow
+from cards import AnchorLadder, EmptyCard, DuelCards, WordCard
+from dialogs import StyledDialog, dialog_open
+from drawer import DefinitionDrawer
+from menus import ChoiceButton, HeaderMenus, TabBar, watch_focus
+from popups import Toast, Tooltip
+from widgets import refresh_widgets
 
 
 SCRIPT_DIR = app_dir()          # where tierlist.py is, or a built program (T-1)

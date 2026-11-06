@@ -91,7 +91,11 @@ before editing the file); DEVELOPERS.md has the same map with more detail)
     sizing.py       window sizes from the screen and the contents; monitors; Windows display scaling.
     ui_style.py     ttk / tk styling (UI-3).          ui_motion.py easing, colour blend, Animator (UI-4).
     smooth.py       soft-edged rounded shapes, curves and icons drawn as images (UI-53).
-    widgets.py      RoundButton, the word card, tabs, messages, dialogs and the other small widgets.
+    smears.py       censored words drawn smeared (ST-6).    popups.py  Toast and Tooltip (UI-11, UI-13).
+    buttons.py      RoundButton, the tier pills, small icon and smear buttons, the developer tools' bubbles.
+    menus.py        drop-down menus, choices, the header menus and tabs (UI-10, UI-43).
+    drawer.py       the definitions pane (UI-12).   cards.py  the word card, duel cards and other drawn panels.
+    dialogs.py      StyledDialog, every dialog's frame (UI-24).   widgets.py  refresh_widgets after a font change.
     errors.py       friendly error / message / question dialogs, error handlers, run_guarded (ST-2).
     startup.py      first-run progress window; runs set-up on a worker thread (ST-1).
     ui_chart.py     each tab's view at the top right (the tier chart...) and the progress shelf.

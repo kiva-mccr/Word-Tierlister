@@ -15,7 +15,8 @@ from fonts import init_fonts
 from fullscreen import PauseMenu, backdrop_colour, key_names
 from theme import PALETTE
 from ui_style import apply_ttk_style
-from widgets import DropMenu, StyledDialog
+from dialogs import StyledDialog
+from menus import DropMenu
 DropMenu_labels = DropMenu.labels
 
 # ---- the keys

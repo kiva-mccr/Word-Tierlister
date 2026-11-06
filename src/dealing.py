@@ -28,7 +28,10 @@ from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
 from background import Task
-from widgets import RoundButton, ShapeCard, SmearToggle, StyledDialog, Tooltip
+from buttons import RoundButton, SmearToggle
+from cards import ShapeCard
+from dialogs import StyledDialog
+from popups import Tooltip
 
 CENSOR_NOTE = "blurred, except on hover"
 

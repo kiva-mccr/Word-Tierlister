@@ -1054,7 +1054,7 @@ class TuneWindow:
         from fonts import font
         from theme import PALETTE as P
         from ui_motion import Animator
-        from widgets import RoundButton
+        from buttons import RoundButton
         self.tk, self.font, self.P = tk, font, P
         self.root, self.answers_path, self.rounds, self.source = root, answers_path, rounds, source
         self.events = queue.Queue()
@@ -1105,7 +1105,7 @@ class TuneWindow:
                              anchor="nw", height=2)
         self.note.pack(fill="x", pady=(6, 0))
         box = self.bottom
-        from widgets import TabBar                  # (the details one at a time under tabs, asked for: crowded)
+        from menus import TabBar  # (the details one at a time under tabs, asked for: crowded)
         card = P["surface"]
         self.tabs = TabBar(box, self.TABS, self.show_tab, font("small"), animator=anim, canvas_bg=bg, page_bg=card)
         self.tabs.pack(fill="x", pady=(8, 0))

@@ -2,7 +2,7 @@
 
 Tunes the numbers the rudeness rules already have (OB-10; a developer tool) against the answers of the review by hand (OB-9), in a window: the error round by round on words held back, each kind before and after, the numbers changed, a guard over every word the program scores, the meanings still wrong; Keep writes the numbers into `src/rudeness.py`. Rules only stays: the program never reads the answers.
 
-- **Uses:** `constants`, `errors`, `fonts`, `measure_rudeness`, `obscene`, `review`, `rudeness`, `startup`, `theme`, `ui_motion`, `ui_style`, `widgets`
+- **Uses:** `buttons`, `constants`, `errors`, `fonts`, `measure_rudeness`, `menus`, `obscene`, `review`, `rudeness`, `startup`, `theme`, `ui_motion`, `ui_style`
 - **Used by:** nothing (run directly)
 - **Tests:** `_selftest_devtools`, `_selftest_tune`
 

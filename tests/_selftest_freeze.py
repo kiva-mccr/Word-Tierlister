@@ -10,7 +10,7 @@ os.environ["USERPROFILE"] = os.environ["HOME"]           # (Windows reads home f
 faulthandler.dump_traceback_later(60, exit=True)                  # (a freeze fails the test instead of hanging it)
 import tkinter as tk
 import tierlist as T
-import widgets as W
+import cards as W
 
 wm = subprocess.Popen(["openbox"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) if shutil.which("openbox") \
     else None

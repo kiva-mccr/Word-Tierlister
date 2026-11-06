@@ -105,7 +105,7 @@ s.set_anchors(["serendipity", "luminous", "table", "bureaucracy", "gristle", "mo
 root = tk.Tk()
 app = T.App(root, s, T.Definitions(s)); root.update()
 assert app.reduce_motion is False and app.anim.reduce_motion is False
-from widgets import DropMenu
+from menus import DropMenu
 labels = DropMenu.labels(app.header.menus["View"])                       # the header's View menu (UI-10)
 assert "Reduce motion" in labels, labels
 got = []

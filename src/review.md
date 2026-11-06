@@ -2,7 +2,7 @@
 
 The review of rude meanings by hand (OB-9, a developer option: `python tierlist.py --review-rude`): a window that goes through a review file word by word, the rules' guess filled in for each meaning, and saves the answers beside it on every change. The answers only test and tune the rules (`tools/measure_rudeness.py answers`); the program never reads them.
 
-- **Uses:** `constants`, `fonts`, `keymap`, `obscene`, `sizing`, `theme`, `ui_style`, `widgets`
+- **Uses:** `buttons`, `constants`, `drawer`, `fonts`, `keymap`, `obscene`, `sizing`, `theme`, `ui_style`
 - **Used by:** `app`, `devtools`, `tune_rudeness`
 - **Tests:** `_selftest_review`
 

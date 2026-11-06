@@ -2,7 +2,7 @@
 
 Settings > Keyboard shortcuts (UI-48): every action's keys in cards by view; click a key and press the new one; changes apply at once and are saved.
 
-- **Uses:** `fonts`, `keymap`, `sizing`, `theme`, `widgets`
+- **Uses:** `buttons`, `dialogs`, `fonts`, `keymap`, `sizing`, `theme`
 - **Used by:** `app`
 - **Tests:** none of its own
 

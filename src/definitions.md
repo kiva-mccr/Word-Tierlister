@@ -3,7 +3,7 @@
 Definitions: offline WordNet, the online dictionaryapi.dev fallback, splitting stored text into senses, and finding the word a meaning only names ("Alternative spelling of jail": `form_target`, F-3).
 
 - **Uses:** `constants`
-- **Used by:** `app`, `speed_check`, `tierlist`, `widgets`
+- **Used by:** `app`, `drawer`, `speed_check`, `tierlist`
 - **Tests:** `_selftest`, `_selftest_lookup`, `_selftest_tabswitch`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

@@ -14,7 +14,7 @@ import devtools as DT
 import sources
 import standalone as S
 from constants import VERSION, review_answers_path
-from widgets import DevBubble
+from buttons import DevBubble
 from theme import PALETTE
 
 WORDS = [f"w{i:04d}" for i in range(40)]

@@ -10,7 +10,7 @@ import tkinter as tk
 import tierlist as T
 import app as A
 import startup, ui_style
-from widgets import StyledDialog
+from dialogs import StyledDialog
 
 s = T.Store(os.path.join(tmp, "v.db"))
 words = [f"w{i:03d}" for i in range(40)]

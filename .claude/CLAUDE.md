@@ -33,7 +33,7 @@ pitfalls" are written by hand: add the rule or the bug there when you fix one. c
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
 constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, background, fonts, sizing, ui_style,
-ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> devtools -> app -> tierlist.
+ui_motion, smooth, framesync, smears, popups, buttons, menus, drawer, cards, dialogs, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> devtools -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter. Hand a worker's answer to the window with `background.Task` and repeat
@@ -54,7 +54,8 @@ ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, 
   polygon; Tk's own canvas shapes are jagged, worst on Windows). Never `create_polygon(..., smooth=True)` for
   them (small icons: `SmoothCanvas.icon_image` with `smooth.ICONS`, never text symbols). Use `round_rect_coords` to resize; a shape on the plain canvas colour is pre-blended (cheap), over
   other shapes its edge stays see-through. Pop-ups are kept on their monitor with `sizing.clamp_to_monitor`.
-- New widgets go in widgets.py and are tested in _selftest_widgets2.py. After animating a frame's
+- New widgets go in the module for their kind (smears, popups, buttons, menus, drawer, cards, dialogs; the map is in
+  widgets.py's docstring) and are tested in _selftest_widgets2.py. After animating a frame's
   height, reset it to height=0 and pack_propagate(True), or Tk flips between sizes forever (the definitions
   pane is the exception: its contents are placed for good and its height always set, F-27; never repack them).
 - The bottom-right hint lists only keys no on-screen button already shows. Every key comes from `keymap.py`
@@ -94,7 +95,7 @@ ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, 
   else may write the save meanwhile.
 - Keep `deps.PACKAGES` in step with `requirements.txt` (a test checks it); a new package also needs its
   `deps.SIZE`, `PURPOSE` and `HOMEPAGE` entries. The builder (PyInstaller) is in `deps.BUILD_PACKAGES`, not requirements.txt.
-- Dialogs: build on `widgets.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
+- Dialogs: build on `dialogs.StyledDialog` (or errors.show_message / ask_yes_no / show_error); no tk
   messagebox. A new window is built withdrawn, placed, then shown with `ui_style.show_drawn` (F-48: drawn
   see-through, so it never appears piece by piece); the main window stays see-through until it settles (App._unveil). The bottom bar's square ttk buttons stay on purpose.
 - Errors: raise `problems.SetupError` for fixable problems; plain-language text lives in
@@ -108,9 +109,9 @@ ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, 
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
 - Censored (obscene) words: copies of the word side by side over 0.625 letter widths, each line's end letters smeared
-  only inward so nothing reaches past the word (F-33, the user's rules) (`widgets.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
-  (`widgets.smeared_label`; the word un-smears while the pointer is over the pane) and Browse's list too
-  (`widgets.TreeSmears` over a blank cell). Route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
+  only inward so nothing reaches past the word (F-33, the user's rules) (`smears.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
+  (`smears.smeared_label`; the word un-smears while the pointer is over the pane) and Browse's list too
+  (`smears.TreeSmears` over a blank cell). Route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
 
 ## Before handing a round over

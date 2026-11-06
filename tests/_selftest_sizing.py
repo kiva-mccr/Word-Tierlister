@@ -153,7 +153,7 @@ saved = dict(Z._xrandr_cache)
 Z._xrandr_cache["monitors"] = [(0, 0, 1000, 700, True), (1000, 0, 900, 600, False)]
 second = tk.Toplevel(root); second.geometry("300x200+1200+100"); second.update()
 assert Z.monitor_box(second) == (1000, 0, 900, 600), Z.monitor_box(second)
-from widgets import StyledDialog
+from dialogs import StyledDialog
 dlg = StyledDialog(second, "Two monitors", "A question", "On the second monitor, over its window.")
 dlg.button("OK", dlg.close, default=True)
 Z.place_dialog(dlg.win, second); dlg.win.deiconify(); dlg.win.update()

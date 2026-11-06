@@ -2010,6 +2010,10 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   watches, the developer tools, the reshuffle, Source & Updates' check, the sync rounds and Syncthing's answers). Fixed
   on the way: Source & Updates said "Checking..." for good if its check raised (now "Could not check"); a timer left on
   a closed window fired a deleted command.
+- [x] **F-62** Asked for (the rewrite audit's item 6): widgets.py (3,800 lines, 23 classes) split by kind into
+  smears.py (censored words), popups.py (Toast, Tooltip), buttons.py, menus.py (drop-downs, header menus, tabs),
+  drawer.py (the definitions pane), cards.py (the word card, duel cards and other panels) and dialogs.py
+  (StyledDialog); widgets.py keeps the map and refresh_widgets. Code moved unchanged; each module has its own note.
 - [x] **F-55** Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
   F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
   tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between

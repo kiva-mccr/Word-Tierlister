@@ -29,7 +29,9 @@ from problems import STOPPED_MESSAGE
 from saves import user_data_dir
 from startup import run_with_progress
 from theme import PALETTE
-from widgets import LinkButton, StyledDialog, Tooltip
+from buttons import LinkButton
+from dialogs import StyledDialog
+from popups import Tooltip
 
 TITLE = "Sync with other devices"
 INTRO = ("Keeps your tier list the same on your other computers. It uses Syncthing, a free program that copies a "

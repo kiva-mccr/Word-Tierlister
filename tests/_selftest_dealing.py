@@ -10,7 +10,7 @@ import tkinter as tk
 import tierlist as T
 from rudeness import KIND_BITS as B
 from fonts import font
-from widgets import UNSMEAR_MS
+from smears import UNSMEAR_MS
 from constants import KIND_NOTES, RUDE_NAMES, card_label, mask_word
 
 assert mask_word("bastard") == "b•••••d" and mask_word("ok") == "••" and mask_word("shit") == "s••t"

@@ -54,7 +54,7 @@ from saves import is_frozen, remember_save
 from startup import ensure_packages, offer_system_install, run_with_progress
 from theme import PALETTE
 from background import Task
-from widgets import StyledDialog
+from dialogs import StyledDialog
 from constants import REPO_PAGE, VERSION
 
 TITLE = "Source & Updates"

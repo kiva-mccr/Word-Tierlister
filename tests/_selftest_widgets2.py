@@ -8,7 +8,11 @@ import tkinter as tk
 import tkinter.font as tkfont
 from theme import PALETTE, TIER_COLORS
 from ui_motion import Animator
-from widgets import ChoiceButton, EmptyCard, close_popups, watch_focus, WordCard, AnchorLadder, DropMenu, DuelCards, DefinitionDrawer, HeaderMenus, RoundButton, TabBar, TierRow, Toast
+from buttons import RoundButton, TierRow
+from cards import EmptyCard, WordCard, AnchorLadder, DuelCards
+from drawer import DefinitionDrawer
+from menus import ChoiceButton, close_popups, watch_focus, DropMenu, HeaderMenus, TabBar
+from popups import Toast
 
 from fonts import load_typefaces
 load_typefaces()                     # (before the first Tk, as main() does: a Mac's Tk may not see fonts added later)
@@ -24,8 +28,9 @@ clicks = []
 b = RoundButton(root, "S", lambda: clicks.append(1), font=fnt, lift=3, hint="1")
 b.pack(padx=10, pady=10); update()
 plain = RoundButton(root, "S", lambda: None, font=fnt, hint="1"); plain.pack(); update()
-import widgets as _W
-assert plain._target()[1] == _W.lerp_color(plain._fill, PALETTE["text"], _W.EDGE) and _W.EDGE == 0.07   # (UI-78: softer)
+import buttons as _W
+from ui_motion import lerp_color
+assert plain._target()[1] == lerp_color(plain._fill, PALETTE["text"], _W.EDGE) and _W.EDGE == 0.07   # (UI-78: softer)
 assert b.winfo_reqheight() == plain.winfo_reqheight() + 3                     # room for the lift
 y0 = b.coords("label")[1]
 assert b.itemcget("shadow", "fill") == PALETTE["bg"]                         # shadow invisible at rest
@@ -604,7 +609,7 @@ wt.destroy()
 
 # ---- StyledDialog (UI-24): headline, intro, body, rounded buttons; Enter = default, Escape = on_cancel
 from fonts import init_fonts
-from widgets import StyledDialog
+from dialogs import StyledDialog
 init_fonts(root)
 got = []
 dlg = StyledDialog(root, "T", "A headline", "Some intro text", animator=anim)
@@ -665,7 +670,7 @@ assert wc_font.cget("size") == 40                                               
 wc.destroy()
 
 # ---- ShapeCard (UI-41): a queue shape's curve; chosen = white with a lilac edge and a "half by" line
-from widgets import ShapeCard, short_rank
+from cards import ShapeCard, short_rank
 from constants import queue_weight
 picked = []
 scw = tk.Toplevel(root)
@@ -696,7 +701,7 @@ assert dc.winfo_width() > dc.left.winfo_width() * 3 and abs(cards - mid) <= 2, (
 wide.destroy()
 
 # ---- Tooltip (UI-33): below what it describes, stays put, rounded lilac card in the shared font
-from widgets import Tooltip
+from popups import Tooltip
 area = tk.Canvas(root, width=300, height=40, bg=PALETTE["bg"]); area.pack(); update()
 tip = Tooltip(area, lambda e: "left half" if e.x < 150 else "right half", font=small)
 shown_states = []
@@ -720,7 +725,7 @@ side.hide()
 area.destroy()
 
 # ---- TierChip (UI-28): a rounded pastel tier label, sized from its font
-from widgets import TierChip
+from buttons import TierChip
 chip = TierChip(root, "S", TIER_COLORS[0], small); chip.pack(); update()
 poly = chip.find_withtag("all")[0]
 assert chip.itemcget(poly, "fill") == TIER_COLORS[0] and chip.smooth_image(poly) is not None
@@ -729,7 +734,7 @@ small.configure(size=11); chip.destroy()
 
 # un-smearing ends on the word itself (reported: small text looked bold, then snapped): one copy per pixel, and
 # near the end the side copies fade into the paper under a middle copy drawn last
-from widgets import smear_items
+from smears import smear_items
 cv = tk.Canvas(root, bg="#ffffff"); cv.pack()
 txt = cv.create_text(10, 10, text="a smeared meaning", font=("TkDefaultFont", 11), anchor="nw", fill="#3D3A4B")
 root.update()
@@ -760,7 +765,7 @@ for amount in (1.0, 0.3, 0.05):
     assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill") == "#ffffff"]
 # F-38 (the user's idea): on one line the short letters (no ascender, descender or dot) smear twice as far, behind
 # the rest, but never past the word's ends; a wrapped meaning keeps the one spread
-import widgets as _W
+import smears as _W
 cv.delete("all")
 F30 = ("TkDefaultFont", 30)
 m = lambda t: cv.tk.call("font", "measure", F30, t)
@@ -904,7 +909,7 @@ wc.destroy()
 
 # ---- LinkButton with words (UI-75: the GitHub link): the words, then the icon; muted, the text colour on hover;
 # a click runs it; it re-measures when its font is resized
-from widgets import LinkButton
+from buttons import LinkButton
 went = []
 lf = tkfont.Font(root=root, family="TkDefaultFont", size=12)
 holder = tk.Toplevel(root); holder.geometry("+0+0")               # (the root is full: somewhere it shows)
@@ -926,7 +931,7 @@ assert link.winfo_reqwidth() > w0
 holder.destroy()
 
 # ---- SmearToggle: "ab" smeared while its variable is True, plain while False; a click or Space flips it
-from widgets import SmearToggle
+from buttons import SmearToggle
 holder = tk.Toplevel(root); var = tk.BooleanVar(value=True)
 st = SmearToggle(holder, var); st.pack(); update()
 assert st.find_withtag("smear") and st.winfo_reqwidth() > st.winfo_reqheight() > 0
@@ -939,7 +944,8 @@ holder.destroy(); update()
 var.set(True); update()                                                        # (no trace left behind)
 
 # DevBubble / StyledDialog.dev_bubbles: the developer tools' pills, in the headline's row, right of the headline
-dlg = _W.StyledDialog(root, "t", "A headline", "intro")
+from buttons import DevBubble
+dlg = StyledDialog(root, "t", "A headline", "intro")
 ran, lit = [], tk.BooleanVar(value=True)
 bub = dlg.dev_bubbles((("Log", lambda: ran.append("log")), ("Nightly", lambda: ran.append("n"), lit)))
 assert list(bub) == ["Log", "Nightly"] and bub["Nightly"].lit() and not bub["Log"].lit()
@@ -949,10 +955,10 @@ assert bub["Log"].winfo_rootx() > head.winfo_rootx() + head.winfo_width()
 assert abs(bub["Log"].winfo_rooty() - head.winfo_rooty()) < head.winfo_height()
 bub["Log"].invoke(); bub["Nightly"].invoke()
 assert ran == ["log", "n"] and not lit.get() and not bub["Nightly"].lit()
-assert _W.StyledDialog(root, "t").dev_bubbles((("x", None),)) == {}             # (no headline: no bubbles)
+assert StyledDialog(root, "t").dev_bubbles((("x", None),)) == {}             # (no headline: no bubbles)
 # a running tool's ring: lit while progress() says so, the ring drawn; the images are cached by their angles
 state = [None]
-run = _W.DevBubble(root, "Tune", lambda: ran.append("tune"), progress=lambda: state[0]); run.pack(); update(2)
+run = DevBubble(root, "Tune", lambda: ran.append("tune"), progress=lambda: state[0]); run.pack(); update(2)
 assert not run.running() and len(run.find_all())
 state[0] = (0.5, "Round 6 of up to 12"); update(8); time.sleep(0.15); update(8)
 assert run.running() and run.lit() and run.state[1] == "Round 6 of up to 12"
@@ -963,7 +969,7 @@ state[0] = None; update(3); time.sleep(0.15); update(3)
 assert not run.running() and run._blink
 run.destroy(); update(2)                                                         # (its timers stop with it)
 # ---- SmearWordButton: the word itself, smeared on the S tier's colour while on (DT-6, picked from a mock-up) -------
-from widgets import SmearWordButton
+from buttons import SmearWordButton
 flips = []
 sw = SmearWordButton(root, "Smear the whole word", lambda: flips.append(1)); sw.pack(); update(2)
 sw.show("bugger", False); sw.set_hint("S"); update(2)

@@ -19,7 +19,8 @@ from fonts import font
 from smooth import SmoothCanvas, gradient_image
 from theme import PALETTE, TIER_COLORS, TIER_TEXT, contrast, default_tiers, is_hex
 from ui_motion import lerp_color
-from widgets import EDGE, StyledDialog
+from buttons import EDGE
+from dialogs import StyledDialog
 
 READABLE = 4.5            # the dark ink on a tier colour at least this (WCAG's text contrast; UI-76)
 BARS = (("H", 360, "°"), ("S", 100, "%"), ("V", 100, "%"))     # each bar's letter, the reading at its right, its unit

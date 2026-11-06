@@ -130,7 +130,7 @@ key("Escape"); assert card.word == app.cur_word and card.kind == label
 app.on_close()
 
 # ---- W-1: a word clicked in a definition ----------------------------------------------------------------------------
-import app as A, widgets as Wd
+import app as A, drawer as Wd
 s = T.Store(os.path.join(tempfile.mkdtemp(), "w1.db"))
 s.insert_words(WORDS[:12] + ["apple", "orchard", "fruit"]); s.set_anchors(WORDS[:6]); s.set_meta("dealt_asked", "1")
 s.unplace("apple")                                               # (comes up next)

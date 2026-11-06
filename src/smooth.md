@@ -3,7 +3,7 @@
 Anti-aliased rounded shapes for our canvases: soft-edged images over an invisible polygon (`SmoothCanvas.round_rect`), curves (`curve_image`) and small icons (`ICONS`).
 
 - **Uses:** `fonts`
-- **Used by:** `app`, `browser`, `fullscreen`, `tiercolours`, `ui_chart`, `widgets`
+- **Used by:** `app`, `browser`, `buttons`, `cards`, `fullscreen`, `menus`, `popups`, `tiercolours`, `ui_chart`
 - **Tests:** `_selftest_filepicker`, `_selftest_smooth`, `_selftest_widgets`
 
 The module docstring has the details; this page is the map.

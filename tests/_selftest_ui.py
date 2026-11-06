@@ -381,7 +381,7 @@ app.anim.finish_all(); pump(2)
 # ---- zoom: View menu and Ctrl + / - / 0 scale the whole main window, remembered in the save
 from fonts import font as _font
 body0, word0 = _font("body").cget("size"), _font("word").cget("size")
-import widgets as _W
+import menus as _W
 assert {"Zoom in", "Zoom out", "Actual size"} <= set(_W.DropMenu.labels(app.header.menus["View"]))
 app.set_zoom(1.2); pump(3)                 # (Z-1: every view and the pane must fit; 130% does not on a 1080 px screen)
 assert app.zoom == 1.2 and s.get_meta("zoom") == "1.2"

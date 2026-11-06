@@ -27,7 +27,9 @@ from fonts import font
 from saves import find_saves, save_progress
 from store import Store
 from theme import PALETTE
-from widgets import FileList, RoundButton, StyledDialog
+from buttons import RoundButton
+from cards import FileList
+from dialogs import StyledDialog
 
 EXPORT_KINDS = [("txt", "Text", "easy to read"), ("csv", "CSV", "for spreadsheets"), ("md", "Markdown", "for notes")]
 IMPORT_EXTS = (".db", ".csv", ".txt", ".md")

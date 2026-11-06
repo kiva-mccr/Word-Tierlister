@@ -2,7 +2,7 @@
 
 Friendly error and message dialogs and the program-wide safety net (ST-2): every run goes through `run_guarded`, and Tk / thread errors are logged and shown once.
 
-- **Uses:** `constants`, `fonts`, `problems`, `theme`, `ui_style`, `widgets`
+- **Uses:** `constants`, `dialogs`, `fonts`, `problems`, `theme`, `ui_style`
 - **Used by:** `app`, `browser`, `devtools`, `filepicker`, `sources`, `startup`, `stress_ui`, `syncdialog`, `tierlist`, `tune_rudeness`
 - **Tests:** `_selftest_errors`, `_selftest_health`, `_selftest_tune`
 

@@ -34,7 +34,8 @@ from obscene import set_aside_old_answers
 from sizing import keep_on_screen, place_dialog
 from theme import PALETTE, TIER_COLORS
 from ui_style import set_icon, show_drawn
-from widgets import WIKTIONARY_NOTE, LinkButton, RoundButton, SmearWordButton
+from buttons import LinkButton, RoundButton, SmearWordButton
+from drawer import WIKTIONARY_NOTE
 
 KINDS = (("clean", "Not rude"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))   # (OB-12)
 KIND_NAMES = dict(KINDS)

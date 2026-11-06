@@ -3,7 +3,7 @@
 How rude each meaning is, by hand-written rules over Wiktionary's data (OB-6): points per kind from labels, topics, the definition's wording, groups of people, WordNet, links between words and word families; then what a word's scores lead to (`score_saved`: its kinds, smeared whole or not, the meanings smeared in definitions).
 
 - **Uses:** `obscene`
-- **Used by:** `app`, `dealing`, `measure_rudeness`, `store`, `tune_rudeness`, `widgets`, `wordsource`
+- **Used by:** `app`, `dealing`, `drawer`, `measure_rudeness`, `store`, `tune_rudeness`, `wordsource`
 - **Tests:** `_selftest_dealing`, `_selftest_nextreview`, `_selftest_obscene`, `_selftest_review`, `_selftest_rudeness`, `_selftest_tune`, `_selftest_wikt`
 
 The module docstring has the details; this page is the map.

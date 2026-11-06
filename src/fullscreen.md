@@ -2,7 +2,7 @@
 
 Full screen (FS-2): the pause menu that stands in for the top menus while the window fills the screen (`PauseMenu`), and the Back bar a dialog wears there (`dialog_bar`).
 
-- **Uses:** `fonts`, `keymap`, `smooth`, `theme`, `ui_motion`, `widgets`
+- **Uses:** `buttons`, `fonts`, `keymap`, `smooth`, `theme`, `ui_motion`
 - **Used by:** `app`
 - **Tests:** `_selftest_fullscreen`
 
