@@ -2,7 +2,7 @@
 
 The main window (`App`): the header, the three placing views, the duel tabs, the chart and shelf, the definitions pane, the bottom bar, keys, zoom and window fitting, undo, and the background jobs it polls.
 
-- **Uses:** `browser`, `constants`, `dealing`, `definitions`, `deps`, `devtools`, `errors`, `filepicker`, `fonts`, `framesync`, `fullscreen`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `smooth`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
+- **Uses:** `background`, `browser`, `constants`, `dealing`, `definitions`, `deps`, `devtools`, `errors`, `filepicker`, `fonts`, `framesync`, `fullscreen`, `keymap`, `review`, `rudeness`, `saves`, `shortcuts`, `sizing`, `smooth`, `sources`, `standalone`, `syncdialog`, `theme`, `tiercolours`, `ui_chart`, `ui_motion`, `ui_style`, `widgets`, `wordsource`
 - **Used by:** `speed_check`, `stress_ui`, `tierlist`
 - **Tests:** `_selftest_build`, `_selftest_defsize`, `_selftest_devtools`, `_selftest_filepicker`, `_selftest_framesync`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_lookup`, `_selftest_release`, `_selftest_sizing`, `_selftest_sources`, `_selftest_tabswitch`, `_selftest_ui`, `_selftest_ui2`, `_selftest_veil`, `_selftest_zoom`
 

@@ -301,8 +301,10 @@ erDiagram
 
 ## Threads
 
-Tk is single-threaded, so only the main thread touches widgets. Worker threads hand their results back through
-queues that the main loop polls. No animation frame may touch the database.
+Tk is single-threaded, so only the main thread touches widgets. A worker thread hands its answer back through
+`src/background.py`: a `Task` runs `work()` on a worker and calls `done` (or `failed`) on the main thread, and a
+`Repeat` is a timer on the main thread; both stop when their window closes. Definitions and the start-up
+progress window keep queues of their own that the main loop polls. No animation frame may touch the database.
 
 ```mermaid
 flowchart LR
@@ -322,10 +324,10 @@ flowchart LR
     end
     Setup -- "log lines, queue" --> App
     Defs -- "drain(): results queue" --> App
-    Upd -- "queue" --> App
-    RudeRead -- "queue" --> App
-    Deal -- "done" --> App
-    Sync -- "queue; folded in a step at a time" --> App
+    Upd -- "Task" --> App
+    RudeRead -- "Task" --> App
+    Deal -- "Task" --> App
+    Sync -- "Task; folded in a step at a time" --> App
 ```
 
 ## Builds, releases and updates
@@ -475,6 +477,7 @@ found again, so switching between the two loses nothing.
 | `src/tiercolours.py` | Settings > Tier colours... (UI-61, UI-80): click a tier's pill, then set its colour with the H / S / V bars or a hex code (each follows the other); a colour too dark for the tier's letter is said so and Apply waits; Reset to defaults; Apply saves them and shows them (the window is rebuilt in place). |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
+| `src/background.py` | Work on a worker thread handed back to the Tk thread (`Task`: `done` or `failed`, never lost) and timers on it (`Repeat`); both stop when their window closes. |
 | `src/devtools.py` | The developer tools' bubbles (Settings > Developer tools): the review of rude meanings, Review words and Tune & reroll run from `tools/` in the background (a `Job` each, with its ring and stop button), Log and Crash test. |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder, each code file's notes up to date, the import layers); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |

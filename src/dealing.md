@@ -2,7 +2,7 @@
 
 Settings > How words are dealt (ST-6): the order new words come in, which kinds of words (and which kinds of rude meaning under "Obscene words"), and censoring; also the three-step page on the first start.
 
-- **Uses:** `constants`, `fonts`, `obscene`, `rudeness`, `theme`, `widgets`
+- **Uses:** `background`, `constants`, `fonts`, `obscene`, `rudeness`, `theme`, `widgets`
 - **Used by:** `app`
 - **Tests:** none of its own
 

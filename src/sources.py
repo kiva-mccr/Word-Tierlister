@@ -36,11 +36,9 @@ it and shows what unpacking it would change before it does it. The first start o
 (T-9: App._offer_other_form), and a yes does it straight away (go=True), from the version you have.
 """
 import os
-import queue
 import shutil
 import sys
 import tempfile
-import threading
 import time
 import tkinter as tk
 from tkinter import filedialog, ttk
@@ -55,6 +53,7 @@ from problems import STOPPED_MESSAGE, SetupError
 from saves import is_frozen, remember_save
 from startup import ensure_packages, offer_system_install, run_with_progress
 from theme import PALETTE
+from background import Task
 from widgets import StyledDialog
 from constants import REPO_PAGE, VERSION
 
@@ -149,27 +148,23 @@ class SourceDialog:
     def _start_check(self):
         """Ask GitHub on a worker thread (it never touches the window): the newest release, then main as it is now
         and which files differ from this source (nightly). The answer is collected every 100 ms."""
-        answer = queue.Queue()
-
         def ask():
             release = self.check()
             main = self.nightly_check() if self.here and self.nightly_always is not None else None
-            answer.put((release, main, standalone.nightly_changes(main, self.here) if main else []))
-        threading.Thread(target=ask, daemon=True).start()
+            return release, main, standalone.nightly_changes(main, self.here) if main else []
 
-        def collect():
+        def collect(answer):
             if not self.dlg.alive():
                 return
-            try:
-                self.release, main, files = answer.get_nowait()
-            except queue.Empty:
-                self.dlg.win.after(100, collect)
-                return
+            self.release, main, files = answer
             self.checked = True
             self.main_now = main
             self.nightly, self.nightly_files = (main, files) if files else (None, [])
             self._show_check()
-        collect()
+        def failed(exc):                  # (said like GitHub not answering, never "Checking..." for good)
+            standalone.last_error = str(exc) or type(exc).__name__
+            collect((None, None, []))
+        Task(self.dlg.win, ask, done=collect, failed=failed)
 
     def again(self):
         """"Try again": ask GitHub once more."""

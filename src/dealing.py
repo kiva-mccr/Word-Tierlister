@@ -19,7 +19,6 @@ App.devtools.tune_reroll); its ring and the right half's words show the step.
 """
 import gc
 import random
-import threading
 import tkinter as tk
 from tkinter import ttk
 
@@ -28,6 +27,7 @@ from obscene import CENSORABLE, RUDE_KINDS
 from rudeness import KIND_BITS
 from fonts import font
 from theme import PALETTE, TIER_COLORS
+from background import Task
 from widgets import RoundButton, ShapeCard, SmearToggle, StyledDialog, Tooltip
 
 CENSOR_NOTE = "blurred, except on hover"
@@ -364,35 +364,34 @@ class DealDialog:
         app.busy = True                              # nothing else writes to the save meanwhile (_poll_defs)
         gc.collect()                                 # tk objects may only be freed on this thread: tidy up now and
         gc.disable()                                 # pause the collector, so it never runs inside the worker
-        result = {}
 
         def work():                                  # (no tkinter here)
-            try:
-                if deal is not None:
-                    self.store.set_deal(**deal)
-                if cfg is not None:
-                    self.store.reshuffle(**cfg)
-            except Exception as exc:                 # (any failure: a crash of the worker said "reshuffled")
-                result["error"] = str(exc) or type(exc).__name__
-        worker = threading.Thread(target=work, daemon=True)
-        worker.start()
+            if deal is not None:
+                self.store.set_deal(**deal)
+            if cfg is not None:
+                self.store.reshuffle(**cfg)
 
-        def wait():
-            if worker.is_alive():
-                d.win.after(50, wait)
-                return
+        def ended():                                 # (the save is free again even if the dialog has gone)
             app.busy = False
             gc.enable()
+            if not d.alive():
+                return False
             self.bar.stop()
-            if result.get("error"):
-                for b in (*d.buttons.values(), self.new_seed):
-                    b.set_enabled(True)
-                d.on_cancel = self._skip if self.first else d.close
-                self.bar.grid_remove()
-                self.say(f"Could not apply: {result['error']}")
+            return True
+
+        def done(_):
+            if ended():
+                self._finish("Queue reshuffled" if cfg else "Words dealt")
+
+        def failed(exc):                             # (any failure: a crash of the worker once said "reshuffled")
+            if not ended():
                 return
-            self._finish("Queue reshuffled" if cfg else "Words dealt")
-        wait()
+            for b in (*d.buttons.values(), self.new_seed):
+                b.set_enabled(True)
+            d.on_cancel = self._skip if self.first else d.close
+            self.bar.grid_remove()
+            self.say(f"Could not apply: {str(exc) or type(exc).__name__}")
+        Task(app.root, work, done=done, failed=failed, ms=50)
 
     def _finish(self, message):
         app = self.app

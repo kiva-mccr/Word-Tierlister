@@ -13,8 +13,6 @@ import random
 import re
 import sqlite3
 import sys
-import queue
-import threading
 import time
 import webbrowser
 
@@ -28,6 +26,7 @@ from definitions import Online, wiktionary_url
 import wordsource
 from browser import Browser
 from dealing import DealDialog
+from background import Repeat, Task
 from devtools import DevTools
 from errors import ask_buttons, ask_yes_no, show_error, show_exception, show_message
 from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
@@ -169,7 +168,7 @@ class App:
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
         self._was_online = False
-        root.after(self.ONLINE_POLL_MS, self._watch_online)
+        Repeat(root, self.ONLINE_POLL_MS, self._watch_online)
         self.font_scale = 1.0     # < 1 when the fonts had to shrink to fit a small screen (_fit_window)
         self._was_comparing = False   # (the place view showed a comparison last time: _render_place_state)
         self._center_w = None     # last width the centre area was fitted for (_on_center_configure)
@@ -231,7 +230,7 @@ class App:
         self._layout_defs()
         self.refresh()
         self._fit_window(initial=True)
-        root.after(120, self._poll_defs)
+        Repeat(root, 120, self._poll_defs)
         self.rude_read = None     # the background read of Wiktionary's meanings (_start_rude_read), while it runs
         root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
@@ -331,26 +330,24 @@ class App:
             last = 0
         if self.shut or self.store.closed or time.time() - last < self.UPDATE_EVERY_S:
             return
-        answer = queue.Queue()
-        threading.Thread(target=lambda: answer.put((check or standalone.latest_release)()), daemon=True).start()
-
-        def collect(release=None, got=False):
-            if self.shut or self.store.closed or not self.root.winfo_exists():
-                return
-            if not got:
-                try:
-                    release, got = answer.get_nowait(), True
-                    self.store.set_meta("update_checked", time.time())
-                except queue.Empty:
-                    return self.root.after(500, collect)
-            if not standalone.newer(release) or self.store.get_meta("update_told") == release["version"]:
-                return
+        def tell(release):
+            if self.shut or self.store.closed:
+                return False
             if dialog_open(self.root) or self.busy:
-                return self.root.after(1000, lambda: collect(release, True))
+                return True                              # (asked again in a second)
             self.store.set_meta("update_told", release["version"])
             self.flash(f"Version {release['version']} is out (you have {VERSION}): File > Source & Updates",
                        kind="info", ms=8000)
-        collect()
+            return False
+
+        def got(release):
+            if self.shut or self.store.closed:
+                return
+            self.store.set_meta("update_checked", time.time())
+            if standalone.newer(release) and self.store.get_meta("update_told") != release["version"] and \
+                    tell(release):
+                Repeat(self.root, 1000, lambda: tell(release))
+        Task(self.root, check or standalone.latest_release, done=got, failed=lambda exc: None, ms=500)
 
     # ---- T-9: the other form, offered once --------------------------------------------------------------------
     FORM_OFFER_MS = 1500                     # after the start's own questions; then checked this often until quiet
@@ -2125,7 +2122,6 @@ class App:
                     b.render_def()
             if self.review is not None and self.review.alive():
                 self.review.show_online()
-        self.root.after(self.ONLINE_POLL_MS, self._watch_online)
 
     # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
     def look_up(self, word, parent=None):
@@ -2172,24 +2168,23 @@ class App:
         if not wordsource.wants_rude_fetch(self.store):
             return
         self.store.set_meta("rude_tried", time.time())
-        state = self.rude_read = {"line": "", "result": None, "error": None}
+        state = self.rude_read = {"line": ""}
         path = self.store.path
 
         def work():                                  # (no tkinter, and its own read-only connection)
+            db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
             try:
-                db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-                try:
-                    words = {r[0] for r in db.execute("SELECT word FROM words")}
-                finally:
-                    db.close()
-                log = lambda text: state.__setitem__("line", text)      # noqa: E731
-                saved = wordsource.fetch_rude_senses(path, words, log)
-                log("Scoring rude meanings (100%)")
-                state["result"] = (saved, wordsource.find_rude(words, saved, log=log))
-            except Exception as exc:                 # offline, disk full, ...: tried again later (RUDE_RETRY_S)
-                state["error"] = str(exc) or type(exc).__name__
-        threading.Thread(target=work, daemon=True).start()
-        self.root.after(2000, self._poll_rude_read)
+                words = {r[0] for r in db.execute("SELECT word FROM words")}
+            finally:
+                db.close()
+            log = lambda text: state.__setitem__("line", text)      # noqa: E731
+            saved = wordsource.fetch_rude_senses(path, words, log)
+            log("Scoring rude meanings (100%)")
+            return saved, wordsource.find_rude(words, saved, log=log)
+
+        def failed(exc):                             # offline, disk full, ...: tried again later (RUDE_RETRY_S)
+            self.rude_read = None
+        Task(self.root, work, done=self._save_rude_read, failed=failed, ms=2000, wait=lambda: self.busy)
 
     def rude_read_note(self):
         """How far the background read has come ("12%"), or None when none is running (How words are dealt)."""
@@ -2198,34 +2193,32 @@ class App:
         m = re.search(r"\((\d+)%\)", self.rude_read["line"])
         return m.group(1) + "%" if m else "starting"
 
-    def _poll_rude_read(self):
-        state = self.rude_read
-        if state["error"]:
-            self.rude_read = None
+    def _save_rude_read(self, result):
+        """The meanings are read and scored: save them a few thousand rows a frame, never while a reshuffle writes."""
+        if self.shut or self.store.closed:
             return
-        if state["result"] is None or self.busy:
-            self.root.after(2000, self._poll_rude_read)
-            return
-        saved, found = state["result"]
+        saved, found = result
         steps = [self.store.save_rude_senses(saved, chunk=4000), self.store.set_rude(found, chunk=4000)]
 
-        def tick():                                  # a few thousand rows a frame, never while a reshuffle writes
-            if not self.busy:
-                if next(steps[0], StopIteration) is StopIteration:
-                    steps.pop(0)
-                    if not steps:
-                        self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
-                        self.rude_read = None
-                        self.after_external_change()
-                        self.flash("Rude meanings read from Wiktionary", ms=2500)
-                        return
-            self.root.after(15, tick)
-        tick()
+        def tick():
+            if self.busy or self.store.closed:
+                return not self.store.closed
+            if next(steps[0], StopIteration) is StopIteration:
+                steps.pop(0)
+                if not steps:
+                    self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
+                    self.rude_read = None
+                    self.after_external_change()
+                    self.flash("Rude meanings read from Wiktionary", ms=2500)
+                    return False
+            return True
+        if tick():
+            Repeat(self.root, 15, tick)
 
     def _poll_defs(self):
-        """Every 120 ms: collect finished lookups, cache them in the save, and redraw the panes that show them."""
+        """Every 120 ms (a Repeat): collect finished lookups, cache them in the save, and redraw the panes that show
+        them."""
         if self.busy:                          # a reshuffle is writing the save: collect them afterwards
-            self.root.after(120, self._poll_defs)
             return
         changed = False
         for word, text, found in self.defs.drain():
@@ -2238,7 +2231,6 @@ class App:
             for bw in list(self.browsers):
                 if bw.alive():
                     bw.render_def()
-        self.root.after(120, self._poll_defs)
 
     # ---- anchors ----------------------------------------------------------------------------------------------
     @property

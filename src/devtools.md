@@ -2,7 +2,7 @@
 
 The developer tools' bubbles (Settings > Developer tools, DT-1..DT-7): `DevTools` (one per main window, `App.devtools`) starts the review of rude meanings, makes review words and runs the tuner from tools/ in the source folder, shows how a running tool is doing on its bubble's ring and stops it. Log and Crash test for Source & Updates are here too.
 
-- **Uses:** `constants`, `errors`, `filepicker`, `review`, `saves`, `standalone`
+- **Uses:** `background`, `constants`, `errors`, `filepicker`, `review`, `saves`, `standalone`
 - **Used by:** `app`
 - **Tests:** `_selftest_devtools`
 

@@ -2004,6 +2004,12 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
 - [x] **F-60** Asked for (the audit's item 5): start-up's stages named once with their work (src/launch.py:
   `stages`, `set_up`); main() no longer works out the "Step i of n" plan in one if / elif chain and runs a second copy
   of it. wordsource's wiktionary_steps / queue_steps still predict the stage lines their work logs.
+- [x] **F-61** Asked for (the rewrite audit's item 4): one helper for background work, src/background.py: `Task` (work
+  on a worker thread, `done` / `failed` on the Tk thread) and `Repeat` (a timer), both stopped when their window is
+  destroyed. Twelve hand-written polls moved onto it (the update check, the rude read, the definitions and online
+  watches, the developer tools, the reshuffle, Source & Updates' check, the sync rounds and Syncthing's answers). Fixed
+  on the way: Source & Updates said "Checking..." for good if its check raised (now "Could not check"); a timer left on
+  a closed window fired a deleted command.
 - [x] **F-55** Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
   F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
   tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between

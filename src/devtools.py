@@ -9,8 +9,8 @@ Log and Crash test (and Nightly, which is sources.py's own).
 - A running tool's ring (DT-3) reads progress(); its red cross (DT-7) calls stop().
 
 The tools run from the source folder (root) as programs of their own, each in a process group of its own, so stopping
-one stops what it started. A worker thread reads their output into a Job; the window polls the Job (a worker thread
-never touches Tk).
+one stops what it started. A worker thread reads their output into a Job; the window waits on it with background.Task
+and Repeat (a worker thread never touches Tk).
 """
 import os
 import re
@@ -22,6 +22,7 @@ import threading
 from tkinter import filedialog
 
 import standalone
+from background import Repeat, Task
 from constants import LOG_FILE, REVIEW_FILE, review_answers_path
 from errors import ask_yes_no, show_message
 from filepicker import browse, use_themed
@@ -133,9 +134,6 @@ class DevTools:
 
     def _flash(self, *a, **kw):
         self.app.flash(*a, **kw)
-
-    def _after(self, ms, fn):
-        self.app.root.after(ms, fn)
 
     # ---- the review file and the review ------------------------------------------------------------------------
     def review_file(self):
@@ -316,18 +314,20 @@ class DevTools:
             self.app.store.set_meta("tune_base", str(len(answered)))    # (by hand too: the next 50 count from here)
         if cmd and self.tuner is not None:
             self.tuner.run = run
-            self._watch_tuner(self.tuner)
+            job = self.tuner
+            if self._watch_tuner(job):
+                Repeat(self.app.root, 300, lambda: self._watch_tuner(job))
         return cmd
 
     def _watch_tuner(self, job):
         """Tune & reroll's steps (polled: the tuner is read on a worker thread): a toast when the tuner is done,
-        then, once its process has ended after tuning to the end, the reroll; a tuner closed mid-way ends it."""
+        then, once its process has ended after tuning to the end, the reroll; a tuner closed mid-way ends it. True
+        while it runs (asked again: a Repeat)."""
         if job.tuned and not job.said:
             job.said = True
             self._flash("The tuner is done: Keep or Discard its numbers in its window", kind="ok", ms=6000)
         if job.running():
-            self._after(300, lambda: self._watch_tuner(job))
-            return
+            return True
         if self.tuner is job:
             self.tuner = None
         if job.stop:
@@ -336,6 +336,7 @@ class DevTools:
             self.make_review_words(None, run=job.run, then="reroll")
         elif job.proc.poll():
             self._flash("The tuner stopped before it was done", kind="warn", ms=6000)
+        return False
 
     def make_review_words(self, dlg=None, ask=None, run=None, then=None):
         """Make review words (OB-11): tools/measure_rudeness.py in the background, the review file next to the save
@@ -375,19 +376,19 @@ class DevTools:
         def line(step, steps, text):
             job.note = (f"Step {step} of {steps}: " if steps > 1 else "") + text
 
-        def work():
-            job.done = run(cmds, self.root) if run else run_tools(cmds, self.root, line, job)
-        if run:
-            work()
-        else:
-            threading.Thread(target=work, daemon=True).start()
-        self._watch_tool(job)
+        def done(result):
+            job.done = result
+            self._watch_tool(job)
+
+        def failed(exc):                  # (a command that could not even start: said like one that failed)
+            done((1, str(exc) or type(exc).__name__))
+        Task(self.app.root, (lambda: run(cmds, self.root)) if run else (lambda: run_tools(cmds, self.root, line, job)),
+             done=done, failed=failed, ms=500, thread=run is None)
         return cmds
 
     def _watch_tool(self, job):
-        """The toast once the tools have run (polled: the worker thread never touches Tk)."""
+        """The toast once the tools have run (`job.done`, handed over by make_review_words' Task)."""
         if job.done is None:
-            self._after(500, lambda: self._watch_tool(job))
             return
         self.tool = None
         code, last = job.done
@@ -460,4 +461,4 @@ class DevTools:
         dialog and the log entry; the program keeps running."""
         if dlg is not None:
             dlg.close()
-        self._after(delay, lambda: 1 / 0)
+        self.app.root.after(delay, lambda: 1 / 0)

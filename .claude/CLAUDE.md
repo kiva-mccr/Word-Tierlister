@@ -32,11 +32,13 @@ the file. Its facts (uses, used by, tests, public API) come from `python tools/n
 pitfalls" are written by hand: add the rule or the bug there when you fix one. check_release fails on a stale note.
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
-constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, fonts, sizing, ui_style,
+constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, background, fonts, sizing, ui_style,
 ui_motion, smooth, framesync, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> devtools -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
-- Worker threads (startup) never touch tkinter.
+- Worker threads (startup) never touch tkinter. Hand a worker's answer to the window with `background.Task` and repeat
+  a timer with `background.Repeat` (both stop with their window; a worker's exception reaches `failed` or the error
+  dialog): never a hand-written `after` poll.
 
 ## Conventions worth keeping
 - Light look by default, a dark mode to choose (UI-62; theme.DARK) and tier colours to choose (UI-61). Pastel and
