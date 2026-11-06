@@ -790,6 +790,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (reported: "a bit crowded"; approved from a mock-up): the chart takes most of the window, the details
 #           one at a time under tabs (Earlier tunes first), shorter note and legend; Numbers changed and Still wrong
 #           list everything with a scroll bar when they do not fit (asked for).
+#           Then (reported: the first tune's strip looked empty, close tunes overlapped): a note on what later tunes
+#           add; ticks spread apart. Then (asked for: "are we sure the tuning is smart"; all four fixes picked): noise
+#           from each part against itself, word families in one part, a light pull, steps shrinking to 70%; tested on
+#           answers made from planted numbers: 3.0% -> 0.7% (1.8% before).
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds

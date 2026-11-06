@@ -10,15 +10,16 @@ into src/rudeness.py for a person to read over and commit.
 How it works:
   * the answered words (rude_review_answers.jsonl beside the review file) are split into 5 parts; for each part the
     numbers are tuned on the other 4 and tested on it, so every answered word is tested once, never by numbers
-    tuned on it; a sixth run tunes on every answered word: Keep takes its numbers at the round the tests liked best
+    tuned on it, nor by numbers tuned on its relatives (split_parts: a word family stays in one part); a sixth run tunes on every answered word: Keep takes its numbers at the round the tests liked best
     (the earliest whose average is within the noise of the lowest, best_round: a win by wobble is luck);
-  * the noise is the parts' standard error (noise); a round is a real gain only by more than it, and the search
-    stops after patience(noise) rounds without one: 3, one more per 0.5 points of noise, 15 at most (asked for: a
+  * the noise is the standard error of each part's change between two rounds (noise: each part against itself,
+    as the parts differ in how hard their words are); a round is a real gain only by more than it, and the search
+    stops after patience(noise) rounds without one: 3, one more per 0.1 points of noise, 15 at most (asked for: a
     noisy average waits longer to decide);
   * a round tries every number a step up and a step down (then JUMP steps), keeping a change when it lowers the
     error on the words tuned on plus a pull towards today's numbers (cost: PULL points for a number moved its own
-    size, asked for: only changes that clearly pay stay) (coordinate descent); a step that helps no way halves, so
-    the search settles;
+    size, asked for: a change that hardly pays stays put) (coordinate descent); a step that helps no way shrinks
+    (SHRINK), so the search settles;
   * the error is 100% minus the average F1 of the kinds (Clean and each rude kind, meaning by meaning, as
     rudeness.sense_kind gives them) and of smearing the whole word (rudeness.results): Slur counts as much as
     Clean, though most meanings are clean; the numbers tuned are the rules' own (obscene.RULE_KINDS), the kinds
@@ -66,14 +67,16 @@ PARTS = 5                       # the answered words are tested in this many par
 ALL = PARTS                     # (the run that tunes on every answered word)
 STEP = 0.2                      # a number's first step: 20% of it (a factor's: 0.2)
 MIN_STEP = 0.02                 # a step this small is settled
-PULL = 1.0                      # error points a change costs per number moved its own size (a factor: doubled or
-                                # halved): only changes that clearly pay stay (asked for: a pull towards today's;
-                                # tried on 600 stand-in answers: 13.0% -> 12.0% with 3 numbers moved, against 12.4%
-                                # with 11; random kicks after settling were tried too and found nothing better)
+SHRINK = 0.7                    # a step that helps neither way shrinks to this share (halving settled in 5-8 rounds,
+                                # short of numbers planted to be found: see PULL)
+PULL = 0.15                     # error points a change costs per number moved its own size (a factor: doubled or
+                                # halved), so a change that hardly pays stays put (asked for: a pull towards today's).
+                                # 1.0 held back real gains: on answers made from six planted numbers it found 2 of
+                                # them; random kicks after settling were tried too and found nothing better
 JUMP = 4                        # a step that helps neither way is tried this many times as far before it halves
                                 # (the error moves in jumps: a small step often changes no meaning's kind)
 PATIENCE = 3                    # rounds without a real gain before it stops, on an average with no noise ...
-NOISE_ROUND = 0.5               # ... and one round more for each this many points of noise (the parts' standard error)
+NOISE_ROUND = 0.1               # ... and one round more for each this many points of noise (noise)
 PATIENCE_MAX = 15
 DOUBLED = 2.0                   # the guard marks a kind that covers this many times the words it does now
 MISSES_FILE = "rude_tune_misses.txt"
@@ -381,9 +384,43 @@ def answer_pairs(answers, words):
     return out
 
 
-def part_of(word):
-    """Which of the PARTS a word is tested in (fixed: by its letters)."""
-    return int(hashlib.md5(word.encode()).hexdigest(), 16) % PARTS
+def _hash(text):
+    return int(hashlib.md5(text.encode()).hexdigest(), 16)
+
+
+def split_parts(words, family):
+    """{word: which of the PARTS it is tested in}: a word family (words linked by `family`, the words each is built
+    from) stays in one part, so no tested word is helped by tuning on its relatives (a third of the answered words
+    had one in another part); the families go biggest first to the emptiest part, so the parts stay even."""
+    top = {}
+
+    def find(w):
+        top.setdefault(w, w)
+        while top[w] != w:
+            top[w] = top[top[w]]
+            w = top[w]
+        return w
+
+    for w in words:
+        for parent in family.get(w, ()):
+            a, b = sorted((find(w), find(parent)))
+            top[b] = a
+    groups = {}
+    for w in sorted(words):
+        groups.setdefault(find(w), []).append(w)
+    sizes, out = [0] * PARTS, {}
+    for _root, ws in sorted(groups.items(), key=lambda g: (-len(g[1]), _hash(g[0]))):
+        part = min(range(PARTS), key=lambda i: (sizes[i], i))
+        sizes[part] += len(ws)
+        out.update(dict.fromkeys(ws, part))
+    return out
+
+
+def parts_of(data):
+    """{answered word: its part} (split_parts, worked out once and kept in `data`)."""
+    if "parts" not in data:
+        data["parts"] = split_parts(data["answers"], data.get("family", {}))
+    return data["parts"]
 
 
 def tally(data, scored, words_in):
@@ -442,7 +479,7 @@ def cost(data, values):
 
 def tune_round(data, values, steps, train, order, progress=None):
     """One round of the search over `train`: every number a step up and down (in `order`), a change kept when it
-    lowers the error plus the pull towards today's numbers (cost), a step that helps neither way halved;
+    lowers the error plus the pull towards today's numbers (cost), a step that helps neither way shrunk (SHRINK);
     progress(numbers tried, of) after each number. Returns (values, steps, error on train, without the pull)."""
     values, steps = dict(values), dict(steps)
     plain, _t = evaluate(data, values, train)
@@ -464,7 +501,7 @@ def tune_round(data, values, steps, train, order, progress=None):
             if pulled < best - 1e-9:
                 best, plain, values[p], moved = pulled, err, v, True
                 break
-        steps[p] = steps[p] if moved else steps[p] / 2
+        steps[p] = steps[p] if moved else steps[p] * SHRINK
     if progress:
         progress(len(order), len(order))
     apply(values, data["base"])
@@ -504,9 +541,9 @@ def _keep(data):
 def _run_part(part, values, steps, rnd):
     """One round of one part's search (in a tuning process): (part, values, steps, train error, test error, test
     tally). The part ALL tunes on every answered word and has no test."""
-    words = sorted(_data["answers"])
-    train = [w for w in words if part == ALL or part_of(w) != part]
-    test = [] if part == ALL else [w for w in words if part_of(w) == part]
+    words, parts = sorted(_data["answers"]), parts_of(_data)
+    train = [w for w in words if part == ALL or parts[w] != part]
+    test = [] if part == ALL else [w for w in words if parts[w] == part]
     order = sorted(values, key=lambda p: hashlib.md5(f"{p}{rnd}{part}".encode()).hexdigest())
     out = _data.get("_progress")
     tell = (lambda i, n: out.put(("step", rnd, part, i, n))) if out is not None else None
@@ -517,7 +554,7 @@ def _run_part(part, values, steps, rnd):
 
 def _tested(part, values):
     """(part, the scores of its tested words) with `values`, for the misses and the start's tally."""
-    test = [w for w in _data["answers"] if part_of(w) == part]
+    test = [w for w, p in parts_of(_data).items() if p == part]
     apply(values, _data["base"])
     return part, score_targets(_data, test)
 
@@ -746,6 +783,24 @@ def changed(start, values):
     return [(p, start[p], v) for p, v in values.items() if round(v, 2) != round(start[p], 2)]
 
 
+def tune_xs(words, left, end, gap):
+    """Where each earlier tune's tick goes (oldest first): along the words answered, from the first tune's count (a
+    little before it) to the newest's at `end`, no two closer than `gap` (two tunes 10 words apart sat on top of
+    each other at the far right, reported); squeezed back between left and end when the gaps push past it."""
+    least, most = min(words), max(words)
+    if most == least:
+        start = least - 1
+    else:
+        start = max(0, least - (most - least) * 0.25)
+    xs = [left + (n - start) / max(1e-9, most - start) * (end - left) for n in words]
+    for i in range(1, len(xs)):
+        xs[i] = max(xs[i], xs[i - 1] + gap)
+    if len(xs) > 1 and xs[-1] > end:
+        lo = xs[0] if xs[0] < end - gap * (len(xs) - 1) else left
+        xs = [lo + (v - xs[0]) * (end - lo) / (xs[-1] - xs[0]) for v in xs]
+    return xs
+
+
 def read_history(path):
     """The earlier tunes, oldest first: [{"when", "words", "meanings", "start", "best", "round", "kept"}]."""
     out = []
@@ -786,7 +841,7 @@ class Tuning:
         self.tested = tested_parts(data)    # (only parts with answered words: a few answers leave some empty)
         self.values = {part: dict(self.start_values) for part in range(PARTS + 1)}
         self.steps = {part: {p: STEP for p in self.start_values} for part in range(PARTS + 1)}
-        self.history = []                   # [(round, {part: values}, average test error, noise, tally)]
+        self.history = []                   # [(round, {part: values}, average, noise, tally, {part: tested error})]
         self.best = None                    # (round, average test error, all words' values, tally)
         self._go = threading.Event()
         self._go.set()
@@ -813,15 +868,15 @@ class Tuning:
         jobs = [ex.submit(_run_part, p, self.start_values, {k: 0.0 for k in self.start_values}, 0)
                 for p in self.tested]
         now = self._results(0, jobs)
-        tests = [r[4] for r in now]
-        avg = sum(tests) / len(tests)
-        self.history.append((0, {p: dict(self.start_values) for p in range(PARTS + 1)}, avg, noise(tests),
-                             _sum_tallies(r[5] for r in now)))
+        tests = {r[0]: r[4] for r in now}
+        avg = sum(tests.values()) / len(tests)
+        self.history.append((0, {p: dict(self.start_values) for p in range(PARTS + 1)}, avg, 0.0,
+                             _sum_tallies(r[5] for r in now), tests))
         self.best = (0, avg, dict(self.start_values), _sum_tallies(r[5] for r in now))
-        gain_at = avg                       # (the average at the last real gain: lower by more than the noise)
-        since, wait = 0, patience(noise(tests))
+        gain_at = self.history[0]           # (the round of the last real gain: lower by more than the noise)
+        since, wait = 0, patience(0.0)
         self.events.put(("sweep", {"round": 0, "errors": {r[0]: (r[3], r[4]) for r in now}, "average": avg,
-                                   "noise": noise(tests), "best": 0, "tally": ("now", self.best[3]),
+                                   "noise": 0.0, "best": 0, "tally": ("now", self.best[3]),
                                    "misses": self._misses(ex), "wait": (since, wait)}))
         for rnd in range(1, self.rounds + 1):
             self._go.wait()
@@ -831,20 +886,21 @@ class Tuning:
             res = {r[0]: r for r in self._results(rnd, jobs)}
             for p, r in res.items():
                 self.values[p], self.steps[p] = r[1], r[2]
-            tests = [res[p][4] for p in self.tested]
-            avg, spread = sum(tests) / len(tests), noise(tests)
+            tests = {p: res[p][4] for p in self.tested}
+            avg = sum(tests.values()) / len(tests)
+            spread = noise(tests, gain_at[5])     # (against the last real gain: each part against itself)
             self.round = rnd
             self.history.append((rnd, {p: dict(self.values[p]) for p in res}, avg, spread,
-                                 _sum_tallies(res[p][5] for p in self.tested)))
+                                 _sum_tallies(res[p][5] for p in self.tested), tests))
             sweep = {"round": rnd, "errors": {p: (res[p][3], res[p][4]) for p in res}, "average": avg,
                      "noise": spread}
             pick = best_round(self.history)
             if pick != self.best[0]:
-                r_, vals, a_, _n, t_ = self.history[pick]
+                r_, vals, a_, _n, t_, _t = self.history[pick]
                 self.best = (r_, a_, dict(vals[ALL]), t_)
                 sweep.update(best=pick, tally=("best", t_), misses=self._misses(ex))
-            if avg < gain_at - spread - 1e-9:
-                gain_at, since = avg, 0
+            if avg < gain_at[2] - spread - 1e-9:
+                gain_at, since = self.history[-1], 0
             else:
                 since += 1
             wait = patience(spread)
@@ -891,19 +947,24 @@ class Tuning:
         self._go.set()
 
 
-def noise(tests):
-    """The average's noise: the standard error of the parts' tested errors (points; none from one part)."""
-    if len(tests) < 2:
+def noise(tests, against):
+    """How far apart two rounds' averages may be by luck: the standard error of each part's change between them
+    ({part: tested error} each; points, none from one part). Each part is compared with itself: the spread between
+    the parts is mostly how hard each one's words are, the same every round, and counting it (as before) put the
+    noise at about +-0.4 where the changes' own was +-0.1 to 0.25, so real gains were taken for luck."""
+    d = [tests[p] - against[p] for p in tests if p in against]
+    if len(d) < 2:
         return 0.0
-    mean = sum(tests) / len(tests)
-    return (sum((t - mean) ** 2 for t in tests) / (len(tests) - 1)) ** 0.5 / len(tests) ** 0.5
+    mean = sum(d) / len(d)
+    return (sum((x - mean) ** 2 for x in d) / (len(d) - 1)) ** 0.5 / len(d) ** 0.5
 
 
 def best_round(history):
-    """The round Keep takes (asked for): the earliest whose average is within the noise of the lowest (a win smaller
-    than the noise is likely luck, and an earlier round has changed fewer numbers)."""
+    """The round Keep takes (asked for): the earliest whose average is within the noise (noise) of the lowest's (a
+    win smaller than the noise is likely luck, and an earlier round has changed fewer numbers). `history`: [(round,
+    values, average, noise, tally, {part: tested error})]."""
     low = min(history, key=lambda h: h[2])
-    return next(h[0] for h in history if h[2] <= low[2] + low[3] + 1e-9)
+    return next(h[0] for h in history if h[2] <= low[2] + noise(h[5], low[5]) + 1e-9)
 
 
 def patience(spread):
@@ -923,7 +984,7 @@ def _relay(source, events):
 
 def tested_parts(data):
     """The parts that hold at least one answered word (in order): only these are tested and averaged."""
-    return sorted({part_of(w) for w in data["answers"]})
+    return sorted(set(parts_of(data).values()))
 
 
 def _sum_tallies(tallies):
@@ -966,6 +1027,7 @@ def _run_guard(values, base):
 # ---- the window ----------------------------------------------------------------------------------------------------
 PART_LINE = "#A6D9BD"           # (the chart's own colours: a part's faint line, the average's)
 AVERAGE_LINE = "#5FBF8C"
+GAP = 28                        # the earlier tunes' ticks are never closer than this (pixels)
 LIST_LINES = 6                  # (the lines Numbers changed and Still wrong show; more scroll)
 GUARD_NAMES = (("whole", "Smeared whole"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))
 
@@ -1416,10 +1478,13 @@ class TuneWindow:
         stop = ""
         if self.wait and self.noise:
             since, wait = self.wait
-            stop = (f" Noise ±{self.noise[-1][1]:.1f}: it stops after {wait} rounds with no gain beyond it "
+            stop = (f" Noise ±{self.noise[-1][1]:.2f}: it stops after {wait} rounds with no gain beyond it "
                     f"({since} so far).")
         if not self.best_round:
-            self.note.config(text="No round has beaten the rules as they are yet." + stop)
+            low_round, low = min(self.avg, key=lambda a: a[1]) if self.avg else (0, None)
+            self.note.config(text=(f"Round {low_round}'s {low:.1f}% is within the noise of the rules as they are, "
+                                   "so Keep would change nothing yet." if low_round else
+                                   "No round has beaten the rules as they are yet.") + stop)   # (reported)
             return
         fit = dict(self.points.get(ALL, [])).get(self.best_round)
         avg = dict(self.avg)[self.best_round]
@@ -1478,23 +1543,30 @@ class TuneWindow:
         top, bottom = pad + line + 10, h - pad - line - 4
         hi = max(max(t["start"], t["best"]) for t in tunes) + 0.5
         lo = max(0.0, min(min(t["start"], t["best"]) for t in tunes) - 0.5)
-        most = max(t["words"] for t in tunes)
         left, end = pad + 30, w - pad - 30
-        x = lambda n: left + n / max(1, most) * (end - left)                  # noqa: E731
+        xs = tune_xs([t["words"] for t in tunes], left, end, GAP)
         y = lambda v: top + (hi - v) / max(0.1, hi - lo) * (bottom - top)     # noqa: E731
+        c.create_line(left, bottom + 4, end, bottom + 4, fill=P["surface2"], width=1)       # (the words axis)
         if len(tunes) > 1:                                    # (the error after each tune: falling is good news)
-            c.create_line(*[v for t in tunes for v in (x(t["words"]), y(t["best"]))], fill=PART_LINE, width=2)
-        for t in tunes:
+            c.create_line(*[v for tx, t in zip(xs, tunes) for v in (tx, y(t["best"]))], fill=PART_LINE, width=2)
+        else:                                 # (the first tune: one tick at the right, so say what will come)
+            c.create_text(left, (top + bottom) / 2, anchor="w", font=small, fill=P["muted"], width=end - left - 80,
+                          text="Your first tune. Each later one adds a tick here, at the words answered by then, "
+                               "so you can watch the error fall as you answer more.")
+        label_left = w                                        # (labels from the newest back: none overlapping)
+        for tx, t in reversed(list(zip(xs, tunes))):
             here = t is now
             col = AVERAGE_LINE if t.get("kept") or here else PART_LINE
-            tx = x(t["words"])
             c.create_line(tx - 5, y(t["start"]), tx + 5, y(t["start"]), fill=P["muted"], width=2)   # (before)
             c.create_line(tx, y(t["start"]), tx, y(t["best"]), fill=col, width=3 if here else 2)
             r = 5 if here else 4
             c.create_oval(tx - r, y(t["best"]) - r, tx + r, y(t["best"]) + r, outline=col,
                           fill=col if t.get("kept") or here else P["surface"], width=2)
-            c.create_text(tx, h - pad - line / 2, text=f"{t['words']:,}", font=small,
-                          fill=P["text"] if here else P["muted"])
+            text = f"{t['words']:,}"
+            half = small.measure(text) / 2
+            if tx + half + 8 <= label_left:
+                c.create_text(tx, h - pad - line / 2, text=text, font=small, fill=P["text"] if here else P["muted"])
+                label_left = tx - half
         c.tag_raise(right)
 
     # ---- the slots: built once, empty; each round fills them in place ---------------------------------------------

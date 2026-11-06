@@ -645,7 +645,8 @@ and has a Tune & reroll now button. Reviews ask only about one-part words: no hy
 entries, contractions kept (asked for, like the word list).
 
 To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
-`--review` file; `--entries` the compact download). It splits the answered words into 5 parts, tunes the numbers the
+`--review` file; `--entries` the compact download). It splits the answered words into 5 parts (a word family kept in one part, so no word is tested on numbers tuned on
+its relatives), tunes the numbers the
 rules already have (the points of each label, topic, wording and WordNet meaning, the thresholds and weights) on 4
 and tests on the 5th, each part in turn, and draws the error round by round: 100% minus the average F1 of the kinds
 and of smearing the whole word, on the words held back. A guard counts what every word the program scores would show
@@ -656,11 +657,14 @@ commit. It is still rules only: nothing in the program reads the answers. A bar 
 reading (share and time left) and then each round (parts done, time left). The entries are read in a process of their
 own and the helper processes run at a lower priority, so the window stays smooth; the chart grows with the window.
 The window opens with every row in place (empty) and keeps one size; each round's results show at once. The noise of
-the average (the parts' standard error, a band on the chart) decides the stop: a round is a real gain only by more
-than it, and the search waits 3 rounds plus one per 0.5 points of noise (15 at most) before stopping; Keep takes the
-earliest round within the noise of the lowest. Each change pays a small pull towards today's numbers, so only
-changes that clearly pay stay. Every finished tune is remembered in `rude_tune_history.jsonl` beside the answers, and
-the Earlier tunes tab shows each as a tick at its word count, from the error before it down to after it.
+the average (a band on the chart: the standard error of each part's change against itself, since the parts differ in
+how hard their words are every round) decides the stop: a round is a real gain only by more than it, and the search
+waits 3 rounds plus one per 0.1 points of noise (15 at most) before stopping; Keep takes the earliest round within the
+noise of the lowest. Each change pays a light pull towards today's numbers, so a change that hardly pays stays put,
+and a step that helps neither way shrinks to 70% (SHRINK), so the search keeps looking for longer. Answers made from
+planted numbers check that it finds them again (see tune_rudeness.md). Every finished tune is remembered in `rude_tune_history.jsonl` beside the answers, and
+the Earlier tunes tab shows each as a tick at its word count, from the error before it down to after it (the first tune
+says what later ones will add; ticks close in words are spread apart, `tune_xs`).
 `--start-hidden` starts the window hidden (it shows itself when done).
 Under the chart, tabs show one panel at a time: Earlier tunes, Each kind, Numbers changed, Guard and Still wrong
 (the last two list everything and scroll).
