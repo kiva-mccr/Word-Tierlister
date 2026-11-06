@@ -117,8 +117,8 @@ and Ctrl+Z brings it back.
 - **Which words**: nouns, verbs, adjectives, adverbs and the rest, each with a tick box and a count. Untick a kind
   and those words wait out of sight; nothing is ever deleted.
 - **Obscene words** start unticked. Tick them and you can choose which kinds of rude meaning you want:
-  expletives (swearing, harsh insults and crude words), sexual, and slurs. Medical words, mild name-calling and
-  toilet words count as ordinary words.
+  expletives (swearing and harsh insults), sexual (including euphemisms, like "sleep with"), and slurs. Medical
+  words, the plain words for sex, mild name-calling and toilet words count as ordinary words.
 - **Censor obscene words** smears a rude word sideways until you point at it, on the card, in Browse and in the
   definitions. A word that is only rude in one of its meanings (like "can") keeps its word, and only that meaning
   is smeared. A small "abc" button beside each kind of rude meaning lets you censor that kind or let it

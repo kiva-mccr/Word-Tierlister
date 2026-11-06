@@ -2,6 +2,7 @@ import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 """The rudeness rules (OB-6): points from labels, topics / categories, the definition's wording, WordNet, the
 links between words and word families; a meaning's kind; the word's points over the censored kinds. Cases from the tuning against Claude."""
 from rudeness import KIND_BITS as KIND_BITS_
+import rudeness
 from rudeness import MEANING_MIN, WHOLE_MIN, score_sense, score_word, sense_kind, sense_points, word_points
 
 
@@ -128,9 +129,14 @@ assert sense_kind(got["do"][1]) == "sexual" and sense_kind(got["did"][0]) == "cl
 assert sense_kind(got["fucked"][0]) == "sexual"                                            # meaning of its word
 assert kind("Very (as a general-purpose intensifier).", ["slang"], pos="adv") == "clean"
 assert kind("Used as an intensifier.", ["vulgar"], pos="adv") == "expletive"
-assert meaning_kinds(W["take"], got["take"]) == ["clean", "clean"]                          # (the proper words:
-assert meaning_kinds(W["penis"], got["penis"]) == ["clean"]                                 # no kind, OB-12)
-assert results("take", W["take"], got["take"], {"sexual"})[0] == KIND_BITS_["clean"]
+assert meaning_kinds(W["take"], got["take"]) == ["clean", "sexual"]   # (an ordinary word's later meaning about sex:
+assert meaning_kinds(W["penis"], got["penis"]) == ["clean"]            # a euphemism, Sexual; the proper word: no kind,
+assert results("take", W["take"], got["take"], {"sexual"})[0] == KIND_BITS_["clean"] | KIND_BITS_["sexual"]  # (OB-12)
+assert not results("take", W["take"], got["take"], {"sexual"})[1]                       # (never smeared whole for it)
+# selling sex is Sexual in plain words; bodily waste is no expletive, however vulgar; a rude name for a group: a slur
+assert kind("A house of prostitution.") == "sexual" and kind("Sexual activity.") == "clean"
+assert rudeness.fold({"crude": 5.0, "insult": 4.0}, {"tags": ["vulgar"]}) == {"expletive": 4.0}
+assert kind("A homosexual man.", ["offensive", "vulgar"]) == "slur"
 assert kind("To take the virginity of.", ["euphemistic"], pos="verb") != "sexual"          # (a euphemism: polite)
 
 assert kind("An exclamation used to express pleasant or unpleasant mild surprise.", pos="intj") == "clean"   # "why"
@@ -247,7 +253,8 @@ assert main_kind([{}, {"insult": 5.0}], C) is None                              
 from rudeness import fold
 assert fold({"clinical": 5.0}, {}) == {}                                             # the proper word: none
 assert fold({"crude": 4.0, "insult": 3.0}, {}) == {}                                # toilet words, mild insults
-assert fold({"crude": 4.0, "swear": 2.0}, {"tags": ["vulgar"]}) == {"expletive": 4.0}   # the best of them, harsh
+assert fold({"crude": 4.0, "swear": 2.0}, {"tags": ["vulgar"]}) == {"expletive": 2.0}   # toilet words never count,
+assert fold({"crude": 4.0}, {"tags": ["vulgar"]}) == {}                    # however vulgar (the user's answers: "shit: feces")
 assert fold({"swear": 3.5, "sexual": 3.0, "slur": 1.0}, {}) == {"expletive": 3.5, "sexual": 3.0, "slur": 1.0}
 assert got["skull-fuck"][3] == "sexual" and got["boys"][3] is None                   # (not smeared whole: none)
 # OB-12 (the user's choice from the real data): a word mostly used rudely is smeared whole though its first meaning
