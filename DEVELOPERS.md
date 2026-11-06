@@ -656,8 +656,10 @@ the average (the parts' standard error, a band on the chart) decides the stop: a
 than it, and the search waits 3 rounds plus one per 0.5 points of noise (15 at most) before stopping; Keep takes the
 earliest round within the noise of the lowest. Each change pays a small pull towards today's numbers, so only
 changes that clearly pay stay. Every finished tune is remembered in `rude_tune_history.jsonl` beside the answers, and
-a strip above the chart shows each as a tick at its word count, from the error before it down to after it.
+the Earlier tunes tab shows each as a tick at its word count, from the error before it down to after it.
 `--start-hidden` starts the window hidden (it shows itself when done).
+Under the chart, tabs show one panel at a time: Earlier tunes, Each kind, Numbers changed, Guard and Still wrong
+(the last two list everything and scroll).
 
 ```mermaid
 flowchart TB
