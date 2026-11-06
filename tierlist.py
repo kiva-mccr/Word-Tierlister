@@ -2083,6 +2083,15 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           the rows out, makes their system windows and looks up the check mark's font (DropMenu._warm), all while
 #           hidden. Step 2, only if still slow: show each menu once, see-through, where it opens, then hide it (never
 #           parked off-screen, F-54).
+# [x] F-57 Asked for (a rewrite audit, the user picked its first three items): CLAUDE.md trimmed from 40 KB to 18 KB
+#           (finished steps live only in this roadmap; it keeps Next, the rules those steps taught and the known
+#           gaps). Browse's kinds of word: a rare kind (adverbs, 3%) sorted by Tier took 160 ms in 300k placed, 440 ms
+#           on its third page and 430 ms with no kinds known, as the sort's index was read until a page of that kind
+#           turned up; now a kind is a list of words.kinds values that idx_placed_kinds looks up, and a rare one is
+#           found that way and sorted (20 ms), chosen from its count against the page asked for (Store.KIND_SORT_COST).
+#           tools/speed_check.py gives its words kinds as Wiktionary has them and times Adverbs too.
+# [x] F-58 Asked for (the same audit): the developer tools' bubbles moved out of App (about 400 lines) into
+#           src/devtools.py: DevTools (App.devtools) and a Job for each running tool in place of loose dicts.
 # [x] F-55 Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
 #           F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
 #           tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between

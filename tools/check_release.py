@@ -119,7 +119,7 @@ def check_docs(problems):
 LAYERS = [["constants"], ["obscene"], ["rudeness"], ["problems"], ["deps"], ["syncthing_api"], ["keymap"], ["bundle"],
           ["standalone"], ["store"], ["wordsource", "saves", "definitions"], ["syncfiles"], ["theme"], ["fonts"],
           ["sizing"], ["ui_style"], ["ui_motion"], ["smooth", "framesync"], ["widgets"], ["errors"], ["startup"], ["ui_chart", "fullscreen"],
-          ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog", "review"], ["dealing"], ["sources"], ["app"]]
+          ["browser"], ["filepicker"], ["shortcuts", "tiercolours", "syncdialog", "review"], ["dealing"], ["sources"], ["devtools"], ["app"]]
 
 
 def _module_imports(path):

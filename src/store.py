@@ -1179,6 +1179,14 @@ class Store:
                "Duels": "games DESC, rank ASC"}
 
     KIND_FILTERS = {label: bit for _, label, bit in KINDS}
+    KIND_SORT_COST = 1                  # (sorting a kind's words costs about as much as reading as many rows in order)
+
+    @staticmethod
+    def _kind_clause(bit):
+        """The words of a kind (KINDS bit; an unknown kind counts as "other") as a list of words.kinds values, which
+        idx_placed_kinds can look up; a test of the bit (kinds & bit) has to read every entry."""
+        values = ", ".join(str(v) for v in range(1, ALL_KINDS + 1) if v & bit)
+        return f"(kinds IN ({values}){' OR kinds IS NULL' if bit == KINDS[-1][2] else ''})"
     SEARCH_WINDOW, SEARCH_WINDOW_MAX = 20, 200_000     # (a broad search reads this many words in order per row asked)
     _PLACED_INDEX = {"Tier": "idx_placed_order", "Rating": "idx_placed_rating", "Duels": "idx_placed_games",
                      "A-Z": "idx_placed_word", "Frequency": "idx_placed_shelf"}
@@ -1201,8 +1209,7 @@ class Store:
             elif tier_filter == "Obscene words":               # ST-6: a kind of word (placed ones): only rude meanings
                 where.append("(COALESCE(rude, 1) & 1) = 0")
             elif tier_filter in self.KIND_FILTERS:
-                where.append("(COALESCE(kinds, 16) & ?) != 0")
-                args.append(self.KIND_FILTERS[tier_filter])
+                where.append(self._kind_clause(self.KIND_FILTERS[tier_filter]))
         if tier_filter == "Unplaced" and sort in ("Rating", "Duels"):
             sort = "Frequency"          # (an unplaced word is always at 1500 with no duels: the order is by rank, from
                                         # idx_unplaced_rank, not a sort of every unplaced word: 0.9 s in a million)
@@ -1225,6 +1232,16 @@ class Store:
             index = None                # (the tier's own words: idx_words_tr, the planner's choice)
         else:
             index = (self._PLACED_INDEX if placed else self._UNPLACED_INDEX).get(sort)
+        matches = None
+        if tier_filter in self.KIND_FILTERS and not text:
+            # A kind of word: the sort's own index is read in order until a page of that kind is found, which reads
+            # about (offset + limit) / share rows: quick for nouns, 0.16-0.44 s for adverbs in 300k placed. When the
+            # kind is rare enough, its words are found in idx_placed_kinds and sorted instead (20 ms for 9k adverbs)
+            matches = self.db.execute(f"SELECT COUNT(*) FROM words{self._hint('idx_placed_kinds')} WHERE {clause}",
+                                      args).fetchone()[0]
+            placed_now = sum(self.tier_counts().values())
+            if matches * matches * self.KIND_SORT_COST < (offset + limit) * placed_now:
+                index = "idx_placed_kinds"
         hint = self._hint(index) if index else ""
         cols = "word, tier, rating, games, skips, rank, pen"
         rows = None
@@ -1250,11 +1267,12 @@ class Store:
             ).fetchall()
         total = None
         if with_total:
-            if offset == 0 and len(rows) < limit:
+            if matches is not None:
+                total = matches
+            elif offset == 0 and len(rows) < limit:
                 total = len(rows)  # a short first page is everything: skip the extra full scan
             else:
-                counted = self._hint("idx_placed_kinds") if tier_filter in self.KIND_FILTERS or \
-                    tier_filter == "Obscene words" else ""
+                counted = self._hint("idx_placed_kinds") if tier_filter == "Obscene words" else ""
                 if text and not counted:      # (a search counts in the words' own index, as it lists: without it the
                     counted = hint            # count read the whole table, 0.9 s of a 1 s search in a million)
                 total = self.db.execute(f"SELECT COUNT(*) FROM words{counted} WHERE {clause}", args).fetchone()[0]

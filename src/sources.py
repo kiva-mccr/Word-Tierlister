@@ -27,8 +27,8 @@ files differ from this source's, shows "Update to nightly": from source the fold
 (update_source: git pull from main, or main's source synced in); in the program main's source goes into the source
 folder beside it, which then builds the program in this one's place (update_nightly_program, --build-nightly).
 The nightly section shows only with Settings > Developer tools ticked and its "Nightly" bubble lit (a switch at the
-top right, lit to start with; it says so while main is the same); main is not even asked for otherwise. Beside it: "Log" (tierlist.log, App.open_log) and "Crash test"
-(App.crash_test, was --crash-test).
+top right, lit to start with; it says so while main is the same); main is not even asked for otherwise. Beside it: "Log" (tierlist.log, App.devtools.open_log) and "Crash test"
+(App.devtools.crash_test, was --crash-test).
 
 Either way a tick box, "Update to the newest version first" (T-8), ticked to start with and usable once a newer
 version is found: "Make the program" then downloads that version's source and builds from it, and "Unpack" downloads
@@ -112,8 +112,8 @@ class SourceDialog:
         self.main_now = None                      # main as it is now, once found (the Nightly bubble shows it the same)
         if self.nightly_always is not None:       # (Settings > Developer tools: the dialog's bubbles)
             self.bubbles = self.dlg.dev_bubbles((("Nightly", self._toggle_nightly, self.nightly_always),
-                                                 ("Log", app.open_log),
-                                                 ("Crash test", lambda: app.crash_test(self.dlg))))
+                                                 ("Log", app.devtools.open_log),
+                                                 ("Crash test", lambda: app.devtools.crash_test(self.dlg))))
         self._updates_section()
         if self.menu and self.frozen and not deps.in_menu(self.platform):   # (asked for: only in the program, and
             self._menu_section()                                            # only until it is in the menu)

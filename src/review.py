@@ -148,7 +148,7 @@ class RudeReview:
                  font=font("small"), bg=bg, fg=PALETTE["muted"]).pack(anchor="w")
         tunes = tk.Frame(box, bg=bg)                 # (DT-6: earlier tunes, the next automatic one, one by hand)
         tunes.pack(fill="x", pady=(10, 0))
-        self.tune_btn = RoundButton(tunes, "Tune & reroll now", lambda: self.app.tune_reroll(None), bg=PALETTE["surface"],
+        self.tune_btn = RoundButton(tunes, "Tune & reroll now", lambda: self.app.devtools.tune_reroll(None), bg=PALETTE["surface"],
                                     font=font("small"), padx=10, pady=3, radius=10, animator=app.anim)
         self.tune_btn.pack(side="right", padx=(8, 0))
         self.next_tune = tk.Label(tunes, font=font("small"), bg=bg, fg=PALETTE["muted"])
@@ -300,7 +300,8 @@ class RudeReview:
         n = len(self.answers)
         past = [(int(h["words"]), float(h["best"] if h.get("kept") else h["start"]), bool(h.get("kept")))
                 for h in read_history(self.answers_path)]
-        nxt = getattr(self.app, "next_auto_tune", lambda n: None)(n)
+        tools = getattr(self.app, "devtools", None)
+        nxt = tools.next_auto_tune(n) if tools is not None else None
         return n, past, nxt
 
     def _draw_strip(self):
@@ -380,9 +381,9 @@ class RudeReview:
         self.answers[it["w"]] = {"w": it["w"], "keys": [s["key"] for s in it["senses"]], "kinds": list(self.kinds),
                                  "whole": self.whole}
         write_answers(self.answers_path, self.answers, self.order)
-        answered = getattr(self.app, "review_answered", None)
-        if answered is not None:
-            answered(len(self.answers))          # (DT-6: every 50 new answers, Tune & reroll starts by itself)
+        tools = getattr(self.app, "devtools", None)
+        if tools is not None:
+            tools.review_answered(len(self.answers))          # (DT-6: every 50 new answers, Tune & reroll starts by itself)
 
     def back(self):
         """Back one word in the file, shown as it was answered."""

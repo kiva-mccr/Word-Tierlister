@@ -1826,10 +1826,11 @@ class DevBubble(SmoothCanvas):
     is on the ring it turns into a small red cross on pink, the hover note says `note` (a string, or a function
     giving one), and a click runs `command`. The bubble never changes size for it.
 
-        DevBubble(parent, "Log", app.open_log)
+        DevBubble(parent, "Log", app.devtools.open_log)
         DevBubble(parent, "Nightly", toggle, variable=shown)
-        DevBubble(parent, "Review words", app.review_words, progress=lambda: app.dev_progress("review"),
-                  second=("Tune & reroll", app.tune_reroll), stop=(app.stop_note, app.stop_review_tool))
+        tools = app.devtools
+        DevBubble(parent, "Review words", tools.review_words, progress=lambda: tools.progress("review"),
+                  second=("Tune & reroll", tools.tune_reroll), stop=(tools.stop_note, tools.stop))
     """
     POLL_MS = 100
     SPIN_MS = 40              # a frame of the spinning arc (and of the ring easing to a new fraction)

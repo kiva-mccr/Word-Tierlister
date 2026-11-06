@@ -13,9 +13,9 @@ smeared, that kind is censored; plain, it is shown even while censoring (Store.c
 three smeared to start with). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
 applies at once. With Settings > Developer tools ticked, one split bubble at the top right (asked for, picked from a
-mock-up): "Review words" (OB-9's review window, App.review_words; the first review words made when there are none)
+mock-up): "Review words" (OB-9's review window, App.devtools.review_words; the first review words made when there are none)
 | "Tune & reroll" (tools/tune_rudeness.py's window, then new review words from tools/measure_rudeness.py next:
-App.tune_reroll); its ring and the right half's words show the step.
+App.devtools.tune_reroll); its ring and the right half's words show the step.
 """
 import gc
 import random
@@ -86,9 +86,10 @@ class DealDialog:
             dlg.button("Cancel", dlg.close)
             dlg.button("Apply", self.apply, default=True)
             if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
+                tools = app.devtools
                 self.bubbles = dlg.dev_bubbles(((
-                    "Review words", lambda: app.review_words(dlg), None, lambda: app.dev_progress("review"), None,
-                    ("Tune & reroll", lambda: app.tune_reroll(dlg)), (app.stop_note, app.stop_review_tool)),))
+                    "Review words", lambda: tools.review_words(dlg), None, lambda: tools.progress("review"), None,
+                    ("Tune & reroll", lambda: tools.tune_reroll(dlg)), (tools.stop_note, tools.stop)),))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------
