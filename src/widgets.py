@@ -1802,10 +1802,14 @@ class DevBubble(SmoothCanvas):
     the half under the pointer has the darker text. progress() may give a third value, the second half's words
     while it runs ("Tuning · step 1 of 2").
 
+    With `stop=(note, command)` a running tool can be stopped (asked for, picked from a mock-up): while the pointer
+    is on the ring it turns into a small red cross on pink, the hover note says `note` (a string, or a function
+    giving one), and a click runs `command`. The bubble never changes size for it.
+
         DevBubble(parent, "Log", app.open_log)
         DevBubble(parent, "Nightly", toggle, variable=shown)
         DevBubble(parent, "Review words", app.review_words, progress=lambda: app.dev_progress("review"),
-                  second=("Tune & reroll", app.tune_reroll))
+                  second=("Tune & reroll", app.tune_reroll), stop=(app.stop_note, app.stop_review_tool))
     """
     POLL_MS = 100
     SPIN_MS = 40              # a frame of the spinning arc (and of the ring easing to a new fraction)
@@ -1814,7 +1818,7 @@ class DevBubble(SmoothCanvas):
     BLINK_MS = 450            # the whole ring, once, when the tool ends
 
     def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None,
-                 on_running=None, second=None):
+                 on_running=None, second=None, stop=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
@@ -1823,6 +1827,8 @@ class DevBubble(SmoothCanvas):
         self.progress, self._anim, self.on_running = progress, animator, on_running
         self.second = second          # (text, command): the right half, or None
         self._split = None            # where the right half starts (x), once drawn
+        self.stop = stop              # (note, command): the ring stops a running tool, or None
+        self._ring_end = None         # where the ring ends (x), once drawn: left of it is the stop button
         self.state = None             # what progress() said last: None (idle) or (fraction or None, note)
         self._shown = 0.0             # the fraction drawn (it eases to the real one)
         self._spin = 0                # the arc's start while it cannot tell how far
@@ -1836,13 +1842,22 @@ class DevBubble(SmoothCanvas):
         self.bind("<Leave>", lambda e: self._set_hover(False))
         self.bind("<Destroy>", lambda e: e.widget is self and self._stop_all(), add="+")
         if progress is not None:
-            Tooltip(self, lambda e: self.state[1] if self.state else None)
+            Tooltip(self, self._note)
             self._poll()
         self._draw()
 
     # ---- running tools ---------------------------------------------------------------------------------
     def running(self):
         return self.state is not None
+
+    def _note(self, e=None):
+        """The hover note: how the tool is doing, or what stopping it does while the pointer is on the ring."""
+        if not self.state:
+            return None
+        if self._hover == "stop":
+            note = self.stop[0]
+            return note() if callable(note) else note
+        return self.state[1]
 
     def _still(self):
         return self._anim is not None and getattr(self._anim, "reduce_motion", False)
@@ -1907,10 +1922,17 @@ class DevBubble(SmoothCanvas):
 
     # ---- clicks and drawing --------------------------------------------------------------------------------
     def _half(self, x):
-        """Which half `x` is over: "second" (the right half of a split bubble) or "first"."""
+        """Which part `x` is over: "stop" (the ring of a running tool that can be stopped), "second" (the right half
+        of a split bubble) or "first"."""
+        if self.stop and self.running() and self._ring_end is not None and x <= self._ring_end:
+            return "stop"
         return "second" if self.second and self._split is not None and x >= self._split else "first"
 
     def invoke(self, half="first"):
+        if half == "stop":
+            if self.stop and self.running():
+                self.stop[1]()
+            return
         if self.second:                   # (split: each half its own command; they know a running tool)
             (self.second[1] if half == "second" else self.command)()
             return
@@ -1949,11 +1971,20 @@ class DevBubble(SmoothCanvas):
         self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
         y = 1 + h / 2
         cx = 1 + pad + ring / 2
-        self.round_rect(cx - dot / 2, y - dot / 2, cx + dot / 2, y + dot / 2, dot, fill=PALETTE["accent"])
+        self._ring_end = 1 + pad + ring + dot / 2
+        stopping = self._hover == "stop" and self.state is not None
+        if stopping:                      # (the ring under the pointer: a red cross on pink, click to stop)
+            self.round_rect(cx - ring / 2, y - ring / 2, cx + ring / 2, y + ring / 2, ring, fill=PALETTE["bad"][0])
+            size = max(6, (ring * 9 // 16) | 1)
+            self.create_image(round(cx - size / 2), round(y - size / 2), anchor="nw",
+                              image=self.icon_image("stop", size, PALETTE["bad"][1]))
+        else:
+            self.round_rect(cx - dot / 2, y - dot / 2, cx + dot / 2, y + dot / 2, dot, fill=PALETTE["accent"])
         if self.state is not None or self._blink:
             thick = max(2, round(ring / 8))
             x0, y0 = round(cx - ring / 2), round(y - ring / 2)
-            self.create_image(x0, y0, anchor="nw", image=self.ring_image(ring, thick, 0, 360, PALETTE["surface"]))
+            if not stopping:
+                self.create_image(x0, y0, anchor="nw", image=self.ring_image(ring, thick, 0, 360, PALETTE["surface"]))
             frac = None if self.state is None else self.state[0]
             if self._blink:
                 start, extent = 0, 360
@@ -1962,10 +1993,10 @@ class DevBubble(SmoothCanvas):
             else:
                 start, extent = 0, int(round(self._shown * 120)) * 3          # (3 degree steps: a few images)
             if extent > 0:
-                self.create_image(x0, y0, anchor="nw",
-                                  image=self.ring_image(ring, thick, start, min(360, extent), PALETTE["ring"]))
+                self.create_image(x0, y0, anchor="nw", image=self.ring_image(
+                    ring, thick, start, min(360, extent), PALETTE["bad"][1] if stopping else PALETTE["ring"]))
         def ink(half):
-            hover = self._hover == half if other else self._hover
+            hover = self._hover == half if other else self._hover not in (False, "stop")
             return PALETTE["text"] if (on and not other) or hover else PALETTE["muted"]
         x = 1 + pad + ring + dot
         self.create_text(x, y, text=self.text, font=f, anchor="w", fill=ink("first"))
@@ -3612,17 +3643,18 @@ class StyledDialog:
     def dev_bubbles(self, items):
         """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
         (text, command), (text, command, variable) for a switch, or (text, command, None, progress[, on_running[,
-        second]]) for a tool that keeps running (its ring; on_running: what a click does meanwhile; second: (text,
-        command), the right half of a split bubble). Returns the bubbles, by text."""
+        second[, stop]]]) for a tool that keeps running (its ring; on_running: what a click does meanwhile; second:
+        (text, command), the right half of a split bubble; stop: (note, command), its ring stops it). Returns the
+        bubbles, by text."""
         out = {}
         if self.head_row is None or not items:
             return out
         row = tk.Frame(self.head_row, bg=PALETTE["bg"])
         row.pack(side="right", anchor="n", padx=(24, 0))
         for item in items:
-            text, command, variable, progress, on_running, second = (tuple(item) + (None,) * 4)[:6]
+            text, command, variable, progress, on_running, second, stop = (tuple(item) + (None,) * 5)[:7]
             b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim,
-                          on_running=on_running, second=second)
+                          on_running=on_running, second=second, stop=stop)
             b.pack(side="left", padx=(6 if out else 0, 0))
             out[text] = b
         return out

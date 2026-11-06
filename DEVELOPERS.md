@@ -637,7 +637,9 @@ Wiktionary entries first when they are missing). **Tune & reroll** runs the two 
 (below), then, once it has tuned to the end and you Keep or Discard, `next` in the background. Its ring shows the
 tuner's rounds, then turns while the new words are picked, and its right half names the step; a toast in the main
 window says when each step is done. Closing the tuner's window while it tunes only hides it; a click on Tune & reroll
-brings it back. Discard while it tunes stops there, with no reroll. They run the scripts in `tools/`, so only from the source.
+brings it back. Discard while it tunes stops there, with no reroll. The ring under the pointer turns into a red cross
+that stops either step (`App.stop_review_tool`: the tool's whole process group, so the tuner's workers go too; a
+half-written review file or entries file is removed). They run the scripts in `tools/`, so only from the source.
 Every 50 new answers (`App.AUTO_TUNE`, counted from the last start, meta `tune_base`) the review starts Tune & reroll
 by itself with the tuner's `--start-hidden`, never while one runs nor without the entries; the review window's strip
 reads the tuner's `rude_tune_history.jsonl` (beside the answers) for a tick per earlier tune, with its tested error,

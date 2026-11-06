@@ -831,6 +831,8 @@ ICONS = {
     # chevrons (FS-2's pause menu: Back, and a row that opens a page)
     "back": [[(10.2, 1.5), (12.4, 3.7), (8.1, 8.0), (12.4, 12.3), (10.2, 14.5), (3.7, 8.0)]],
     "next": [[(5.8, 1.5), (12.3, 8.0), (5.8, 14.5), (3.6, 12.3), (7.9, 8.0), (3.6, 3.7)]],
+    # a cross (stop a running developer tool: its bubble's ring under the pointer): two crossing bars
+    "stop": [[(3.9, 2.1), (13.9, 12.1), (12.1, 13.9), (2.1, 3.9)], [(12.1, 2.1), (13.9, 3.9), (3.9, 13.9), (2.1, 12.1)]],
 }
 
 

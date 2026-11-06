@@ -11,6 +11,7 @@ import math
 import os
 import random
 import re
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -108,13 +109,42 @@ def reopen_while_asked(app, store, defs, new_root):
     return app
 
 
-def _run_tools(cmds, cwd, on_line=None):
+# a tool started by a developer bubble gets a process group of its own, so stopping it stops what it started too
+_OWN_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
+
+
+def stop_tree(proc, run=subprocess.run):
+    """Stop a tool a developer bubble started, and the processes it started (the tuner's workers); never waits
+    (whoever watches it sees it end)."""
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            threading.Thread(target=run, args=(["taskkill", "/F", "/T", "/PID", str(proc.pid)],),
+                             kwargs={"capture_output": True, "timeout": 30}, daemon=True).start()
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+    except (OSError, AttributeError, TypeError):
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+
+
+def _run_tools(cmds, cwd, on_line=None, job=None):
     """Run each command in turn (a worker thread: no Tk here): (the exit code, the last line it printed), stopping
-    at the first that fails. `on_line(step, steps, line)`: each line as it is printed (the bubble's hover note)."""
+    at the first that fails. `on_line(step, steps, line)`: each line as it is printed (the bubble's hover note).
+    `job`: the running one is kept there ("proc", "step": its index), and none starts once it says "stop"."""
     code, last = 0, ""
+    job = job if job is not None else {}
     for i, cmd in enumerate(cmds):
+        if job.get("stop"):
+            return 1, "stopped"
         p = subprocess.Popen(cmd, cwd=cwd, env=standalone.clean_env(), stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT, text=True, bufsize=1)
+                             stderr=subprocess.STDOUT, text=True, bufsize=1, **_OWN_GROUP)
+        job["proc"], job["step"] = p, i
+        if job.get("stop"):               # (stopped while it was starting)
+            stop_tree(p)
         last = ""
         for line in p.stdout:
             if line.strip():
@@ -2408,6 +2438,44 @@ class App:
         job["hidden"] = False
         return True
 
+    def stop_note(self):
+        """The Review words bubble's hover note over its ring (the stop button): what stopping does now."""
+        tuner = getattr(self, "_tuner_job", None)
+        if tuner is not None and tuner["proc"].poll() is None:
+            return "Stop: the tuner closes and its numbers are thrown away; no new review words are made"
+        job = getattr(self, "_tool_job", None)
+        if job is not None and job.get("then") == "open":
+            return "Stop: no review words are made"
+        return "Stop: the review words stay as they were"
+
+    def stop_review_tool(self):
+        """The Review words bubble's stop button (asked for): stop the tuner, or the review words being made (its
+        half-written file is removed once it has ended: _watch_tool). Returns what it stopped: "tuner", "tools" or
+        None."""
+        tuner = getattr(self, "_tuner_job", None)
+        if tuner is not None and tuner["proc"].poll() is None:
+            tuner["stop"] = True
+            stop_tree(tuner["proc"])
+            return "tuner"
+        job = getattr(self, "_tool_job", None)
+        if job is not None and job["done"] is None:
+            job["stop"] = True
+            stop_tree(job.get("proc"))
+            return "tools"
+        return None
+
+    @staticmethod
+    def _drop_partial(job):
+        """Remove what the stopped command left half written (a review file, Wiktionary's entries)."""
+        partial = job.get("partial") or ()
+        step = job.get("step")
+        if step is None or step >= len(partial):
+            return
+        try:
+            os.remove(partial[step])
+        except OSError:
+            pass
+
     def review_words(self, dlg=None, ask=None, run=None):
         """The Review words bubble's left half (asked for: one bubble for the review words): the review
         (review_rude); with no review file yet, the first review words are made (make_review_words) and the review
@@ -2476,7 +2544,9 @@ class App:
             return
         if getattr(self, "_tuner_job", None) is job:
             self._tuner_job = None
-        if job.get("tuned"):
+        if job.get("stop"):
+            self.flash("Stopped: the tuner's numbers were thrown away", kind="info", ms=5000)
+        elif job.get("tuned"):
             self.make_review_words(None, run=job.get("run"), then="reroll")
         elif job["proc"].poll():
             self.flash("The tuner stopped before it was done", kind="warn", ms=6000)
@@ -2496,8 +2566,9 @@ class App:
             self.flash("Still making review words", kind="info")
             return None
         path = self.review_file()
-        cmds = []
-        if not os.path.exists(os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")):
+        cmds, partial = [], []            # (partial: what each command leaves half written when it is stopped)
+        entries = os.path.join(self.TOOLS_ROOT, "rudeness_entries.jsonl")
+        if not os.path.exists(entries):
             if not (ask or (lambda: ask_yes_no(
                     "Make review words", "Read Wiktionary's entries first?",
                     "The words are picked from every English entry of Wiktionary: about 3 GB to read once, kept as "
@@ -2505,19 +2576,21 @@ class App:
                     yes="Read them", parent=parent)))():
                 return None
             cmds.append([sys.executable, tool, "fetch"])
+            partial.append(entries)
         first = not os.path.exists(path)
         cmds.append([sys.executable, tool, "sample", "--out", path] if first else
                     [sys.executable, tool, "next", "--review", path])
+        partial.append(path if first else path + ".part")     # (next writes a .part, then swaps it in)
         self.store.set_meta("review_file", os.path.abspath(path))
         self.flash(f"Making {'1,500' if first else '300 new'} review words: a few minutes", kind="info", ms=5000)
-        self._tool_job = {"done": None, "path": path, "note": None, "then": then}
+        self._tool_job = {"done": None, "path": path, "note": None, "then": then, "partial": partial}
         job = self._tool_job
 
         def line(step, steps, text):
             job["note"] = (f"Step {step} of {steps}: " if steps > 1 else "") + text
 
         def work():
-            job["done"] = run(cmds, self.TOOLS_ROOT) if run else _run_tools(cmds, self.TOOLS_ROOT, line)
+            job["done"] = run(cmds, self.TOOLS_ROOT) if run else _run_tools(cmds, self.TOOLS_ROOT, line, job)
         if run:
             work()
         else:
@@ -2532,7 +2605,11 @@ class App:
             return
         self._tool_job = None
         code, last = job["done"]
-        if code == 0:
+        if job.get("stop"):
+            self._drop_partial(job)
+            self.flash("Stopped: the review words are as they were" if job.get("then") != "open" else
+                       "Stopped: no review words were made", kind="info", ms=5000)
+        elif code == 0:
             if self.review is not None and self.review.alive() and self.review_path == job["path"]:
                 self.review.close()               # (the file was refreshed under it: open it again on the new words,
                 self.open_review(job["path"])     # its answers saved already)
@@ -2566,7 +2643,7 @@ class App:
         cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"] + (["--start-hidden"] if hidden else [])
         proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),
                                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
-                                                     bufsize=1)))(cmd)
+                                                     bufsize=1, **_OWN_GROUP)))(cmd)
         if getattr(proc, "stdout", None) is not None:      # (its rounds fill the bubble's ring: _follow_tuner)
             self._tuner_job = {"proc": proc, "frac": 0.0, "note": None}
             threading.Thread(target=_follow_tuner, args=(proc, self._tuner_job), daemon=True).start()

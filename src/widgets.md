@@ -68,6 +68,7 @@ The module docstring has the details; this page is the map.
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- DevBubble with `stop=`: the ring is the stop button only while running (`_half` gives "stop" left of `_ring_end`); the bubble never changes size for it (a wider bubble would shift the corner's text). The Tooltip reads `_note` after the bubble's own Motion handler set `_hover` (bound first).
 - DevBubble with `second=`: each half runs its own command even while running (the app decides: the tuner's window back, or "still making"); `_split` is only known once drawn. SmearWordButton reads the S tier's colour at every draw (tier colours can change) and keeps one size smeared or not.
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
 - A closed DropMenu is hidden (withdrawn) everywhere, never parked mapped off-screen (F-54, reported: on GNOME the move back on screen was sometimes lost, so the menu never showed while its button stayed lit, and the next click "closed" it). Use `is_open` for "open".

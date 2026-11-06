@@ -88,7 +88,7 @@ class DealDialog:
             if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
                 self.bubbles = dlg.dev_bubbles(((
                     "Review words", lambda: app.review_words(dlg), None, lambda: app.dev_progress("review"), None,
-                    ("Tune & reroll", lambda: app.tune_reroll(dlg))),))
+                    ("Tune & reroll", lambda: app.tune_reroll(dlg)), (app.stop_note, app.stop_review_tool)),))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------
