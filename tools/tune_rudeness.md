@@ -51,7 +51,7 @@ The module docstring has the details; this page is the map.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
 - `doubled`: The guard's names that cover more than DOUBLED times the words they do now (from none: any).
 - `TuneWindow`: The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed, the guard, the meanings still wrong; Pause, Discard, Keep...
-  - methods: chart_size, show_bar, round_share, start, handle, sweep, listen, close_box, show_again, check_best, draw, span, draw_note, current, remember, draw_past, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
+  - methods: chart_size, show_bar, round_share, start, handle, sweep, listen, close_box, show_again, check_best, draw, span, draw_note, show_tab, current, remember, draw_past, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
 - `pool_for_guard`: The guard's process (or this one: 0).
 - `main`: The command line: the window (it reads the entries and starts the search itself).
 - `load`: Read the entries in a process of its own (reading them in the window's process froze it for seconds at a time); its progress and its result come back as the window's...
@@ -74,6 +74,7 @@ The module docstring has the details; this page is the map.
 - The chart gets the height the rest leaves on the screen (`CHART_MIN` at least): reported squished on a 1200 px screen when the empty rows were stacked; kinds, numbers changed and the guard sit side by side, the Keep note on the button row. Every fixed-size label keeps a width (and lines) of its own: a wrapping label with only a wraplength grew wider than its slot and was cut. The rounds axis shows the rounds run plus those it may still wait (`span`), and the % numbers thin out on a short chart.
 - Each change pays a pull towards today's numbers (`cost`, PULL): tried on 600 stand-in answers it reached a lower tested error with 3 numbers moved instead of 11. Random kicks after settling were tried and found nothing better in 2.5 times the time (not built). `tune_round` returns the error without the pull: the chart shows plain error.
 - Earlier tunes: one line per finished tune in `rude_tune_history.jsonl` beside the answers (`remember` on done, Keep rewrites it kept); the program's review window reads the same file (its keys: when, words, meanings, start, best, round, kept; error %, not agreement).
+- The details sit under tabs (asked for: "crowded"; approved from a mock-up): Earlier tunes, Each kind, Numbers changed, Guard, Still wrong, all gridded in one cell (`panels`) so the page is always as tall as the tallest, raised with `tk.Misc.tkraise` (a Canvas's own tkraise raises its items). Numbers changed and Still wrong list everything in a read-only Text (`_list`, LIST_LINES) whose scroll bar shows only while the lines do not all fit (asked for); its column keeps the bar's width.
 - The stop allows for noise (asked for): a gain counts only when it beats the last real gain by more than the parts' standard error (`noise`), the wait grows with it (`patience`), and Keep's round is the earliest within the noise of the lowest (`best_round`, picked by the user); its misses come from that round's numbers, not the latest.
 
 ## Changing it
