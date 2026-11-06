@@ -954,6 +954,28 @@ assert run.ring_image(15, 2, 0, 360, "#8C72E0").width() == 15
 state[0] = None; update(3); time.sleep(0.15); update(3)
 assert not run.running() and run._blink
 run.destroy(); update(2)                                                         # (its timers stop with it)
+# ---- SmearWordButton: the word itself, smeared on the S tier's colour while on (DT-6, picked from a mock-up) -------
+from widgets import SmearWordButton
+flips = []
+sw = SmearWordButton(root, "Smear the whole word", lambda: flips.append(1)); sw.pack(); update(2)
+sw.show("bugger", False); sw.set_hint("S"); update(2)
+plain = int(sw.cget("width"))
+texts = [sw.itemcget(i, "text") for i in sw.find_all() if sw.type(i) == "text"]
+assert texts == ["Smear the whole word", "bugger", "S"] and not sw.find_withtag("smear")
+sw._anim = types.SimpleNamespace(reduce_motion=True)
+sw.show("bugger", True); update(2)
+assert sw.find_withtag("smear") and int(sw.cget("width")) == plain          # (smeared: the same size, no jump)
+assert sw._lift == 0                                                          # (Reduce motion: no bounce)
+sw._anim = types.SimpleNamespace(reduce_motion=False)
+sw.show("bugger", False); assert sw._lift < 0                                 # (a change bounces...)
+for _ in range(20):
+    time.sleep(0.03); update(1)
+assert sw._lift == 0                                                          # (...and settles)
+sw.show("other", True); assert sw._lift == 0                                  # (a new word: no bounce)
+sw.invoke(); assert flips == [1]
+sw.set_enabled(False); sw.invoke(); assert flips == [1]
+assert not sw.find_withtag("smear")                                           # (disabled: never lit)
+sw.destroy()
 dlg.close()
 root.destroy()
 print("WIDGETS2 OK")

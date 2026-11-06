@@ -2192,6 +2192,16 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Score the rules went (the tuner shows the score; review.score_guesses removed). The notice: a toast in
 #           the main window when the tuner is done and when the new words are made (the user's pick over a lasting
 #           bubble or a tick). _selftest_devtools.py.
+# [x] DT-6 Asked for: "each tune remember the previous ... lil ticks", Tune & reroll every 50 words by itself, still
+#           run by hand any time, and a livelier "Smear the whole word" (all picked from mock-ups in project files
+#           dev-bubbles/). Every App.AUTO_TUNE (50) new answers (counted from the last start, by hand or not: meta
+#           tune_base) the review starts Tune & reroll itself (App.review_answered), the tuner --start-hidden (it shows
+#           when done); never while one runs, nor without the entries. The review window: a strip (RudeReview.
+#           _draw_strip) from no answers to the next tune, a tick per earlier tune from the tuner's
+#           rude_tune_history.jsonl with its tested error (kept: its best, else today's; lower is better), "next tune
+#           in N", and a "Tune & reroll now" button. widgets.SmearWordButton: the word itself, smeared on the S
+#           tier's colour when yes, plain when no, a short bounce on a change. _selftest_devtools, _selftest_review,
+#           _selftest_widgets2.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

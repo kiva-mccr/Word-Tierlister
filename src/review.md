@@ -13,12 +13,14 @@ The module docstring has the details; this page is the map.
 - `kind_colour`: A kind's pastel: a tier colour each (read now: they can be changed), Not rude the plain neutral.
 - `read_review`: The review file's words, in order: [{"w", "why", "whole", "senses": [{"key", "pos", "labels", "gloss", "guess"}]}].
 - `read_answers`: {word: {"keys", "kinds", "whole"}} from an answers file, or {} when there is none yet (or it was in the old six kinds: set aside, obscene.set_aside_old_answers).
+- `read_history`: The earlier tunes beside the answers file, oldest first: [{"words", "start", "best", "kept", ...}] (the tuner's history file: "start" / "best" are tested errors in %,...
 - `write_answers`: Write every answer to `path` (the review's words in its order, then any others: answers from an earlier, smaller review are kept), through a temporary file, so a...
 - `RudeReview`: The review window (see the module's note).
-  - methods: item, select, set_kind, toggle_whole, next_word, back, open_wiktionary, show_online, apply_keys, on_key, alive, close
+  - methods: item, strip_marks, select, set_kind, toggle_whole, next_word, back, open_wiktionary, show_online, apply_keys, on_key, alive, close
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
+- DT-6: the strip shows the tuner's history as tested **error** (lower is better), never relabelled as agreement; a kept tune shows its best error, one not kept the error with the numbers it started from. `_save` tells the app (`review_answered`) after every answer: that is where the automatic Tune & reroll starts.
 - It opens with `ui_style.show_drawn`, complete (F-48).
 
 - Rules only (the user's choice): the answers are a yardstick for the rules, never a list the program reads.

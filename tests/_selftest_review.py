@@ -68,7 +68,7 @@ assert lit == ["clean"] and rv.row_parts[0][2].cget("text") == "Not rude"
 key(rv, "Down"); key(rv, "Down"); assert rv.sel == 2
 key(rv, "Down"); assert rv.sel == 2                       # (stays on the last)
 key(rv, "Up"); key(rv, "2"); assert rv.kinds[1] == "expletive" and rv.sel == 1
-key(rv, "s"); assert rv.whole is True and "yes" in rv.whole_btn.cget("text")
+key(rv, "s"); assert rv.whole is True and rv.whole_btn.on and rv.whole_btn.word == rv.item["w"]
 assert key(rv, "x") is None                               # a key of no review action passes
 rv.select(0); pump(1); assert rv.sel == 0                 # (a click on a meaning)
 # with motion on, the lit button is the selected meaning's kind once the fades end (a fade from set_enabled used
@@ -96,7 +96,7 @@ assert rv.item["w"] == "shitload" and [a["w"] for a in saved()] == ["tail", "idi
 assert saved()[1]["kinds"] == ["sexual"]
 # the keys follow the keymap: a changed key shows on its button and works
 app.keys.set("review_whole", ["z"]); app.apply_keys(); pump(1)
-assert rv.whole_btn.cget("hint") == "Z" and rv.whole is True
+assert rv.whole_btn.hint == "Z" and rv.whole is True
 key(rv, "s"); assert rv.whole is True
 key(rv, "z"); assert rv.whole is False
 # Open in Wiktionary (W): greyed out offline; online it opens the word's page (the browser faked)
@@ -155,6 +155,19 @@ rv = app.open_review(empty); pump(3)
 assert rv.item is None and "Nothing to review" in rv.word.cget("text") and "measure_rudeness" in rv.why.cget("text")
 rv.close(); pump(1)
 assert R.kind_colour("clean") and R.kind_colour("slur") == T.TIER_COLORS[3]
+# DT-6: the strip of earlier tunes (the tuner's history beside the answers; kept: its best error, else today's)
+with open(os.path.join(os.path.dirname(answers), R.HISTORY_FILE), "w", encoding="utf-8") as f:
+    f.write(json.dumps({"words": 50, "start": 34.0, "best": 29.0, "kept": True}) + "\n")
+    f.write("not json\n" + json.dumps({"words": 100}) + "\n")                  # (skipped)
+    f.write(json.dumps({"words": 100, "start": 29.0, "best": 27.0, "kept": False}) + "\n")
+s.set_meta("tune_base", "100")
+rv = app.open_review(path); pump(4)
+n, past, nxt = rv.strip_marks()
+assert past == [(50, 29.0, True), (100, 29.0, False)] and nxt == 150 and n == len(rv.answers)
+texts = [rv.strip.itemcget(i, "text") for i in rv.strip.find_all() if rv.strip.type(i) == "text"]
+assert "29% error" in texts and "50" in texts and f"next tune in {150 - n}" in texts, texts
+assert rv.tune_btn.cget("text") == "Tune & reroll now"
+rv.close(); pump(1)
 root.destroy()
 
 # tools/measure_rudeness.py: a review file's words (the meanings asked about, the rules' guesses) and the answers

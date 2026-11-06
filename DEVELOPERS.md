@@ -637,7 +637,11 @@ Wiktionary entries first when they are missing). **Tune & reroll** runs the two 
 (below), then, once it has tuned to the end and you Keep or Discard, `next` in the background. Its ring shows the
 tuner's rounds, then turns while the new words are picked, and its right half names the step; a toast in the main
 window says when each step is done. Closing the tuner's window while it tunes only hides it; a click on Tune & reroll
-brings it back. Discard while it tunes stops there, with no reroll. They run the scripts in `tools/`, so only from the source. Reviews ask only about one-part words: no hyphenated or spaced
+brings it back. Discard while it tunes stops there, with no reroll. They run the scripts in `tools/`, so only from the source.
+Every 50 new answers (`App.AUTO_TUNE`, counted from the last start, meta `tune_base`) the review starts Tune & reroll
+by itself with the tuner's `--start-hidden`, never while one runs nor without the entries; the review window's strip
+reads the tuner's `rude_tune_history.jsonl` (beside the answers) for a tick per earlier tune, with its tested error,
+and has a Tune & reroll now button. Reviews ask only about one-part words: no hyphenated or spaced
 entries, contractions kept (asked for, like the word list).
 
 To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
