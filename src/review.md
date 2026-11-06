@@ -35,7 +35,7 @@ The module docstring has the details; this page is the map.
 - Back and Enter walk the file one word at a time (an answered word shows as answered). A history of words
   answered this time made Enter after Back jump to the first unanswered word, so Back no longer walked straight
   (reported).
-- The Wiktionary button follows App.online (App._watch_online calls `show_online`); tests never go online.
+- The Wiktionary icon (top right of the word; no button or key since DT-6, asked for) follows App.online (App._watch_online calls `show_online`); tests never go online.
 - The answers file is rewritten whole through a `.part` file on every answer (a kind key or click, the whole word)
   and on Enter, so Back, quitting or a crash never loses a change (saving only on Enter lost a change before Back:
   reported).

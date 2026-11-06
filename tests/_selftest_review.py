@@ -99,15 +99,16 @@ app.keys.set("review_whole", ["z"]); app.apply_keys(); pump(1)
 assert rv.whole_btn.hint == "Z" and rv.whole is True
 key(rv, "s"); assert rv.whole is True
 key(rv, "z"); assert rv.whole is False
-# Open in Wiktionary (W): greyed out offline; online it opens the word's page (the browser faked)
+# the Wiktionary icon (asked for: like the card's, no button or key): only online; a click opens the word's page
 opened = []
 app.open_page = opened.append
-assert rv.wikt_btn.cget("hint") == "W" and not rv.wikt_btn.enabled
-key(rv, "w"); assert opened == []
-app.online.online = True; rv.show_online(); pump(1)
-assert rv.wikt_btn.enabled
-key(rv, "w"); assert len(opened) == 1 and "/shitload#English" in opened[0]
-app.online.online = False; rv.show_online()
+assert not rv.wikt_link.winfo_ismapped() and key(rv, "w") is None and opened == []
+app.online.online = True; rv.show_online(); pump(2)
+assert rv.wikt_link.winfo_ismapped()
+assert rv.wikt_link.winfo_rootx() > rv.word.winfo_rootx() + rv.word.winfo_width()     # (right of the word)
+rv.wikt_link.command(); assert len(opened) == 1 and "/shitload#English" in opened[0]
+app.online.online = False; rv.show_online(); pump(2)
+assert not rv.wikt_link.winfo_ismapped()
 # Keyboard shortcuts shows the review's keys while it is open
 d = app.edit_keys(); pump(2)
 assert ("review_next", 0) in d.caps
@@ -165,7 +166,7 @@ rv = app.open_review(path); pump(4)
 n, past, nxt = rv.strip_marks()
 assert past == [(50, 29.0, True), (100, 29.0, False)] and nxt == 150 and n == len(rv.answers)
 texts = [rv.strip.itemcget(i, "text") for i in rv.strip.find_all() if rv.strip.type(i) == "text"]
-assert "29% error" in texts and "50" in texts and f"next tune in {150 - n}" in texts, texts
+assert "29% error" in texts and "50" in texts and rv.next_tune.cget("text") == f"next tune in {150 - n}", texts
 assert rv.tune_btn.cget("text") == "Tune & reroll now"
 rv.close(); pump(1)
 root.destroy()

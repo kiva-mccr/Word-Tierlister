@@ -52,7 +52,6 @@ ACTIONS = (
     ("review_up", "review", "Previous meaning", ["Up"]),
     ("review_down", "review", "Next meaning", ["Down"]),
     ("review_whole", "review", "Smear the whole word", ["s"]),
-    ("review_wiktionary", "review", "Open in Wiktionary", ["w"]),
     ("review_next", "review", "Next word", ["Return"]),
     ("review_back", "review", "Back one word", ["BackSpace"]),
 )

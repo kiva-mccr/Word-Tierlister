@@ -2204,7 +2204,8 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           rude_tune_history.jsonl with its tested error (kept: its best, else today's; lower is better), "next tune
 #           in N", and a "Tune & reroll now" button. widgets.SmearWordButton: the word itself, smeared on the S
 #           tier's colour when yes, plain when no, a short bounce on a change. _selftest_devtools, _selftest_review,
-#           _selftest_widgets2.
+#           _selftest_widgets2. Then (asked for): the review's Open in Wiktionary button and its W key gave way to
+#           the definitions' small link icon at the top right of the word, shown only while online.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,
