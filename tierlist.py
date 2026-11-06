@@ -2210,6 +2210,13 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           tier's colour when yes, plain when no, a short bounce on a change. _selftest_devtools, _selftest_review,
 #           _selftest_widgets2. Then (asked for): the review's Open in Wiktionary button and its W key gave way to
 #           the definitions' small link icon at the top right of the word, shown only while online.
+# [x] DT-7 Asked for: "no cancel button on the bubbles ... an x on hover" (picked from mock-ups in project files
+#           dev-bubbles/: A, the ring turns into the stop). DevBubble(stop=(note, command)): while a tool runs, the ring
+#           under the pointer is a red cross on pink (smooth.ICONS "stop"), its hover note says what stopping does,
+#           a click stops it; the bubble keeps its size. App.stop_review_tool: the tuner (no reroll, its numbers
+#           thrown away) or the review words being made (_run_tools keeps the running process; its half-written
+#           file removed, App._drop_partial). Tools start in a process group of their own (_OWN_GROUP) and
+#           app.stop_tree stops the group (taskkill /T on Windows). _selftest_devtools.py.
 # [x] F-36 Reported: the smearing lags. F-32/F-33 had made a card's frame ~95 text items, each tracked for overhang.
 #           Now: the layout is worked out once per text (_smear_layout), copies are plain items under one guard,
 #           a copy is the line less its last (moved right) or first (moved left) letter, so one item a copy again,

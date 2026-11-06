@@ -71,6 +71,23 @@ b._set_hover("second")
 assert [b.itemcget(i, "fill") for i in b.find_all() if b.type(i) == "text"] == [PALETTE["muted"], PALETTE["text"]]
 b.destroy()
 
+# ---- the stop button: a running tool's ring turns into a red cross under the pointer (asked for, picked: A) --------
+stops, now = [], [None]
+b = DevBubble(root, "Review words", lambda: left.append(2), progress=lambda: now[0],
+              second=("Tune & reroll", lambda: right.append(2)), stop=(lambda: "Stop: gone", lambda: stops.append(1)))
+b.pack(); pump(3)
+assert b._half(2) == "first"                                        # (not running: the ring is the left half)
+b.invoke("stop"); assert not stops                                  # (nothing to stop)
+now[0] = (0.5, "Round 6 of up to 12", None); pump(3)
+w1 = int(b.cget("width"))
+assert b._ring_end and b._half(2) == "stop" and b._half(int(b._ring_end) + 4) == "first"
+b._set_hover("stop")
+assert b._note() == "Stop: gone" and int(b.cget("width")) == w1      # (never a size of its own)
+assert [b.itemcget(i, "fill") for i in b.find_all() if b.type(i) == "text"] == [PALETTE["muted"]] * 2
+b.invoke(b._half(2)); assert stops == [1] and left == [1, 1] and right == [1]
+b._set_hover("first"); assert b._note() == "Round 6 of up to 12"
+b.destroy()
+
 
 def toast():
     return app.toast.cget("text")
@@ -175,6 +192,9 @@ class FakeTuner:                   # (prints its rounds on a pipe the test write
     def poll(self):
         return self.code
 
+    def terminate(self):           # (the stop button; a fake has no process group)
+        self.end(-15)
+
 
 rerolled = []
 reroll = lambda c, cwd: rerolled.append(c) or (0, "300 new words to review")
@@ -235,6 +255,46 @@ app.anim.reduce_motion = True
 job["done"] = (0, "300 new words to review"); app._watch_tool(job)
 assert app.dev_progress("review") is None
 d.dlg.close()
+
+# ---- the stop button: the tuner (its numbers thrown away, no reroll), or the review words being made ---------------
+assert app.stop_review_tool() is None                               # (nothing running)
+t3, rerolled = FakeTuner(), []
+assert app.tune_reroll(None, start=lambda c: t3, run=reroll)
+t3.say("Round 2 of up to 12\n")
+assert app.stop_note().startswith("Stop: the tuner closes")
+assert app.stop_review_tool() == "tuner" and t3.code == -15
+wait_for(lambda: app._tuner_job is None)
+pump(10)
+assert not rerolled and toast() == "Stopped: the tuner's numbers were thrown away"
+# a real tool on a worker thread: stopped with what it started; its half-written file removed
+with open(mr, "w", encoding="utf-8") as f:
+    f.write("import os, subprocess, sys, time\n"
+            "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+            "open(sys.argv[3] + '.pid', 'w').write(str(child.pid))\n"
+            "open(sys.argv[3] + '.part', 'w').write('half')\n"
+            "print('Picking 300 words', flush=True)\n"
+            "time.sleep(60)\n")
+assert app.make_review_words(None) and app.stop_note() == "Stop: the review words stay as they were"
+wait_for(lambda: os.path.exists(fresh + ".part") and app._tool_job.get("note"), 20)
+assert app.dev_progress("review") == (None, "Picking 300 words", None)
+assert app.stop_review_tool() == "tools"
+wait_for(lambda: app._tool_job is None, 20)
+assert toast() == "Stopped: the review words are as they were"
+assert not os.path.exists(fresh + ".part") and os.path.exists(fresh)          # (the old review file kept)
+if os.name != "nt":                                                  # (what it started went with it)
+    child = int(open(fresh + ".pid").read())
+    def gone():
+        try:
+            os.kill(child, 0)
+        except OSError:
+            return True
+        try:                                                         # (a zombie no one has reaped yet is gone too)
+            return open(f"/proc/{child}/stat").read().split(")")[1].split()[0] == "Z"
+        except OSError:
+            return True
+    wait_for(gone, 10)
+os.remove(fresh + ".pid")
+open(mr, "w").close()
 
 # ---- every 50 new answers, Tune & reroll starts by itself (DT-6, asked for; still a click away any time) ----------
 s.set_meta("tune_base", "")
