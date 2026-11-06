@@ -39,13 +39,16 @@ The module docstring has the details; this page is the map.
 - `write_misses`: The misses as text: one meaning a line, the word, your kind, the rules' kind, its definition.
 - `changed`: [(param, from, to)] of the numbers that moved (factors shown as their effect: "TOPIC_POINTS * clinical").
 - `read_answers`: The answers file's {word: {"kinds": {meaning key: kind}, "whole": bool}} (measure_rudeness.read_answers).
-- `Tuning`: The search: every part's rounds in the processes, one round at a time; events go to `events` (a queue) as ("round", n, {part: (train error, test error)}, average test...
+- `Tuning`: The search: every part's rounds in the processes, one round at a time; events go to `events` (a queue) as ("sweep", {round, errors: {part: (train error, test error)},...
   - methods: run, pause, resume, stop
+- `noise`: The average's noise: the standard error of the parts' tested errors (points; none from one part).
+- `best_round`: The round Keep takes (asked for): the earliest whose average is within the noise of the lowest (a win smaller than the noise is likely luck, and an earlier round has...
+- `patience`: Rounds without a real gain before the search stops: longer the noisier the average (asked for).
 - `tested_parts`: The parts that hold at least one answered word (in order): only these are tested and averaged.
 - `precision_recall`: {class: (precision, recall) in %} from a tally.
 - `doubled`: The guard's names that cover more than DOUBLED times the words they do now (from none: any).
 - `TuneWindow`: The window (the mock-up agreed): the error round by round, each kind before and after, the numbers changed, the guard, the meanings still wrong; Pause, Discard, Keep...
-  - methods: chart_size, show_bar, round_share, start, handle, listen, close_box, show_again, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
+  - methods: chart_size, show_bar, round_share, start, handle, sweep, listen, close_box, show_again, check_best, draw, draw_note, draw_kinds, draw_changes, draw_guard, draw_misses, pause, keep, discard, close
 - `pool_for_guard`: The guard's process (or this one: 0).
 - `main`: The command line: the window (it reads the entries and starts the search itself).
 - `load`: Read the entries in a process of its own (reading them in the window's process froze it for seconds at a time); its progress and its result come back as the window's...
@@ -64,6 +67,8 @@ The module docstring has the details; this page is the map.
 - The error moves in jumps (a small step often changes no meaning's kind): a step that helps neither way is tried JUMP times as far before it halves.
 - Keep writes each number where it stands (comments kept) and runs the new file's text to check every number landed, then bumps RUDENESS_VERSION; read the diff before committing.
 - The tuning processes never load WordNet (its matches are worked out first, `wordnet_tables`); the guard's process does, once.
+- The window is one size from the start (asked for): every row is built empty in `_build_slots` and only filled in place (`draw_kinds`, `draw_changes`, `draw_guard`, `draw_misses` set text, never add or remove widgets), the info and note keep two lines, and the window's size is set once. A round's results come as one "sweep" event and show together; the guard's first count is held for round 0's sweep.
+- The stop allows for noise (asked for): a gain counts only when it beats the last real gain by more than the parts' standard error (`noise`), the wait grows with it (`patience`), and Keep's round is the earliest within the noise of the lowest (`best_round`, picked by the user); its misses come from that round's numbers, not the latest.
 
 ## Changing it
 

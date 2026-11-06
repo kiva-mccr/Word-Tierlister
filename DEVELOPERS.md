@@ -648,6 +648,10 @@ Keep writes the best numbers into `src/rudeness.py` and bumps `RUDENESS_VERSION`
 commit. It is still rules only: nothing in the program reads the answers. A bar under the answers line shows the
 reading (share and time left) and then each round (parts done, time left). The entries are read in a process of their
 own and the helper processes run at a lower priority, so the window stays smooth; the chart grows with the window.
+The window opens with every row in place (empty) and keeps one size; each round's results show at once. The noise of
+the average (the parts' standard error, a band on the chart) decides the stop: a round is a real gain only by more
+than it, and the search waits 3 rounds plus one per 0.5 points of noise (15 at most) before stopping; Keep takes the
+earliest round within the noise of the lowest.
 
 ```mermaid
 flowchart TB
