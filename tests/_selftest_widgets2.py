@@ -219,7 +219,15 @@ dm.items = items + [("command", "More", lambda: None, None)]
 dm.open(50, 60); update()
 assert dm.win is not kept and not kept.winfo_exists() and len(dm._rows) == 4
 dm.close(); dm.items = items
-dm.prepare(); prepared = dm.win; dm.open(50, 60); update()
+warmed = []
+real_warm = DropMenu._warm
+DropMenu._warm = lambda self: warmed.append(self) or real_warm(self)
+dm.prepare(); prepared = dm.win
+DropMenu._warm = real_warm
+# (F-56: laid out, with the check mark's font looked up, while hidden, before any open)
+assert warmed == [dm] and prepared.winfo_reqwidth() > 1 and prepared.wm_state() == "withdrawn"
+assert not prepared.winfo_viewable()
+dm.open(50, 60); update()
 assert dm.win is prepared and dm.is_open()                     # (prepare: built ahead, hidden, for a quick open)
 assert dm.win.winfo_viewable() and dm.win.winfo_rootx() >= 0   # (open: shown again, on screen)
 dm.close(); update()
