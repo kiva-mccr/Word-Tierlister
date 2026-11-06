@@ -783,6 +783,10 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           Then (reported: the chart super squished on a 1200 px screen; approved from a mock-up): kinds, numbers
 #           changed and the guard side by side, the chart the height the rest leaves, the rounds axis to the rounds
 #           run plus those it may still wait, the % numbers thinned on a short chart.
+#           Then (asked for: "modern methods"; trialled on stand-in answers, picked): each change pays a pull
+#           towards today's numbers (random kicks were tried and dropped: nothing better, 2.5x the time); every tune is
+#           remembered (rude_tune_history.jsonl) and drawn as a tick at its words, before down to after (approved
+#           from a mock-up); --start-hidden for the program's automatic tune.
 # [x] OB-11 Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
 #           most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
 #           a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
@@ -2066,6 +2070,11 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
+# [x] F-55 Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
+#           F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
+#           tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between
+#           tries. Now a shape with nothing on screen is painted at once; only shapes already showing wait for the
+#           size kept. A zoom takes as long as before (~0.1 s here). Approved before building ("go ahead").
 # [x] F-54 Reported (Fedora, GNOME): sometimes a top menu did not open on a click; its button stayed lit after the
 #           pointer left, a second click unlit it and a third opened it. The program thought the menu open, but F-51's
 #           closed menu, parked mapped off-screen, was sometimes never moved back on screen by GNOME. Picked by the
