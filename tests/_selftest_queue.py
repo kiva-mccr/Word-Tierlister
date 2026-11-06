@@ -154,6 +154,7 @@ assert u.get_word("table")["tier"] == 4 and u.get_word("table")["qkey"] == qk
 
 # ---- 8. paging beyond 1500 and sort options ------------------------------------------------------------------------------------
 p = fresh("page.db", 9000)
+p.db.execute("PRAGMA synchronous=OFF")   # (7,000 single placements: a disk flush each took ~4 min on GitHub's Windows)
 p.reshuffle(seed=1)
 for i in range(0, 7000):
     p.place(f"w{i:07d}", i % 6)
