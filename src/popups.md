@@ -3,7 +3,7 @@
 The notes that float over the page: `Toast` (a message that fades in and out) and `Tooltip` (a hover note).
 
 - **Uses:** `sizing`, `smooth`, `theme`, `ui_motion`
-- **Used by:** `app`, `browser`, `buttons`, `dealing`, `syncdialog`
+- **Used by:** `app`, `browser`, `buttons`, `dealing`, `review`, `syncdialog`
 - **Tests:** `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

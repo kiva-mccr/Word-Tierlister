@@ -54,6 +54,7 @@ ACTIONS = (
     ("review_whole", "review", "Smear the whole word", ["s"]),
     ("review_next", "review", "Next word", ["Return"]),
     ("review_back", "review", "Back one word", ["BackSpace"]),
+    ("review_find", "review", "Find a word", ["slash"]),
 )
 MAX_KEYS = 3
 GROUP_OF = {a: g for a, g, _l, _k in ACTIONS}

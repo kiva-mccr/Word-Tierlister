@@ -15,6 +15,11 @@ The word's Wiktionary page opens from a small icon at the top right of the word 
 reached; asked for: like the card's icon, no button or key).
     Backspace    back one word in the file, as it was answered (a straight walk: Back then Enter returns to where
                  it was; a history of words answered made Enter after Back skip ahead: reported)
+    /            find a word in the file (or the magnifier at the word's top left: asked for, like the card's look-up,
+                 UI-51): typing goes over the word, the words that start with it (then those that hold it) drop
+                 down under it with their answers, Up / Down and Enter (or a click) go to one, Escape goes back.
+                 Enter on a word found this way returns to the word the search started from ("Back to ..." on
+                 the Next button); Back walks the file from the found word as usual, and forgets the return.
 
 The answers go to the answers file beside the review file (constants.review_answers_path), rewritten on every
 answer (a kind, the whole word) and on Enter, so stopping any time loses nothing and starting again carries on at the first word not answered. Nothing is
@@ -36,10 +41,13 @@ from theme import PALETTE, TIER_COLORS
 from ui_style import set_icon, show_drawn
 from buttons import LinkButton, RoundButton, SmearWordButton
 from drawer import WIKTIONARY_NOTE
+from popups import Tooltip
 
 KINDS = (("clean", "Not rude"), ("expletive", "Expletive"), ("sexual", "Sexual"), ("slur", "Slur"))   # (OB-12)
 KIND_NAMES = dict(KINDS)
 WRAP_CHARS = 64           # a meaning wraps at this many average characters
+FIND_SHOWN = 8            # the most words the search lists under the word
+FIND_HINT = "Up / Down: pick  \u00b7  Enter: go to it  \u00b7  Esc: back"
 HISTORY_FILE = "rude_tune_history.jsonl"   # (tools/tune_rudeness.py writes a line per finished tune, beside the answers)
 
 
@@ -106,6 +114,24 @@ def read_history(answers_path):
     return out
 
 
+def find_words(order, typed, limit=FIND_SHOWN):
+    """The words of `order` (the file's, commonest first) that start with `typed`, then those that only hold it,
+    at most `limit`; case is ignored. Nothing for nothing typed."""
+    t = typed.strip().lower()
+    if not t:
+        return []
+    starts = [w for w in order if w.lower().startswith(t)][:limit]
+    if len(starts) < limit:
+        starts += [w for w in order if t in w.lower() and not w.lower().startswith(t)][:limit - len(starts)]
+    return starts
+
+
+def answer_kinds(answer):
+    """The kinds an answer gave its meanings, rude ones in KINDS order, or ["clean"] when none is rude."""
+    given = set(answer.get("kinds", []))
+    return [k for k, _n in KINDS if k != "clean" and k in given] or ["clean"]
+
+
 def write_answers(path, answers, order):
     """Write every answer to `path` (the review's words in its order, then any others: answers from an earlier,
     smaller review are kept), through a temporary file, so a crash mid-write never leaves half a file."""
@@ -129,6 +155,8 @@ class RudeReview:
         self.answers = read_answers(self.answers_path)
         self.i = next((n for n, it in enumerate(self.items) if it["w"] not in self.answers), len(self.items))
         self.sel, self.kinds, self.whole = 0, [], False
+        self.typing, self.typed, self.found, self.found_sel = False, "", [], 0
+        self.return_to = None                    # (the word a search started from: Enter on the found one goes back)
         bg = PALETTE["bg"]
         self.win = tk.Toplevel(app.root)
         self.win.withdraw()                      # (shown once built and placed)
@@ -164,6 +192,10 @@ class RudeReview:
         size = max(12, int(font("heading").metrics("linespace") * 0.6))   # (the word's Wiktionary page, like the
         self.wikt_link = LinkButton(head, "external", self.open_wiktionary, note=WIKTIONARY_NOTE, size=size, bg=bg)
         self._wikt_shown = False                                         # card's icon: only while online)
+        self.find_link = LinkButton(head, "search", self.start_find, size=size, bg=bg)   # (its mirror on the left)
+        self.find_link.place(relx=0.0, rely=0.0, anchor="nw")
+        Tooltip(self.find_link, lambda e: self._find_note())
+        self.drop = tk.Frame(box, bg=PALETTE["surface"], highlightthickness=1, highlightbackground=PALETTE["border"])
         self.why = tk.Label(box, font=body, bg=bg, fg=PALETTE["muted"])
         self.why.pack()
         self.rows = tk.Frame(box, bg=bg)
@@ -208,6 +240,7 @@ class RudeReview:
 
     def _load(self):
         """Show the current word: its earlier answers if it has them, else the rules' guesses."""
+        self.end_find()
         it = self.item
         if it is not None:
             a = self.answers.get(it["w"])
@@ -230,6 +263,9 @@ class RudeReview:
         self._draw_strip()
         if self.back_btn.enabled != (self.i > 0):
             self.back_btn.set_enabled(self.i > 0)
+        nxt = "Next word" if self.return_to is None else f"Back to {self.items[self.return_to]['w']}"
+        if self.next_btn.cget("text") != nxt:
+            self.next_btn.config(text=nxt)
         self.show_online()
         if it is None:
             self.word.config(text="Every word is answered" if total else "Nothing to review")
@@ -369,6 +405,10 @@ class RudeReview:
         if self.item is None:
             return
         self._save()
+        if self.return_to is not None:           # a word found by the search: back to where the search started
+            self.i, self.return_to = self.return_to, None
+            self._load()
+            return
         self.i += 1                              # the next word in the file (shown as answered if it was)
         if self.i >= len(self.items):            # past the last: any word skipped earlier, else the end
             self.i = next((n for n in range(len(self.items)) if self.items[n]["w"] not in self.answers),
@@ -390,6 +430,7 @@ class RudeReview:
         """Back one word in the file, shown as it was answered."""
         if self.i > 0:
             self.i -= 1
+            self.return_to = None                # (walking the file again from the found word)
             self._load()
 
     def open_wiktionary(self):
@@ -408,6 +449,113 @@ class RudeReview:
             else:
                 self.wikt_link.place_forget()
 
+    # ---- finding a word ---------------------------------------------------------------------------------------
+    def _find_note(self):
+        """The magnifier's hover note, with its key."""
+        if self.typing:
+            return "Back to the word"
+        keys = self.app.keys.display("review_find")
+        return "Find a word" + (f" ({keys[0]})" if keys else "")
+
+    def start_find(self):
+        """The magnifier (or its key): type over the word to find one in the file; again, it goes back."""
+        if self.typing:
+            self.end_find()
+            self._render(new=True)
+            return
+        if not self.items:
+            return
+        self.typing, self.typed, self.found, self.found_sel = True, "", [], 0
+        self._show_find()
+
+    def end_find(self):
+        """Stop typing (the word comes back with the next render)."""
+        if self.typing:
+            self.typing = False
+            self.drop.place_forget()
+            self.word.config(fg=PALETTE["text"])
+
+    def find_key(self, e):
+        """A key while typing: letters add, Backspace takes one off, Up / Down pick, Enter goes, Escape goes back."""
+        ks, ch = e.keysym, getattr(e, "char", "") or ""
+        if ks in ("Return", "KP_Enter"):
+            if self.found:
+                self.go_to(self.found[self.found_sel])
+            return
+        if ks == "Escape":
+            self.end_find()
+            self._render(new=True)
+            return
+        if ks in ("Up", "Down"):
+            if self.found:
+                self.found_sel = (self.found_sel + (1 if ks == "Down" else -1)) % len(self.found)
+                self._draw_drop()
+            return
+        if ks == "BackSpace":
+            self.typed = self.typed[:-1]
+        elif len(ch) == 1 and ch.isprintable() and len(self.typed) < 60 and (ch != " " or self.typed):
+            self.typed += ch
+        else:
+            return
+        self.found, self.found_sel = find_words(self.order, self.typed), 0
+        self._show_find()
+
+    def go_to(self, word):
+        """Show `word` from the file; Enter on it returns to the word the search started from."""
+        n = self.order.index(word)
+        if n != self.i:
+            if self.return_to is None and self.item is not None:
+                self.return_to = self.i
+            elif self.return_to == n:            # (found the word the search started from: just back there)
+                self.return_to = None
+            self.i = n
+        self._load()
+
+    def _show_find(self):
+        """The typed letters over the word (a lilac caret after them), the keys under it, the matches below."""
+        if self.typed:
+            self.word.config(text=self.typed + "\u2009|", fg=PALETTE["accent"])
+        else:
+            self.word.config(text="type a word\u2009|", fg=PALETTE["muted"])
+        self.why.config(text=FIND_HINT)
+        self._draw_drop()
+
+    def _draw_drop(self):
+        """The words found, under the word, each with its answer (the kinds given) or "not answered yet"."""
+        for w in self.drop.winfo_children():
+            w.destroy()
+        if not self.typed:
+            self.drop.place_forget()
+            return
+        body, small = font("body"), font("small")
+        row_h = body.metrics("linespace") + 10
+        self.win.update_idletasks()
+        y = self.word.master.winfo_y() + self.word.winfo_height() + 2
+        room = max(1, (self.box.winfo_height() - y - 8) // row_h)
+        shown = self.found[:room]
+        if not shown:
+            tk.Label(self.drop, text="No word in the review matches", font=small, bg=PALETTE["surface"],
+                     fg=PALETTE["muted"], padx=12, pady=6).pack(fill="x")
+        for n, w in enumerate(shown):
+            fill = PALETTE["surface2"] if n == self.found_sel else PALETTE["surface"]
+            row = tk.Frame(self.drop, bg=fill, padx=12, pady=4, cursor="hand2")
+            row.pack(fill="x")
+            parts = [row, tk.Label(row, text=w, font=body, bg=fill, fg=PALETTE["text"])]
+            parts[-1].pack(side="left")
+            a = self.answers.get(w)
+            if a:
+                for k in reversed(answer_kinds(a)):
+                    chip = RoundButton(row, KIND_NAMES[k], lambda w=w: self.go_to(w), bg=kind_colour(k), font=small,
+                                       padx=8, pady=1, radius=9, canvas_bg=fill, animator=self.app.anim)
+                    chip.pack(side="right", padx=(4, 0))
+            parts.append(tk.Label(row, text="answered" if a else "not answered yet", font=small, bg=fill,
+                                  fg=PALETTE["muted"]))
+            parts[-1].pack(side="right", padx=(0, 4))
+            for p in parts:
+                p.bind("<Button-1>", lambda e, w=w: self.go_to(w))
+        self.drop.place(x=self.box.winfo_width() // 2, y=y, anchor="n", width=int(self.box.winfo_width() * 0.6))
+        self.drop.lift()
+
     # ---- keys -----------------------------------------------------------------------------------------------
     def apply_keys(self):
         """Show the keymap's keys on the buttons (App.apply_keys calls this after a change)."""
@@ -420,7 +568,10 @@ class RudeReview:
         self.back_btn.config(hint=hint("review_back"))
 
     def on_key(self, e):
-        """A key press: what the keymap's "review" group says it does."""
+        """A key press: what the keymap's "review" group says it does (while finding a word, the typing)."""
+        if self.typing:
+            self.find_key(e)
+            return "break"
         spec = spec_of(e, self._ws)
         action = self.app.keys.lookup("review", spec) if spec else None
         if action is None or not action.startswith("review_"):
@@ -430,7 +581,8 @@ class RudeReview:
             self.set_kind(kind)
         else:
             {"review_up": lambda: self.select(self.sel - 1), "review_down": lambda: self.select(self.sel + 1),
-             "review_whole": self.toggle_whole, "review_next": self.next_word, "review_back": self.back}[action]()
+             "review_whole": self.toggle_whole, "review_next": self.next_word, "review_back": self.back,
+             "review_find": self.start_find}[action]()
         return "break"
 
     def alive(self):
