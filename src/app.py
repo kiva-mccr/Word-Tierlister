@@ -39,7 +39,7 @@ from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
-from review import RudeReview, describe_score, read_answers, read_review, score_guesses
+from review import RudeReview
 from syncdialog import AutoSync, SyncDialog
 import standalone
 import framesync
@@ -137,7 +137,7 @@ def _follow_tuner(proc, job):
                 job["frac"] = int(m.group(1)) / max(1, int(m.group(2)))
                 job["note"] = f"Round {m.group(1)} of up to {m.group(2)}"
             elif line.startswith("Done"):
-                job["over"] = True
+                job["over"] = job["tuned"] = True        # (tuned to the end: the reroll follows once it closes)
             elif line.startswith("Hidden"):       # (its close box while tuning: only hidden; show_tuner brings it back)
                 job["hidden"] = True
     except (OSError, ValueError):
@@ -2357,17 +2357,6 @@ class App:
             dlg.close()
         return self.open_review(path)
 
-    def score_rules(self, dlg=None, ask=None):
-        """The "Score the rules" bubble: the answers so far against the rules' guesses in the review file
-        (review.score_guesses: the rules as they were when the file was made). Returns the text shown."""
-        parent = dlg.win if dlg else self.root
-        path = self.pick_review_file(parent, ask)
-        if not path:
-            return None
-        text = describe_score(score_guesses(read_review(path), read_answers(review_answers_path(path))))
-        show_message("Score the rules", "The rules against your answers", text, parent=parent)
-        return text
-
     TOOLS_ROOT = standalone.ROOT          # (the source folder whose tools/ the developer bubbles run; tests point it
                                           # elsewhere)
 
@@ -2384,21 +2373,24 @@ class App:
 
     def dev_progress(self, name):
         """How a developer tool that keeps running is doing, for its bubble's ring: None (not running) or
-        (fraction or None, the hover note). "review words": Make review words (no fraction: it cannot tell how far;
-        the note is its step and last line); "tune": the tuner's rounds, until it is done or closed."""
-        if name == "review words":
-            job = getattr(self, "_tool_job", None)
-            return None if job is None else (None, job.get("note") or "Making review words")
-        job = getattr(self, "_tuner_job", None)
+        (fraction or None, the hover note, the split bubble's right half or None). "review": the Review words
+        bubble: Tune & reroll's two steps (the tuner's rounds, then Make review words: no fraction, it cannot tell
+        how far), or the first review words being made."""
+        tuner = getattr(self, "_tuner_job", None)
+        if tuner is not None and tuner["proc"].poll() is None:
+            if tuner.get("over"):                 # (done: waiting for Keep or Discard in its window)
+                return 1.0, "Step 1 of 2: tuned; Keep or Discard in the tuner's window", "Keep or Discard · step 1 of 2"
+            note = tuner.get("note") or "The tuner is reading Wiktionary's entries"
+            if tuner.get("hidden"):
+                note += "  ·  click Tune & reroll to bring its window back"
+            return tuner.get("frac") or 0.0, "Step 1 of 2: " + note, "Tuning · step 1 of 2"
+        job = getattr(self, "_tool_job", None)
         if job is None:
             return None
-        if job["proc"].poll() is not None:
-            self._tuner_job = None
-            return None
-        if job.get("over"):                       # (done: its window may stay open for Keep; show_tuner still reaches it)
-            return None
-        note = job.get("note") or "The tuner is reading Wiktionary's entries"
-        return job.get("frac") or 0.0, note + ("  ·  click to bring its window back" if job.get("hidden") else "")
+        note = job.get("note") or "Making review words"
+        if job.get("then") == "reroll":
+            return None, "Step 2 of 2: " + note, "New words · step 2 of 2"
+        return None, note, None
 
     def show_tuner(self):
         """Bring the tuner's window back (asked for: closed while it tunes, a click on its bubble opens it again; once
@@ -2414,13 +2406,59 @@ class App:
         job["hidden"] = False
         return True
 
-    def make_review_words(self, dlg=None, ask=None, run=None):
-        """The "Make review words" bubble (OB-11): tools/measure_rudeness.py in the background, the review file
+    def review_words(self, dlg=None, ask=None, run=None):
+        """The Review words bubble's left half (asked for: one bubble for the review words): the review
+        (review_rude); with no review file yet, the first review words are made (make_review_words) and the review
+        opens on them. Returns what it started (the review, the commands) or None."""
+        if getattr(self, "_tool_job", None) and self._tool_job.get("then") == "open":
+            self.flash("Still making the first review words", kind="info")
+            return None
+        if os.path.exists(self.review_file()):
+            return self.review_rude(dlg)
+        return self.make_review_words(dlg, ask, run, then="open")
+
+    def tune_reroll(self, dlg=None, ask=None, start=None, run=None):
+        """The Review words bubble's right half, Tune & reroll (asked for: the tools run in sequence): the tuner
+        (tune_rules); once it has tuned to the end and its window is closed (Keep or Discard), new review words
+        (make_review_words, then="reroll"). While it runs, a click brings the tuner's window back (or says the new
+        words are still being made). `run`: for the reroll (tests). Returns the tuner's command, or None."""
+        if getattr(self, "_tool_job", None):
+            self.flash("Still making review words", kind="info")
+            return None
+        if self.show_tuner():                     # (one tuner at a time: the open one is brought forward)
+            if dlg is not None:
+                dlg.close()
+            return None
+        cmd = self.tune_rules(dlg, ask, start)
+        job = getattr(self, "_tuner_job", None)
+        if cmd and job is not None:
+            job["run"] = run
+            self._watch_tuner(job)
+        return cmd
+
+    def _watch_tuner(self, job):
+        """Tune & reroll's steps (polled: the tuner is read on a worker thread): a toast when the tuner is done,
+        then, once its process has ended after tuning to the end, the reroll; a tuner closed mid-way ends it."""
+        if job.get("tuned") and not job.get("said"):
+            job["said"] = True
+            self.flash("The tuner is done: Keep or Discard its numbers in its window", kind="ok", ms=6000)
+        if job["proc"].poll() is None:
+            self.root.after(300, lambda: self._watch_tuner(job))
+            return
+        if getattr(self, "_tuner_job", None) is job:
+            self._tuner_job = None
+        if job.get("tuned"):
+            self.make_review_words(None, run=job.get("run"), then="reroll")
+        elif job["proc"].poll():
+            self.flash("The tuner stopped before it was done", kind="warn", ms=6000)
+
+    def make_review_words(self, dlg=None, ask=None, run=None, then=None):
+        """Make review words (OB-11): tools/measure_rudeness.py in the background, the review file
         next to the save (review_file): `sample` (1,500 words) when there is none yet, else `next` (the answered
         words kept, the rest replaced by 300 picked from the answers' misses; an open review opens again on them). The Wiktionary entries it reads (rudeness_entries.jsonl in the source folder) are fetched
         first when missing, after asking (`ask(): yes?`, tests). A toast says when it starts and what it made.
-        `run(commands) -> (exit code, its last line)` runs them, on a worker thread (tests: at once). Returns the
-        commands, or None."""
+        `run(commands) -> (exit code, its last line)` runs them, on a worker thread (tests: at once). `then`: "open"
+        (the review opens on them) or "reroll" (the end of Tune & reroll: its toast). Returns the commands, or None."""
         parent = dlg.win if dlg else self.root
         tool = self._tool("measure_rudeness.py", parent)
         if tool is None:
@@ -2443,7 +2481,7 @@ class App:
                     [sys.executable, tool, "next", "--review", path])
         self.store.set_meta("review_file", os.path.abspath(path))
         self.flash(f"Making {'1,500' if first else '300 new'} review words: a few minutes", kind="info", ms=5000)
-        self._tool_job = {"done": None, "path": path, "note": None}
+        self._tool_job = {"done": None, "path": path, "note": None, "then": then}
         job = self._tool_job
 
         def line(step, steps, text):
@@ -2469,14 +2507,18 @@ class App:
             if self.review is not None and self.review.alive() and self.review_path == job["path"]:
                 self.review.close()               # (the file was refreshed under it: open it again on the new words,
                 self.open_review(job["path"])     # its answers saved already)
-            self.flash(last or "Review words made", kind="ok", ms=6000)
+            elif job.get("then") == "open" and os.path.exists(job["path"]):
+                self.open_review(job["path"])
+            done = last or "review words made"
+            self.flash(f"Tune & reroll is done: {done}" if job.get("then") == "reroll" else done, kind="ok", ms=6000)
         else:
-            self.flash(f"Making review words failed: {last}", kind="warn", ms=8000)
+            self.flash(f"{'Tune & reroll' if job.get('then') == 'reroll' else 'Making review words'} failed: {last}",
+                       kind="warn", ms=8000)
 
     def tune_rules(self, dlg=None, ask=None, start=None):
-        """The "Tune the rules" bubble (OB-10): tools/tune_rudeness.py's window, a program of its own, on the review
+        """Tune the rules (OB-10; Tune & reroll's first step): tools/tune_rudeness.py's window, a program of its own, on the review
         file and its answers (asked for when there is none next to the save). It needs the Wiktionary entries
-        (Make review words reads them) and some answers. `start(command)`: how to start it (tests). Returns the
+        (making the first review words reads them) and some answers. `start(command)`: how to start it (tests). Returns the
         command, or None."""
         parent = dlg.win if dlg else self.root
         tool = self._tool("tune_rudeness.py", parent)
@@ -2489,12 +2531,8 @@ class App:
                          "tuned against your answers.", parent=parent)
             return None
         if not os.path.exists(entries):
-            show_message("Tune the rules", "Wiktionary's entries are missing", "Make review words reads them "
-                         "first (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
-            return None
-        if self.show_tuner():                     # (one tuner at a time: the open one is brought forward)
-            if dlg is not None:
-                dlg.close()
+            show_message("Tune the rules", "Wiktionary's entries are missing", "Review words reads them when "
+                         "it makes the first review words (about 3 GB, once): the tuner scores every word they hold.", parent=parent)
             return None
         cmd = [sys.executable, tool, "--review", path, "--entries", entries, "--from-program"]
         proc = (start or (lambda c: subprocess.Popen(c, cwd=self.TOOLS_ROOT, env=standalone.clean_env(),

@@ -96,53 +96,6 @@ def write_answers(path, answers, order):
     os.replace(tmp, path)
 
 
-def score_guesses(items, answers):
-    """The rules against the answers so far (the "Score the rules" bubble), from the review file alone: each answered
-    meaning's answer against the rules' guess written into the file (so the rules as they were when it was made; for
-    the rules as they are now, tools/measure_rudeness.py answers). Returns {"words", "meanings", "agree", "whole",
-    "whole_agree", "kinds": {kind: (right, guessed, answered)}}."""
-    out = {"words": 0, "meanings": 0, "agree": 0, "whole": 0, "whole_agree": 0,
-           "kinds": {k: [0, 0, 0] for k, _ in KINDS if k != "clean"}}
-    for it in items:
-        a = answers.get(it["w"])
-        if not a:
-            continue
-        out["words"] += 1
-        given = dict(zip(a.get("keys", []), a.get("kinds", [])))
-        for s in it["senses"]:
-            want, got = given.get(s.get("key")), s.get("guess", "clean")
-            if want is None:
-                continue
-            out["meanings"] += 1
-            out["agree"] += want == got
-            for k, c in out["kinds"].items():
-                c[0] += want == got == k
-                c[1] += got == k
-                c[2] += want == k
-        if "whole" in a:
-            out["whole"] += 1
-            out["whole_agree"] += bool(a["whole"]) == bool(it.get("whole"))
-    out["kinds"] = {k: tuple(c) for k, c in out["kinds"].items()}
-    return out
-
-
-def describe_score(sc):
-    """score_guesses' numbers in words, for the message."""
-    if not sc["meanings"]:
-        return "Nothing answered yet: answer a few words in Review rude meanings first."
-    pct = lambda a, b: f"{a / b:.0%}" if b else "-"
-    lines = [f"{sc['words']:,} words answered, {sc['meanings']:,} meanings. The rules guessed the same kind for "
-             f"{pct(sc['agree'], sc['meanings'])} of the meanings, and the same about smearing the whole word for "
-             f"{pct(sc['whole_agree'], sc['whole'])} of the words.", "",
-             "Each kind: how often a guess was right, and how many of the answers the rules found:"]
-    for k, (right, guessed, answered) in sc["kinds"].items():
-        if guessed or answered:
-            lines.append(f"{KIND_NAMES[k]}: {pct(right, guessed)} right, found {right} of {answered}")
-    lines += ["", "These are the rules as they were when the review file was made; "
-              "tools/measure_rudeness.py answers scores the rules as they are now."]
-    return "\n".join(lines)
-
-
 # ---- the window ---------------------------------------------------------------------------------------------
 class RudeReview:
     """The review window (see the module's note)."""

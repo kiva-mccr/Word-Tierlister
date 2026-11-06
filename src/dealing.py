@@ -12,10 +12,10 @@ ones are left out of the queue, never deleted (Store.set_deal). Beside each kind
 smeared, that kind is censored; plain, it is shown even while censoring (Store.censor_kinds; asked for: OB-7; all
 three smeared to start with). The kinds open while Obscene words or Censor obscene words is ticked.
 Applying reshuffles / re-deals the unplaced words on a worker thread (App.busy, a moving bar); the censor tick
-applies at once. With Settings > Developer tools ticked, four bubbles at the top right: "Review rude meanings" (OB-9's
-review window, App.review_rude), "Score the rules" (the answers so far against the rules' guesses, App.score_rules),
-"Make review words" (tools/measure_rudeness.py sample, then next: App.make_review_words) and "Tune the rules"
-(tools/tune_rudeness.py's window: App.tune_rules).
+applies at once. With Settings > Developer tools ticked, one split bubble at the top right (asked for, picked from a
+mock-up): "Review words" (OB-9's review window, App.review_words; the first review words made when there are none)
+| "Tune & reroll" (tools/tune_rudeness.py's window, then new review words from tools/measure_rudeness.py next:
+App.tune_reroll); its ring and the right half's words show the step.
 """
 import gc
 import random
@@ -86,12 +86,9 @@ class DealDialog:
             dlg.button("Cancel", dlg.close)
             dlg.button("Apply", self.apply, default=True)
             if getattr(app, "dev_tools", False):            # (Settings > Developer tools: OB-9's review, scored)
-                self.bubbles = dlg.dev_bubbles((("Make review words", lambda: app.make_review_words(dlg), None,
-                                                 lambda: app.dev_progress("review words")),
-                                                ("Review rude meanings", lambda: app.review_rude(dlg)),
-                                                ("Score the rules", lambda: app.score_rules(dlg)),
-                                                ("Tune the rules", lambda: app.tune_rules(dlg), None,
-                                                 lambda: app.dev_progress("tune"), app.show_tuner)))
+                self.bubbles = dlg.dev_bubbles(((
+                    "Review words", lambda: app.review_words(dlg), None, lambda: app.dev_progress("review"), None,
+                    ("Tune & reroll", lambda: app.tune_reroll(dlg))),))
         dlg.show()
 
     # ---- the three parts ------------------------------------------------------------------------------------------

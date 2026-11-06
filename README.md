@@ -230,11 +230,13 @@ save is kept either way, and the next release is offered as usual. A release's p
 release's checksums before it is used; nightlies are built on your computer, so there is nothing to check.
 
 **Developer tools**: tick Settings > Developer tools and a few small bubbles appear at the top right of some
-dialogs, for testing the program: in How words are dealt, reviewing the rude meanings by hand and scoring the rules;
-in Source & Updates, the nightly build, the log and a crash test (it shows the error dialog on purpose). While one
-keeps running (making review words, tuning the rules) a ring round its dot shows how far it is; hover for the details.
-Closing the tuner's window while it tunes only hides it: click its bubble to bring it back (it also comes back by
-itself when it finishes; Discard stops it).
+dialogs, for testing the program. In How words are dealt, one bubble in two halves: **Review words** opens the review
+of rude meanings (the first time, it makes the review words first) and **Tune & reroll** tunes the rules on your
+answers, then, once you Keep or Discard the new numbers, picks 300 new review words. In Source & Updates, the nightly
+build, the log and a crash test (it shows the error dialog on purpose). While one keeps running a ring round its dot
+shows how far it is and the bubble says which step it is on; hover for the details. A short message at the bottom of
+the main window says when each step finishes. Closing the tuner's window while it tunes only hides it: click Tune &
+reroll to bring it back (it also comes back by itself when it finishes; Discard stops it).
 
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.

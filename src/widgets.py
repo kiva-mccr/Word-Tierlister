@@ -1708,9 +1708,15 @@ class DevBubble(SmoothCanvas):
     a click runs `on_running` (the tuner: its window back, asked for), or does nothing without one. When it ends the whole ring blinks once and the bubble is plain again. It asks every
     POLL_MS, so a dialog opened while the tool runs shows it too. Reduce motion: no spinning, no easing.
 
-        DevBubble(parent, "Review rude meanings", app.review_rude)
+    With `second=(text, command)` it is split in two by a thin line (asked for, picked from a mock-up: one bubble
+    for the review words): each half runs its own command, running or not (the commands know what to do then), and
+    the half under the pointer has the darker text. progress() may give a third value, the second half's words
+    while it runs ("Tuning · step 1 of 2").
+
+        DevBubble(parent, "Log", app.open_log)
         DevBubble(parent, "Nightly", toggle, variable=shown)
-        DevBubble(parent, "Tune the rules", app.tune_rules, progress=lambda: app.dev_progress("tune"))
+        DevBubble(parent, "Review words", app.review_words, progress=lambda: app.dev_progress("review"),
+                  second=("Tune & reroll", app.tune_reroll))
     """
     POLL_MS = 100
     SPIN_MS = 40              # a frame of the spinning arc (and of the ring easing to a new fraction)
@@ -1719,21 +1725,25 @@ class DevBubble(SmoothCanvas):
     BLINK_MS = 450            # the whole ring, once, when the tool ends
 
     def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None,
-                 on_running=None):
+                 on_running=None, second=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
         self.text, self.command, self.variable = text, command, variable
         self._font, self._bg, self._hover = font_ or font("small"), bg, False
         self.progress, self._anim, self.on_running = progress, animator, on_running
+        self.second = second          # (text, command): the right half, or None
+        self._split = None            # where the right half starts (x), once drawn
         self.state = None             # what progress() said last: None (idle) or (fraction or None, note)
         self._shown = 0.0             # the fraction drawn (it eases to the real one)
         self._spin = 0                # the arc's start while it cannot tell how far
         self._blink = False           # the whole ring, a moment after the tool ended
         self._jobs = {}
-        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
+        self.bind("<ButtonRelease-1>", lambda e: self.invoke(self._half(e.x)))
+        for seq in ("<space>", "<Return>"):
             self.bind(seq, lambda e: self.invoke())
-        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Enter>", lambda e: self._set_hover(self._half(e.x)))
+        self.bind("<Motion>", lambda e: self._hover != self._half(e.x) and self._set_hover(self._half(e.x)))
         self.bind("<Leave>", lambda e: self._set_hover(False))
         self.bind("<Destroy>", lambda e: e.widget is self and self._stop_all(), add="+")
         if progress is not None:
@@ -1807,7 +1817,14 @@ class DevBubble(SmoothCanvas):
             self._later("frame", self.SPIN_MS, self._frame)
 
     # ---- clicks and drawing --------------------------------------------------------------------------------
-    def invoke(self):
+    def _half(self, x):
+        """Which half `x` is over: "second" (the right half of a split bubble) or "first"."""
+        return "second" if self.second and self._split is not None and x >= self._split else "first"
+
+    def invoke(self, half="first"):
+        if self.second:                   # (split: each half its own command; they know a running tool)
+            (self.second[1] if half == "second" else self.command)()
+            return
         if self.running():                # (a running tool: its window back if it has one, else nothing)
             if self.on_running:
                 self.on_running()
@@ -1834,6 +1851,9 @@ class DevBubble(SmoothCanvas):
         ring = (h - 6) | 1 if self.progress is not None else dot      # (odd: the dot sits in its middle)
         pad = h // 2 - (ring - dot) // 2
         w = pad + ring + dot + f.measure(self.text) + h // 2
+        other = self._second_text()
+        if other:
+            w += h // 2 + 1 + f.measure(other) + h // 2
         super().configure(width=w + 2, height=h + 2)
         fill = PALETTE["select_bg"] if on or self._hover else PALETTE["surface"]
         edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
@@ -1855,8 +1875,22 @@ class DevBubble(SmoothCanvas):
             if extent > 0:
                 self.create_image(x0, y0, anchor="nw",
                                   image=self.ring_image(ring, thick, start, min(360, extent), PALETTE["ring"]))
-        self.create_text(1 + pad + ring + dot, y, text=self.text, font=f, anchor="w",
-                         fill=PALETTE["text"] if on or self._hover else PALETTE["muted"])
+        def ink(half):
+            hover = self._hover == half if other else self._hover
+            return PALETTE["text"] if (on and not other) or hover else PALETTE["muted"]
+        x = 1 + pad + ring + dot
+        self.create_text(x, y, text=self.text, font=f, anchor="w", fill=ink("first"))
+        if other:
+            x += f.measure(self.text) + h // 2
+            self.create_line(x, 1 + h * 0.25, x, 1 + h * 0.75, fill=edge)
+            self._split = x
+            self.create_text(x + 1 + h // 2, y, text=other, font=f, anchor="w", fill=ink("second"))
+
+    def _second_text(self):
+        """The right half's words: its own, or what progress() says while running ("Tuning · step 1 of 2")."""
+        if not self.second:
+            return None
+        return self.state[2] if self.state is not None and len(self.state) > 2 and self.state[2] else self.second[0]
 
     def refresh(self):
         self._draw()
@@ -3488,17 +3522,18 @@ class StyledDialog:
 
     def dev_bubbles(self, items):
         """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
-        (text, command), (text, command, variable) for a switch, or (text, command, None, progress[, on_running]) for
-        a tool that keeps running (its ring; on_running: what a click does meanwhile). Returns the bubbles, by text."""
+        (text, command), (text, command, variable) for a switch, or (text, command, None, progress[, on_running[,
+        second]]) for a tool that keeps running (its ring; on_running: what a click does meanwhile; second: (text,
+        command), the right half of a split bubble). Returns the bubbles, by text."""
         out = {}
         if self.head_row is None or not items:
             return out
         row = tk.Frame(self.head_row, bg=PALETTE["bg"])
         row.pack(side="right", anchor="n", padx=(24, 0))
         for item in items:
-            text, command, variable, progress, on_running = (tuple(item) + (None,) * 3)[:5]
+            text, command, variable, progress, on_running, second = (tuple(item) + (None,) * 4)[:6]
             b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim,
-                          on_running=on_running)
+                          on_running=on_running, second=second)
             b.pack(side="left", padx=(6 if out else 0, 0))
             out[text] = b
         return out
