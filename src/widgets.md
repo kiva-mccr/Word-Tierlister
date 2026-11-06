@@ -70,6 +70,7 @@ The module docstring has the details; this page is the map.
 
 - DevBubble with `second=`: each half runs its own command even while running (the app decides: the tuner's window back, or "still making"); `_split` is only known once drawn. SmearWordButton reads the S tier's colour at every draw (tier colours can change) and keeps one size smeared or not.
 - A DropMenu's window is built once and kept, hidden while closed (F-49, reported: building it at every open took 40-190 ms on GNOME / Wayland). `open` refreshes the kept rows (check marks, the items' current functions: App.apply_keys makes the list again); different labels or shortcuts (`_shape`) make it again. HeaderMenus builds each one ahead while idle (`prepare`). `is_open` is the shown flag, not `win`.
+- `prepare` also warms the hidden window (`_warm`, F-56): layout, every row's system window, the check mark's font (a font fallback search, slow the first time on systems with many fonts). It never shows the window.
 - A closed DropMenu is hidden (withdrawn) everywhere, never parked mapped off-screen (F-54, reported: on GNOME the move back on screen was sometimes lost, so the menu never showed while its button stayed lit, and the next click "closed" it). Use `is_open` for "open".
 - A RoundButton draws on <Configure> only when its size changed (`_drawn`): every new button was drawn twice. A ShapeCard redraws on `set` only when its spread or choice changed.
 

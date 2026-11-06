@@ -2077,6 +2077,12 @@ only the UI layer imports tkinter, so the core runs and is tested without it.
 #           (check_release's static checks, pyflakes) first; macOS on pushes to main, nightly and by hand, not on
 #           pull requests; the placement timing check measures against the disk's own write time. Merge leftovers in
 #           the notes (app.md's doubled methods and heading) mended; orphans out (fonts.display_family and others).
+# [x] F-56 Asked for: "the first time the user opens the top menu dropdowns they open really slow". The menus were
+#           already built hidden while idle (F-49); the first open was still slow on Fedora / GNOME, not here (5 ms
+#           first, 2.5 ms later, under mutter on Xvfb). Step 1 of a plan the user picked: the idle build now also lays
+#           the rows out, makes their system windows and looks up the check mark's font (DropMenu._warm), all while
+#           hidden. Step 2, only if still slow: show each menu once, see-through, where it opens, then hide it (never
+#           parked off-screen, F-54).
 # [x] F-55 Reported: "why do all the cards disappear when changing zoom". Recorded frame by frame at each merge: since
 #           F-51, a zoom showed the page without its cards, tier pills, buttons and chart bars for ~0.15 s. The fit's
 #           tries rebuild the rounded shapes while their painting is skipped (smooth.measuring), and Tk draws between

@@ -1009,14 +1009,34 @@ class DropMenu:
         return tuple(out)
 
     def prepare(self):
-        """Build the window now, hidden, so the first open is quick too (HeaderMenus does it while idle)."""
+        """Build the window now, hidden and laid out (_warm), so the first open is quick too (HeaderMenus does it
+        while idle)."""
         if self._shown:
             return
         try:
             if self.win is None or self._built != self._shape() or not self.win.winfo_exists():
                 self._build()
+                self._warm()
         except tk.TclError:
             pass
+
+    WARM_TEXT = "\u2713"                 # drawn on an open only: its font (a fallback on many systems) found ahead
+
+    def _warm(self):
+        """Do ahead, without showing anything, the work a first open did beyond building (F-56, asked for: the
+        first open of each top menu was slow on Fedora / GNOME): lay out the rows, make every row's system window
+        and look up the fonts for the check mark (Tk searches the system's fonts for a symbol its own font lacks,
+        slow the first time where many fonts are installed)."""
+        win = self.win
+        win.update_idletasks()
+        for row, parts, _it in self._rows:
+            row.winfo_id()
+            for w in parts:
+                w.winfo_id()
+        win.winfo_id()
+        fonts = {str(parts[0].cget("font")) for _row, parts, _it in self._rows}
+        for f in fonts:
+            win.tk.call("font", "measure", f, self.WARM_TEXT)
 
     def _build(self):
         """Make the (hidden) window and its rows for the items (asked for: menus opened slowly, 40-190 ms each time,

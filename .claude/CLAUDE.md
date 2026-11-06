@@ -215,7 +215,7 @@ never left in the top-left corner, and frame sync for drags, the only resizes mu
 F-55 (reported: every card vanished for a moment on a zoom: shapes with nothing on screen are painted even while a fit
 measures). F-51 (asked for: a cleanup; slow = windows drawing and the top menus: masks only where something changes, never painted
 for sizes a fit only tries (smooth.measuring), menus parked mapped off-screen on X11 (undone by F-54: GNOME sometimes lost the menu; closed menus are hidden again); CI quick check, macOS off pull
-requests). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
+requests). F-56 (asked for: the first open of a top menu was slow on Fedora: the idle build also lays it out, makes its system windows and finds the check mark's font, still hidden; step 2 if still slow: one see-through showing, never off-screen). FS-1 dropped (the user: going back from a pop-up means full screen's menu, never reopening the drop-downs).
 FS-2 (asked for, picked from mock-ups in the project files' full-screen/: View > Full screen / F11; Esc opens a pause menu
 (src/fullscreen.py) over the page, pages from the top menus with Back and a trail; dialogs there wear Back + trail, no
 Cancel, no title bar except on macOS; the backdrop is a tint, Tk has no see-through widgets).
