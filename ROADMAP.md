@@ -731,6 +731,12 @@ sees it close silently. Both steps are useful even if the program is only ever r
   the answers 23.4% -> 20.4% (measured on the same answers: the tuner's held-out run is the real test); the
   program's words: Sexual 3,528 -> 3,734, Expletive 4,768 -> 4,646, Slur 1,617 -> 1,647, whole 11,619 ->
   11,710. "Slur beats expletive" everywhere was tried and was worse (24.8%). RUDENESS_VERSION 17.
+  Then (asked for: "the error just doesn't seem to be going below 20%"; slur was 8.9 of its 20.4 points, 64
+  meanings answered): wider groups, picked by the user: police, illness and disability, homelessness, where
+  someone is from, class, non-white, Native American, queer; a rude-labelled meaning naming one is a slur
+  whatever points its labels gave. 20.4% -> 18.5%; the program's words: Slur 1,647 -> 1,879, whole 11,710 ->
+  11,982. Women left out (the user's choice): the answers disagree (slut, gash slur; ho, whore, bicycle sexual;
+  bitch expletive), adding them fixed 3 and broke 20. RUDENESS_VERSION 18.
 - [x] **Z-1** One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
   screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
   change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to

@@ -137,6 +137,8 @@ assert not results("take", W["take"], got["take"], {"sexual"})[1]               
 assert kind("A house of prostitution.") == "sexual" and kind("Sexual activity.") == "clean"
 assert rudeness.fold({"crude": 5.0, "insult": 4.0}, {"tags": ["vulgar"]}) == {"expletive": 4.0}
 assert kind("A homosexual man.", ["offensive", "vulgar"]) == "slur"
+assert kind("An American Indian.", ["derogatory", "offensive"]) == "slur"       # (OB-13: the user's groups, police too)
+assert kind("A police officer.", ["derogatory", "slang"]) == "slur" and kind("A police officer.") == "clean"
 assert kind("To take the virginity of.", ["euphemistic"], pos="verb") != "sexual"          # (a euphemism: polite)
 
 assert kind("An exclamation used to express pleasant or unpleasant mild surprise.", pos="intj") == "clean"   # "why"
