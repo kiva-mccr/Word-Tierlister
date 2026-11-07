@@ -257,7 +257,7 @@ A friendly message explains it in plain words, and the program usually keeps goi
 The [developer guide](DEVELOPERS.md) has diagrams of how the code fits together, a map of every file, the
 command-line options, how to run the tests, and how builds and releases work.
 
-## Licence
+## License
 
 Word Tierlister is free software under the GNU General Public License, version 3 ([`LICENSE`](LICENSE)). The two
 typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1.
