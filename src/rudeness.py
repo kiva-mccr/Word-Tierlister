@@ -119,11 +119,14 @@ WORDING = [(re.compile(p, re.I), pts) for p, pts in (
      {"clinical": 0.5}),
 )]
 
-# a group of people (race, nationality, religion, sexuality, gender, disability): with a rude label, a slur
+# a group of people (race, nationality, religion, sexuality, gender, disability, and, from the user's answers (OB-13),
+# police, illness, homelessness, where someone is from, class): with a rude label, a slur
 GROUP = [re.compile(r"\b(of (\w+ )?(\w+ )?(descent|origin|ancestry|extraction|heritage)|black (person|people|man|"
                     r"woman)|jew(s|ish)?\b|homosexual|gay (man|men|person)|lesbian|bisexual|trans(gender)? (woman|"
                     r"man|person|people)|transgender|effeminate|disabled|mentally|(half|quarter)[- ]caste|mixed[- ]"
-                    r"race|caucasian|immigrants?\b)", re.I),
+                    r"race|caucasian|immigrants?\b|non-?white|amerind\w*|american indian|non-muslim|queer|police|officers?\b|"
+                    r"cops?\b|disabilit\w*|intellectual\w*|learning|illness|homeless|(person|people|man|woman|someone) "
+                    r"from\b|middle class|working class|rural|country bumpkin|yokel|hick)", re.I),
          re.compile(r"(^|\b([Aa]n?|[Tt]he) )[A-Z][a-z]+ (person|people|man|woman|men|women)\b"),  # "An Italian person"
          re.compile(r"\b(a|the) native of\b|\bnatives of\b", re.I)]
 GROUP_POINTS = {"slur": 5}
@@ -373,6 +376,9 @@ def score_sense(sense, pos="", word="", wn=None, identity=False):
             if k != "clinical":
                 points[k] *= SOFTENED
     out = fold(unslur(points, sense, word, identity), sense)
+    if any(g.search(gloss) for g in GROUP) and labs & {"derogatory", "offensive", "pejorative", "slur", "ethnic"} \
+            and not (identity or group_name(sense, word)):    # a rude name for a group: a slur, whatever points the
+        out["slur"] = max(out.get("slur", 0.0), MEANING_MIN)   # labels gave ("red: (offensive) an American Indian")
     if rude_label and out.get("slur", 0.0) >= MEANING_MIN and any(g.search(gloss) for g in GROUP):
         for k in ("expletive", "sexual"):    # a rude name for a group of people is a slur first, however vulgar
             if k in out:                     # ("fag: a homosexual man" was an expletive)
@@ -671,7 +677,7 @@ def form_target(sense):
 
 
 # ---- in the program (OB-6): what is kept in the save, and what the scores lead to --------------------------------
-RUDENESS_VERSION = "17"     # bumped when the rules change: every save scores its words again (prepare_queue)
+RUDENESS_VERSION = "18"     # bumped when the rules change: every save scores its words again (prepare_queue)
 KIND_BITS = {"clean": 1, **{k: 2 << i for i, k in enumerate(RUDE_KINDS)}}     # words.rude: the kinds of its meanings
 LISTED = (KIND_BITS["expletive"], True, [], "expletive")     # results() for a word on the hand-picked list, no meanings known
 GLOSS_KEY = 40             # a meaning is told apart in the definitions by its first characters

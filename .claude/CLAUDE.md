@@ -154,7 +154,7 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
 ## Rules learnt from earlier steps
 - A new top-level file must be added to `standalone.TOP_FILES` (F-47: Remove it keeps what the user added).
 - Never name a module like a PyPI package (src/ is first on the path: "packaging" broke it).
-- Bump `rudeness.RUDENESS_VERSION` whenever the rules change (now 17). The program reads rules only, never the
+- Bump `rudeness.RUDENESS_VERSION` whenever the rules change (now 18). The program reads rules only, never the
   review's answers (OB-9); tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
 - Smears: the user checked 194 words over the commonest end-letter pairs (F-39); add a per-pair spot fix only if one is
   reported.
