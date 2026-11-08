@@ -59,7 +59,7 @@ def stages(store, existing, current, wordlist=None, source="wiktionary", wiktion
             store.insert_words(build_word_list())
             store.set_meta("source", "wordnet")
         out.append((["First run: building the word list"], from_wordnet))
-    # the queue: flag compounds, score rude meanings and shuffle (cheap when already done)
+    # the queue: flag compounds, mark obscene words and shuffle (cheap when already done)
     out.append((queue_steps(store, adds_words=adds, by_wiktionary=wiki), lambda log: prepare_queue(store, log=log)))
     if seed is not None and seed != store.queue_settings()["seed"]:
         def reshuffle(log):

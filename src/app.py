@@ -10,7 +10,6 @@ import json
 import math
 import os
 import random
-import re
 import sqlite3
 import sys
 import time
@@ -21,23 +20,20 @@ import tkinter.font as tkfont
 from tkinter import filedialog, ttk
 
 import deps
-import rudeness
 from definitions import Online, wiktionary_url
-import wordsource
 from browser import Browser
 from dealing import DealDialog
 from background import Repeat, Task
 from devtools import DevTools
 from errors import ask_buttons, ask_yes_no, show_error, show_exception, show_message
 from constants import (CENSOR_CAVEAT_SHORT, DEFAULT_ANCHORS, FOCUS_ROUNDS, MODES,
-                       QUEUE_SHAPES, REPO_PAGE, RUDE_NAMES, TIERS, VERSION, card_label, mask_word, typed_word)
+                       QUEUE_SHAPES, REPO_PAGE, TIERS, VERSION, card_label, mask_word, typed_word)
 from fonts import ROLES, init_fonts, font, scale_fonts
 from keymap import Keymap, display, spec_of
 from saves import app_dir, is_code_note, is_frozen, write_export
 from shortcuts import ShortcutsDialog
 from tiercolours import TierColoursDialog
 from sources import UPDATED_FROM, SourceDialog
-from review import RudeReview
 from syncdialog import AutoSync, SyncDialog
 import standalone
 import framesync
@@ -167,8 +163,6 @@ class App:
         self.def_lookup = None    # a word clicked in the definitions (W-1): the pane shows it until "Back" or the next word
         self.lookups = []         # words looked up so (W-1), shown in Browse for the moment, at the bottom
         self.browsers = []
-        self.review = None                # the review of rude meanings (--review-rude, OB-9), when open
-        self.review_path = None
         self.devtools = DevTools(self)    # the developer tools' bubbles (Settings > Developer tools)
         self.browse_state = None     # what the last Browse window showed when it closed (UI-38)
         self.online = Online().start()   # (the Wiktionary link on a definition shows only while it can be reached)
@@ -236,8 +230,6 @@ class App:
         self.refresh()
         self._fit_window(initial=True)
         Repeat(root, 120, self._poll_defs)
-        self.rude_read = None     # the background read of Wiktionary's meanings (_start_rude_read), while it runs
-        root.after(3000, self._start_rude_read)
         root.after(300, self._startup)
 
     def open_window(self):
@@ -368,7 +360,7 @@ class App:
         # (reported: it fired after the save had closed and failed reading it: once shut, a window never asks)
         if self.shut or self.store.closed or not self.root.winfo_exists() or self.store.get_meta(key) == "1":
             return
-        if dialog_open(self.root) or self.busy or self.rude_read is not None:
+        if dialog_open(self.root) or self.busy:
             self.root.after(self.FORM_OFFER_MS, self._offer_other_form)
             return
         if frozen and not standalone.bundled_source():
@@ -1307,8 +1299,7 @@ class App:
         self.censor_shown()
 
     def censor_shown(self):
-        """The definitions and Browse drawn again after censoring changed (View, or How words are dealt: which kinds
-        are smeared)."""
+        """The definitions and Browse drawn again after censoring changed (View, or How words are dealt)."""
         self._render_defs()
         for b in self.browsers:
             if b.alive():
@@ -1321,8 +1312,7 @@ class App:
 
     def toggle_dev(self):
         """Settings > Developer tools (asked for: dev tools from the window, not only by command): small bubbles at the
-        top right of How words are dealt (the rude-meaning review) and Source & Updates (nightly, the log, a crash
-        test), shown in dialogs opened from now on. Off to start with; saved for this save (never synced)."""
+        top right of Source & Updates (nightly, the log, a crash test), shown in dialogs opened from now on. Off to start with; saved for this save (never synced)."""
         self.dev_tools = self.dev_var.get()
         self.store.set_meta("dev_tools", int(self.dev_tools))
 
@@ -1511,8 +1501,6 @@ class App:
         for name, items in self._menu_items():
             self.header.menus[name] = items
             self.header.drops[name].items = items
-        if self.review is not None and self.review.alive():
-            self.review.apply_keys()
         self._hint()
 
     def _show_frame(self, frame):
@@ -1558,8 +1546,7 @@ class App:
         self.word_card.grid()
         notes = (" - looked up" if row["word"] == self.looked_up else "") + \
                 (" - revisiting a word you skipped" if row["skips"] > 0 else "")
-        label = card_label(row["kinds"], RUDE_NAMES.get(self.store.rude_kind(row["word"])),     # ("noun · sexual";
-                           compound=bool(row["pen"]))                                            # compound: asked for)
+        label = card_label(row["kinds"], compound=bool(row["pen"]))          # ("noun · verb"; compound: asked for)
         self.word_card.set(row["word"], f"frequency rank #{row['rank'] + 1:,}{notes}",   # (it fits the word itself)
                            censor=self.store.censored(row["word"]), kind=label or None)
         anchors_ok = all(self.anchors)
@@ -2094,9 +2081,7 @@ class App:
         if self.def_lookup:
             back = ("Back to " + ", ".join(self.shown(w) for w in self.def_words), self._def_back)
         self.def_frame.show_words([self.def_lookup] if self.def_lookup else self.def_words, self.get_def,
-                                  self.store.censored,
-                                  self.store.smeared_meanings if self.store.deal_settings()["censor"] else None,
-                                  on_word=self._def_clicked, back=back, link=self.wiktionary_link())
+                                  self.store.censored, on_word=self._def_clicked, back=back, link=self.wiktionary_link())
 
     # ---- the word's Wiktionary page, from a definition (asked for: its etymology and the rest) ------------------
     ONLINE_POLL_MS = 3000
@@ -2125,8 +2110,6 @@ class App:
             for b in self.browsers:
                 if b.alive():
                     b.render_def()
-            if self.review is not None and self.review.alive():
-                self.review.show_online()
 
     # ---- looking a word up from a definition (W-1) -------------------------------------------------------------
     def look_up(self, word, parent=None):
@@ -2164,61 +2147,6 @@ class App:
 
     DEF_LINES_MIN = 3                    # the definitions pane's shortest: the worst case counts it at this (Z-1)
     DEF_LINES_ROOM = 4                   # lines more the window opens with room for, where the screen has it
-
-    # ---- Wiktionary's meanings for a save without them (OB-6), read in the background ------------------------
-    def _start_rude_read(self):
-        """A save from before OB-6 (or from a word list) keeps no Wiktionary meanings for the rudeness rules: read
-        them once in the background (a 3 GB download, resumable), then score and save them a little at a time.
-        Until then the words smeared before (and the short hand-picked list) stand in."""
-        if not wordsource.wants_rude_fetch(self.store):
-            return
-        self.store.set_meta("rude_tried", time.time())
-        state = self.rude_read = {"line": ""}
-        path = self.store.path
-
-        def work():                                  # (no tkinter, and its own read-only connection)
-            db = sqlite3.connect(f"file:{os.path.abspath(path)}?mode=ro", uri=True)
-            try:
-                words = {r[0] for r in db.execute("SELECT word FROM words")}
-            finally:
-                db.close()
-            log = lambda text: state.__setitem__("line", text)      # noqa: E731
-            saved = wordsource.fetch_rude_senses(path, words, log)
-            log("Scoring rude meanings (100%)")
-            return saved, wordsource.find_rude(words, saved, log=log)
-
-        def failed(exc):                             # offline, disk full, ...: tried again later (RUDE_RETRY_S)
-            self.rude_read = None
-        Task(self.root, work, done=self._save_rude_read, failed=failed, ms=2000, wait=lambda: self.busy)
-
-    def rude_read_note(self):
-        """How far the background read has come ("12%"), or None when none is running (How words are dealt)."""
-        if not self.rude_read:
-            return None
-        m = re.search(r"\((\d+)%\)", self.rude_read["line"])
-        return m.group(1) + "%" if m else "starting"
-
-    def _save_rude_read(self, result):
-        """The meanings are read and scored: save them a few thousand rows a frame, never while a reshuffle writes."""
-        if self.shut or self.store.closed:
-            return
-        saved, found = result
-        steps = [self.store.save_rude_senses(saved, chunk=4000), self.store.set_rude(found, chunk=4000)]
-
-        def tick():
-            if self.busy or self.store.closed:
-                return not self.store.closed
-            if next(steps[0], StopIteration) is StopIteration:
-                steps.pop(0)
-                if not steps:
-                    self.store.set_meta("rude_done", rudeness.RUDENESS_VERSION)
-                    self.rude_read = None
-                    self.after_external_change()
-                    self.flash("Rude meanings read from Wiktionary", ms=2500)
-                    return False
-            return True
-        if tick():
-            Repeat(self.root, 15, tick)
 
     def _poll_defs(self):
         """Every 120 ms (a Repeat): collect finished lookups, cache them in the save, and redraw the panes that show
@@ -2268,15 +2196,6 @@ class App:
                 bw.win.lift()
                 return
         Browser(self)
-
-    def open_review(self, path):
-        """Open the review of rude meanings (--review-rude, OB-9) over this window, or raise it if it is open."""
-        if self.review is not None and self.review.alive():
-            self.review.win.lift()
-            return self.review
-        self.review_path = path
-        self.review = RudeReview(self, path)
-        return self.review
 
     def edit_anchors(self):
         """Dialog to choose the six anchor words (UI-28): a pill per tier, and any problem (empty, used twice,
@@ -2663,9 +2582,6 @@ class App:
         if old.pause is not None and old.pause.is_open():     # (FS-2: a switch in the pause menu brought a new look)
             path = old.pause.trail()
             self.root.after(self.SETTLE_MS + 200, lambda: self.open_pause_menu(path))
-        if old.review is not None and old.review.alive():      # (OB-9: the review opens again, where it was)
-            old.review.close()
-            self.root.after(150, lambda: self.open_review(old.review_path))
 
     def reopen(self):
         """Close this window but keep the save open: main() builds it again at once, so a new look (dark mode, the

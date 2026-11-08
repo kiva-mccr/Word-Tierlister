@@ -1,17 +1,16 @@
 """The program's buttons, drawn on canvases with smoothed rounded corners (Canvas, not tk.Button or ttk, so the colours
 look the same on macOS, Windows and Linux): RoundButton (UI-5) and the tier pills (TierRow, TierChip), the small icon
-link (LinkButton), the censor pill (SmearToggle), the yes button naming a smeared word (SmearWordButton) and the
-developer tools' bubbles (DevBubble). EDGE is a button's or pill's edge: its fill this far toward the ink.
+link (LinkButton) and the developer tools' bubbles (DevBubble). EDGE is a button's or pill's edge: its fill this far toward the ink.
 """
 import tkinter as tk
 import tkinter.font as tkfont
 
 from fonts import font
 from smooth import SmoothCanvas
-from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light, mix
+from theme import PALETTE, TIER_COLORS, TIER_TEXT, ink_on, is_light
 from ui_motion import lerp_color
 from popups import Tooltip
-from smears import Unsmear, smear_items
+from smears import Unsmear
 
 
 HOVER_MS = 120          # colour fade when the pointer enters or leaves
@@ -409,309 +408,29 @@ class LinkButton(SmoothCanvas):
         self._draw()
 
 
-class SmearToggle(SmoothCanvas):
-    """A small pill holding "abc", smeared while `variable` is True and plain while it is False; a click (or Space /
-    Return once it has focus) flips it: the censor button beside each kind of rude meaning in How words are dealt
-    (asked for: censoring each kind on its own; no hover note, asked for).
+class DevBubble(SmoothCanvas):
+    """A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for:
+    dev tools reachable from the window, not only by command; only while Settings > Developer tools is ticked).
+    A click (or Space / Return once it has focus) runs `command`. With `variable` it is a switch, lit while True.
 
-        SmearToggle(parent, tk.BooleanVar(value=True))
+        DevBubble(parent, "Log", app.devtools.open_log)
+        DevBubble(parent, "Nightly", toggle, variable=shown)
     """
 
-    TEXT = "abc"
-
-    def __init__(self, parent, variable, font_=None, bg=None):
+    def __init__(self, parent, text, command, variable=None, font_=None, bg=None):
         super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
                          bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
                          highlightcolor=PALETTE["accent"])
-        self.variable, self._font, self._bg = variable, font_ or font("small"), bg
-        self._hover = False
-        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
-            self.bind(seq, lambda e: self.toggle())
-        self.bind("<Enter>", lambda e: self._set_hover(True))
-        self.bind("<Leave>", lambda e: self._set_hover(False))
-        self._trace = variable.trace_add("write", lambda *_: self._draw())
-        self.bind("<Destroy>", lambda e: e.widget is self and self._untrace())
-        self._draw()
-
-    def _untrace(self):
-        try:
-            self.variable.trace_remove("write", self._trace)
-        except tk.TclError:
-            pass
-
-    def toggle(self):
-        self.variable.set(not self.variable.get())
-
-    def _set_hover(self, on):
-        self._hover = on
-        self._draw()
-
-    def _draw(self):
-        self.delete("all")
-        f, on = self._font, bool(self.variable.get())
-        line = f.metrics("linespace")
-        h = line + 4
-        w = f.measure(self.TEXT) + line + 2
-        super().configure(width=w + 2, height=h + 2)
-        bg = self._bg or PALETTE["bg"]
-        fill = PALETTE["select_bg"] if on else bg
-        edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
-        self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
-        ink = PALETTE["text"] if on or self._hover else PALETTE["muted"]
-        item = self.create_text(1 + (w - f.measure(self.TEXT)) / 2, 1 + (h - line) / 2, text=self.TEXT, font=f,
-                                fill=ink, anchor="nw")              # (nw: smear_items reads a line's top left)
-        if on:
-            smear_items(self, item, ink, fill, 1.0, ("smear",))
-            self.itemconfigure(item, state="hidden")
-
-    def refresh(self):
-        self._draw()
-
-
-class SmearWordButton(SmoothCanvas):
-    """A rounded button that says what a yes means (asked for: easy to tell yes from no; picked from a mock-up): its
-    `text` on the left and the word on the right, smeared on the S tier's colour while on, plain on the surface
-    colour while off, the key under the word. A click (or Space / Return once it has focus) runs `command`; a change
-    gives a short bounce (none with Reduce motion). The review's "Smear the whole word".
-
-        b = SmearWordButton(parent, "Smear the whole word", toggle, animator=app.anim); b.show("bugger", True)
-    """
-    BOUNCE = (-3, -2, -1, 0)      # pixels up, a frame each (BOUNCE_MS apart), when it changes
-    BOUNCE_MS = 30
-
-    def __init__(self, parent, text, command, font_=None, word_font=None, bg=None, animator=None):
-        super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
-                         bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
-                         highlightcolor=PALETTE["accent"])
-        self.text, self.command, self._anim = text, command, animator
-        self._font, self._word_font = font_ or font("body"), word_font or font("heading")
-        self.word, self.on, self.hint, self.enabled = "", False, "", True
-        self._hover, self._lift, self._job = False, 0, None
-        for seq in ("<ButtonRelease-1>", "<space>", "<Return>"):
+        self.text, self.command, self.variable = text, command, variable
+        self._font, self._hover = font_ or font("small"), False
+        self.bind("<ButtonRelease-1>", lambda e: self.invoke())
+        for seq in ("<space>", "<Return>"):
             self.bind(seq, lambda e: self.invoke())
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
         self._draw()
 
     def invoke(self):
-        if self.enabled:
-            self.command()
-
-    def show(self, word, on):
-        """Show `word`, smeared if `on`; a change of `on` for the same word bounces."""
-        bounce = word == self.word and bool(on) != self.on
-        self.word, self.on = word, bool(on)
-        self._draw()
-        if bounce and not getattr(self._anim, "reduce_motion", False):
-            self._bounce(0)
-
-    def set_hint(self, hint):
-        self.hint = hint
-        self._draw()
-
-    def set_enabled(self, on):
-        self.enabled = bool(on)
-        super().configure(cursor="hand2" if on else "")
-        self._draw()
-
-    def _set_hover(self, on):
-        self._hover = on
-        self._draw()
-
-    def _bounce(self, i):
-        if self._job:
-            self.after_cancel(self._job)
-            self._job = None
-        self._lift = self.BOUNCE[i]
-        self._draw()
-        if i + 1 < len(self.BOUNCE):
-            self._job = self.after(self.BOUNCE_MS, lambda: self._bounce(i + 1))
-
-    def _draw(self):
-        self.delete("all")
-        f, wf, small = self._font, self._word_font, font("small")
-        word = self.word or " "
-        pad = f.metrics("linespace")
-        wline, sline = wf.metrics("linespace"), small.metrics("linespace")
-        h = wline + sline + 10
-        ww = max(wf.measure(word), small.measure(self.hint))
-        w = pad + f.measure(self.text) + pad + ww + pad
-        super().configure(width=w + 2, height=h + 6)
-        on = self.on and self.enabled
-        fill = TIER_COLORS[0] if on else PALETTE["surface"]
-        edge = PALETTE["accent"] if self._hover and self.enabled else (mix(fill, ink_on(fill), 0.3) if on else PALETTE["border"])
-        y0 = 3 + self._lift
-        self.round_rect(1, y0, w, y0 + h, 12, fill=fill, outline=edge)
-        ink = ink_on(fill) if self.enabled else PALETTE["muted"]
-        self.create_text(1 + pad, y0 + h / 2, text=self.text, font=f, anchor="w", fill=ink)
-        cx = w - pad - ww / 2
-        item = self.create_text(cx - wf.measure(word) / 2, y0 + 4, text=word, font=wf, anchor="nw", fill=ink)
-        if on:                                    # (nw: smear_items reads a line's top left)
-            smear_items(self, item, ink, fill, 1.0, ("smear",))
-            self.itemconfigure(item, state="hidden")
-        if self.hint:
-            self.create_text(cx, y0 + 4 + wline + 1, text=self.hint, font=small, anchor="n",
-                             fill=ink if self.enabled else PALETTE["muted"])
-
-    def refresh(self):
-        self._draw()
-
-
-class DevBubble(SmoothCanvas):
-    """A small lilac pill with a dot and a few words: a developer tool in a dialog's top right corner (asked for:
-    dev tools reachable from the window, not only by command; only while Settings > Developer tools is ticked).
-    A click (or Space / Return once it has focus) runs `command`. With `variable` it is a switch, lit while True.
-
-    With `progress() -> None or (fraction or None, note)` it shows a tool that keeps running after the click (asked
-    for, picked from a mock-up): while it runs the bubble is lit and a thin ring fills clockwise around the dot
-    (a fraction), or a short arc goes round it (None: no way to tell how far); the hover note says how far it is;
-    a click runs `on_running` (the tuner: its window back, asked for), or does nothing without one. When it ends the whole ring blinks once and the bubble is plain again. It asks every
-    POLL_MS, so a dialog opened while the tool runs shows it too. Reduce motion: no spinning, no easing.
-
-    With `second=(text, command)` it is split in two by a thin line (asked for, picked from a mock-up: one bubble
-    for the review words): each half runs its own command, running or not (the commands know what to do then), and
-    the half under the pointer has the darker text. progress() may give a third value, the second half's words
-    while it runs ("Tuning · step 1 of 2").
-
-    With `stop=(note, command)` a running tool can be stopped (asked for, picked from a mock-up): while the pointer
-    is on the ring it turns into a small red cross on pink, the hover note says `note` (a string, or a function
-    giving one), and a click runs `command`. The bubble never changes size for it.
-
-        DevBubble(parent, "Log", app.devtools.open_log)
-        DevBubble(parent, "Nightly", toggle, variable=shown)
-        tools = app.devtools
-        DevBubble(parent, "Review words", tools.review_words, progress=lambda: tools.progress("review"),
-                  second=("Tune & reroll", tools.tune_reroll), stop=(tools.stop_note, tools.stop))
-    """
-    POLL_MS = 100
-    SPIN_MS = 40              # a frame of the spinning arc (and of the ring easing to a new fraction)
-    SPIN_STEP = 12            # degrees a frame: a turn in 1.2 s
-    SPIN_ARC = 100            # the arc's length while it cannot tell how far
-    BLINK_MS = 450            # the whole ring, once, when the tool ends
-
-    def __init__(self, parent, text, command, variable=None, font_=None, bg=None, progress=None, animator=None,
-                 on_running=None, second=None, stop=None):
-        super().__init__(parent, bd=0, highlightthickness=1, takefocus=1, cursor="hand2",
-                         bg=bg or PALETTE["bg"], highlightbackground=bg or PALETTE["bg"],
-                         highlightcolor=PALETTE["accent"])
-        self.text, self.command, self.variable = text, command, variable
-        self._font, self._bg, self._hover = font_ or font("small"), bg, False
-        self.progress, self._anim, self.on_running = progress, animator, on_running
-        self.second = second          # (text, command): the right half, or None
-        self._split = None            # where the right half starts (x), once drawn
-        self.stop = stop              # (note, command): the ring stops a running tool, or None
-        self._ring_end = None         # where the ring ends (x), once drawn: left of it is the stop button
-        self.state = None             # what progress() said last: None (idle) or (fraction or None, note)
-        self._shown = 0.0             # the fraction drawn (it eases to the real one)
-        self._spin = 0                # the arc's start while it cannot tell how far
-        self._blink = False           # the whole ring, a moment after the tool ended
-        self._jobs = {}
-        self.bind("<ButtonRelease-1>", lambda e: self.invoke(self._half(e.x)))
-        for seq in ("<space>", "<Return>"):
-            self.bind(seq, lambda e: self.invoke())
-        self.bind("<Enter>", lambda e: self._set_hover(self._half(e.x)))
-        self.bind("<Motion>", lambda e: self._hover != self._half(e.x) and self._set_hover(self._half(e.x)))
-        self.bind("<Leave>", lambda e: self._set_hover(False))
-        self.bind("<Destroy>", lambda e: e.widget is self and self._stop_all(), add="+")
-        if progress is not None:
-            Tooltip(self, self._note)
-            self._poll()
-        self._draw()
-
-    # ---- running tools ---------------------------------------------------------------------------------
-    def running(self):
-        return self.state is not None
-
-    def _note(self, e=None):
-        """The hover note: how the tool is doing, or what stopping it does while the pointer is on the ring."""
-        if not self.state:
-            return None
-        if self._hover == "stop":
-            note = self.stop[0]
-            return note() if callable(note) else note
-        return self.state[1]
-
-    def _still(self):
-        return self._anim is not None and getattr(self._anim, "reduce_motion", False)
-
-    def _later(self, name, ms, fn):
-        try:
-            self._jobs[name] = self.after(ms, fn)
-        except tk.TclError:
-            pass
-
-    def _stop_all(self):
-        for job in self._jobs.values():
-            try:
-                self.after_cancel(job)
-            except tk.TclError:
-                pass
-        self._jobs = {}
-
-    def _poll(self):
-        """Ask how the tool is doing; start the frames when it starts, blink once when it ends."""
-        try:
-            now = self.progress()
-        except Exception:                 # (a tool's own state must never break the dialog)
-            now = None
-        was = self.state
-        self.state = now
-        if now is not None and was is None:
-            self._shown = (now[0] or 0.0) if self._still() else 0.0
-            self._blink = False
-            self._frame()
-        elif now is None and was is not None:
-            self._blink = True
-            self._draw()
-            self._later("blink", self.BLINK_MS, self._end_blink)
-        elif now is not None and self._still():
-            self._shown = now[0] or 0.0
-            self._draw()
-        elif now is not None and "frame" not in self._jobs:       # (Reduce motion turned off while it runs)
-            self._frame()
-        self._later("poll", self.POLL_MS, self._poll)
-
-    def _end_blink(self):
-        self._blink = False
-        self._draw()
-
-    def _frame(self):
-        """One frame while the tool runs: the arc turns, the ring eases towards the fraction."""
-        self._jobs.pop("frame", None)
-        if self.state is None:
-            return
-        frac = self.state[0]
-        if not self._still():
-            if frac is None:
-                self._spin = (self._spin + self.SPIN_STEP) % 360
-            else:
-                self._shown += (frac - self._shown) * 0.25
-                if abs(frac - self._shown) < 0.004:
-                    self._shown = frac
-        self._draw()
-        if not self._still():
-            self._later("frame", self.SPIN_MS, self._frame)
-
-    # ---- clicks and drawing --------------------------------------------------------------------------------
-    def _half(self, x):
-        """Which part `x` is over: "stop" (the ring of a running tool that can be stopped), "second" (the right half
-        of a split bubble) or "first"."""
-        if self.stop and self.running() and self._ring_end is not None and x <= self._ring_end:
-            return "stop"
-        return "second" if self.second and self._split is not None and x >= self._split else "first"
-
-    def invoke(self, half="first"):
-        if half == "stop":
-            if self.stop and self.running():
-                self.stop[1]()
-            return
-        if self.second:                   # (split: each half its own command; they know a running tool)
-            (self.second[1] if half == "second" else self.command)()
-            return
-        if self.running():                # (a running tool: its window back if it has one, else nothing)
-            if self.on_running:
-                self.on_running()
-            return
         if self.variable is not None:
             self.variable.set(not self.variable.get())
             self._draw()
@@ -719,7 +438,7 @@ class DevBubble(SmoothCanvas):
             self.command()
 
     def lit(self):
-        return self.running() or (self.variable is not None and bool(self.variable.get()))
+        return self.variable is not None and bool(self.variable.get())
 
     def _set_hover(self, on):
         self._hover = on
@@ -727,62 +446,21 @@ class DevBubble(SmoothCanvas):
 
     def _draw(self):
         self.delete("all")
-        f, on = self._font, self.lit() or self._blink
+        f, on = self._font, self.lit()
         line = f.metrics("linespace")
         h = line + 6
         dot = max(4, line // 3)
-        ring = (h - 6) | 1 if self.progress is not None else dot      # (odd: the dot sits in its middle)
-        pad = h // 2 - (ring - dot) // 2
-        w = pad + ring + dot + f.measure(self.text) + h // 2
-        other = self._second_text()
-        if other:
-            w += h // 2 + 1 + f.measure(other) + h // 2
+        pad = h // 2
+        w = pad + dot + dot + f.measure(self.text) + h // 2
         super().configure(width=w + 2, height=h + 2)
         fill = PALETTE["select_bg"] if on or self._hover else PALETTE["surface"]
         edge = PALETTE["accent"] if on or self._hover else PALETTE["border"]
         self.round_rect(1, 1, w, h, h, fill=fill, outline=edge)      # (r = h: a pill in smooth.py's corners)
         y = 1 + h / 2
-        cx = 1 + pad + ring / 2
-        self._ring_end = 1 + pad + ring + dot / 2
-        stopping = self._hover == "stop" and self.state is not None
-        if stopping:                      # (the ring under the pointer: a red cross on pink, click to stop)
-            self.round_rect(cx - ring / 2, y - ring / 2, cx + ring / 2, y + ring / 2, ring, fill=PALETTE["bad"][0])
-            size = max(6, (ring * 9 // 16) | 1)
-            self.create_image(round(cx - size / 2), round(y - size / 2), anchor="nw",
-                              image=self.icon_image("stop", size, PALETTE["bad"][1]))
-        else:
-            self.round_rect(cx - dot / 2, y - dot / 2, cx + dot / 2, y + dot / 2, dot, fill=PALETTE["accent"])
-        if self.state is not None or self._blink:
-            thick = max(2, round(ring / 8))
-            x0, y0 = round(cx - ring / 2), round(y - ring / 2)
-            if not stopping:
-                self.create_image(x0, y0, anchor="nw", image=self.ring_image(ring, thick, 0, 360, PALETTE["surface"]))
-            frac = None if self.state is None else self.state[0]
-            if self._blink:
-                start, extent = 0, 360
-            elif frac is None:
-                start, extent = self._spin, self.SPIN_ARC
-            else:
-                start, extent = 0, int(round(self._shown * 120)) * 3          # (3 degree steps: a few images)
-            if extent > 0:
-                self.create_image(x0, y0, anchor="nw", image=self.ring_image(
-                    ring, thick, start, min(360, extent), PALETTE["bad"][1] if stopping else PALETTE["ring"]))
-        def ink(half):
-            hover = self._hover == half if other else self._hover not in (False, "stop")
-            return PALETTE["text"] if (on and not other) or hover else PALETTE["muted"]
-        x = 1 + pad + ring + dot
-        self.create_text(x, y, text=self.text, font=f, anchor="w", fill=ink("first"))
-        if other:
-            x += f.measure(self.text) + h // 2
-            self.create_line(x, 1 + h * 0.25, x, 1 + h * 0.75, fill=edge)
-            self._split = x
-            self.create_text(x + 1 + h // 2, y, text=other, font=f, anchor="w", fill=ink("second"))
-
-    def _second_text(self):
-        """The right half's words: its own, or what progress() says while running ("Tuning · step 1 of 2")."""
-        if not self.second:
-            return None
-        return self.state[2] if self.state is not None and len(self.state) > 2 and self.state[2] else self.second[0]
+        cx = 1 + pad + dot / 2
+        self.round_rect(cx - dot / 2, y - dot / 2, cx + dot / 2, y + dot / 2, dot, fill=PALETTE["accent"])
+        self.create_text(1 + pad + dot + dot, y, text=self.text, font=f, anchor="w",
+                         fill=PALETTE["text"] if on or self._hover else PALETTE["muted"])
 
     def refresh(self):
         self._draw()

@@ -8,13 +8,13 @@ import tkinter as tk
 
 from fonts import font
 from sizing import usable_area
-from keymap import (DEV_GROUPS, GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, spec_of,
+from keymap import (GROUP_NAMES, LABEL_OF, ACTIONS, MAX_KEYS, RESERVED, display, spec_of,
                     place_display, place_keys)
 from theme import PALETTE
 from buttons import RoundButton
 from dialogs import StyledDialog
 
-COLUMNS = (("all", "browse"), ("place", "compare"), ("duel", "review"))     # the cards, left to right
+COLUMNS = (("all", "browse"), ("place", "compare"), ("duel",))     # the cards, left to right
 
 
 class ShortcutsDialog:
@@ -52,10 +52,7 @@ class ShortcutsDialog:
             # room for "↺ default" kept on every row, so nothing shifts when one appears
             col.columnconfigure(2, minsize=f.measure("\u21ba default") + 2 * 6 + 4)
             r = 0
-            # the review's keys only while its window is open (F-48: listed whenever Developer tools was on, the
-            # third card grew so tall and wide that the cards stacked on a screen under ~1,500 px)
-            shown = [g for g in groups if g not in DEV_GROUPS or getattr(self.app, "review", None) is not None]
-            for gi, g in enumerate(shown):
+            for gi, g in enumerate(groups):
                 tk.Label(col, text=GROUP_NAMES[g], bg=bg, fg=PALETTE["muted"], font=f).grid(
                     row=r, column=0, columnspan=3, sticky="w", pady=(0 if gi == 0 else round(line * 0.8), 2))
                 r += 1

@@ -3,8 +3,8 @@
 The fonts: one family and named size roles shared as Tk `Font` objects (UI-2).
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `buttons`, `cards`, `dealing`, `dialogs`, `errors`, `filepicker`, `fullscreen`, `review`, `shortcuts`, `smears`, `smooth`, `sources`, `startup`, `stress_ui`, `syncdialog`, `tiercolours`, `tierlist`, `tune_rudeness`, `ui_style`
-- **Tests:** `_selftest_dealing`, `_selftest_defsize`, `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_fonts`, `_selftest_fullscreen`, `_selftest_icon`, `_selftest_looks`, `_selftest_sizing`, `_selftest_smooth`, `_selftest_startup`, `_selftest_style`, `_selftest_sync`, `_selftest_tune`, `_selftest_ui`, `_selftest_widgets2`, `_selftest_zoom`
+- **Used by:** `app`, `browser`, `buttons`, `cards`, `dealing`, `dialogs`, `errors`, `filepicker`, `fullscreen`, `shortcuts`, `smears`, `smooth`, `sources`, `startup`, `stress_ui`, `syncdialog`, `tiercolours`, `tierlist`, `ui_style`
+- **Tests:** `_selftest_dealing`, `_selftest_defsize`, `_selftest_deps`, `_selftest_drawer`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_fonts`, `_selftest_fullscreen`, `_selftest_icon`, `_selftest_looks`, `_selftest_sizing`, `_selftest_smooth`, `_selftest_startup`, `_selftest_style`, `_selftest_sync`, `_selftest_ui`, `_selftest_widgets2`, `_selftest_zoom`
 
 The module docstring has the details; this page is the map.
 

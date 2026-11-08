@@ -1,7 +1,7 @@
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import gzip, json, os, tempfile
-import rudeness
 import tierlist as T
+from obscene import LIST_VERSION
 
 
 def entry(word, pos="noun", glosses=("a thing",), tags=(), form_of=None, lang="en", categories=()):
@@ -34,20 +34,20 @@ lines = [
     entry("un-", "prefix", ["not"]),                          # affix -> excluded
     entry("bonjour", "intj", ["hello"], lang="fr"),           # wrong language -> excluded
     entry("empty", "noun", []),                               # no glosses -> excluded
-    # OB-6: the rules score each meaning (src/rudeness.py); the meanings they read are kept in the save
+    # OB-2: rude meanings keep Wiktionary's labels in the definitions; OB-14: obscene words come from the list
     entry("bastard", "noun", ["a child born out of wedlock"]),
     entry("bastard", "noun", ["a mean person"], tags=["vulgar", "derogatory"]),
     entry("bastard", "adj", ["inferior"], tags=["derogatory"]),
     entry("bastards", "noun", ["plural of bastard"], form_of="bastard"),         # (and its forms)
-    entry("shit", "noun", ["faeces"], tags=["vulgar"]),                           # first meaning rude: smeared whole
+    entry("shit", "noun", ["faeces"], tags=["vulgar"]),                           # on the list: obscene
     entry("shit", "verb", ["to defecate"]),
     entry("shit", "verb", ["to fool"]),
     entry("bureaucracy", "noun", ["government by officials"]),                   # derogatory, but of no person
     entry("bureaucracy", "noun", ["the officials"]),
     entry("bureaucracy", "noun", ["excessive red tape"], tags=["derogatory"]),
-    entry("come", "verb", ["to move nearer"]),                                   # a sexual meaning: only it smeared
+    entry("come", "verb", ["to move nearer"]),                                   # not on the list: ordinary
     entry("come", "verb", ["to orgasm"], tags=["vulgar"]),
-    entry("gyp", "verb", ["to cheat"], tags=["offensive", "sometimes"]),         # hedged: clean
+    entry("gyp", "verb", ["to cheat"], tags=["offensive", "sometimes"]),         # (the hedge is shown)
 ]
 tmp = tempfile.mkdtemp()
 src = os.path.join(tmp, "sample.jsonl.gz")
@@ -78,26 +78,20 @@ assert "(derogatory) excessive red tape" in s.get_def("bureaucracy") and "(offen
 assert s.get_meta("source") == "wiktionary" and s.get_meta("wk_done") == "0"
 assert not s.db.execute("SELECT name FROM sqlite_master WHERE name='wk'").fetchone()
 assert s.stats()["total"] == n == len(words)
-# ST-6: the kinds come from the same pass, and the meanings the rudeness rules read (OB-6)
+# ST-6: the kinds come from the same pass
 kinds = {r[0]: r[1] for r in s.db.execute("SELECT word, kinds FROM words")}
 assert kinds["run"] == 1 | 2 and kinds["serendipity"] == 1 and kinds["zymolytic"] == 4 and kinds["the"] == 16, kinds
 assert kinds["don't"] == 16 and kinds["of"] == 16
 assert s.get_meta("kinds_done") == "1"
-assert set(s.rude_senses()) == {"bastard", "bastards", "shit", "bureaucracy", "come", "gyp"}, s.rude_senses()
-assert T.queue_steps(s) == ["Detecting compound words", "Scoring rude meanings", "Shuffling the queue"]
+assert not s.db.execute("SELECT name FROM sqlite_master WHERE name='rude'").fetchone()   # (OB-14: nothing kept)
+assert T.queue_steps(s) == ["Detecting compound words", "Marking obscene words", "Shuffling the queue"]
 assert s.get_meta("freq_done") == T.Store.FREQ_VERSION and s.get_word("run")["freq"] > 0   # (stored as it ranked)
 T.prepare_queue(s, log=lambda *_: None)
-assert not T.queue_steps(s) and s.get_meta("rude_done") == rudeness.RUDENESS_VERSION
-B = rudeness.KIND_BITS
-rude = dict(s.db.execute("SELECT word, rude FROM words WHERE rude IS NOT NULL"))
-assert rude == {"shit": B["clean"] | B["expletive"], "bastard": B["clean"], "bastards": B["clean"],
-                "bureaucracy": B["clean"], "come": B["clean"], "gyp": B["clean"]}, rude
-# (a form follows its word's first meaning: bastard's is clean; "sometimes offensive" is hedged to clean; a
-# "derogatory" label on red tape describes no person: no insult; bastard and "come" are ordinary words: only their
-# vulgar meanings are rude (an expletive, a sexual one), smeared in their definitions, not the word)
-assert s.obscene_words() == {"shit"}, s.obscene_words()
-assert s.smeared_meanings("come") == ["to orgasm"] and s.smeared_meanings("bastard") == ["a mean person"]
-assert s.get_word("gyp")["out"] == 0 and s.get_word("come")["out"] == 0   # (a clean meaning: dealt by its kind)
+assert not T.queue_steps(s) and s.get_meta("obscene_done") == LIST_VERSION
+# (the list decides, whole words: bastard, bastards, shit and gyp are on it; come and bureaucracy are not)
+assert s.obscene_words() == {"bastard", "bastards", "shit", "gyp"}, s.obscene_words()
+assert s.get_word("shit")["out"] == 1 and s.get_word("bureaucracy")["out"] == 0     # (Obscene words unticked)
+assert s.get_word("come")["out"] == 0
 
 assert s.get_meta("hyphens_done") == "1"           # (a fresh build has no hyphenated words to leave out)
 
@@ -124,11 +118,10 @@ s4.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTE
               " kinds INTEGER)")
 s4.db.execute("INSERT INTO wk VALUES('the',1,1,1,'x',16),('cat',1,1,1,'y',1)")
 s4.db.commit()
-s4.save_rude_senses({})
 s4.set_meta("wk_done", "1")
 T.build_wiktionary(s4, os.path.join(tmp, "missing-file-never-read.jsonl"), log=quiet)
 assert s4.count_words() == 2 and s4.get_word("cat")["kinds"] == 1
-# a parse staged before OB-6 (no meanings kept for the rules) is read again from the file
+# a parse staged before ST-6 (no kinds kept) is read again from the file
 s5 = T.Store(os.path.join(tmp, "d5.db"))
 s5.db.execute("CREATE TABLE wk(word TEXT PRIMARY KEY, senses INTEGER, lemma INTEGER, live INTEGER, text TEXT)")
 s5.db.execute("INSERT INTO wk VALUES('the',1,1,1,'x')")

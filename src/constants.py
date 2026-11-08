@@ -1,7 +1,6 @@
 """Shared constants: tier names, modes, ranking defaults. Only the standard library, so anything can use it.
 """
 import math
-import os
 import unicodedata
 
 
@@ -76,32 +75,24 @@ KIND_NOTES = {
     "adv": "Adverbs: words that say how, when or where (quickly, soon, here).",
     "other": ("Other: pronouns, prepositions, conjunctions, interjections, numbers, abbreviations, contractions "
               "and the like (she, under, because, wow, seven, etc., don't)."),
-    "obscene": ("Obscene words: words whose meanings are all rude (vulgar, offensive or derogatory words and "
-                "slurs). Tick it to choose which kinds of rude meaning come up."),
-    # the kinds of rude meaning (obscene.RUDE_KINDS), under Obscene words (OB-5)
-    "expletive": "Expletives: strong language, swearing, harsh insults and crude words (shit, bastard, piss).",
-    "sexual": "Sexual: sex acts and slang for sex and the parts of the body it uses.",
-    "slur": "Slurs: words aimed at a group of people that could make someone feel bad.",
+    "obscene": ("Obscene words: swearing, sexual slang and slurs, from a published list of profanity (Surge AI's). "
+                "A word on it counts in every meaning."),
 }
-# one word's kind, faintly above it on the card (after its parts of speech)
-RUDE_NAMES = {"expletive": "expletive", "sexual": "sexual", "slur": "slur"}
 POS_NAMES = (("noun", 1), ("verb", 2), ("adjective", 4), ("adverb", 8))   # on the card, in this order ("other" is
                                                                            # too vague to show: pronouns, numbers...)
 
 
-def card_label(kinds, rude=None, compound=False):
-    """What the word card writes faintly above a word (asked for): its parts of speech, "compound word" for one
-    made of words (it was on the frequency line), then for a censored word its kind of rude word: "noun · verb",
-    "noun · compound word · sexual"; "" when there is nothing to say. `kinds`: words.kinds (KINDS bits, None when
-    not known); `rude`: a RUDE_NAMES value or None; `compound`: words.pen (a compound word)."""
+def card_label(kinds, compound=False):
+    """What the word card writes faintly above a word (asked for): its parts of speech, then "compound word" for one
+    made of words (it was on the frequency line): "noun · verb", "noun · compound word"; "" when there is nothing to
+    say. `kinds`: words.kinds (KINDS bits, None when not known); `compound`: words.pen (a compound word)."""
     parts = [name for name, bit in POS_NAMES if (kinds or 0) & bit]
-    return " · ".join(parts + (["compound word"] if compound else []) + ([rude] if rude else []))
+    return " · ".join(parts + (["compound word"] if compound else []))
 
 
-RUDE_LABELS = {"expletive": "Expletives", "sexual": "Sexual", "slur": "Slurs"}
 # what is said when censoring is turned on (asked for: it is not fully accurate): a line under the tick box in How
 # words are dealt, and the same words in a toast when it is turned on from View (U-2, asked for: one short text)
-CENSOR_CAVEAT_LINE = "picked out by rules: it may miss some, or smear an ordinary word"
+CENSOR_CAVEAT_LINE = "picked out by a published word list: it may miss some, or catch an ordinary word"
 CENSOR_CAVEAT_SHORT = "Censoring on \u00b7 " + CENSOR_CAVEAT_LINE
 KIND_NOTE_EXTRA = "A word can be more than one kind (\"run\" is a noun and a verb): it comes up if any of its kinds are ticked."
 
@@ -158,13 +149,6 @@ def parse_plan(line):
     return line[len(PLAN_MARK):].split("\x1f") if line.startswith(PLAN_MARK) else None
 
 
-# The review of rude meanings by hand (OB-9: python tierlist.py --review-rude; tools/measure_rudeness.py sample /
-# answers): the words to review, and the answers beside them. The answers only test the rules: never read by them.
-REVIEW_FILE = "rude_review.jsonl"
 LOG_FILE = "tierlist.log"                # (next to the save: sessions, errors, hard crashes; F-19)
 
 
-def review_answers_path(review):
-    """The answers file beside a review file: rude_review.jsonl -> rude_review_answers.jsonl."""
-    base, ext = os.path.splitext(review)
-    return base + "_answers" + (ext or ".jsonl")

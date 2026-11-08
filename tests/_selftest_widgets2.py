@@ -1,7 +1,6 @@
 """Widgets from UI-7 on: TierRow (and RoundButton's hover lift), DuelCards (and flat buttons), AnchorLadder,
 TabBar, DropMenu and HeaderMenus (UI-10), Toast (UI-11),
-DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75), SmearToggle (the
-censor button beside each kind of rude meaning)."""
+DefinitionDrawer (UI-12), WordCard.transition_from (UI-16), LinkButton with words (UI-75)."""
 import _paths  # noqa: F401  (puts src/ and the top folder on the import path)
 import time, types
 import tkinter as tk
@@ -883,13 +882,13 @@ cv.delete("s"); cv.itemconfigure(big, text="ox"); smear_items(cv, big, "#3D3A4B"
 assert not [i for i in cv.find_withtag("s") if cv.type(i) == "rectangle" and cv.itemcget(i, "fill")]   # (two letters)
 cv.destroy()
 
-# UI-59: the kind of a rude word, faintly above it; the card's size never changes for it, and typing hides it
+# UI-59: its parts of speech, faintly above it; the card's size never changes for it, and typing hides it
 from fonts import font
 wc = WordCard(root, font("word"), font("body")); wc.pack(); root.update()
 wc.set("table", "frequency rank #9"); root.update(); size = (wc.winfo_reqwidth(), wc.winfo_reqheight())
 assert not wc.find_withtag("kind")
-wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
-assert wc.itemcget("kind", "text") == "sexual" and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
+wc.set("bum-fuck", "frequency rank #7", kind="noun"); root.update()
+assert wc.itemcget("kind", "text") == "noun" and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
 kb, wb = wc.bbox("kind"), wc.bbox("word")
 assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                      # above the letters, on the card
 # asked for (a little of both): the word is drawn smaller under a kind, the kind is near the sub-line's size, and it
@@ -897,7 +896,7 @@ assert kb[3] <= wb[1] + (wb[3] - wb[1]) * 0.3 and kb[1] >= 0                    
 labelled = abs(wc._fit.cget("size"))
 wc.set("bum-fuck", "frequency rank #7"); root.update()
 assert labelled < abs(wc._fit.cget("size")) and (wc.winfo_reqwidth(), wc.winfo_reqheight()) == size
-wc.set("bum-fuck", "frequency rank #7", kind="sexual"); root.update()
+wc.set("bum-fuck", "frequency rank #7", kind="noun"); root.update()
 assert wc._kind_font.metrics("linespace") >= 0.8 * font("body").metrics("linespace") - 1, (  # (a pixel of rounding:
     wc._kind_font.actual(), wc._kind_font.metrics(), font("body").metrics())                 # small at 72 dpi)
 pt = abs(wc._fit.cget("size")) * float(wc.tk.call("tk", "scaling"))
@@ -911,12 +910,12 @@ def smear_over_kind():
     order, kb = list(wc.find_all()), wc.bbox("kind")
     over = [i for i in wc.find_overlapping(*kb) if {"smear", "oldsmear"} & set(wc.gettags(i))]
     return sum(order.index(i) > order.index(wc.find_withtag("kind")[0]) for i in over), len(over)
-wc.set("cum", "frequency rank #8", censor=True, kind="sexual"); root.update()
+wc.set("cum", "frequency rank #8", censor=True, kind="noun"); root.update()
 assert wc.find_withtag("smear") and smear_over_kind()[0] == 0
 wc.smear.clear = 0.5; wc.smear.paint(); assert smear_over_kind()[0] == 0
 anim, crossed = Animator(root), 0
 wc.set("bollocks", "frequency rank #8", censor=True, kind="expletive"); root.update()     # (tall letters: they reach up)
-wc.set("jizz", "frequency rank #9", censor=True, kind="sexual")
+wc.set("jizz", "frequency rank #9", censor=True, kind="noun")
 wc.transition_from("bollocks", "frequency rank #8", 0, -wc.winfo_reqheight(), anim)
 frame_at = wc._frame
 anim.cancel_all()
@@ -973,21 +972,7 @@ lf.configure(size=20); link.refresh(); update()
 assert link.winfo_reqwidth() > w0
 holder.destroy()
 
-# ---- SmearToggle: "ab" smeared while its variable is True, plain while False; a click or Space flips it
-from buttons import SmearToggle
-holder = tk.Toplevel(root); var = tk.BooleanVar(value=True)
-st = SmearToggle(holder, var); st.pack(); update()
-assert st.find_withtag("smear") and st.winfo_reqwidth() > st.winfo_reqheight() > 0
-st.event_generate("<ButtonRelease-1>", x=3, y=3); update()
-assert var.get() is False and not st.find_withtag("smear")
-st.focus_force(); update(); st.event_generate("<Return>"); update()
-assert var.get() is True and st.find_withtag("smear")
-var.set(False); update(); assert not st.find_withtag("smear")                 # (follows its variable)
-holder.destroy(); update()
-var.set(True); update()                                                        # (no trace left behind)
-
 # DevBubble / StyledDialog.dev_bubbles: the developer tools' pills, in the headline's row, right of the headline
-from buttons import DevBubble
 dlg = StyledDialog(root, "t", "A headline", "intro")
 ran, lit = [], tk.BooleanVar(value=True)
 bub = dlg.dev_bubbles((("Log", lambda: ran.append("log")), ("Nightly", lambda: ran.append("n"), lit)))
@@ -999,40 +984,6 @@ assert abs(bub["Log"].winfo_rooty() - head.winfo_rooty()) < head.winfo_height()
 bub["Log"].invoke(); bub["Nightly"].invoke()
 assert ran == ["log", "n"] and not lit.get() and not bub["Nightly"].lit()
 assert StyledDialog(root, "t").dev_bubbles((("x", None),)) == {}             # (no headline: no bubbles)
-# a running tool's ring: lit while progress() says so, the ring drawn; the images are cached by their angles
-state = [None]
-run = DevBubble(root, "Tune", lambda: ran.append("tune"), progress=lambda: state[0]); run.pack(); update(2)
-assert not run.running() and len(run.find_all())
-state[0] = (0.5, "Round 6 of up to 12"); update(8); time.sleep(0.15); update(8)
-assert run.running() and run.lit() and run.state[1] == "Round 6 of up to 12"
-run.invoke(); assert ran[-1] != "tune"                                           # (running: a click does nothing)
-assert run.ring_image(15, 2, 0, 90, "#8C72E0") is run.ring_image(15, 2, 0, 90, "#8C72E0")
-assert run.ring_image(15, 2, 0, 360, "#8C72E0").width() == 15
-state[0] = None; update(3); time.sleep(0.15); update(3)
-assert not run.running() and run._blink
-run.destroy(); update(2)                                                         # (its timers stop with it)
-# ---- SmearWordButton: the word itself, smeared on the S tier's colour while on (DT-6, picked from a mock-up) -------
-from buttons import SmearWordButton
-flips = []
-sw = SmearWordButton(root, "Smear the whole word", lambda: flips.append(1)); sw.pack(); update(2)
-sw.show("bugger", False); sw.set_hint("S"); update(2)
-plain = int(sw.cget("width"))
-texts = [sw.itemcget(i, "text") for i in sw.find_all() if sw.type(i) == "text"]
-assert texts == ["Smear the whole word", "bugger", "S"] and not sw.find_withtag("smear")
-sw._anim = types.SimpleNamespace(reduce_motion=True)
-sw.show("bugger", True); update(2)
-assert sw.find_withtag("smear") and int(sw.cget("width")) == plain          # (smeared: the same size, no jump)
-assert sw._lift == 0                                                          # (Reduce motion: no bounce)
-sw._anim = types.SimpleNamespace(reduce_motion=False)
-sw.show("bugger", False); assert sw._lift < 0                                 # (a change bounces...)
-for _ in range(20):
-    time.sleep(0.03); update(1)
-assert sw._lift == 0                                                          # (...and settles)
-sw.show("other", True); assert sw._lift == 0                                  # (a new word: no bounce)
-sw.invoke(); assert flips == [1]
-sw.set_enabled(False); sw.invoke(); assert flips == [1]
-assert not sw.find_withtag("smear")                                           # (disabled: never lit)
-sw.destroy()
 dlg.close()
 root.destroy()
 print("WIDGETS2 OK")

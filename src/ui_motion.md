@@ -3,7 +3,7 @@
 The animation engine (UI-4): easing, colour blending and the `Animator` every animation runs through.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `buttons`, `cards`, `fullscreen`, `popups`, `smears`, `tiercolours`, `tune_rudeness`, `ui_chart`
+- **Used by:** `app`, `browser`, `buttons`, `cards`, `fullscreen`, `popups`, `smears`, `tiercolours`, `ui_chart`
 - **Tests:** `_selftest_chart`, `_selftest_motion`, `_selftest_tabswitch`, `_selftest_widgets`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

@@ -290,7 +290,7 @@ assert "checking every word for compounds" in text and "giving every unplaced wo
 st4 = T.Store(os.path.join(tmp, "plan.db"))
 plan = W.wiktionary_steps(st4, src) + W.queue_steps(st4, adds_words=True, by_wiktionary=True)
 assert plan == ["Reading entries", "Ranking words", "Detecting compound words",
-                "Scoring rude meanings", "Shuffling the queue"], plan     # (src given: nothing to download)
+                "Marking obscene words", "Shuffling the queue"], plan     # (src given: nothing to download)
 lines = []
 W.build_wiktionary(st4, src, log=lines.append); W.prepare_queue(st4, log=lines.append)
 stages = [l for l in lines if l and not l.startswith(" ")]
@@ -298,55 +298,27 @@ hits = [next(i for i, st in enumerate(stages) if st.startswith(name)) for name i
 assert hits == sorted(hits), (plan, stages)
 assert W.queue_steps(st4) == []                                 # all done: a later start has no steps
 assert W.wiktionary_steps(T.Store(os.path.join(tmp, "plan2.db")))[0] == "Downloading English Wiktionary"
-# a save from before OB-6 keeps no Wiktionary meanings: its kinds come from the stored definitions, and until the
-# App has read the meanings in the background, its earlier flags and the hand-picked list stand in
+# a save made from a word list keeps no Wiktionary entries: its kinds come from the stored definitions, and its
+# obscene words from the list (OB-14), whatever an earlier version flagged
 old = T.Store(os.path.join(tmp, "old.db"))
 old.insert_words(["run", "bitch", "bitches", "zorp", "come", "shit", "bureaucracy", "class"])
 old.db.execute("UPDATE words SET obscene=1 WHERE word='come'"); old.db.commit()      # (an earlier flag)
 old.set_def("run", "\u2022 (verb) to move fast\n\u2022 (noun) an act of running")
 plan = W.queue_steps(old)
 assert plan == ["Detecting compound words", "Looking up how common", "Sorting words into kinds",
-                "Scoring rude meanings", "Shuffling the queue"], plan
+                "Marking obscene words", "Shuffling the queue"], plan
 lines = []; W.prepare_queue(old, log=lines.append)
 stages = [l for l in lines if l and not l.startswith(" ")]
 hits = [next(i for i, st in enumerate(stages) if st.startswith(n)) for n in plan]
 assert hits == sorted(hits), stages
 assert old.get_word("run")["kinds"] == 3 and old.get_word("zorp")["kinds"] == 16
-assert old.get_meta("rude_done") == "list" and old.obscene_words() == {"bitch", "bitches", "shit", "come"}
+assert old.obscene_words() == {"bitch", "bitches", "shit"}, old.obscene_words()
 assert W.queue_steps(old) == []
-# the background read (App._start_rude_read): never while offline (as in every test), else once in a while
-assert not W.wants_rude_fetch(old)
-off = os.environ.pop("WORD_TIERLISTER_OFFLINE")
-try:
-    assert W.wants_rude_fetch(old)
-    old.set_meta("rude_tried", time.time())
-    assert not W.wants_rude_fetch(old)
-    old.set_meta("rude_tried", time.time() - W.RUDE_RETRY_S - 1)
-    assert W.wants_rude_fetch(old)
-finally:
-    os.environ["WORD_TIERLISTER_OFFLINE"] = off
-# ... it reads the meanings of the save's words from the download (a plain file here), scores them on its thread,
-# and the App writes the result a few thousand rows at a time
-dump = os.path.join(tmp, "rude.jsonl")
-with open(dump, "w", encoding="utf-8") as f:
-    for w, glosses, tags in [("bitch", ["A female dog.", "A malicious woman."], [[], ["vulgar", "derogatory"]]),
-                             ("shit", ["Faeces.", "Nonsense."], [["vulgar"], ["vulgar"]]),
-                             ("come", ["To move nearer.", "To orgasm."], [[], ["vulgar", "slang"]]),
-                             ("notinsave", ["A rude thing."], [["vulgar"]])]:
-        f.write(json.dumps({"word": w, "lang_code": "en", "pos": "noun", "senses": [
-            {"glosses": [g], "tags": t} for g, t in zip(glosses, tags)]}) + "\n")
-    f.write(json.dumps({"word": "bitches", "lang_code": "en", "pos": "noun",
-                        "senses": [{"glosses": ["plural of bitch"], "form_of": [{"word": "bitch"}]}]}) + "\n")
-words = {r[0] for r in old.db.execute("SELECT word FROM words")}
-saved = W.read_rude_senses(dump, words, log=lambda *_: None)
-assert set(saved) == {"bitch", "bitches", "shit", "come"}, set(saved)
-found = W.find_rude(words, saved, log=lambda *_: None)
-steps = [old.save_rude_senses(saved, chunk=2), old.set_rude(found, chunk=2)]
-assert [sum(1 for _ in g) for g in steps] == [2, 2]           # (4 words, 2 a step)
-old.set_meta("rude_done", W.rude_version(old))
-assert old.obscene_words() == {"shit"}, old.obscene_words()        # (bitch: an insult; come: one sexual meaning)
-assert old.smeared_meanings("come") == ["To orgasm."] and W.queue_steps(old) == [] and not W.wants_rude_fetch(old)
-# a word added by hand (UI-51) has no meanings to read: the hand-picked list decides
+# a new list (another not_obscene.txt, say) marks them again on the next start
+old.set_meta("obscene_done", "older")
+assert W.queue_steps(old) == ["Marking obscene words"]
+W.prepare_queue(old, log=lambda *_: None); assert W.queue_steps(old) == []
+# a word added by hand (UI-51): the list decides
 old.add_word("dipshits"); old.add_word("glass")
 assert "dipshits" in old.obscene_words() and "glass" not in old.obscene_words()
 

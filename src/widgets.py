@@ -2,7 +2,7 @@
 
     smears.py    censored words drawn smeared (smear_items, Unsmear, smeared_label, TreeSmears)
     popups.py    Toast, Tooltip
-    buttons.py   RoundButton, TierRow, TierChip, LinkButton, SmearToggle, SmearWordButton, DevBubble
+    buttons.py   RoundButton, TierRow, TierChip, LinkButton, DevBubble
     menus.py     DropMenu, ChoiceButton, HeaderMenus, TabBar, close_popups, watch_focus
     drawer.py    the definitions pane (DefinitionDrawer, fill_definitions, word_at)
     cards.py     WordCard, DuelCards, AnchorLadder, EmptyCard, ShapeCard, FileList

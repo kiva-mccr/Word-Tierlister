@@ -20,9 +20,9 @@ How it works
   rank, and compound words ("bookshelf", "well-known") are pushed further back.
   Same seed = same order. Change it under Settings > How words are dealt (or
   --seed N), where "Most common first" is a strict frequency order instead, and
-  kinds of words (nouns, verbs, ..., obscene words and each kind of rude meaning) can be
-  left out of the queue. Censor obscene words there smears them sideways until the pointer
-  is over them, and their rude meanings in the definitions.
+  kinds of words (nouns, verbs, ..., obscene words: those on Surge AI's published profanity
+  list) can be left out of the queue. Censor obscene words there smears them sideways, with
+  their meanings in the definitions, until the pointer is over them.
   The first start asks these in three short steps. (--source wordnet gives a
   smaller ~77k list instead.)
 * Your progress lives in a save file (tierlist.db) that is written after every action.
@@ -67,15 +67,14 @@ How it works
 
 Code map (run tierlist.py; it stays at the top of the folder, next to your save. The modules below
 live in src/, the self-tests in tests/, the developer's tools in tools/ (check_release, layout_trace, build,
-measure_rudeness, notes, speed_check, stress_ui, make_icon, make_typefaces), the Claude notes in .claude/; each code file has a note beside it (name.md: read it
+notes, speed_check, stress_ui, make_icon, make_typefaces), the Claude notes in .claude/; each code file has a note beside it (name.md: read it
 before editing the file); DEVELOPERS.md has the same map with more detail)
 ----------------------------------------------------------------------------------------------
     tierlist.py     entry point: command-line options, start-up sequence, main(). Re-exports
                     the pieces below so `import tierlist` keeps working for the self-tests.
     constants.py    tier names, modes, ranking defaults, the queue's curve.   (no dependencies)
-    obscene.py      the kinds of rude meaning, Wiktionary's rude labels, a short hand-picked list (no tkinter).
-    rudeness.py     how rude each meaning is, by rules: points from labels, topics, wording, WordNet, links
-                    between words; what a word's scores lead to (OB-6; no tkinter).
+    obscene.py      obscene words: Surge AI's list (src/wordlists) less not_obscene.txt; Wiktionary's rude
+                    labels (OB-14; no tkinter).
     keymap.py       the keyboard shortcuts: every action's keys, the user's changes on top (UI-48; no tkinter).
     problems.py     plain-language error text, SetupError, log helpers (ST-2; no tkinter).
     deps.py         required packages: detect and install them; the terminal stage (ST-3, ST-4; no tkinter).
@@ -92,7 +91,7 @@ before editing the file); DEVELOPERS.md has the same map with more detail)
     ui_style.py     ttk / tk styling (UI-3).          ui_motion.py easing, colour blend, Animator (UI-4).
     smooth.py       soft-edged rounded shapes, curves and icons drawn as images (UI-53).
     smears.py       censored words drawn smeared (ST-6).    popups.py  Toast and Tooltip (UI-11, UI-13).
-    buttons.py      RoundButton, the tier pills, small icon and smear buttons, the developer tools' bubbles.
+    buttons.py      RoundButton, the tier pills, the small icon link, the developer tools' bubbles.
     menus.py        drop-down menus, choices, the header menus and tabs (UI-10, UI-43).
     drawer.py       the definitions pane (UI-12).   cards.py  the word card, duel cards and other drawn panels.
     dialogs.py      StyledDialog, every dialog's frame (UI-24).   widgets.py  refresh_widgets after a font change.
@@ -102,11 +101,10 @@ before editing the file); DEVELOPERS.md has the same map with more detail)
     browser.py      Browser: the Browse / edit window.
     filepicker.py   the app's own Import / Export file choosing on Linux (UI-42).
     shortcuts.py    Settings > Keyboard shortcuts... (UI-48).
-    review.py       the review of rude meanings by hand (OB-9; a developer tool: How words are dealt's bubble or --review-rude).
     tiercolours.py  Settings > Tier colours... (UI-61).
     dealing.py      Settings > How words are dealt... and the first start's three steps (ST-6).
     sources.py      File > Source & Updates...: updates; make a standalone program; in the program, unpack its source.
-    devtools.py     the developer tools' bubbles (Settings > Developer tools): the review words, the tuner, Log, Crash test.
+    devtools.py     the developer tools' bubbles (Settings > Developer tools): Log, Crash test.
     app.py          App: the main window and all modes.
 
 Layers: each module imports only from the ones before it (DEVELOPERS.md draws them; tools/check_release.py
@@ -127,7 +125,7 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES, REVIEW_FILE, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
+from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
@@ -187,10 +185,6 @@ def main():
     ap.add_argument("--no-install", action="store_true",
                     help="never offer to pip-install missing packages (they are listed in requirements.txt), "
                          "nor to make a program / unpack the source on the first start")
-    ap.add_argument("--review-rude", nargs="?", const="", default=None, metavar="FILE",
-                    help="(developer) review the rude words' meanings by hand: FILE, or rude_review.jsonl next to "
-                         "the save (from tools/measure_rudeness.py sample); the answers go beside it and only "
-                         "test the rules")
     ap.add_argument("--crash-test", action="store_true", help=argparse.SUPPRESS)   # ST-2: fakes a bug 3 s after start
     ap.add_argument("--remove-source", help=argparse.SUPPRESS)  # T-12: the unpacked source this was made from
     ap.add_argument(standalone.BUILD_NIGHTLY, help=argparse.SUPPRESS)  # the program to build in place of (nightly)
@@ -310,12 +304,6 @@ def main():
             if args.build_nightly and not getattr(sys, "frozen", False):   # (the program's nightly update: build it
                 from sources import SourceDialog                               # from this source, in its place)
                 root.after(500, lambda: SourceDialog(app, go=True, target=args.build_nightly))
-            if args.review_rude is not None:      # (OB-9: a developer option)
-                review = args.review_rude or os.path.join(os.path.dirname(os.path.abspath(store.path)), REVIEW_FILE)
-                if os.path.exists(review):
-                    app.open_review(review)
-                else:
-                    print(f"No review file at {review}: make one with tools/measure_rudeness.py sample.")
             if args.crash_test:           # lets you see the friendly error dialog; the program keeps running
                 root.after(3000, lambda: 1 / 0)
             root.mainloop()

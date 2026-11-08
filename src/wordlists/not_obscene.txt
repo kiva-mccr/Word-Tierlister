@@ -1,0 +1,68 @@
+# Words Surge AI's list (profanity_en.csv) catches that are not obscene: whatever is listed here is never counted
+# as obscene (obscene.py). One word per line, lower case; lines starting with # are notes. Add a word the list gets
+# wrong here instead of editing the list itself (asked for: the list stays as published).
+
+# Ordinary words, names and places the list catches (usually as part of a phrase or a rare slang use)
+abbie
+bater
+bastinado
+bates
+bbc
+bender
+buttermilk
+cack
+coot
+cooties
+crow
+crows
+diddle
+dipstick
+dolt
+dong
+finger
+flamer
+flamers
+forked
+greaser
+hoar
+hustler
+jigger
+jiggs
+knickers
+knob
+mongrel
+nicker
+nip
+nuggets
+octopussy
+peter
+puss
+ramrod
+sack
+scut
+sheet
+slit
+spook
+spooks
+suck
+swine
+tart
+tramp
+wang
+
+# Medical and body words (proper terms, not vulgar)
+anal
+anus
+breasts
+crotch
+cunnilingus
+rectum
+sperm
+sphincter
+transvestite
+vulva
+
+# Words whose everyday meaning is clean but whose slang meaning is common: left out of this file for now, so
+# they stay obscene (a listed word counts as obscene whole). Move any to a line of its own above to clear it.
+#   ass (donkey), bitch (female dog), cock (rooster), pussy (cat), prick (to prick), hoe (garden tool),
+#   booty (pirate's booty), snatch (to grab), bondage, spanking, hooters, homo, negro, bugger

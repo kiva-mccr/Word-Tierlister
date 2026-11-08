@@ -479,7 +479,7 @@ class WordCard(SmoothCanvas):
       magnifier again) puts the word back; note(text, animator) says something under it and shakes the card.
     * ST-6: set(word, sub, censor=True) shows the word smeared sideways (Censor obscene words); with the pointer
       over it, it un-smears (Unsmear; `animator` is the App's, for the easing).
-    * UI-59: set(..., kind="sexual") writes what kind of rude word it is faintly above it, in a row of its own: the
+    * UI-59: set(..., kind="noun · verb") writes its parts of speech faintly above it, in a row of its own: the
       card is KIND_ROOM of a sub-line taller for every word (so its size still never changes) and a word with a
       kind is drawn at KIND_SCALE of its size (asked for: a little of both, so the kind has room).
     """

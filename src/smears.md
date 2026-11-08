@@ -29,7 +29,7 @@ The module docstring has the details; this page is the map.
 - A smear never reaches past its word (F-33, the user's rules): each line's first and last letter smear only inward over the same spread, the letters between both ways (`smear_items`, `_smear_lines`). The straight cut-off strips it had cut through letters that reach past their boxes (Young Serif's j and f), and a smeared label's canvas, only as wide as its text, cropped the outer copies (the definitions pane).
 - `smear_items`: one text copy per whole pixel, side copies faded into the paper by half a pixel apart, the middle copy drawn last. Copies stacked on one pixel looked bold on small text and then snapped (the definitions pane); check the last frames' ink against the plain word.
 - A censored word is smeared (`smear_items` / `Unsmear`; `smeared_label` where it is not our canvas; `TreeSmears` over a Treeview), un-smearing under the pointer; never masked where a widget can draw.
-- `smear_items` reads a text item's top left: draw the text with `anchor="nw"` (centred text smeared below and beside itself, `SmearToggle`). `round_rect`'s corners are soft splines: a pill needs `r` about the full height, not half.
+- `smear_items` reads a text item's top left: draw the text with `anchor="nw"` (centred text smeared below and beside itself). `round_rect`'s corners are soft splines: a pill needs `r` about the full height, not half.
 
 ## Changing it
 

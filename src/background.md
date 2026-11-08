@@ -1,9 +1,9 @@
 # `src/background.py`
 
-Work on a worker thread handed back to the Tk thread (`Task`), and timers that repeat on it (`Repeat`); both stop when their widget is destroyed. Every place that waits on a worker uses it: the update check and the background read of rude meanings (app), the developer tools, the reshuffle (dealing), Source & Updates' check and the sync rounds.
+Work on a worker thread handed back to the Tk thread (`Task`), and timers that repeat on it (`Repeat`); both stop when their widget is destroyed. Every place that waits on a worker uses it: the update check (app), the reshuffle (dealing), Source & Updates' check and the sync rounds.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `dealing`, `devtools`, `sources`, `syncdialog`
+- **Used by:** `app`, `dealing`, `sources`, `syncdialog`
 - **Tests:** `_selftest_background`
 
 The module docstring has the details; this page is the map.

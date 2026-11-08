@@ -369,9 +369,6 @@ busy = sources.SourceDialog(app, root_dir=S.ROOT, check=lambda: None); pump(root
 app._offer_other_form(); pump(root)
 assert not asked                                                  # another question open: it waits
 busy.close(); pump(root)
-app.rude_read = {"line": ""}; app._offer_other_form(); pump(root)
-assert not asked                                                  # Wiktionary's meanings downloading: it waits
-app.rude_read = None
 app._offer_other_form(); pump(root, 4)
 assert asked == ["Make this a standalone program?"] and made == [S.ROOT]       # yes: builds at once
 assert app.store.get_meta("offered_program") == "1"

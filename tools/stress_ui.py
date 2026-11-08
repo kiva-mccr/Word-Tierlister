@@ -44,7 +44,7 @@ def setup(rnd):
     s.insert_words(WORDS)
     s.set_anchors(WORDS[:6])
     s.set_meta("dealt_asked", "1")
-    s.db.execute(f"UPDATE words SET obscene=1, rude=4 WHERE word IN ({','.join('?' * len(OBSCENE))})", OBSCENE)
+    s.db.execute(f"UPDATE words SET obscene=1 WHERE word IN ({','.join('?' * len(OBSCENE))})", OBSCENE)
     s.db.commit()
     s.set_censor(True)
     for w in WORDS[11:30]:

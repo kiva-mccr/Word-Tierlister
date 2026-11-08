@@ -38,11 +38,11 @@ flowchart TB
     wordsource["wordsource.py<br/>build the word list from Wiktionary or WordNet,<br/>frequencies, kinds of word, queue prep"]
     app["app.py: App<br/>the main window and its four modes"]
     widgets["cards.py, buttons.py, menus.py, drawer.py, popups.py, ui_chart.py, ...<br/>word card, tier pills, duel cards, toasts,<br/>definitions pane, tier chart, progress shelf"]
-    dialogs["browser.py, dealing.py, tiercolours.py,<br/>shortcuts.py, sources.py, filepicker.py, review.py<br/>Browse, the settings windows, the rude-meaning review"]
+    dialogs["browser.py, dealing.py, tiercolours.py,<br/>shortcuts.py, sources.py, filepicker.py<br/>Browse, the settings windows"]
     sync["syncdialog.py, syncfiles.py, syncthing_api.py<br/>sync with other devices"]
     defs["definitions.py: Definitions<br/>lookups on a worker thread"]
     store[("store.py: Store<br/>tierlist.db (SQLite)")]
-    rude["rudeness.py, obscene.py<br/>which meanings are rude"]
+    rude["obscene.py, src/wordlists<br/>which words are obscene (a published list)"]
     standalone["standalone.py, deps.py<br/>packages, builds, self-update"]
     net{{"the internet:<br/>kaikki.org Wiktionary, dictionaryapi.dev,<br/>GitHub releases and main, PyPI"}}
     peers{{"your other devices,<br/>through Syncthing"}}
@@ -50,7 +50,6 @@ flowchart TB
     user --> app
     main --> startup --> wordsource --> store
     main --> app
-    wordsource --> rude
     app --> widgets
     app --> dialogs
     app -- "every action: a Store method<br/>(commits), then refresh()" --> store
@@ -84,7 +83,7 @@ flowchart TB
     end
     subgraph L4["windows and views"]
         direction LR
-        ui_chart["ui_chart"] ~~~ fullscreen["fullscreen"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ review["review"] ~~~ dealing["dealing"] ~~~ sources["sources"] ~~~ devtools["devtools"]
+        ui_chart["ui_chart"] ~~~ fullscreen["fullscreen"] ~~~ browser["browser"] ~~~ filepicker["filepicker"] ~~~ shortcuts["shortcuts"] ~~~ tiercolours["tiercolours"] ~~~ syncdialog["syncdialog"] ~~~ dealing["dealing"] ~~~ sources["sources"] ~~~ devtools["devtools"]
     end
     subgraph L3["UI building blocks (tkinter)"]
         direction LR
@@ -99,11 +98,11 @@ flowchart TB
     end
     subgraph L0["foundations (no tkinter)"]
         direction LR
-        constants["constants"] ~~~ obscene["obscene"] ~~~ rudeness["rudeness"] ~~~ problems["problems"] ~~~ deps["deps"] ~~~ syncthing_api["syncthing_api"] ~~~ keymap["keymap"] ~~~ bundle["bundle"] ~~~ standalone["standalone"]
+        constants["constants"] ~~~ obscene["obscene"] ~~~ problems["problems"] ~~~ deps["deps"] ~~~ syncthing_api["syncthing_api"] ~~~ keymap["keymap"] ~~~ bundle["bundle"] ~~~ standalone["standalone"]
     end
     L6 --> L5 --> L4 --> L3 --> L2 --> L1 --> L0
     L6 -. "also store, saves, startup, deps, ..." .-> L1
-    L5 -. "also store-free helpers:<br/>keymap, rudeness, deps, standalone" .-> L0
+    L5 -. "also store-free helpers:<br/>keymap, deps, standalone" .-> L0
     L4 -. "browser, filepicker read the Store directly" .-> L1
 ```
 
@@ -113,11 +112,10 @@ note):
 | Module | Imports |
 |---|---|
 | `tierlist` | app, browser, constants, definitions, deps, errors, fonts, launch, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
-| `app` | background, browser, buttons, cards, constants, dealing, definitions, deps, devtools, dialogs, drawer, errors, filepicker, fonts, framesync, fullscreen, keymap, menus, popups, review, rudeness, saves, shortcuts, sizing, smooth, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets, wordsource |
-| `devtools` | background, constants, errors, filepicker, review, saves, standalone |
+| `app` | background, browser, buttons, cards, constants, dealing, definitions, deps, devtools, dialogs, drawer, errors, filepicker, fonts, framesync, fullscreen, keymap, menus, popups, saves, shortcuts, sizing, smooth, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets |
+| `devtools` | constants, standalone |
 | `sources` | background, constants, deps, dialogs, errors, filepicker, fonts, problems, saves, standalone, startup, theme |
-| `dealing` | background, buttons, cards, constants, dialogs, fonts, obscene, popups, rudeness, theme |
-| `review` | buttons, constants, drawer, fonts, keymap, obscene, sizing, theme, ui_style |
+| `dealing` | background, buttons, cards, constants, dialogs, fonts, popups, theme |
 | `syncdialog` | background, buttons, deps, dialogs, errors, fonts, popups, problems, saves, startup, syncfiles, syncthing_api, theme |
 | `tiercolours` | buttons, constants, dialogs, fonts, smooth, theme, ui_motion |
 | `shortcuts` | buttons, dialogs, fonts, keymap, sizing, theme |
@@ -130,7 +128,7 @@ note):
 | `widgets` | dialogs, drawer |
 | `dialogs` | buttons, fonts, sizing, theme, ui_style |
 | `cards` | buttons, constants, fonts, smears, smooth, theme, ui_motion |
-| `drawer` | buttons, definitions, rudeness, smears, theme |
+| `drawer` | buttons, definitions, smears, theme |
 | `menus` | buttons, sizing, smooth, theme |
 | `buttons` | fonts, popups, smears, smooth, theme, ui_motion |
 | `popups` | sizing, smooth, theme, ui_motion |
@@ -141,12 +139,11 @@ note):
 | `launch` | constants, problems, wordsource |
 | `definitions` | constants |
 | `saves` | constants |
-| `wordsource` | constants, obscene, problems, rudeness |
-| `store` | constants, obscene, rudeness |
+| `wordsource` | constants, obscene, problems |
+| `store` | constants, obscene |
 | `standalone` | bundle, constants, deps |
 | `syncthing_api` | deps |
 | `deps` | constants |
-| `rudeness` | obscene |
 
 ## Start-up
 
@@ -169,12 +166,10 @@ flowchart TB
     J --> K["startup.run_with_progress(set_up)<br/>on a worker thread, a progress window with time left"]
     K --> K1["launch.set_up: names every stage first,<br/>then build_wiktionary or the word list,<br/>then wordsource.prepare_queue"]
     K1 --> L["App(root, store, Definitions(store)).open_window()"]
-    L --> L1{"--build-nightly or --review-rude?<br/>(the program's nightly update; a developer option)"}
-    L1 -- "--build-nightly" --> L2["SourceDialog(go=True, target=...):<br/>build the program in place of the old one"]
-    L1 -- "--review-rude" --> L3["the review of rude meanings<br/>(src/review.py) opens over the window"]
-    L1 -- neither --> M["root.mainloop()"]
+    L --> L1{"--build-nightly?<br/>(the program's nightly update)"}
+    L1 -- yes --> L2["SourceDialog(go=True, target=...):<br/>build the program in place of the old one"]
+    L1 -- no --> M["root.mainloop()"]
     L2 --> M
-    L3 --> M
     M --> N{"App.reopen asked?<br/>(dark mode, tier colours)"}
     N -- yes --> I2["app.reopen_while_asked: build the window again<br/>in the new look, then take over the old one"] --> M
     N -- no --> O["end_session in the log"]
@@ -256,10 +251,8 @@ erDiagram
         int pen "compound-word push-back"
         real freq "wordfreq frequency"
         int kinds "parts of speech (bits)"
-        int obscene "smeared whole"
+        int obscene "on the obscene words list"
         int out "left out by How words are dealt"
-        int rude "kinds of rude meaning (bits)"
-        int rude_main "its main rude kind"
     }
     comparisons {
         int id PK
@@ -285,11 +278,6 @@ erDiagram
         text word PK
         text text "cached definition"
     }
-    rude {
-        text word PK
-        text senses "the meanings the rules read"
-        text smeared "which meanings are smeared"
-    }
     history {
         int id PK
         text payload "rows as they were: one undo step"
@@ -297,14 +285,13 @@ erDiagram
     }
     meta {
         text key PK
-        text value "settings: zoom, monitor_zooms, dark_mode, keymap, tier_colors, censor_kinds, dev_tools, qseed, ..."
+        text value "settings: zoom, monitor_zooms, dark_mode, keymap, tier_colors, censor, obscene_done, dev_tools, qseed, ..."
     }
     words ||--o{ comparisons : "winner / loser"
     words ||--o{ conflicts : "a / b"
     comparisons ||--o| swaps : "comp_id"
     words ||--o| anchors : "one per tier"
     words ||--o| defs : "word"
-    words ||--o| rude : "word"
 ```
 
 ## Threads
@@ -324,7 +311,6 @@ flowchart LR
         Setup["startup.run_with_progress:<br/>building the word list"]
         Defs["Definitions._worker:<br/>WordNet, then dictionaryapi.dev"]
         Upd["the update check (sources.py):<br/>standalone.latest_release, then main<br/>for a nightly (latest_main, nightly_changes)"]
-        RudeRead["App._start_rude_read:<br/>an older save's rude meanings"]
         Deal["dealing.py: a reshuffle<br/>(App.busy; nothing else writes)"]
         Pip["deps.install: pip, and a watcher<br/>measuring its download"]
         Sync["syncdialog.AutoSync: writing and reading<br/>the sync files; Syncthing's answers"]
@@ -333,7 +319,6 @@ flowchart LR
     Setup -- "log lines, queue" --> App
     Defs -- "drain(): results queue" --> App
     Upd -- "Task" --> App
-    RudeRead -- "Task" --> App
     Deal -- "Task" --> App
     Sync -- "Task; folded in a step at a time" --> App
 ```
@@ -390,7 +375,7 @@ by this repository's workflow.
 | The tier chart and the progress shelf | `src/ui_chart.py` |
 | Full screen: the pause menu and a dialog's Back bar | `src/fullscreen.py` (App: `toggle_full_screen`, `_pause_pages`) |
 | The word list: download, parsing, frequencies | `src/wordsource.py` |
-| What counts as rude | `src/rudeness.py` (bump `RUDENESS_VERSION`), `src/obscene.py` |
+| Which words are obscene | `src/wordlists/not_obscene.txt` (a word the list gets wrong), `src/obscene.py` |
 | Definitions | `src/definitions.py` |
 | An error's wording | `src/problems.py` (`describe`) |
 | Packages and their install dialog | `src/deps.py`, `src/startup.py` |
@@ -414,7 +399,6 @@ All optional; `python tierlist.py --help` explains each.
 | `--seed N` | Reshuffle the words you haven't placed yet with this seed. |
 | `--console` | Keep the terminal / console attached and print to it (troubleshooting). |
 | `--no-install` | Never offer to install missing packages, nor (on the first start) to make a program or unpack the source. |
-| `--review-rude [FILE]` | (Developers) Review the rude words' meanings by hand: FILE, or `rude_review.jsonl` next to the save (see [What counts as rude](#what-counts-as-rude)). The same from the window: Settings > Developer tools, then the bubble in How words are dealt. |
 
 ## Folders
 
@@ -422,11 +406,10 @@ All optional; `python tierlist.py --help` explains each.
 tierlist.py        run this. Your save (tierlist.db), its log and exports stay next to it.
 requirements.txt   the Python packages (the program offers to install them itself)
 src/               the program's modules; src/icons/ holds its icon (drawn by tools/make_icon.py), src/typefaces/
-                   its two fonts (fetched by tools/make_typefaces.py)
+                   its two fonts (fetched by tools/make_typefaces.py), src/wordlists/ the obscene words list
 tests/             the self-tests and run_tests.sh
 tools/             check_release.py (pre-hand-off checks, builds the zip), layout_trace.py (layout jitter finder),
-                   build.py + hooks/ (build it as a program), measure_rudeness.py (measures the rudeness rules),
-                   tune_rudeness.py (tunes the rules' numbers against the review's answers),
+                   build.py + hooks/ (build it as a program),
                    make_icon.py (draws the icon), make_typefaces.py (fetches the fonts), speed_check.py and
                    stress_ui.py (speed and stress checks), notes.py (keeps the notes beside the code current)
 .claude/           notes for Claude Code: CLAUDE.md (project notes) and CHECKLIST.md
@@ -451,11 +434,10 @@ found again, so switching between the two loses nothing.
 | `src/launch.py` | Start-up's stages (the word list, the queue, `--seed`), each named once with its work: the progress window's "Step i of n" comes from the same list that runs. |
 | `ROADMAP.md` | The roadmap: every step, what was asked and built, and the decisions. |
 | `src/constants.py` | The program's VERSION and GitHub repository (T-8), tier names, modes, ranking defaults, the kinds of words (ST-6) and the masked text of a censored word. No dependencies. |
-| `src/obscene.py` | The kinds of rude meaning (Expletive, Sexual, Slur; OB-12), which start ticked and which are censored; Wiktionary's rude labels; a short list chosen by hand (the stand-in until a save has Wiktionary's meanings, and for a word added by hand). No tkinter, no internet. |
-| `src/rudeness.py` | How rude each meaning is, by rules, no word list (OB-6): points towards the rules' own six kinds (Clinical, Crude, Swear, Insult, Sexual, Slur), folded into the three shown (`fold`), from Wiktionary's labels, its topics and categories, the definition's wording, the word itself and, when nltk's WordNet is installed, the matching WordNet meaning's place in its tree and its usage labels; a second pass over Wiktionary's synonym lists says which kind a slang meaning is; a meaning's kind; the word's points, its first meaning counting most (enough of them: the whole word smeared); word families (a word built from a rude one: its etymology, or that word's derived terms) add a little; what a word's scores lead to (`score_saved`: the kinds of its meanings, smeared whole, the meanings smeared); how the program keeps meanings compactly (`compact_entry`, `expand`, `has_signal`). No tkinter, no internet. |
+| `src/obscene.py` | Which words are obscene (OB-14): Surge AI's published profanity list (`src/wordlists/profanity_en.csv`, MIT) less `src/wordlists/not_obscene.txt`, matched whole (`is_obscene`); `LIST_VERSION` (a change to either file marks every save's words again); Wiktionary's rude labels, shown in the definitions. No tkinter, no internet. |
 | `src/keymap.py` | The keyboard shortcuts (UI-48): every action with a key, its view and default keys, your changes on top (saved in the save); key presses to key names. No tkinter. |
-| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and of rude meaning, the ones left out; ST-6, OB-5), the meanings the rudeness rules read and what they found (OB-6), conflicts, boundary swaps, the progress shelf's tallies, merging. |
-| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), the meanings the rudeness rules read (`RudeCollector`, kept at the Wiktionary build; `fetch_rude_senses` for an older save, in the background) and scoring them (`find_rude`), queue prep. |
+| `src/store.py` | `Store`: the SQLite save. Tiers, anchors (they follow their tier), Elo duels, undo, queue order, which words are dealt (kinds of word and obscene words, the ones left out; ST-6), which words are obscene (`mark_obscene`, from the list, OB-14), conflicts, boundary swaps, the progress shelf's tallies, merging. |
+| `src/wordsource.py` | Building the word list (WordNet, Wiktionary; each word's parts of speech), compound detection, word frequencies (for the coverage tag), kinds for an older save (from its definitions), marking the obscene words (once per list), queue prep. |
 | `src/saves.py` | Where the save lives (`app_dir`: tierlist.py's folder, or a built program's own, T-1); finding / remembering your earlier save; export. |
 | `.github/workflows/build.yml` | Build programs (T-8, T-16): builds the Linux, Windows and macOS (Apple Silicon) programs on GitHub (a button, or `tools/build.py --all`); a pushed tag `v<VERSION>` publishes them as a release. |
 | `.github/workflows/macos.yml` | Test on macOS (T-18): on GitHub's Macs (Apple Silicon and Intel), runs every self-test (split over 2 machines for Apple Silicon and 3 for Intel, run at once: `SHARD=k/n`, `tests/_shard.py`), builds the program and starts it, and keeps screenshots of each stage and the built app as downloads of the run. Runs on pushes to main that touch the code (never for a change only to `.md` files, docs or images), once a night, and the Run workflow button; not on pull requests (a Mac run takes 20-30 minutes). |
@@ -465,6 +447,7 @@ found again, so switching between the two loses nothing.
 | `src/theme.py` | The two looks (light, and Dusk for dark mode, UI-77), each with its default tier colours; Browse's softer row tints, and `contrast()` (text about 7:1, UI-76). |
 | `src/fonts.py` | Typography (UI-73): loads the two bundled typefaces for this program only (never installed) and builds the named size roles: Young Serif for the words, Atkinson Hyperlegible for the rest, the text in three sizes (20 / 12 / 10 pt). |
 | `src/typefaces/` | Young Serif and Atkinson Hyperlegible (regular, bold, both italics), from Google Fonts under the SIL Open Font Licence (the licences beside them), with their line spacing tightened by `tools/make_typefaces.py`; `overhang.json`, the letters whose ink reaches past their box. |
+| `src/wordlists/` | The obscene words list (OB-14): `profanity_en.csv`, Surge AI's profanity list as published (MIT, `profanity_en_LICENSE.txt`; only its `text` column is read), and `not_obscene.txt`, the ordinary words it catches. |
 | `src/ui_style.py` | ttk / tk styling (applies the palette and fonts to every widget; draws the tick boxes); puts the program's icon on every window (IC-1); shows a window only once it has drawn (`show_drawn`, F-48). |
 | `src/icons/` | The icon (IC-1): the progress shelf's six spines in the tier colours on a cream tile with a slightly darker border (IC-4), the lilac mark over C. PNGs from 16 to 1024 px (windows, taskbar, the Linux launcher) and `icon.ico` (the Windows program's own icon). |
 | `src/deps.py` | Packages: finds missing ones and installs them (measuring the download for a real speed and time left); the terminal stage, the private `.venv`; each package's size, purpose and web page; giving the terminal back and the applications-menu launcher (ST-5) (no tkinter). |
@@ -477,7 +460,7 @@ found again, so switching between the two loses nothing.
 | `src/smooth.py` | Smooth (anti-aliased) rounded shapes and curves for the canvases: drawn as small images, since Tk's own canvas shapes have jagged edges (worst on Windows); text whose letters reach past their boxes (Young Serif's j and f) is repainted whole (F-32). |
 | `src/smears.py` | Censored words drawn smeared (ST-6): `smear_items` (copies side by side, never past the word's own ends (F-33), its end letters smeared further inward (F-43)), `Unsmear` (un-smears under the pointer), `smeared_label` (for the definition panes) and `TreeSmears` (Browse's list). |
 | `src/popups.py` | `Toast` (messages, each its own, the newest on top) and `Tooltip` (hover notes). |
-| `src/buttons.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links), `SmearToggle` (the small "abc" pill, smeared or plain, that censors a kind of rude meaning or not), `SmearWordButton` and `DevBubble` (the developer tools' small pills; a running tool's shows a progress ring round its dot, from `DevTools.progress`). |
+| `src/buttons.py` | `RoundButton` (rounded pastel buttons with hover, press and key hints), `TierRow` (the S..F pills), `TierChip` (a tier label drawn like a pill), `LinkButton` (a small "opens elsewhere" icon, alone or after words: the Wiktionary and GitHub links) and `DevBubble` (the developer tools' small pills, a switch or a button). |
 | `src/menus.py` | `DropMenu` (the program's own drop-downs, kept built and hidden while closed), `ChoiceButton` (drop-down choices), `HeaderMenus` (File / Edit / View / Settings), `TabBar` (mode tabs, which show only once they have work), `close_popups` / `watch_focus`. |
 | `src/drawer.py` | `DefinitionDrawer` (the definitions pane, with a slim scroll bar while its meanings do not all fit (F-34): it fills the room the page leaves and eases to a new height when the view changes; under "plural of colour" or "Alternative spelling of jail", that word's own meaning), `fill_definitions`, `word_at` (a word in a meaning to look up, W-1). |
 | `src/cards.py` | `WordCard` (the big word on its card; its magnifier looks up any word to sort it now, typed on the card with a blinking caret; a censored word is smeared), `DuelCards` (the two duel cards with Tie / Skip), `AnchorLadder` (the S..F strip while comparing), `EmptyCard` (friendly "nothing to do" panels), `ShapeCard` (a queue shape and its curve, in How words are dealt) and `FileList` (the file picker's list). |
@@ -485,14 +468,13 @@ found again, so switching between the two loses nothing.
 | `src/widgets.py` | The map of the widget modules above, and `refresh_widgets` (re-measure them all after a font change). |
 | `src/ui_chart.py` | Each tab's own view at the top right: the tier chart (Place new words), `SettledChart` (Refine), `ConflictCard` (Conflicts); `Bookshelf`, the progress shelf under the status line (every spine one width, UI-79; a hovered spine lifts, its neighbours less; in the duel tabs a little triangle in each word's tier colour marks the spines the two words come from). |
 | `src/fullscreen.py` | Full screen (FS-2): `PauseMenu`, the menu Esc opens over the whole window (pages made from the top menus, Back and a trail, rows that slide in and pop), and `dialog_bar`, the Back bar and trail a dialog wears there in place of Cancel and its title bar. |
-| `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, with a tick box per kind of rude meaning under it, OB-5, and beside each kind a small smear button to censor it or not, OB-7, OB-8) and Censor obscene words; on the first start the same in three steps. |
-| `src/review.py` | The review of rude meanings by hand (OB-9, developers: How words are dealt's bubble or `--review-rude`): word by word, the rules' guess filled in for each meaning; the answers go beside the review file and only test the rules (`tools/measure_rudeness.py answers`; `score_guesses` for the bubble, against the file's own guesses). |
+| `src/dealing.py` | Settings > How words are dealt... (ST-6): the order (Most common first, or a little shuffled with its shape, spread, seed), which kinds of words (a tick box each, with counts; obscene words too, one plain tick box, OB-14) and Censor obscene words; on the first start the same in three steps. |
 | `src/shortcuts.py` | Settings > Keyboard shortcuts...: change any key (click it, press the new one), add or remove keys, swap on a clash; the 1-6 placing keys move as a set. |
 | `src/tiercolours.py` | Settings > Tier colours... (UI-61, UI-80): click a tier's pill, then set its colour with the H / S / V bars or a hex code (each follows the other); a colour too dark for the tier's letter is said so and Apply waits; Reset to defaults; Apply saves them and shows them (the window is rebuilt in place). |
 | `src/filepicker.py` | Import / Export file choosing on Linux (UI-42): what it found first (other saves, exports), a themed folder browser behind it; Windows and macOS keep their own dialogs. |
 | `src/browser.py` | The Browse / edit window: search, Show (a tier, unplaced words, or the placed words of a kind) / Sort (or click a column heading; again to turn it round; its arrow fills as the rows load), rows in soft tier colours (a censored word reads b•••••d), Move to, Unplace (or the Delete key; Ctrl+Z undoes), definition; it opens complete and in its place, like the other windows, and remembers what it showed. |
 | `src/background.py` | Work on a worker thread handed back to the Tk thread (`Task`: `done` or `failed`, never lost) and timers on it (`Repeat`); both stop when their window closes. |
-| `src/devtools.py` | The developer tools' bubbles (Settings > Developer tools): the review of rude meanings, Review words and Tune & reroll run from `tools/` in the background (a `Job` each, with its ring and stop button), Log and Crash test. |
+| `src/devtools.py` | The developer tools' bubbles (Settings > Developer tools): Log and Crash test (Source & Updates). |
 | `src/app.py` | The main window and all four modes. |
 | `tools/check_release.py` | Pre-hand-off checks (packages vs requirements, docs, tests listed, files in the right folder, each code file's notes up to date, the import layers); `--tests`, `--zip`. See `.claude/CHECKLIST.md`. |
 | `tools/speed_check.py` | Times refresh, placing, duels and every Browse sort on a big throwaway save (a million words by default, dense and sparse); fails when something is more than twice its budget (F-9). |
@@ -506,14 +488,12 @@ found again, so switching between the two loses nothing.
 | `src/syncfiles.py` | Syncing between devices (SY-1): each device's progress as one file of its own in the sync folder, merged word by word (the newer change wins). No tkinter. |
 | `src/syncthing_api.py` | Syncthing (SY-1): finding it, starting it (and at log-in), and its local API for linking devices and sharing the sync folder. No tkinter. |
 | `src/syncdialog.py` | File > Sync with other devices (SY-1), and the automatic sync while the program runs. |
-| `tools/measure_rudeness.py` | Measures `src/rudeness.py`'s rules against an earlier sorting by Claude (OB-6; developers): `fetch` keeps every lower-case English entry of the Wiktionary download compactly (with its word family: the words its etymology names, its derived terms), `measure` says how often both lead to the same thing, per censoring policy, with or without each source (`--no-links`, `--no-wordnet`, `--no-families`); `sample` writes a review file for `--review-rude`, `next` adds the words that teach the rules most (active review, OB-11) and `answers` scores the rules against its answers (OB-9). |
-| `tools/tune_rudeness.py` | Tunes `src/rudeness.py`'s numbers against the review's answers (OB-10; developers): a window with the error round by round (5 parts, each tested on numbers tuned without it), each kind before and after, the numbers changed, a guard over every word the program scores and the meanings still wrong; Keep writes the numbers back. |
 | `tools/build.py` | Builds the program for this system with PyInstaller (T-3; the work is in `src/standalone.py`): `python tools/build.py` (installs PyInstaller if missing; `--check` then runs the new program for a moment). Linux / Windows: one file, no console; macOS: an app bundle. Into `dist/`. `--all`: Linux, Windows and macOS at once on GitHub (T-8, T-16). |
 | `tools/hooks/hook-nltk.py` | Replaces PyInstaller's nltk hook, which would pack the build machine's WordNet data into the program. |
 | `tools/layout_trace.py` | Debugging: places words fast in a throwaway save and reports widgets that moved when they should not, one-frame spikes, and anything over the tier buttons (`--reduce-motion`, `--every`, `--zoom`, `--csv`). |
 
-Layers, lowest first: `constants`, `obscene`, `rudeness`, `problems`, `deps`, `syncthing_api`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `launch` -> `syncfiles` -> `theme`, `background`,
-`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `framesync`, `smears`, `popups`, `buttons`, `menus`, `drawer`, `cards`, `dialogs`, `widgets`, `errors`, `startup` -> `ui_chart`, `fullscreen`, `browser`, `filepicker`, `shortcuts`, `tiercolours`, `syncdialog`, `review`, `dealing`, `sources` -> `devtools` -> `app` -> `tierlist`. A file only imports from files
+Layers, lowest first: `constants`, `obscene`, `problems`, `deps`, `syncthing_api`, `keymap`, `bundle`, `standalone` -> `store` -> `wordsource` / `saves` / `definitions` -> `launch` -> `syncfiles` -> `theme`, `background`,
+`fonts`, `sizing`, `ui_style`, `ui_motion`, `smooth`, `framesync`, `smears`, `popups`, `buttons`, `menus`, `drawer`, `cards`, `dialogs`, `widgets`, `errors`, `startup` -> `ui_chart`, `fullscreen`, `browser`, `filepicker`, `shortcuts`, `tiercolours`, `syncdialog`, `dealing`, `sources` -> `devtools` -> `app` -> `tierlist`. A file only imports from files
 earlier in that list. Only the UI files import `tkinter`.
 
 ## Notes beside the code
@@ -588,173 +568,40 @@ the `out` column; `Store.reshuffle` sets the order.
 
 ```mermaid
 flowchart TB
-    W["a word"] --> O{"smeared whole?<br/>(words.obscene)"}
+    W["a word"] --> O{"on the obscene words list?<br/>(words.obscene)"}
     O -- "no: an ordinary word" --> K{"is its kind of word ticked?<br/>Nouns, Verbs, Adjectives, Adverbs, Other"}
-    O -- "yes: an obscene word" --> R{"is one of its rude kinds ticked?<br/>(under Obscene words)"}
+    O -- "yes: an obscene word" --> R{"is Obscene words ticked?"}
     R -- yes --> IN["dealt"]
-    R -- no --> CL{"has it a clean meaning<br/>of a ticked kind of word?"}
-    CL -- yes --> IN
-    CL -- no --> OUT["left out (out = 1)<br/>never deleted"]
+    R -- no --> OUT["left out (out = 1)<br/>never deleted"]
     K -- yes --> IN
     K -- no --> OUT
-    IN --> C{"Censor obscene words on?"}
+    IN --> C{"Censor obscene words on,<br/>and an obscene word?"}
     C -- no --> SHOW["shown as it is"]
-    C -- yes --> P{"is a kind it has censored?<br/>its abc pill smeared (OB-7)"}
-    P -- yes --> SM["smeared on the card and in Browse,<br/>b•••••d in messages,<br/>un-smears under the pointer"]
-    P -- no --> SHOW
+    C -- yes --> SM["smeared on the card, in Browse and in the definitions<br/>(its meanings too), b•••••d in messages,<br/>un-smears under the pointer"]
 ```
 
 - **Order**: "Most common first" (by frequency rank) or "Mostly common, a little shuffled" (the default; its
   shape, spread and seed set how far it reaches). Compound words come later (`pen`).
-- **Which words**: a tick box per kind of word, with counts; all start ticked but "Obscene words". Its kinds of
-  rude meaning (OB-12, the user's three): Expletives start ticked, Sexual and Slurs do not. Medical words, mild
-  name-calling and toilet words are ordinary words.
-- **Censoring** smears all three kinds to start with. Every kind has a small "abc" pill beside it, smeared while it
-  is censored. A word with several kinds stays smeared while any of them is censored. A save from before OB-12 keeps
-  its choices (`Store._three_kinds`, once: Crude, Swear and Insult become Expletive, Clinical goes; OB-8's
-  `words.smear_extra` is no longer read). In a word that is not smeared whole, only its rude meanings are smeared, in the
-  definitions, and only meanings of a censored kind (`rudeness.results` keeps each one's kind). The pills are saved
-  in meta `censor_kinds` (`Store.censor_kinds`; `Store.censored_words` lists the words they smear). The card names
-  a word's kinds faintly above it ("noun · sexual") either way. Turning censoring on says it may not be fully
-  accurate (in full once a save, then a short message). Exports keep the real words.
+- **Which words**: a tick box per kind of word, with counts; all start ticked but "Obscene words" (one plain tick box).
+- **Censoring** smears every obscene word, and in the definitions each of its meanings after their labels; they
+  un-smear while the pointer is over the pane. An ordinary word's rude meaning ("(vulgar) ...") shows as it is,
+  labelled. The card names a word's parts of speech faintly above it ("noun · verb"). Turning censoring on says it
+  may not be fully accurate (a short message). Exports keep the real words.
 
-#### What counts as rude
+#### Which words are obscene
 
-Decided by rules, not a list (`src/rudeness.py`, OB-6). Bump `rudeness.RUDENESS_VERSION` when a rule changes, and
-measure with `tools/measure_rudeness.py` (79% the same outcome as an earlier sorting by Claude, 81% for the
-commonest words).
+A published list, not rules (OB-14, asked for: the rules of OB-6..OB-13 never reached a point the user was happy with;
+they, the review of rude meanings and the tuner are archived on the branch `archive/censoring`). `src/obscene.py`
+reads Surge AI's profanity list (`src/wordlists/profanity_en.csv`, MIT, 1,598 words and phrases, kept exactly as
+published) and takes away the ordinary words it catches, listed in `src/wordlists/not_obscene.txt` (buttermilk, peter,
+sheet, crow; medical words like anus or sperm). A listed word is obscene whole, in every meaning: there are no kinds.
+Matching ignores case and the hyphens or spaces that join a word ("mother-fucker").
 
-To check the rules against your own judgement (OB-9), review a sample by hand. `python tools/measure_rudeness.py
-fetch` keeps the Wiktionary download compactly (about 3 GB to read, once). `python tools/measure_rudeness.py sample`
-then writes `rude_review.jsonl`: 1,500 words, weighted so every kind is covered, plus words with a clean main meaning
-and a rude later one, and likely misses (found clean but with a slang label or a body word). Put it next to your save,
-tick Settings > Developer tools and click **Review words** at the top right of Settings > How words are
-dealt (or start `python tierlist.py --review-rude`). With no file next to the save it makes one (`sample`) and opens
-the review on it; `--review-rude` asks for one instead and remembers it. A window goes through the words one by one, showing the main meaning
-and any meaning with a sign of rudeness, each with the rules' guess filled in. Keys 1 to 4 set the selected meaning's
-kind (Not rude, Expletive, Sexual, Slur), S says whether the whole word should be smeared,
-the small icon at the word's top right opens its Wiktionary page (shown only while online), Enter goes to the next word and Backspace goes back
-one word in the file. The magnifier at the word's top left (or `/`) finds a word in the file: type over the word, the
-words that start with it (then those that hold it) drop down with their answers, and Enter or a click goes to one;
-Enter there returns to the word you were on (the Next button says "Back to ..."). These keys can be changed in Keyboard shortcuts, which shows
-them only while the review is open. The answers are saved on every change (a kind, the whole word), to `rude_review_answers.jsonl` beside
-the review file. Starting again carries on where you stopped. `python tools/measure_rudeness.py answers --show 40`
-scores the rules against them, meaning by meaning. The answers only test and tune the rules: the program never
-reads them.
-
-Once the first sample is answered (or while it is), `python tools/measure_rudeness.py next` (OB-11, active review)
-refreshes the review file: the words answered so far stay first, as they were (Back still walks them), and the
-unanswered ones give way to 300 new words (`--size`), picked to teach the rules most, none answered already. Each
-group's share is weighted by how often the rules were wrong on the words it gave before, and one group follows your
-misses (words sharing a label or gloss word with the meanings you answered otherwise than the rules guessed). The
-others: a meaning near the line (within a point of counting as rude, or of smearing the word), meanings whose
-signals point to two kinds, candidate signals the rules never read (a Wiktionary topic, or a gloss word common in
-Wiktionary's own rude meanings, on a meaning found clean; a few words each, so each candidate gets tested), and
-common words with no sign at all, the only way to count what the rules miss. The review window goes on from the
-first word not answered (an open review opens again on the new words); "Here because" says why each word was picked.
-
-Both can be run from the window too: tick Settings > Developer tools, and How words are dealt shows one split bubble.
-**Review words** opens the review, running `sample` first when there is no review file (it offers to fetch the
-Wiktionary entries first when they are missing). **Tune & reroll** runs the two in sequence: the tuner's window
-(below), then, once it has tuned to the end and you Keep or Discard, `next` in the background. Its ring shows the
-tuner's rounds, then turns while the new words are picked, and its right half names the step; a toast in the main
-window says when each step is done. Closing the tuner's window while it tunes only hides it; a click on Tune & reroll
-brings it back. Discard while it tunes stops there, with no reroll. The ring under the pointer turns into a red cross
-that stops either step (`DevTools.stop` in `src/devtools.py`: the tool's whole process group, so the tuner's workers go too; a
-half-written review file or entries file is removed). They run the scripts in `tools/`, so only from the source.
-Every 50 new answers (`DevTools.AUTO_TUNE`, counted from the last start, meta `tune_base`) the review starts Tune & reroll
-by itself with the tuner's `--start-hidden`, never while one runs nor without the entries; the review window's strip
-reads the tuner's `rude_tune_history.jsonl` (beside the answers) for a tick per earlier tune, with its tested error,
-and has a Tune & reroll now button. Reviews ask only about one-part words: no hyphenated or spaced
-entries, contractions kept (asked for, like the word list).
-
-To tune the rules' numbers against those answers (OB-10), run `python tools/tune_rudeness.py` (the same
-`--review` file; `--entries` the compact download). It splits the answered words into 5 parts (a word family kept in one part, so no word is tested on numbers tuned on
-its relatives), tunes the numbers the
-rules already have (the points of each label, topic, wording and WordNet meaning, the thresholds and weights) on 4
-and tests on the 5th, each part in turn, and draws the error round by round: 100% minus the average F1 of the kinds
-and of smearing the whole word, on the words held back. A guard counts what every word the program scores would show
-with the best numbers (a kind more than doubling is marked, and Keep asks first), and the meanings still wrong are
-listed (all of them in `rude_tune_misses.txt` beside the answers: ideas for new rules, since no number fixes those).
-Keep writes the best numbers into `src/rudeness.py` and bumps `RUDENESS_VERSION`; read the diff, run the tests and
-commit. It is still rules only: nothing in the program reads the answers. A bar under the answers line shows the
-reading (share and time left) and then each round (parts done, time left). The entries are read in a process of their
-own and the helper processes run at a lower priority, so the window stays smooth; the chart grows with the window.
-The window opens with every row in place (empty) and keeps one size; each round's results show at once. The noise of
-the average (a band on the chart: the standard error of each part's change against itself, since the parts differ in
-how hard their words are every round) decides the stop: a round is a real gain only by more than it, and the search
-waits 3 rounds plus one per 0.1 points of noise (15 at most) before stopping; Keep takes the earliest round within the
-noise of the lowest. Each change pays a light pull towards today's numbers, so a change that hardly pays stays put,
-and a step that helps neither way shrinks to 70% (SHRINK), so the search keeps looking for longer. Answers made from
-planted numbers check that it finds them again (see tune_rudeness.md). Every finished tune is remembered in `rude_tune_history.jsonl` beside the answers, and
-the Earlier tunes tab shows each as a dot at its word count for the error after it, with a standard error bar over the
-tested parts (the history's "se"; the first tune says what later ones will add; dots close in words are spread apart,
-`tune_xs`).
-`--start-hidden` starts the window hidden (it shows itself when done).
-Under the chart, tabs show one panel at a time: Earlier tunes, Each kind, Numbers changed, Guard and Still wrong
-(the last two list everything and scroll).
-
-```mermaid
-flowchart TB
-    D["the Wiktionary download"] -- "measure_rudeness.py fetch" --> E["the compact entries<br/>(read once, about 3 GB)"]
-    E -- "measure_rudeness.py sample" --> RV["rude_review.jsonl<br/>1,500 words, the rules' guesses filled in"]
-    RV --> WIN["Review rude meanings (src/review.py)<br/>the Review words bubble, or --review-rude"]
-    WIN -- "1-7 a meaning's kind, S smear the word;<br/>saved on every change" --> ANS["rude_review_answers.jsonl<br/>beside the review file"]
-    ANS -- "measure_rudeness.py answers" --> SC["how often the rules agree,<br/>meaning by meaning"]
-    ANS -- "tune_rudeness.py" --> TU["tune on 4 parts, test on the 5th,<br/>each part in turn; the guard;<br/>the meanings still wrong"]
-    E --> TU
-    TU -- "Keep" --> RU["src/rudeness.py: the new numbers,<br/>RUDENESS_VERSION bumped"]
-    RU -- "read the diff, run the tests, commit" --> PR["the program scores words again<br/>with the new rules (never the answers)"]
-    RU -. "the next sample" .-> RV
-    E -- "measure_rudeness.py next<br/>(near the line, disagreeing, candidates, no sign)" --> RV
-```
-
-```mermaid
-flowchart TB
-    M["each meaning of a word<br/>(kept from Wiktionary at the build: the rude table)"] --> P
-    subgraph P["points towards the rules' six kinds: Clinical, Crude, Swear, Insult, Sexual, Slur,<br/>folded into Expletive, Sexual, Slur (Crude and Insult only when vulgar or offensive; Clinical none)"]
-        direction LR
-        p1["Wiktionary's labels<br/>(vulgar), (slang), (offensive)"] ~~~ p2["its topics<br/>and categories"] ~~~ p3["the definition's<br/>wording"] ~~~ p4["WordNet<br/>(when installed)"] ~~~ p5["synonym lists:<br/>which kind a slang<br/>meaning is"] ~~~ p6["word families:<br/>bullshit is built<br/>from shit"]
-    end
-    P --> X{"special cases"}
-    X -- "a form: plural, clipping" --> X1["counts as its word's first meaning<br/>did = do; boys stays ordinary"]
-    X -- "one of the ~3,000 commonest words" --> X2["only plainly labelled rude meanings count<br/>box yes, top no"]
-    X -- "a group's own name" --> X3["never a slur<br/>jews, gay, queer"]
-    X -- "anything else" --> K
-    X1 --> K
-    X2 --> K
-    X3 --> K
-    K{"which kind has the most points,<br/>and is it enough?"}
-    K -- "not enough" --> C["a clean meaning"]
-    K -- "enough" --> R["a rude meaning of that kind"]
-    C --> W
-    R --> W
-    W{"the word: its points,<br/>mostly from its first meaning"}
-    W -- "enough" --> WS["smeared whole (words.obscene)<br/>listed under Obscene words<br/>e.g. shit, bastard"]
-    W -- "not enough" --> WO["an ordinary word, dealt with its kind of word<br/>only its rude meanings smeared in definitions<br/>e.g. can, come, fairy"]
-    WS --> CEN["censoring smears only the censored kinds:<br/>Expletive, Sexual, Slur, each with its own pill"]
-    WO --> CEN
-```
-
-The smaller rules, each with the example that made it:
-
-| Rule | Example |
-|---|---|
-| The proper word is never rude; a crude word or an insult is an expletive only when vulgar or offensive | "penis", "poop", "idiot" are ordinary; "shit", "bastard" are not |
-| A word mostly used rudely is smeared whole, whatever its first meaning: 3 or more firmly rude meanings, half of them or more | "dick", "bitch", "balls"; not "cock" (1 of 34) or "gash" |
-| A hedged label never smears a word whole | "what the hell" is only mildly vulgar |
-| A hyphenated word with a rude part makes its slang meanings as rude | "piss-taker"; "doo-wop" has no slang meaning |
-| Words a definition only gives as examples do not count | "such as slime or semen" |
-| In a word smeared whole, a meaning naming the word itself is smeared too | "an instance of skull-fucking" |
-| "Derogatory" alone is not an insult unless the definition describes a person badly | |
-| A euphemism is the polite word | "pass water" |
-| A slang meaning that is itself a rude word is rude like it | "dam: Damn." |
-| A slur or rude meaning that is not the word's usual one smears that meaning only | "fairy" |
-
-The Wiktionary build keeps the meanings the rules read (about 150,000 words of a million, the `rude` table) and
-scores them once at the end of setting up. An older save, or one made from a word list, reads them from the
-Wiktionary download in the background while you sort (`App._start_rude_read`); until then `src/obscene.py`'s short
-hand-picked list stands in.
+`Store.mark_obscene` sets `words.obscene` from the list in one pass (about a second in a million words) when a save
+opens with a list it has not marked yet (meta `obscene_done` against `obscene.LIST_VERSION`, a hash of both files), so
+editing `not_obscene.txt` re-marks every save on its next start. A word added later (by hand, a sync, an Import) is
+checked as it arrives (`Store._mark_added`). A save from the rules' time drops the meanings they kept (the `rude` table)
+and their settings once (`Store._drop_rules`); its `words.rude` columns stay, unused.
 
 ### Building a program
 

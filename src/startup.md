@@ -3,7 +3,7 @@
 Long jobs behind a progress window (ST-1): `run_with_progress` runs `work(log)` on a worker thread and turns its log lines into a stage, a detail line, a bar with an ETA and "Step i of n"; also the install dialog (ST-4) and Windows' console detach.
 
 - **Uses:** `constants`, `deps`, `errors`, `fonts`, `problems`, `sizing`, `syncthing_api`, `theme`, `ui_style`
-- **Used by:** `sources`, `syncdialog`, `tierlist`, `tune_rudeness`
+- **Used by:** `sources`, `syncdialog`, `tierlist`
 - **Tests:** `_selftest_sizing`, `_selftest_startup`, `_selftest_veil`
 
 The module docstring has the details; this page is the map.
