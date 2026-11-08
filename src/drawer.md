@@ -1,9 +1,9 @@
 # `src/drawer.py`
 
-The definitions pane: `DefinitionDrawer` (eases open and closed), `fill_definitions` (words and their senses in a tk.Text, rude meanings smeared, a Wiktionary link) and `word_at` (a word in a meaning to look up).
+The definitions pane: `DefinitionDrawer` (eases open and closed), `fill_definitions` (words and their senses in a tk.Text, a censored word smeared with its meanings, a Wiktionary link) and `word_at` (a word in a meaning to look up).
 
-- **Uses:** `buttons`, `definitions`, `rudeness`, `smears`, `theme`
-- **Used by:** `app`, `browser`, `review`, `widgets`
+- **Uses:** `buttons`, `definitions`, `smears`, `theme`
+- **Used by:** `app`, `browser`, `widgets`
 - **Tests:** `_selftest_drawer`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
@@ -11,7 +11,7 @@ The module docstring has the details; this page is the map.
 ## Public API
 
 - `definition_tags`: The text tags a definition pane uses (fill_definitions): the word in bold, muted numbers, the part of speech and examples in italics, senses indented.
-- `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, the keys of its meanings to smear, True if the word itself...
+- `fill_definitions`: Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up, True if the word is censored)]: the word in bold, then each...
 - `word_at`: (start index, end index, the word) under the point x, y of the definition pane `t`, inside a meaning, an example or a form's line (LINK_TAGS), or None (a heading, a...
 - `DefinitionDrawer`: The definition pane (UI-12): eases open and closed instead of snapping, and shows each word in bold with its senses numbered, the part of speech in italics and...
   - methods: columns, set_lines, lines, line_height, show_words, is_open, settle, set_open, collapse, natural_height, height_for, steady, ease_from, pin, unpin, opening, open, close

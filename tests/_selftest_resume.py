@@ -116,7 +116,7 @@ before = {w: cur.get_word(w)["tier"] for w in WORDS[:50]}
 res = cur.merge(old)
 print(res)
 assert res["added"] == 2 and res["skipped"] == 2
-cur.set_censor(True); assert "shitbag" in cur.censored_words()                # checked here as a looked-up word is
+cur.set_censor(True); assert cur.censored("shitbag")                # checked here as a looked-up word is
 assert res["placed"] == 350 + 2 and res["same"] + res["differs"] == 50 and res["differs"] == 50 and res["same"] == 0
 assert res["comparisons"] == 31 and res["backup"] and os.path.exists(res["backup"])
 assert {w: cur.get_word(w)["tier"] for w in WORDS[:50]} == before            # nothing already decided is overwritten
@@ -170,7 +170,7 @@ for ext in (".txt", ".md", ".csv"):
     assert got == want, (ext, len(got), len(want))
     assert set(fresh.skipped_words()) == set(cur.skipped_words()), ext
     assert r["added"] == 2 and r["placed"] == len(want)
-    fresh.set_censor(True); assert "shitbag" in fresh.censored_words(), ext     # (an Import checks it too)
+    fresh.set_censor(True); assert fresh.censored("shitbag"), ext     # (an Import checks it too)
     # ordering inside each tier survives the trip
     for t in range(6):
         a = [x["word"] for x in cur.export_rows() if x["tier"] == t]

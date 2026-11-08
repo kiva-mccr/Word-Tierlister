@@ -77,8 +77,8 @@ res = mine.apply_sync("OLD", *rows_of(old))
 assert mine.get_word("eel")["tier"] == 5 and mine.get_word("fox")["tier"] == 4 and res["words"] == 1
 # a rude word this list lacks (added by hand there) is checked here as a looked-up word is: censored the same
 a.add_word("shitbag"); a.place("shitbag", 2); a.set_censor(True); b.set_censor(True)
-assert "shitbag" in a.censored_words() and b.apply_sync("A", *rows_of(a))["added"] == 1
-assert "shitbag" in b.censored_words() and b.rude_kind("shitbag") == a.rude_kind("shitbag")
+assert a.censored("shitbag") and b.apply_sync("A", *rows_of(a))["added"] == 1
+assert b.censored("shitbag")
 # an unplaced word travels as an unplacing; a word this list lacks is added at the back
 time.sleep(0.01); a.unplace("dog")
 rows, anchors, when, comps = rows_of(a)

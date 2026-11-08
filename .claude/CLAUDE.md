@@ -32,8 +32,8 @@ the file. Its facts (uses, used by, tests, public API) come from `python tools/n
 pitfalls" are written by hand: add the rule or the bug there when you fix one. check_release fails on a stale note.
 
 ## Layering (a file only imports from files earlier in this list; check_release.LAYERS enforces it)
-constants, obscene, rudeness, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, background, fonts, sizing, ui_style,
-ui_motion, smooth, framesync, smears, popups, buttons, menus, drawer, cards, dialogs, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, review, dealing, sources -> devtools -> app -> tierlist.
+constants, obscene, problems, deps, syncthing_api, keymap, bundle, standalone -> store -> wordsource / saves / definitions -> launch -> syncfiles -> theme, background, fonts, sizing, ui_style,
+ui_motion, smooth, framesync, smears, popups, buttons, menus, drawer, cards, dialogs, widgets, errors, startup -> ui_chart, fullscreen, browser, filepicker, shortcuts, tiercolours, syncdialog, dealing, sources -> devtools -> app -> tierlist.
 - Only UI files import tkinter. `problems.py` is deliberately tkinter-free.
 - Every public Store mutator commits before returning. No animation frame may touch the database.
 - Worker threads (startup) never touch tkinter. Hand a worker's answer to the window with `background.Task` and repeat
@@ -109,7 +109,7 @@ ui_motion, smooth, framesync, smears, popups, buttons, menus, drawer, cards, dia
   recreate); show the user pictures for each UI step. Check colours by reading pixel values: the image
   preview can wash out pale pastels.
 - Censored (obscene) words: copies of the word side by side over 0.625 letter widths, each line's end letters smeared
-  only inward so nothing reaches past the word (F-33, the user's rules) (`smears.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it
+  only inward so nothing reaches past the word (F-33, the user's rules) (`smears.smear_items`, `Unsmear`; un-smears under the pointer; the user picked it from many mock-ups), `constants.mask_word` (b•••••d) only where nothing can be drawn (messages); definitions panes smear it with all its meanings
   (`smears.smeared_label`; the word un-smears while the pointer is over the pane) and Browse's list too
   (`smears.TreeSmears` over a blank cell). Route any new on-screen word through `App.shown` / `Store.censored`. Exports keep the real words.
 - Package sizes shown in the install dialog (deps.SIZE) were measured with pip; re-measure if requirements change.
@@ -154,8 +154,7 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
 ## Rules learnt from earlier steps
 - A new top-level file must be added to `standalone.TOP_FILES` (F-47: Remove it keeps what the user added).
 - Never name a module like a PyPI package (src/ is first on the path: "packaging" broke it).
-- Bump `rudeness.RUDENESS_VERSION` whenever the rules change (now 18). The program reads rules only, never the
-  review's answers (OB-9); tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
+- Tests never go online (WORD_TIERLISTER_OFFLINE in tests/_paths.py).
 - Smears: the user checked 194 words over the commonest end-letter pairs (F-39); add a per-pair spot fix only if one is
   reported.
 - Developer tools are bubbles at a dialog's top right, shown only with Settings > Developer tools on (DT-1); a new
@@ -167,10 +166,9 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
   change. Its runners are slow: hold the animator's clock (`anim.clock`, `_real=False`) or background work (an Event).
 - The repository must stay public (updates read its releases; private answers 404). Never change its visibility;
   keep secrets out of it.
-- Obscene words: rules only (src/rudeness.py). words.rude = kinds of its meanings (rudeness.KIND_BITS), words.obscene
-  = smeared whole. Three kinds are shown (Expletive, Sexual, Slur: obscene.RUDE_KINDS, all smeared to start with);
-  the rules score six (obscene.RULE_KINDS) and rudeness.fold turns them into three. A group's own name is never a slur.
-  Measure with tools/measure_rudeness.py; ask before building the drafted tighter Clinical rule.
+- Obscene words (OB-14): Surge AI's list (src/wordlists/profanity_en.csv, MIT) kept as published, less the ordinary
+  words in not_obscene.txt (fix a miss there); a listed word is obscene whole, no kinds. Either file changing changes
+  obscene.LIST_VERSION, which marks every save again. The old rules, kinds and review are on branch archive/censoring.
 
 ## Known gaps (never seen for real; confirm when the user can)
 - Windows, never run on a real machine: the private font loader (UI-73), dpi awareness and monitor work areas (UI-54,
@@ -186,7 +184,5 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
   certificate fix in a built program were never run for real. A release needs constants.VERSION bumped.
 - Sync (SY-1): tried between two Syncthing 1.27 instances on one Linux machine only; the later change wins by each
   device's clock. Tests never start the real Syncthing.
-- Rude meanings read in the background for an old save (App._start_rude_read, a 3 GB download): never tried against
-  the real site. The tuner (OB-10) was only run on stand-in answers here (a round: about a minute on 4 cores).
 - ST-8's pkexec / winget installs were only faked; a read-only save's dialog could not be checked (tests run as root).
 - "+N today" counts from the undo history (~5,000 actions): past that in a day it undercounts.

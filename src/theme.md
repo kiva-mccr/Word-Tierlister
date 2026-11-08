@@ -3,8 +3,8 @@
 The colours: `PALETTE` and the tier colours, plus blending helpers (UI-1). No tkinter.
 
 - **Uses:** the standard library only
-- **Used by:** `app`, `browser`, `buttons`, `cards`, `dealing`, `dialogs`, `drawer`, `errors`, `filepicker`, `fullscreen`, `make_icon`, `menus`, `popups`, `review`, `shortcuts`, `smears`, `sources`, `startup`, `syncdialog`, `tiercolours`, `tierlist`, `tune_rudeness`, `ui_chart`, `ui_style`
-- **Tests:** `_selftest_chart`, `_selftest_deps`, `_selftest_devtools`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_style`, `_selftest_tabswitch`, `_selftest_widgets`, `_selftest_widgets2`
+- **Used by:** `app`, `browser`, `buttons`, `cards`, `dealing`, `dialogs`, `drawer`, `errors`, `filepicker`, `fullscreen`, `make_icon`, `menus`, `popups`, `shortcuts`, `smears`, `sources`, `startup`, `syncdialog`, `tiercolours`, `tierlist`, `ui_chart`, `ui_style`
+- **Tests:** `_selftest_chart`, `_selftest_deps`, `_selftest_fullscreen`, `_selftest_looks`, `_selftest_style`, `_selftest_tabswitch`, `_selftest_widgets`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.
 

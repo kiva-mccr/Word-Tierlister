@@ -1,21 +1,21 @@
 # `src/store.py`
 
-The save file: every read and write of the SQLite database goes through `Store` (words, tiers, ratings, duels, conflicts, anchors, cached definitions, settings, the undo history, the rude meanings).
+The save file: every read and write of the SQLite database goes through `Store` (words, tiers, ratings, duels, conflicts, anchors, cached definitions, settings, the undo history; which words are obscene).
 
-- **Uses:** `constants`, `obscene`, `rudeness`
+- **Uses:** `constants`, `obscene`
 - **Used by:** `browser`, `filepicker`, `speed_check`, `syncfiles`, `tierlist`
-- **Tests:** `_selftest_launch`, `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
+- **Tests:** `_selftest_launch`, `_selftest_obscene`, `_selftest_queue`, `_selftest_sync`, `_selftest_tabswitch`
 
 The module docstring has the details; this page is the map.
 
 ## Public API
 
 - `Store`: All persistence and ranking logic.
-  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, add_word, leave_out_hyphenated, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, censor_kinds, set_censor_kinds, set_kinds, save_rude_senses, rude_senses, set_rude, rude_kind, smeared_meanings, obscene_words, censored_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, is_export, parse_export, sync_rows, apply_sync, merge
+  - methods: close, bulk_write, get_meta, meta_number, set_meta, get_def, set_def, count_words, insert_words, mark_obscene, add_word, leave_out_hyphenated, has_word, get_word, next_unplaced, left_out, queue_settings, reshuffle, deal_settings, set_deal, set_censor, set_kinds, obscene_words, censored, kind_counts, tier_counts, stats, shelf_layout, shelf, spine_of, set_frequencies, settled_shares, swap_counts, actions_since, get_anchors, set_anchors, undo, place, unplace, skip, record_comparison, pick_within, pick_boundary, pick_conflict, list_words, export_rows, skipped_words, backup, is_export, parse_export, sync_rows, apply_sync, merge
 
 ## Rules and pitfalls (fixed before: keep them fixed)
 
-- `_three_kinds` (OB-12) runs once a save (meta `rude_kinds`): it maps the old six kinds' bits in meta `deal_rude`, `censor_kinds` and in words.rude / rude_main onto the three. Old saves keep an unused `words.smear_extra` column (OB-8); never read it.
+- `_drop_rules` (OB-14) runs on a save from the rules' time: it drops table rude, the indexes on words.rude and their meta keys; words.rude / rude_main and `words.smear_extra` (OB-8) stay unused in old saves: never read them.
 - Every public method that changes data commits before returning; no animation frame may touch the database.
 - Browse's kinds of word (F-57): a kind is a list of `words.kinds` values (`_kind_clause`) so `idx_placed_kinds` can look it up; a bit test (`kinds & bit`) reads every entry. A rare kind is found that way and sorted, a common one read in the sort's own index until a page turns up (`KIND_SORT_COST`: compared against its count and the page asked for). Test a change on a save with kinds (tools/speed_check.py gives its words kinds; Adverbs is the slow case).
 - Anything run per duel or per refresh must stay fast on a million-word save: read the indexes, check `EXPLAIN QUERY PLAN` for "TEMP B-TREE", test a dense and a sparse save.
@@ -29,8 +29,8 @@ The module docstring has the details; this page is the map.
 - Syncing (SY-1): `words.changed` is stamped by TEMP triggers (`SYNC_TRIGGERS`, made at every open, never kept in the file) whenever tier, rating, games or skips change, and the anchors' time in meta `anchors_changed`. `apply_sync` sets `changed` back to the other device's time after writing (the trigger stamped it now), or the change would echo back as a newer one. Duels synced in carry `comparisons.origin`; only `origin IS NULL` ones are written out, and a device's own are mirrored (its undone ones removed).
 - The shelf's totals live in meta `shelf_totals`: anything that adds words or changes ranks or frequencies calls `_forget_shelf_totals` (insert_words, add_word, set_frequencies, merge).
 - `leave_out_hyphenated` (W-3) deletes only words with no progress (unplaced, never skipped or compared) and closes the ranks up after, since the shelf assumes ranks 0..n-1.
-- A word new to this list that arrives without meanings to read (`add_word`, a sync's `apply_sync`, an Import's `merge`) goes through `_mark_added`: the hand-picked list sets its rudeness and its place in the queue. Without it a rude word added on another device showed uncensored here (F-46).
-- Which obscene words are smeared is `censored_words()` (the words smeared whole whose kinds meet `censor_kinds`), cached: `set_rude`, `_mark_added` and `set_censor_kinds` forget it. Browse and `censored` read it, never `obscene_words()` (that is every word smeared whole, for the rules). A smeared meaning is stored as [key, kind]; a bare key (scored before RUDENESS_VERSION 13) is always smeared. Clinical / Insult (OB-8) come from `words.smear_extra`, read only while one of them is censored (partial index `idx_words_extra`); never fold them into `obscene`, which deals words.
+- A word new to this list (`add_word`, a sync's `apply_sync`, an Import's `merge`) goes through `_mark_added`: the list (obscene.is_obscene) sets words.obscene and its place in the queue. Without it a rude word added on another device showed uncensored here (F-46).
+- While censoring, every obscene word is smeared (`censored`, reading `obscene_words()`, cached: `mark_obscene` and `_mark_added` forget it). `mark_obscene` changes only the rows that differ, then re-deals.
 
 ## Changing it
 

@@ -12,11 +12,11 @@ SECONDS = {
     "_selftest_dealing": 27, "_selftest_sizing": 26, "_selftest_ui2": 24, "_selftest_release": 21,
     "_selftest_selfupdate": 19, "_selftest_nightly": 12, "_selftest_devtools": 4, "_selftest_freeze": 19, "_selftest_widgets2": 17, "_selftest_fullscreen": 5, "_selftest_health": 17,
     "_selftest_lookup": 15, "_selftest_wikt": 15, "_selftest_shortcuts": 13, "_selftest_filepicker": 13,
-    "_selftest_tabswitch": 13, "_selftest": 11, "_selftest_defsize": 11, "_selftest_rudeness": 6,
+    "_selftest_tabswitch": 13, "_selftest": 11, "_selftest_defsize": 11,
     "_selftest_obscene": 6, "_selftest_motion": 5, "_selftest_deps": 4, "_selftest_bundle": 4, "_selftest_tidy": 4,
     "_selftest_install": 4, "_selftest_fonts": 2, "_selftest_resume": 2, "_selftest_widgets": 2,
     "_selftest_errors": 1, "_selftest_smooth": 1, "_selftest_style": 1, "_selftest_chart": 1, "_selftest_icon": 1,
-    "_selftest_keymap": 0, "_selftest_appdir": 0, "_selftest_updates": 0, "_selftest_folders": 1, "_selftest_nextreview": 2, "_selftest_veil": 3, "_selftest_framesync": 3, "_selftest_sync": 8,
+    "_selftest_keymap": 0, "_selftest_appdir": 0, "_selftest_updates": 0, "_selftest_folders": 1, "_selftest_veil": 3, "_selftest_framesync": 3, "_selftest_sync": 8,
 }
 NEW = 15
 

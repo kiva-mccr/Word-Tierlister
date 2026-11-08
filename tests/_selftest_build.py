@@ -24,6 +24,7 @@ for plat, out, onefile in (("linux", "word-tierlister", True), ("win32", "word-t
     assert any(a.endswith(f"large_en.msgpack.gz{sep}wordfreq/data") for a in added), added
     assert not any("_fr." in a for a in added) and "jieba" in args and "MeCab" in args
     assert f"/tmp/work/source{sep}source" in added                 # the source inside it (T-7 gives it back)
+    assert any(a.endswith(f"src/wordlists{sep}wordlists") for a in added), added   # (the obscene words list, OB-14)
     assert args[args.index("--additional-hooks-dir") + 1] == os.path.join(_paths.ROOT, "tools", "hooks")
     assert args[args.index("--paths") + 1] == os.path.join(_paths.ROOT, "src")
     for mod in ("matplotlib", "PIL", "numpy"):                     # never packed, even when on the computer
@@ -39,9 +40,9 @@ class Blocked(importlib.abc.MetaPathFinder):
             raise ImportError("not packed: " + name)
 sys.meta_path.insert(0, Blocked())
 sys.path[:0] = [{os.path.join(_paths.ROOT, "src")!r}, {_paths.ROOT!r}]
-import tierlist, wordfreq, rudeness, definitions
+import tierlist, wordfreq, obscene, definitions
 assert wordfreq.zipf_frequency("dog", "en") > 4
-rudeness.wordnet()                                  # (None without nltk or its data; never an import error)
+assert obscene.is_obscene("fuck")                  # (the list is packed: OB-14)
 """
 r = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
 assert r.returncode == 0, r.stderr[-2000:]

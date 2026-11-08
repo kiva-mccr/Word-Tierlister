@@ -83,19 +83,15 @@ class StyledDialog:
 
     def dev_bubbles(self, items):
         """Developer tools as small bubbles (DevBubble) at the right of the headline, in the order given: `items` are
-        (text, command), (text, command, variable) for a switch, or (text, command, None, progress[, on_running[,
-        second[, stop]]]) for a tool that keeps running (its ring; on_running: what a click does meanwhile; second:
-        (text, command), the right half of a split bubble; stop: (note, command), its ring stops it). Returns the
-        bubbles, by text."""
+        (text, command), or (text, command, variable) for a switch. Returns the bubbles, by text."""
         out = {}
         if self.head_row is None or not items:
             return out
         row = tk.Frame(self.head_row, bg=PALETTE["bg"])
         row.pack(side="right", anchor="n", padx=(24, 0))
         for item in items:
-            text, command, variable, progress, on_running, second, stop = (tuple(item) + (None,) * 5)[:7]
-            b = DevBubble(row, text, command, variable=variable, progress=progress, animator=self._anim,
-                          on_running=on_running, second=second, stop=stop)
+            text, command, variable = (tuple(item) + (None,))[:3]
+            b = DevBubble(row, text, command, variable=variable)
             b.pack(side="left", padx=(6 if out else 0, 0))
             out[text] = b
         return out

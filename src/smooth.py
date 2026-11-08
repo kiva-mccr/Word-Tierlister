@@ -758,22 +758,6 @@ class SmoothCanvas(tk.Canvas):
             return _photo(self, size, size, paint_mask(rows, _rgb(fill), None))
         return _cached(self, key, make)
 
-    def ring_image(self, size, width, start, extent, fill):
-        """A soft-edged ring, or a piece of one (an annulus sector), size x size pixels and `width` thick, in `fill`,
-        see-through around it: from `start` degrees (0 at the top) clockwise over `extent` degrees (360: whole).
-        The progress ring of a running developer tool (DevBubble); kept in the cache, so callers round the angles."""
-        key = ("photo", "ring", size, width, start, extent, fill)
-
-        def make():
-            c, r_out = size / 2.0, size / 2.0 - 0.5
-            r_in = max(0.5, r_out - width)
-            n = max(2, int(extent / 6) + 1)
-            arc = [math.radians(start + extent * i / (n - 1)) for i in range(n)]
-            poly = ([(c + r_out * math.sin(a), c - r_out * math.cos(a)) for a in arc]
-                    + [(c + r_in * math.sin(a), c - r_in * math.cos(a)) for a in reversed(arc)])
-            return _photo(self, size, size, paint_mask(coverage_mask(poly, size, size, 0), _rgb(fill), None))
-        return _cached(self, key, make)
-
     def smooth_image(self, tag_or_id):
         """The image item drawn for a round_rect (tests), or None."""
         rr = self._rr_items(tag_or_id)
@@ -832,7 +816,6 @@ ICONS = {
     "back": [[(10.2, 1.5), (12.4, 3.7), (8.1, 8.0), (12.4, 12.3), (10.2, 14.5), (3.7, 8.0)]],
     "next": [[(5.8, 1.5), (12.3, 8.0), (5.8, 14.5), (3.6, 12.3), (7.9, 8.0), (3.6, 3.7)]],
     # a cross (stop a running developer tool: its bubble's ring under the pointer): two crossing bars
-    "stop": [[(3.9, 2.1), (13.9, 12.1), (12.1, 13.9), (2.1, 3.9)], [(12.1, 2.1), (13.9, 3.9), (3.9, 13.9), (2.1, 12.1)]],
 }
 
 

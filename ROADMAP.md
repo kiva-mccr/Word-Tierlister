@@ -500,7 +500,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   tick, what it leads to ("With the usual settings: ..."), Back / Next word, the bar, and Save answers
   to a file (word_categories.checked.tsv). It replaces OB-1's not / obscene / swear review (its
   answers stay in the save and still count for the obscene column). _selftest_review.py.
-- [x] **OB-6** Rules instead of a list (asked for: "a point-based model that uses multiple sources", "rather a
+- [x] **OB-6** (archived by OB-14) Rules instead of a list (asked for: "a point-based model that uses multiple sources", "rather a
   solution that can run for each word on startup than a list"; "if it has really high points its
   completely censored, and low points not censored unless a specific definition is contributing a
   lot"). Built so far: src/rudeness.py: each meaning earns points towards the rude kinds from four
@@ -610,7 +610,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   smeared whole keeps its rude kinds (rudeness.score_saved; RUDENESS_VERSION 9); one rude meaning of many
   ("can: buttocks", "come", "box": about 1,700 words) leaves the word ordinary, that meaning smeared in its
   definitions. (measure_rudeness compares meaning by meaning: unchanged.)
-- [x] **OB-5** How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
+- [x] **OB-5** (archived by OB-14) How words are dealt (asked for): ticking "Obscene words" opens the list of kinds, with Swear word,
   Crude, Clinical, Double meaning and Insult ticked and Sexual and Slur not; Censor obscene words then
   smears the ticked kinds' words and each rude meaning inside the definitions. Mock-ups first.
   Decided: Double meaning words are never smeared as words ("last", "john", "brown" are double), only
@@ -629,7 +629,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   deal_rude); a word with a meaning of a ticked kind is dealt, one with only rude meanings is otherwise
   left out, any other word goes by its kind of word (Store._out_sql). Censoring smears only Crude,
   Swear, Sexual and Slur (obscene.CENSORED; the user: never Clinical or Insult, until OB-8 made them optional).
-- [x] **OB-7** A censor button per kind of rude meaning (asked for: "a lil toggleable censor symbol to each category";
+- [x] **OB-7** (archived by OB-14) A censor button per kind of rude meaning (asked for: "a lil toggleable censor symbol to each category";
   picked from two mock-ups: beside each kind, not a row of pills). Beside Crude, Swear words, Sexual and
   Slurs in How words are dealt a small pill (widgets.SmearToggle) shows "abc" smeared while that kind is
   censored and plain while it is let through; a click, Space or Return flips it, Apply saves it (meta
@@ -638,13 +638,13 @@ sees it close silently. Both steps are useful even if the program is only ever r
   any of its kinds is censored (Store.censored_words); each smeared meaning keeps its kind (rudeness.results:
   [key, kind]; RUDENESS_VERSION 13) so the definitions smear only censored kinds (Store.smeared_meanings).
   The kinds now open under "Obscene words" while it or Censor obscene words is ticked (their buttons).
-- [x] **OB-8** Clinical and Insults get a smear button too (asked for: "have them start uncensored, but give the option
+- [x] **OB-8** (archived by OB-14) Clinical and Insults get a smear button too (asked for: "have them start uncensored, but give the option
   to censor"; the mock-up agreed). Their buttons start plain. The rules read each word a second time counting
   them (rudeness.score_saved(also=CENSORABLE - CENSORED)): their meanings join the smeared ones (with their
   kind), and words.smear_extra keeps a word's kinds when that reading smears it whole (partial index
   idx_words_extra); Store.censored_words adds those while Clinical or Insult is censored. "Obscene words"
   and dealing still come from the four kinds alone ("penis", "idiot" stay ordinary nouns). RUDENESS_VERSION 14.
-- [x] **OB-9** Review rude meanings by hand, to test the rules against (asked for: "give me a list of candidates and
+- [x] **OB-9** (archived by OB-14) Review rude meanings by hand, to test the rules against (asked for: "give me a list of candidates and
   for me to review every single one ... something to train the rules on"; a dev option, the old review tab
   back; rules only stays: the answers are never read by the program). tools/measure_rudeness.py sample
   writes rude_review.jsonl (1,500 words: 150 of each kind the rules find, 300 with a clean main meaning and
@@ -657,7 +657,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   Then (asked for): an Open in Wiktionary button (W, greyed out offline); Back and Enter walk the file one
   word at a time (Back followed a history of words answered, so Enter after Back skipped ahead: reported);
   each answer is saved as it is given, not on Enter (a change then Back was lost: reported).
-- [x] **OB-10** Tune the rules' numbers against the review's answers (asked for: "can it also optimize the rules
+- [x] **OB-10** (archived by OB-14) Tune the rules' numbers against the review's answers (asked for: "can it also optimize the rules
   statistically?"; rules only stays; the window picked from five mock-ups): tools/tune_rudeness.py splits the
   answered words into 5 parts (tuned on 4, tested on the 5th, each in turn: every word tested, never by
   numbers tuned on it), searches the numbers rudeness.py already has one at a time, and draws the error
@@ -694,7 +694,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   whiskers +- its standard error over the tested parts (saved as "se" in the history: tunes saved before it
   have a dot only), the dots joined, faint % grid lines named at the left; "before" stays only in the words
   at the top right (standard_error, which noise now uses too).
-- [x] **OB-11** Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
+- [x] **OB-11** (archived by OB-14) Active review (asked for, from the ideas doc): measure_rudeness.py next adds the words that teach the rules
   most to the end of the review file (none reviewed already; the window goes on from the first unanswered):
   a meaning near the line (within 1 point of MEANING_MIN or WHOLE_MIN), signals that disagree (two kinds
   close), a candidate signal (a topic the rules never read, or a gloss word leaning to Wiktionary's rude
@@ -707,7 +707,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   Then (asked for: "the words that teach the system the most"): next refreshes the file (the answered words
   stay first, Back still walks them; the unanswered ones are replaced), its groups weighted by where the
   rules were wrong, and a group like your misses (a label or gloss word on meanings answered otherwise).
-- [x] **OB-12** Three kinds of rude meaning (asked for: the six were hard to sort into, "there isn't an easily
+- [x] **OB-12** (archived by OB-14) Three kinds of rude meaning (asked for: the six were hard to sort into, "there isn't an easily
   consistent answer for many"; picked from mock-ups): Expletive (strong language: swearing, harsh insults,
   crude words), Sexual (sex acts and slang), Slur (words aimed at a group that could make someone feel
   bad). Medical words, mild name-calling and toilet words are ordinary words. All three smeared to start
@@ -722,7 +722,7 @@ sees it close silently. Both steps are useful even if the program is only ever r
   smeared whole whatever its first meaning (rudeness.mostly_rude: 3 or more firmly rude meanings, half of
   its meanings or more): dick, bitch, faggot, balls, pussy and 10 more, 81 words with their forms; "cock"
   (1 of 34) is not; "roger" (3 of 5) is. RUDENESS_VERSION 16.
-- [x] **OB-13** Rules from the user's answers (asked for: "what is still wrong might help you figure out more
+- [x] **OB-13** (archived by OB-14) Rules from the user's answers (asked for: "what is still wrong might help you figure out more
   rules"; 547 words answered, the tuner's misses grouped into six ideas, each measured on the answers first):
   an ordinary word's later meaning about sex is a euphemism and Sexual, labelled or not (rudeness.euphemisms;
   the user: "euphemisms as sexual, clinical terms as normal"); selling or illicit sex is Sexual in plain
@@ -737,6 +737,21 @@ sees it close silently. Both steps are useful even if the program is only ever r
   whatever points its labels gave. 20.4% -> 18.5%; the program's words: Slur 1,647 -> 1,879, whole 11,710 ->
   11,982. Women left out (the user's choice): the answers disagree (slut, gash slur; ho, whore, bicycle sexual;
   bitch expletive), adding them fixed 3 and broke 20. RUDENESS_VERSION 18.
+- [x] **OB-14** A published list instead of the rules (asked for: "I don't think the word censoring is ever going to
+  hit a point I am happy with", then "get rid of specifying which bad words, just leave them all together as obscene
+  words, and use a database method"; mock-ups agreed). The rules (OB-6..OB-13: src/rudeness.py), the three kinds and
+  their smear buttons (OB-7, OB-12), the review of rude meanings (OB-9, --review-rude, its keys), the tuner and
+  active review (OB-10, OB-11: tools/tune_rudeness.py, tools/measure_rudeness.py), their developer bubble and its ring
+  and stop button (DT-3..DT-7), and the background read of an older save's meanings are archived on the branch
+  archive/censoring (main as it was, commit a64cb1d). Obscene words now come from Surge AI's profanity list
+  (src/wordlists/profanity_en.csv, 1,598 entries, MIT, kept as published; the user picked it over LDNOOBW, which
+  counts sex, porn and penis), less src/wordlists/not_obscene.txt (the user's choice: a file of exceptions, seeded
+  with the ordinary and medical words it catches: buttermilk, peter, sheet, crow, anus, sperm; ass, bitch, cock,
+  pussy, hoe and the like stay obscene unless moved there). One kind, a word obscene whole, in every meaning (the
+  user: fine). How words are dealt: "Obscene words" is one plain tick box (asked for: no minus, nothing opens under
+  it), still unticked to start with; Censor obscene words stays (asked for) and smears an obscene word with its
+  meanings in the definitions. A save marks its words from the list once per list (Store.mark_obscene, meta
+  obscene_done = obscene.LIST_VERSION) and drops the rules' rude table and settings (Store._drop_rules).
 - [x] **Z-1** One fit for every view (asked for: "measure and actively enforce the supported window size for whatever
   screen with the worst case UI settings", the user still free to resize; mock-up agreed). Every layout
   change used to re-fit the window (a tab, the definitions pane, a longer definition, comparing to
@@ -2138,18 +2153,18 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
 - [x] **DT-2** Reported: the nightly still showed to everyone whenever main was ahead (U-9's rule, left as it was). Now the
   nightly section shows only while Developer tools is on and the Nightly bubble is lit; otherwise main is
   not even asked for. _selftest_nightly, _selftest_devtools.
-- [x] **DT-3** Asked for, picked from a mock-up: a running dev tool shows on its bubble. While Make review words or Tune
+- [x] **DT-3** (archived by OB-14) Asked for, picked from a mock-up: a running dev tool shows on its bubble. While Make review words or Tune
   the rules runs, its bubble is lit and a thin ring fills clockwise round the dot (the tuner's rounds: it
   prints "Round i of up to n" for the program to read), or a short arc goes round it (Make review words:
   it cannot tell how far); the hover note says how far (its step and last line); a click does nothing (one
   tuner at a time); at the end the whole ring blinks once. App.dev_progress, DevBubble(progress=),
   SmoothCanvas.ring_image, PALETTE["ring"]. Reduce motion: no spinning, no easing.
-- [x] **DT-4** Asked for: the tuner's window can be closed while it tunes and a click on the bubble opens it again. Started
+- [x] **DT-4** (archived by OB-14) Asked for: the tuner's window can be closed while it tunes and a click on the bubble opens it again. Started
   from the bubble (--from-program), the close box only hides it while it tunes (Discard stops it); a "show"
   line on its stdin brings it back (App.show_tuner: a click on the running bubble, DevBubble(on_running=), or
   on the plain one once done while its window is still open); done while hidden, it pops back up by itself
   (the user's pick); hidden when the program closes, it stops. The hover note says it can be brought back.
-- [x] **DT-5** Asked for, picked from a mock-up (project files dev-bubbles/): one bubble for the review words and a notice
+- [x] **DT-5** (archived by OB-14) Asked for, picked from a mock-up (project files dev-bubbles/): one bubble for the review words and a notice
   when a tool finishes. How words are dealt's four bubbles became one split pill (DevBubble(second=)):
   "Review words" (App.review_words: the review; with no review file, sample first, then the review opens)
   | "Tune & reroll" (App.tune_reroll: the tuner, then, once it printed Done and its process ended after Keep
@@ -2158,7 +2173,7 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   Score the rules went (the tuner shows the score; review.score_guesses removed). The notice: a toast in
   the main window when the tuner is done and when the new words are made (the user's pick over a lasting
   bubble or a tick). _selftest_devtools.py.
-- [x] **DT-6** Asked for: "each tune remember the previous ... lil ticks", Tune & reroll every 50 words by itself, still
+- [x] **DT-6** (archived by OB-14) Asked for: "each tune remember the previous ... lil ticks", Tune & reroll every 50 words by itself, still
   run by hand any time, and a livelier "Smear the whole word" (all picked from mock-ups in project files
   dev-bubbles/). Every App.AUTO_TUNE (50) new answers (counted from the last start, by hand or not: meta
   tune_base) the review starts Tune & reroll itself (App.review_answered), the tuner --start-hidden (it shows
@@ -2169,7 +2184,7 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   tier's colour when yes, plain when no, a short bounce on a change. _selftest_devtools, _selftest_review,
   _selftest_widgets2. Then (asked for): the review's Open in Wiktionary button and its W key gave way to
   the definitions' small link icon at the top right of the word, shown only while online.
-- [x] **DT-7** Asked for: "no cancel button on the bubbles ... an x on hover" (picked from mock-ups in project files
+- [x] **DT-7** (archived by OB-14) Asked for: "no cancel button on the bubbles ... an x on hover" (picked from mock-ups in project files
   dev-bubbles/: A, the ring turns into the stop). DevBubble(stop=(note, command)): while a tool runs, the ring
   under the pointer is a red cross on pink (smooth.ICONS "stop"), its hover note says what stopping does,
   a click stops it; the bubble keeps its size. App.stop_review_tool: the tuner (no reroll, its numbers
@@ -2236,6 +2251,8 @@ Linux can be tested from here (Windows / macOS builds would need testing on thos
   request): the six tiers as pills with the swaps per join under them, the join being checked in bold. Last version:
   ui_chart.SwapStrip in commit 9b78889. The swap counts are still recorded, so it would show the full history if it
   came back.
+- **Archived** (OB-14, asked for): the rudeness rules, their kinds, the review of rude meanings and the tuner, on the
+  branch archive/censoring. Obscene words come from Surge AI's published list; fix a miss in not_obscene.txt.
 - **Planned:** Packaging, now asked for: T-6 (make a program), T-7 (back to source, as a sync) and T-8 (one command
   for Linux + Windows builds), which need T-1, T-2 and T-3 first. T-4 dropped, T-5 the release's notes. After the UI
   steps.

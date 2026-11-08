@@ -273,7 +273,7 @@ assert [keys(x) for x in parse_definition("(No definition found.)")] == [
 assert parse_definition("") == [] and parse_definition(None) == []
 assert keys(parse_definition("1. no part of speech")[0]) == {"num": "1", "pos": "", "text": "no part of speech", "example": None}
 # the Wiktionary build's lines: one sense each (they used to run together), its labels and the gloss after them
-# (a censored pane smears a meaning by its gloss's first characters: OB-6)
+# (a censored word's pane smears each gloss after its labels: OB-14)
 senses = parse_definition("\u2022 (noun) A container.\n\u2022 (noun) (vulgar, slang) The vagina.\n"
                           "\u2022 (verb) (sometimes, offensive) To hit.\n\u2022 (noun) (obsolete) An old box.")
 assert [x["pos"] for x in senses] == ["noun", "noun", "verb", "noun"] and senses[0]["text"] == "A container."

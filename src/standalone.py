@@ -79,7 +79,8 @@ TOP_FILES = ("tierlist.py", "tierlist.md", "README.md", "DEVELOPERS.md", "ROADMA
 def source_files(root=ROOT):
     """The complete source, with its folders: code, docs, tests, the Claude files, the licence and git's own lists
     (REPO_FILES); never saves, logs, caches, exports or a built program (docs/ may hold screenshots; src/icons
-    holds the icon, IC-1; src/typefaces the fonts, UI-73). At the top only TOP_FILES."""
+    holds the icon, IC-1; src/typefaces the fonts, UI-73; src/wordlists the obscene words list, OB-14). At the top only
+    TOP_FILES."""
     return [f for f in walk(root) if ships(f)]
 
 
@@ -93,7 +94,8 @@ def ships(f):
     return f.endswith((".py", ".md", ".txt", ".sh", ".yml")) or \
         (f.startswith("docs" + os.sep) and f.endswith(".png")) or \
         (f.startswith(os.path.join("src", "icons") + os.sep) and f.endswith((".png", ".ico", ".icns"))) or \
-        (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json")))
+        (f.startswith(os.path.join("src", "typefaces") + os.sep) and f.endswith((".ttf", ".json"))) or \
+        (f.startswith(os.path.join("src", "wordlists") + os.sep) and f.endswith(".csv"))
 
 
 def manifest(root=ROOT, files=None):
@@ -176,6 +178,8 @@ def pyinstaller_args(dist, work, root=ROOT, platform=None, source=None):
     args += ["--add-data", f"{icons}{sep}icons"]
     typefaces = os.path.join(root, "src", "typefaces")             # (the fonts, UI-73: fonts.load_typefaces)
     args += ["--add-data", f"{typefaces}{sep}typefaces"]
+    wordlists = os.path.join(root, "src", "wordlists")             # (the obscene words list, OB-14: obscene.py)
+    args += ["--add-data", f"{wordlists}{sep}wordlists"]
     if platform.startswith("win"):                                  # (the .exe file's own icon, in Explorer)
         args += ["--icon", os.path.join(icons, "icon.ico")]
     elif mac:                                                       # (the app bundle's own icon, in Finder and the Dock)

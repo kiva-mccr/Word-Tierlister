@@ -3,7 +3,7 @@
 The program's own drop-down menus, choices, header menus and tabs (`DropMenu`, `ChoiceButton`, `HeaderMenus`, `TabBar`), and closing every open drop-down when the program loses focus.
 
 - **Uses:** `buttons`, `sizing`, `smooth`, `theme`
-- **Used by:** `app`, `browser`, `tune_rudeness`
+- **Used by:** `app`, `browser`
 - **Tests:** `_selftest_fullscreen`, `_selftest_motion`, `_selftest_ui`, `_selftest_widgets2`
 
 The module docstring has the details; this page is the map.

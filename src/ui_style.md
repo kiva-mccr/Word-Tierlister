@@ -3,7 +3,7 @@
 The ttk styling that gives standard widgets the pastel look (UI-3), on the `clam` theme, including the tick box images (with the minus for "some ticked").
 
 - **Uses:** `fonts`, `theme`
-- **Used by:** `app`, `dialogs`, `errors`, `review`, `startup`, `tierlist`, `tune_rudeness`
+- **Used by:** `app`, `dialogs`, `errors`, `startup`, `tierlist`
 - **Tests:** `_selftest_deps`, `_selftest_errors`, `_selftest_filepicker`, `_selftest_fullscreen`, `_selftest_icon`, `_selftest_looks`, `_selftest_startup`, `_selftest_sync`
 
 The module docstring has the details; this page is the map.

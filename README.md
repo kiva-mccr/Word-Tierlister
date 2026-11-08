@@ -116,14 +116,13 @@ and Ctrl+Z brings it back.
   word turns up now and then. The curve shows how far the shuffle reaches.
 - **Which words**: nouns, verbs, adjectives, adverbs and the rest, each with a tick box and a count. Untick a kind
   and those words wait out of sight; nothing is ever deleted.
-- **Obscene words** start unticked. Tick them and you can choose which kinds of rude meaning you want:
-  expletives (swearing and harsh insults), sexual (including euphemisms, like "sleep with"), and slurs. Medical
-  words, the plain words for sex, mild name-calling and toilet words count as ordinary words.
-- **Censor obscene words** smears a rude word sideways until you point at it, on the card, in Browse and in the
-  definitions. A word that is only rude in one of its meanings (like "can") keeps its word, and only that meaning
-  is smeared. A small "abc" button beside each kind of rude meaning lets you censor that kind or let it
-  through on its own; all three are censored to start with. Rude words are picked out by rules rather than a hand-made list, so now and then one slips through
-  or an innocent word gets smeared. Exports always keep the real words.
+- **Obscene words** start unticked: swearing, sexual slang and slurs. They come from a published list of profanity
+  ([Surge AI's](https://github.com/surge-ai/profanity), about 1,600 words), less a short list of ordinary words it
+  catches (like "buttermilk" or "sheet"). A word on the list counts as obscene in every meaning, so a few everyday
+  words with a common slang meaning ("cock", "ass") are in there too.
+- **Censor obscene words** smears an obscene word sideways until you point at it, on the card, in Browse and in the
+  definitions (its meanings too). It is only as good as the list, so now and then one slips through or an innocent
+  word gets smeared. Exports always keep the real words.
 
 ## Make it yours
 
@@ -230,18 +229,8 @@ save is kept either way, and the next release is offered as usual. A release's p
 release's checksums before it is used; nightlies are built on your computer, so there is nothing to check.
 
 **Developer tools**: tick Settings > Developer tools and a few small bubbles appear at the top right of some
-dialogs, for testing the program. In How words are dealt, one bubble in two halves: **Review words** opens the review
-of rude meanings (the first time, it makes the review words first) and **Tune & reroll** tunes the rules on your
-answers, then, once you Keep or Discard the new numbers, picks 300 new review words. In Source & Updates, the nightly
-build, the log and a crash test (it shows the error dialog on purpose). While one keeps running a ring round its dot
-shows how far it is and the bubble says which step it is on; hover for the details. A short message at the bottom of
-the main window says when each step finishes. Closing the tuner's window while it tunes only hides it: click Tune &
-reroll to bring it back (it also comes back by itself when it finishes; Discard stops it). To stop a running tool,
-point at its ring: it turns into a small red cross, and a click stops it (the tuner's numbers are thrown away; review
-words being made stay as they were). Every 50 new answers,
-Tune & reroll starts by itself, its window hidden until the tuning is done; the review window shows a line with a
-tick for each earlier tune (its error, lower is better), how many answers until the next one, and a Tune & reroll
-now button. Its "Smear the whole word" button shows the word itself, smeared on pink when the answer is yes.
+dialogs, for testing the program: in Source & Updates, the nightly build, the log and a crash test (it shows the
+error dialog on purpose).
 
 If an update is ever cut off (say the power goes) and the program has gone, look beside where it was for a file
 ending in `.old`: that is the previous version. Take `.old` off its name and start it.
@@ -260,4 +249,5 @@ command-line options, how to run the tests, and how builds and releases work.
 ## License
 
 Word Tierlister is free software under the GNU General Public License, version 3 ([`LICENSE`](LICENSE)). The two
-typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1.
+typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1. The list of
+obscene words is Surge AI's profanity list, under the MIT License (`src/wordlists/profanity_en_LICENSE.txt`).

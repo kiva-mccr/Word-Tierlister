@@ -1,5 +1,5 @@
 """The definitions pane (UI-12): DefinitionDrawer eases open and closed; fill_definitions writes words and their senses
-into a tk.Text (the word in bold, senses numbered, the part of speech and examples in italics, rude meanings smeared),
+into a tk.Text (the word in bold, senses numbered, the part of speech and examples in italics, a censored word and its meanings smeared),
 with a Wiktionary link per word and words in meanings that can be clicked to look them up (word_at, W-1).
 Its contents are placed for good and its height always set (F-27): never repack them.
 """
@@ -7,7 +7,6 @@ import tkinter as tk
 import tkinter.font as tkfont
 from tkinter import ttk
 
-from rudeness import GLOSS_KEY
 from theme import PALETTE
 from buttons import LinkButton
 from smears import WORD_PATTERN, smeared_label
@@ -53,14 +52,12 @@ def _place_link(t, word, link):
     tk.Misc.lift(button)                         # (above the text; a canvas's own lift() raises items)
 
 
-def fill_definitions(t, entries, body, censor=False, animator=None, base=None, on_word=None, back=None, link=None):
+def fill_definitions(t, entries, body, animator=None, base=None, on_word=None, back=None, link=None):
     """Fill the definition pane `t` (a tk.Text) with [(word, definition text or None while it is being looked up,
-    the keys of its meanings to smear, True if the word itself is censored)]: the word in bold, then each sense
-    numbered, its part of speech, its text and example. `censor` (OB-2, OB-6): a meaning the rules found rude of a
-    censored kind (its first rudeness.GLOSS_KEY characters among the keys: Store.smeared_meanings) shows its labels,
-    and its text smeared sideways like a censored word, un-smearing under the pointer. A censored word is smeared
-    the same way (not masked), and un-smears while the pointer is anywhere over the pane. `base` (F-3): base(word)
-    -> the same four for another word; under a meaning that only names one ("Alternative form of bull dyke"), that
+    True if the word is censored)]: the word in bold, then each sense numbered, its part of speech, its text and
+    example. A censored word (OB-14: on the obscene words list, while censoring) is smeared sideways (not masked),
+    and so is each of its meanings after its labels; they un-smear while the pointer is anywhere over the pane.
+    `base` (F-3): base(word) -> the same three for another word; under a meaning that only names one ("Alternative form of bull dyke"), that
     word's own first meaning, muted. `on_word` (W-1): on_word(word) when a word in a meaning is clicked (it is
     underlined under the pointer); `back`: (text, command), a quiet line on top that goes back (after a lookup).
     `link`: link(word) opens the first word's Wiktionary page, from a small icon at the top right (None: no icon,
@@ -98,7 +95,7 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
         if inside:
             c.unsmear.hover(True)
     t._by_pane = by_pane
-    for i, (heading, text, smeared, hide) in enumerate(entries):
+    for i, (heading, text, hide) in enumerate(entries):
         if i:
             t.insert("end", "\n")
         word(heading, hide, t.tag_cget("head", "font") or body, "head")
@@ -115,14 +112,13 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
             if sense["pos"]:
                 t.insert("end", sense["pos"] + "  ", ("pos", "sense"))
                 prefix += sense["pos"] + "  "
-            _insert_gloss(t, sense, "sense", censor and sense["gloss"][:GLOSS_KEY] in smeared, body, animator, prefix,
-                          pane=hide)
+            _insert_gloss(t, sense, "sense", hide, body, animator, prefix)
             if sense["example"]:
                 t.insert("end", "\u201c" + sense["example"] + "\u201d\n", "ex")
             target = form_target(sense["gloss"]) if base else None
             if target and target not in shown:          # (each word once: "plural of X" and "past of X" share it)
                 shown.add(target)
-                name, other, keys, hidden = base(target)
+                name, other, hidden = base(target)
                 main = main_sense(other) if other else None
                 word(name, hidden, body, "base")
                 after = (f" ({main['pos']})" if main and main["pos"] else "") + ": "
@@ -132,8 +128,7 @@ def fill_definitions(t, entries, body, censor=False, animator=None, base=None, o
                 elif main is None:
                     t.insert("end", "No definition found.\n", "base")
                 else:
-                    _insert_gloss(t, main, "base", censor and main["gloss"][:GLOSS_KEY] in keys, body, animator,
-                                  " " * 6 + name + after, pane=hide or hidden)
+                    _insert_gloss(t, main, "base", hide or hidden, body, animator, " " * 6 + name + after)
     t.config(state="disabled")
 
 
@@ -205,8 +200,8 @@ def _pointer_inside(w):
 
 
 def _watch_pane(t):
-    """Once per pane: while the pointer is anywhere over it, its censored words un-smear (asked for); moving onto
-    a smeared meaning inside it is still over the pane."""
+    """Once per pane: while the pointer is anywhere over it, its censored words and their meanings un-smear (asked
+    for); moving onto a smeared meaning inside it is still over the pane."""
     if getattr(t, "_watched", False):
         return
     t._watched = True
@@ -218,11 +213,11 @@ def _watch_pane(t):
     t.bind("<Leave>", lambda e: None if _pointer_inside(t) else over(False), add="+")
 
 
-def _insert_gloss(t, sense, tag, smear, body, animator, prefix, pane=False):
-    """A sense's text and a line end into the pane `t` under `tag`; `smear`: its labels, then its gloss smeared
-    (smeared_label, wrapped to the room left on its line; `prefix`: the text already on it). It un-smears under the
-    pointer, or, `pane` (W-2, asked for: its word is smeared too), with the pointer anywhere over the pane; its words
-    can be clicked as the others can (on_word)."""
+def _insert_gloss(t, sense, tag, smear, body, animator, prefix):
+    """A sense's text and a line end into the pane `t` under `tag`; `smear` (its word is censored): its labels, then
+    its gloss smeared (smeared_label, wrapped to the room left on its line; `prefix`: the text already on it). It
+    un-smears with the pointer anywhere over the pane (W-2, asked for), and its words can be clicked as the others
+    can (on_word)."""
     if not smear:
         t.insert("end", sense["text"] + "\n", tag)
         return
@@ -231,14 +226,11 @@ def _insert_gloss(t, sense, tag, smear, body, animator, prefix, pane=False):
     pad = int(t.cget("padx") or 0)
     room = (t.winfo_width() if t.winfo_ismapped() else int(t.cget("width")) * body.measure("0")) - 2 * pad - 30
     width = max(body.measure("n" * 12), room - body.measure(prefix + label))
-    c = smeared_label(t, sense["gloss"].strip(), body, t.cget("bg"), animator, width=width, hover=not pane,
+    c = smeared_label(t, sense["gloss"].strip(), body, t.cget("bg"), animator, width=width, hover=False,
                       on_word=lambda w: t._on_word and t._on_word(w))
     t.window_create("end", window=c, align="top")
     t.insert("end", "\n", tag)
-    if pane:
-        t._by_pane(c)
-    else:
-        t._smears.append(c)
+    t._by_pane(c)
 
 
 class DefinitionDrawer(tk.Frame):
@@ -348,21 +340,19 @@ class DefinitionDrawer(tk.Frame):
         """Pixels a line adds to its height (App._pane_lines works out the lines that fit with it)."""
         return max(1, self._body.metrics("linespace"))
 
-    def show_words(self, words, get_def, censored=None, smeared=None, on_word=None, back=None, link=None):
+    def show_words(self, words, get_def, censored=None, on_word=None, back=None, link=None):
         """Fill the pane: for each word, its senses (get_def(word) -> text, or None while it is still being looked
-        up). `censored(word)`: True for a word shown smeared (until the pointer is over the pane); `smeared`: while
-        censoring, smeared(word) -> the keys of its meanings smeared until hovered (OB-2, OB-6). A meaning that only
-        names another word shows that word's first meaning under it, looked up the same way (F-3). `on_word`,
+        up). `censored(word)`: True for a word shown smeared with its meanings (until the pointer is over the pane).
+        A meaning that only names another word shows that word's first meaning under it, looked up the same way (F-3). `on_word`,
         `back`, `link`: see fill_definitions (W-1; the Wiktionary link on each column's word)."""
         def entry(w):
-            return w, get_def(w), smeared(w) if smeared else (), bool(censored and censored(w))
+            return w, get_def(w), bool(censored and censored(w))
         two = len(words) == 2 and back is None       # (a duel: each word's meanings on its card's side)
         self._set_columns(2 if two else 1)
         for t, ws, bk in ((self.text, words[:1] if two else words, back), (self.text2, words[1:] if two else [], None)):
             if t is self.text2 and not two:
                 continue
-            fill_definitions(t, [entry(w) for w in ws], self._body, censor=smeared is not None,
-                             animator=self._anim, base=entry, on_word=on_word, back=bk, link=link)
+            fill_definitions(t, [entry(w) for w in ws], self._body, animator=self._anim, base=entry, on_word=on_word, back=bk, link=link)
 
     @property
     def is_open(self):
