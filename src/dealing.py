@@ -25,7 +25,7 @@ from cards import ShapeCard
 from dialogs import StyledDialog
 from popups import Tooltip
 
-CENSOR_NOTE = "blurred, except on hover"
+CENSOR_NOTE = "smeared, except on hover"
 
 
 class DealDialog:

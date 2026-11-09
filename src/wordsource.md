@@ -4,7 +4,7 @@ Where the words come from and getting them ready: the WordNet list, the Wiktiona
 
 - **Uses:** `constants`, `obscene`, `problems`
 - **Used by:** `launch`, `tierlist`
-- **Tests:** `_selftest`, `_selftest_errors`, `_selftest_startup`
+- **Tests:** `_selftest`, `_selftest_errors`, `_selftest_obscene`, `_selftest_startup`
 
 The module docstring has the details; this page is the map.
 

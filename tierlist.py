@@ -125,15 +125,14 @@ import standalone  # noqa: E402
 
 # Re-exported (hence the noqa comments) so the self-tests and anyone doing `import tierlist` can
 # still reach everything as tierlist.Store, tierlist.TIER_COLORS, and so on.
-from constants import DEFAULT_ANCHORS, FOCUS_ROUNDS, LOG_FILE, MODES, TIERS, VERSION, WM_CLASS, plan_line  # noqa: F401
+from constants import LOG_FILE, MODES, VERSION, WM_CLASS  # noqa: F401
 from definitions import Definitions
 from saves import (_pointer_file, app_dir, choose_save, default_save_path, find_saves,  # noqa: F401
                    remember_save, restart_args, save_progress, write_export)
 from sizing import set_dpi_awareness
 from store import Store
-from theme import PALETTE, TIER_COLORS, TIER_ROW, TIER_TEXT, tint  # noqa: F401
-from wordsource import (build_word_list, build_wiktionary, compute_penalties,  # noqa: F401
-                        prepare_queue, queue_steps, wiktionary_steps)
+from theme import PALETTE, TIER_COLORS, TIER_ROW, tint  # noqa: F401
+from wordsource import build_wiktionary, compute_penalties, prepare_queue, queue_steps  # noqa: F401
 
 # The window code needs tkinter, which is optional (e.g. Debian needs `apt install python3-tk`).
 # Without it everything above still works; main() explains what is missing.
@@ -146,11 +145,10 @@ try:
     from problems import end_session, ensure_streams, open_log, start_session
     from startup import detach_console, ensure_packages, run_with_progress
     from ui_style import apply_ttk_style
-    from browser import Browser  # noqa: F401
 except ImportError as exc:
     if (getattr(exc, "name", "") or "").split(".")[0] not in ("tkinter", "_tkinter"):
         raise  # a real bug, not a missing tkinter
-    tk = App = Browser = None
+    tk = App = None
     from problems import end_session, ensure_streams, open_log, start_session   # (no tkinter)
 
 

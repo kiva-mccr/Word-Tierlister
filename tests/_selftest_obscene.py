@@ -7,7 +7,7 @@ import os
 import tempfile
 
 import obscene
-from obscene import LIST_VERSION, obscene_in, is_obscene
+from obscene import LIST_VERSION, is_obscene
 from store import Store
 
 # ---- the list, as published -----------------------------------------------------------------------------------
@@ -15,7 +15,7 @@ with open(obscene.LIST_FILE, encoding="utf-8") as f:
     rows = list(csv.DictReader(f))
 assert len(rows) == 1598 and {"text", "severity_rating", "category_1"} <= set(rows[0]), (len(rows), rows[0].keys())
 assert os.path.exists(os.path.join(obscene.WORDLISTS, "profanity_en_LICENSE.txt"))     # (MIT: ships with it)
-assert len(LIST_VERSION) == 12
+assert len(LIST_VERSION) == 12 and len(obscene.OBSCENE) > 1000       # (read for real: an empty list fails quietly)
 
 for w in ("fuck", "motherfucker", "mother-fucker", "Bullshit", "cunt", "bitch", "ass", "cock", "slut", "faggot",
           "nigger"):
@@ -27,7 +27,7 @@ for w in ("buttermilk", "peter", "sheet", "crow", "finger", "anus", "sperm", "vu
     assert w in {r["text"] for r in rows} and not is_obscene(w), w
 cleared = [ln.strip() for ln in open(obscene.NOT_OBSCENE_FILE, encoding="utf-8") if ln.strip() and ln[0] != "#"]
 assert cleared and all(c == c.lower() for c in cleared)
-assert obscene_in(["table", "shit", "glass", "fucking"]) == ["shit", "fucking"]
+assert [w for w in ["table", "shit", "glass", "fucking"] if is_obscene(w)] == ["shit", "fucking"]
 
 # ---- the save marks them, once per list -----------------------------------------------------------------------
 s = Store(os.path.join(tempfile.mkdtemp(), "o.db"))
@@ -64,6 +64,21 @@ assert "rude" not in names and "obscene" in names["idx_words_kinds"] and "rude" 
 for k in ("rude_done", "rude_senses", "deal_rude", "censor_kinds", "obscene_done"):
     assert s.get_meta(k) is None, k                      # (obscene_done gone: prepare_queue marks the list again)
 assert s.get_meta("censor") == "1"                       # (the user's own choices stay)
+s.close()
+
+# ---- an unreadable list (src/wordlists missing from a build) leaves the marks alone, and says so ------------------
+import wordsource
+s = Store(os.path.join(tempfile.mkdtemp(), "gone.db"))
+s.insert_words(["shit", "table"])
+s.mark_obscene(); s.set_meta("obscene_done", "old")
+kept, obscene.OBSCENE = obscene.OBSCENE, frozenset()
+said = []
+assert "Marking obscene words" not in wordsource.queue_steps(s)
+wordsource.prepare_queue(s, log=said.append)
+obscene.OBSCENE = kept
+assert s.obscene_words() == {"shit"} and s.get_meta("obscene_done") == "old", s.obscene_words()
+assert any("could not be read" in line for line in said), said
+assert "Marking obscene words" in wordsource.queue_steps(s)
 s.close()
 
 print("OBSCENE OK")

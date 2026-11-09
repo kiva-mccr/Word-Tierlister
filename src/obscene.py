@@ -2,7 +2,7 @@
 ordinary words it catches (src/wordlists/not_obscene.txt). A listed word is obscene whole, in every meaning (asked
 for: one list, no kinds, no rules). No tkinter, no internet.
 
-    is_obscene("motherfucker") -> True       obscene_in(words) -> the ones on the list
+    is_obscene("motherfucker") -> True
     LIST_VERSION                              changes with either file: every save marks its words again
 
 Also Wiktionary's labels for a rude meaning (RUDE, with their hedges), which the stored definitions show.
@@ -57,8 +57,3 @@ OBSCENE, LIST_VERSION = _read()
 def is_obscene(word):
     """True if `word` is on the list (and not in not_obscene.txt)."""
     return bool(word) and plain(word) in OBSCENE
-
-
-def obscene_in(words):
-    """The words among `words` on the list, as a list."""
-    return [w for w in words if is_obscene(w)]
