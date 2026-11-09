@@ -249,5 +249,5 @@ command-line options, how to run the tests, and how builds and releases work.
 ## License
 
 Word Tierlister is free software under the GNU General Public License, version 3 ([`LICENSE`](LICENSE)). The two
-typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font Licence 1.1. The list of
+typefaces it ships with, Young Serif and Atkinson Hyperlegible, are under the SIL Open Font License 1.1. The list of
 obscene words is Surge AI's profanity list, under the MIT License (`src/wordlists/profanity_en_LICENSE.txt`).

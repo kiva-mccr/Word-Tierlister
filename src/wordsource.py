@@ -24,6 +24,7 @@ import urllib.error
 import urllib.request
 
 from constants import WIKT_FILENAME, kind_bits
+import obscene
 from obscene import HEDGES, LIST_VERSION, RUDE
 from problems import SetupError
 
@@ -434,12 +435,12 @@ def queue_steps(store, adds_words=False, by_wiktionary=False):
     pen = adds_words or store.get_meta("pen_done") != "1"
     freq = not by_wiktionary and (adds_words or store.get_meta("freq_done") != store.FREQ_VERSION)
     kinds = not by_wiktionary and store.get_meta("kinds_done") != "1"
-    obscene = adds_words or store.get_meta("obscene_done") != LIST_VERSION
+    marks = bool(obscene.OBSCENE) and (adds_words or store.get_meta("obscene_done") != LIST_VERSION)
     shuffle = pen or hyphens or store.db.execute(
         "SELECT 1 FROM words WHERE tier IS NULL AND (qkey IS NULL OR qkey >= 1e17) LIMIT 1").fetchone() is not None
     return ((["Leaving out hyphenated words"] if hyphens else []) + (["Detecting compound words"] if pen else []) + (["Looking up how common"] if freq else [])
             + (["Sorting words into kinds"] if kinds else [])
-            + (["Marking obscene words"] if obscene else [])
+            + (["Marking obscene words"] if marks else [])
             + (["Shuffling the queue"] if shuffle else []))
 
 
@@ -476,7 +477,10 @@ def prepare_queue(store, log=print):
         fill_kinds(store, log)
         store.set_meta("kinds_done", "1")
         dealt = True
-    if store.get_meta("obscene_done") != LIST_VERSION:
+    # (src/wordlists missing or unreadable: marking from an empty list would unmark every obscene word, unseen)
+    if not obscene.OBSCENE:
+        log("The obscene words list (src/wordlists) could not be read: obscene words are left as they were.")
+    elif store.get_meta("obscene_done") != LIST_VERSION:
         log("Marking obscene words (from the list; one time, a few seconds)...")
         log(f"  {store.mark_obscene():,} words changed.")
         store.set_meta("obscene_done", LIST_VERSION)

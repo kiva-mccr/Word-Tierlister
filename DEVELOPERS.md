@@ -111,7 +111,7 @@ note):
 
 | Module | Imports |
 |---|---|
-| `tierlist` | app, browser, constants, definitions, deps, errors, fonts, launch, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
+| `tierlist` | app, constants, definitions, deps, errors, fonts, launch, problems, saves, sizing, sources, standalone, startup, store, theme, ui_style, wordsource |
 | `app` | background, browser, buttons, cards, constants, dealing, definitions, deps, devtools, dialogs, drawer, errors, filepicker, fonts, framesync, fullscreen, keymap, menus, popups, saves, shortcuts, sizing, smooth, sources, standalone, syncdialog, theme, tiercolours, ui_chart, ui_motion, ui_style, widgets |
 | `devtools` | constants, standalone |
 | `sources` | background, constants, deps, dialogs, errors, filepicker, fonts, problems, saves, standalone, startup, theme |

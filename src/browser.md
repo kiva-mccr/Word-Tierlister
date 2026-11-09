@@ -3,7 +3,7 @@
 The Browse / edit window: search, Show / Sort (or click a column heading), the list in tier colours, Move to, Unplace (Delete), Refine, and the definition pane; it opens complete and remembers its view (UI-23, UI-38).
 
 - **Uses:** `buttons`, `constants`, `drawer`, `errors`, `fonts`, `keymap`, `menus`, `popups`, `sizing`, `smears`, `smooth`, `store`, `theme`, `ui_motion`, `widgets`
-- **Used by:** `app`, `stress_ui`, `tierlist`
+- **Used by:** `app`, `stress_ui`
 - **Tests:** `_selftest_sizing`, `_selftest_ui2`
 
 The module docstring has the details; this page is the map.

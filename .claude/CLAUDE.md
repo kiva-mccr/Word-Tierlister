@@ -185,4 +185,6 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
 - Sync (SY-1): tried between two Syncthing 1.27 instances on one Linux machine only; the later change wins by each
   device's clock. Tests never start the real Syncthing.
 - ST-8's pkexec / winget installs were only faked; a read-only save's dialog could not be checked (tests run as root).
+- Z-1 fit, seen only by tools/stress_ui.py --seed 1 under load (about 1 run in 10): two quick zoom steps leave a minimum
+  height 12 px short, and the next comparison grows the window. The fit's measure then followed the window's width.
 - "+N today" counts from the undo history (~5,000 actions): past that in a day it undercounts.
