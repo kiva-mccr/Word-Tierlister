@@ -186,3 +186,6 @@ ID (UI-, F-, T-, OB-, DT-, ST-, U-, SY-, Z-, W-, FS-, S-, IC-). Do not repeat it
   device's clock. Tests never start the real Syncthing.
 - ST-8's pkexec / winget installs were only faked; a read-only save's dialog could not be checked (tests run as root).
 - "+N today" counts from the undo history (~5,000 actions): past that in a day it undercounts.
+
+## Shared preferences
+Before starting work, read Kiva's cross-project preferences at https://raw.githubusercontent.com/kiva-mccr/claude-preferences/main/PREFERENCES.md (or the kiva-mccr/claude-preferences repo if private) and follow them unless this file says otherwise.
